@@ -1,4 +1,4 @@
-import { User, Project, Task, RIBAStage, ApprovalRequest, Issue, Change, RiskRegisterItem, Meeting, MeetingAction, DesignRisk, ContractAdminRecord, ContractEvent, PlanningRecord, SiteConstraint, TenderRecord, TenderReturn, TenderEvaluation, SiteQuery, BuildingRegRecord, BuildingInspection, DutyholderRecord, BRPDGateway, DocumentRecord, DocumentTransmittal, KnowledgeArticle, CPDRecord, Competency, UserCompetency, TrainingPlan, JurisdictionPack, OrganisationSettings, AISourcePermission, AILog, DrawingIssueRecord, ProjectCommercial, CashflowForecast, StaffAllocation, StaffCapacity, FeeRecommendation, FeeQuoteRecord, FeeQuoteLineItem, Opportunity, AISuggestedPrompt, AIConversation, AIMessage, AISource, Integration, PortalInvite, PortalSharedItem, FeeQuoteSection, FeeQuoteView, FeeQuoteTemplate, TermsLibraryItem, ExclusionsLibraryItem, ProjectHealthSnapshot, TaskScheduleMetric, ProjectNumberTemplate, QuoteNumberTemplate, DrawingIssueTemplate, ProjectHealthAlert, BurnBudgetMetric, QuoteProjectLink, QuoteConversionMetric, ComplianceStatement, BRPDRequirement, BRPDChangelogEntry, DrawingIssueWorkflow, DrawingEmail, WizardStep, BriefSection, ProjectBrief, QuoteAccountingLink, RoleVisibilityRule, LeaveRecord, BankHoliday, LeaveEntitlement } from './types'
+import { User, Project, Task, RIBAStage, ApprovalRequest, Issue, Change, RiskRegisterItem, Meeting, MeetingAction, DesignRisk, ContractAdminRecord, ContractEvent, PlanningRecord, SiteConstraint, TenderRecord, TenderReturn, TenderEvaluation, SiteQuery, BuildingRegRecord, BuildingInspection, DutyholderRecord, BRPDGateway, DocumentRecord, DocumentTransmittal, KnowledgeArticle, CPDRecord, Competency, UserCompetency, TrainingPlan, JurisdictionPack, OrganisationSettings, AISourcePermission, AILog, DrawingIssueRecord, ProjectCommercial, CashflowForecast, StaffAllocation, StaffCapacity, FeeRecommendation, FeeQuoteRecord, FeeQuoteLineItem, Opportunity, AISuggestedPrompt, AIConversation, AIMessage, AISource, Integration, PortalInvite, PortalSharedItem, FeeQuoteSection, FeeQuoteView, FeeQuoteTemplate, TermsLibraryItem, ExclusionsLibraryItem, ProjectHealthSnapshot, TaskScheduleMetric, ProjectNumberTemplate, QuoteNumberTemplate, DrawingIssueTemplate, ProjectHealthAlert, BurnBudgetMetric, QuoteProjectLink, QuoteConversionMetric, ComplianceStatement, BRPDRequirement, BRPDChangelogEntry, DrawingIssueWorkflow, DrawingEmail, WizardStep, BriefSection, ProjectBrief, QuoteAccountingLink, RoleVisibilityRule, LeaveRecord, BankHoliday, LeaveEntitlement, TimesheetEntry, TimesheetWeekSummary, Invoice, InvoiceLineItem, OverheadEntry, OverheadSummary, OverheadCategory, NewsItem, DashboardKPIs, ProjectUpdate } from './types'
 import { STAGE_TEMPLATES } from './stage-templates'
 
 // ── Demo Users ──────────────────────────────────────────────
@@ -2904,4 +2904,264 @@ export function getTeamAvailability(date: string): { userId: string; available: 
     if (userLeave) return { userId: e.user_id, available: false, reason: userLeave.leave_type }
     return { userId: e.user_id, available: true }
   })
+}
+
+// ══════════════════════════════════════════════════════════════
+// PHASE 5: TIMESHEETS
+// ══════════════════════════════════════════════════════════════
+
+export const TIMESHEET_ENTRIES: TimesheetEntry[] = [
+  // Sarah - Week of 2026-05-18
+  { id: 'ts1', user_id: 'u1', project_id: 'p1', date: '2026-05-18', hours: 6, description: 'Client coordination & stage review', stage: 3, billable: true, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-22', created_at: '2026-05-18' },
+  { id: 'ts2', user_id: 'u1', project_id: 'p2', date: '2026-05-19', hours: 4, description: 'Design risk workshop', stage: 2, billable: true, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-22', created_at: '2026-05-19' },
+  { id: 'ts3', user_id: 'u1', project_id: 'p1', date: '2026-05-19', hours: 3, description: 'BRPD documentation prep', stage: 3, billable: true, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-22', created_at: '2026-05-19' },
+  { id: 'ts4', user_id: 'u1', project_id: 'p3', date: '2026-05-20', hours: 7, description: 'Tender evaluation review', stage: 4, billable: true, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-22', created_at: '2026-05-20' },
+  // James - Week of 2026-05-18
+  { id: 'ts5', user_id: 'u2', project_id: 'p1', date: '2026-05-18', hours: 8, description: 'Spatial coordination drawings', stage: 3, billable: true, status: 'submitted', submitted_at: '2026-05-22', created_at: '2026-05-18' },
+  { id: 'ts6', user_id: 'u2', project_id: 'p1', date: '2026-05-19', hours: 7.5, description: 'Coordination mark-ups', stage: 3, billable: true, status: 'submitted', submitted_at: '2026-05-22', created_at: '2026-05-19' },
+  { id: 'ts7', user_id: 'u2', project_id: 'p2', date: '2026-05-20', hours: 4, description: 'Concept sketches', stage: 2, billable: true, status: 'submitted', submitted_at: '2026-05-22', created_at: '2026-05-20' },
+  // Priya - Week of 2026-05-25 (current week - some missing)
+  { id: 'ts8', user_id: 'u3', project_id: 'p4', date: '2026-05-25', hours: 6, description: 'Planning submission prep', stage: 3, billable: true, status: 'draft', created_at: '2026-05-25' },
+  { id: 'ts9', user_id: 'u3', project_id: 'p4', date: '2026-05-26', hours: 7, description: 'Heritage statement drafting', stage: 3, billable: true, status: 'draft', created_at: '2026-05-26' },
+  // Tom - hasn't submitted this week at all (missing timesheets alert)
+  { id: 'ts10', user_id: 'u4', project_id: 'p5', date: '2026-05-18', hours: 7, description: 'Site survey documentation', stage: 5, billable: true, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-23', created_at: '2026-05-18' },
+  { id: 'ts11', user_id: 'u4', project_id: 'p5', date: '2026-05-19', hours: 8, description: 'Construction monitoring', stage: 5, billable: true, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-23', created_at: '2026-05-19' },
+  // Amara - partially done current week
+  { id: 'ts12', user_id: 'u5', project_id: 'p2', date: '2026-05-25', hours: 5, description: 'Model updates', stage: 2, billable: true, status: 'draft', created_at: '2026-05-25' },
+  { id: 'ts13', user_id: 'u5', project_id: 'p3', date: '2026-05-25', hours: 2, description: 'Drawing issue coordination', stage: 4, billable: false, status: 'draft', created_at: '2026-05-25' },
+  { id: 'ts14', user_id: 'u5', project_id: 'p2', date: '2026-05-26', hours: 7, description: 'Render preparation', stage: 2, billable: true, status: 'draft', created_at: '2026-05-26' },
+  // Non-billable admin time
+  { id: 'ts15', user_id: 'u1', project_id: 'p1', date: '2026-05-21', hours: 2, description: 'Practice management meeting', stage: 0, billable: false, status: 'approved', submitted_at: '2026-05-22', approved_by: 'u1', approved_at: '2026-05-22', created_at: '2026-05-21' },
+]
+
+export function getTimesheetEntries(): TimesheetEntry[] { return TIMESHEET_ENTRIES }
+export function getUserTimesheets(userId: string): TimesheetEntry[] {
+  return TIMESHEET_ENTRIES.filter(t => t.user_id === userId)
+}
+export function getProjectTimesheets(projectId: string): TimesheetEntry[] {
+  return TIMESHEET_ENTRIES.filter(t => t.project_id === projectId)
+}
+export function getMissingTimesheetUsers(): string[] {
+  const currentWeekStart = '2026-05-25'
+  const usersWithEntries = new Set(TIMESHEET_ENTRIES.filter(t => t.date >= currentWeekStart).map(t => t.user_id))
+  return USERS.map(u => u.id).filter(id => !usersWithEntries.has(id))
+}
+export function getTimesheetWeekSummaries(weekStart: string): TimesheetWeekSummary[] {
+  return USERS.map(u => {
+    const entries = TIMESHEET_ENTRIES.filter(t => t.user_id === u.id && t.date >= weekStart && t.date < new Date(new Date(weekStart).getTime() + 7 * 86400000).toISOString().split('T')[0])
+    const daysWorked = new Set(entries.map(e => e.date)).size
+    return {
+      user_id: u.id,
+      week_start: weekStart,
+      total_hours: entries.reduce((s, e) => s + e.hours, 0),
+      billable_hours: entries.filter(e => e.billable).reduce((s, e) => s + e.hours, 0),
+      submitted: entries.length > 0 && entries.every(e => e.status !== 'draft'),
+      missing_days: Math.max(0, 5 - daysWorked),
+    }
+  })
+}
+
+// ══════════════════════════════════════════════════════════════
+// PHASE 5: INVOICES
+// ══════════════════════════════════════════════════════════════
+
+export const INVOICES: Invoice[] = [
+  {
+    id: 'inv1', invoice_number: 'INV-2026-001', project_id: 'p1', client: 'Riverside Academy Trust',
+    quote_id: 'fq1', amount: 28500, vat_amount: 5700, total_amount: 34200,
+    status: 'paid', issued_date: '2026-03-01', due_date: '2026-03-31', paid_date: '2026-03-28',
+    payment_reference: 'BACS-44821', xero_synced: true, xero_invoice_id: 'xero-inv-001',
+    description: 'RIBA Stage 2 fee — Riverside Academy', line_items: [
+      { id: 'il1', description: 'Concept Design fee', stage: 2, quantity: 1, unit_price: 28500, amount: 28500 }
+    ], created_at: '2026-03-01', updated_at: '2026-03-28'
+  },
+  {
+    id: 'inv2', invoice_number: 'INV-2026-002', project_id: 'p1', client: 'Riverside Academy Trust',
+    amount: 35000, vat_amount: 7000, total_amount: 42000,
+    status: 'overdue', issued_date: '2026-04-15', due_date: '2026-05-15',
+    xero_synced: true, xero_invoice_id: 'xero-inv-002',
+    description: 'RIBA Stage 3 fee (partial) — Riverside Academy', line_items: [
+      { id: 'il2', description: 'Spatial Coordination fee (50%)', stage: 3, quantity: 1, unit_price: 35000, amount: 35000 }
+    ], created_at: '2026-04-15', updated_at: '2026-05-15'
+  },
+  {
+    id: 'inv3', invoice_number: 'INV-2026-003', project_id: 'p2', client: 'Heritage Homes PLC',
+    amount: 12000, vat_amount: 2400, total_amount: 14400,
+    status: 'sent', issued_date: '2026-05-20', due_date: '2026-06-20',
+    xero_synced: true, xero_invoice_id: 'xero-inv-003',
+    description: 'RIBA Stage 2 fee — The Old Rectory', line_items: [
+      { id: 'il3', description: 'Concept Design fee', stage: 2, quantity: 1, unit_price: 12000, amount: 12000 }
+    ], created_at: '2026-05-20', updated_at: '2026-05-20'
+  },
+  {
+    id: 'inv4', invoice_number: 'INV-2026-004', project_id: 'p3', client: 'Malvern Hills Council',
+    amount: 45000, vat_amount: 9000, total_amount: 54000,
+    status: 'due', issued_date: '2026-05-01', due_date: '2026-06-01',
+    xero_synced: false,
+    description: 'RIBA Stage 4 progress — Civic Centre Extension', line_items: [
+      { id: 'il4a', description: 'Technical Design fee (progress)', stage: 4, quantity: 1, unit_price: 40000, amount: 40000 },
+      { id: 'il4b', description: 'Additional surveys', quantity: 1, unit_price: 5000, amount: 5000 }
+    ], created_at: '2026-05-01', updated_at: '2026-05-01'
+  },
+  {
+    id: 'inv5', invoice_number: 'INV-2026-005', project_id: 'p4', client: 'Worcester RFC',
+    amount: 8500, vat_amount: 1700, total_amount: 10200,
+    status: 'draft', due_date: '2026-06-30',
+    xero_synced: false,
+    description: 'RIBA Stage 3 fee — Clubhouse Refurbishment', line_items: [
+      { id: 'il5', description: 'Spatial Coordination fee', stage: 3, quantity: 1, unit_price: 8500, amount: 8500 }
+    ], created_at: '2026-05-28', updated_at: '2026-05-28'
+  },
+  {
+    id: 'inv6', invoice_number: 'INV-2026-006', project_id: 'p5', client: 'Green Valley Developments',
+    amount: 62000, vat_amount: 12400, total_amount: 74400,
+    status: 'viewed', issued_date: '2026-05-22', due_date: '2026-06-22',
+    xero_synced: true, xero_invoice_id: 'xero-inv-006',
+    description: 'RIBA Stage 5 progress — Sustainable Housing Phase 2', line_items: [
+      { id: 'il6a', description: 'Construction stage services (M3)', stage: 5, quantity: 1, unit_price: 50000, amount: 50000 },
+      { id: 'il6b', description: 'Clerk of works visits', quantity: 4, unit_price: 3000, amount: 12000 }
+    ], created_at: '2026-05-22', updated_at: '2026-05-24'
+  },
+]
+
+export function getInvoices(): Invoice[] { return INVOICES }
+export function getProjectInvoices(projectId: string): Invoice[] {
+  return INVOICES.filter(i => i.project_id === projectId)
+}
+export function getOverdueInvoices(): Invoice[] {
+  return INVOICES.filter(i => i.status === 'overdue')
+}
+export function getOpenInvoiceValue(): number {
+  return INVOICES.filter(i => ['sent', 'viewed', 'due', 'overdue'].includes(i.status))
+    .reduce((s, i) => s + i.total_amount, 0)
+}
+export function getInvoicesByStatus(status: string): Invoice[] {
+  return INVOICES.filter(i => i.status === status)
+}
+export function getUnsyncedInvoices(): Invoice[] {
+  return INVOICES.filter(i => !i.xero_synced && i.status !== 'draft')
+}
+export function getTotalInvoicedThisMonth(): number {
+  return INVOICES.filter(i => i.issued_date && i.issued_date.startsWith('2026-05'))
+    .reduce((s, i) => s + i.total_amount, 0)
+}
+
+// ══════════════════════════════════════════════════════════════
+// PHASE 5: OVERHEADS
+// ══════════════════════════════════════════════════════════════
+
+export const OVERHEAD_ENTRIES: OverheadEntry[] = [
+  { id: 'oh1', category: 'rent', description: 'Studio rent — Worcester High Street', amount: 3200, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh2', category: 'internet', description: 'Fibre broadband — BT Business', amount: 89, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh3', category: 'telephones', description: 'Mobile contracts (5 lines)', amount: 175, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh4', category: 'software', description: 'AutoCAD licenses (3)', amount: 450, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh5', category: 'software', description: 'Revit licenses (2)', amount: 380, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh6', category: 'software', description: 'Microsoft 365 Business', amount: 95, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh7', category: 'insurance', description: 'PI Insurance — annual premium', amount: 1850, date: '2026-04-01', recurring: true, frequency: 'quarterly' },
+  { id: 'oh8', category: 'utilities', description: 'Electricity', amount: 285, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh9', category: 'utilities', description: 'Gas', amount: 120, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh10', category: 'printing', description: 'Large format plots — A0 tender set', amount: 340, date: '2026-05-15', recurring: false },
+  { id: 'oh11', category: 'travel', description: 'Site visit mileage — May', amount: 280, date: '2026-05-28', recurring: false },
+  { id: 'oh12', category: 'professional_fees', description: 'Accountancy retainer', amount: 450, date: '2026-05-01', recurring: true, frequency: 'monthly' },
+  { id: 'oh13', category: 'office_admin', description: 'Stationery & supplies', amount: 65, date: '2026-05-10', recurring: false },
+]
+
+export function getOverheadEntries(): OverheadEntry[] { return OVERHEAD_ENTRIES }
+export function getMonthlyOverheadTotal(): number {
+  return OVERHEAD_ENTRIES.filter(e => e.date.startsWith('2026-05'))
+    .reduce((s, e) => s + e.amount, 0)
+}
+export function getOverheadSummaries(): OverheadSummary[] {
+  const categories: OverheadCategory[] = ['rent', 'internet', 'telephones', 'printing', 'software', 'insurance', 'utilities', 'office_admin', 'travel', 'professional_fees']
+  return categories.map(cat => {
+    const entries = OVERHEAD_ENTRIES.filter(e => e.category === cat)
+    const monthly = entries.filter(e => e.date.startsWith('2026-05')).reduce((s, e) => s + e.amount, 0)
+    return { category: cat, monthly_total: monthly, ytd_total: monthly * 5 }
+  }).filter(s => s.monthly_total > 0)
+}
+
+// ══════════════════════════════════════════════════════════════
+// PHASE 5: NEWS & REGULATIONS
+// ══════════════════════════════════════════════════════════════
+
+export const NEWS_ITEMS: NewsItem[] = [
+  { id: 'news1', title: 'Building Safety Act — Secondary Legislation Update', summary: 'New secondary legislation clarifies duty holder responsibilities for higher-risk buildings under BSA 2022.', category: 'regulations', source: 'RIBA Journal', published_at: '2026-05-28', pinned: true, hidden: false },
+  { id: 'news2', title: 'Part L 2025 Amendments Now in Force', summary: 'Updated conservation of fuel and power requirements took effect 28 May 2026, affecting all new applications.', category: 'regulations', source: 'GOV.UK', published_at: '2026-05-28', pinned: false, hidden: false },
+  { id: 'news3', title: 'RIBA Plan of Work 2025 Published', summary: 'Updated Plan of Work introduces enhanced sustainability checkpoints at each stage gateway.', category: 'architecture', source: 'RIBA', published_at: '2026-05-25', pinned: false, hidden: false },
+  { id: 'news4', title: 'Worcester City Centre Masterplan Consultation Opens', summary: 'Public consultation begins on the 30-year masterplan for Worcester city centre regeneration.', category: 'planning', source: 'Worcester News', published_at: '2026-05-22', pinned: false, hidden: false },
+  { id: 'news5', title: 'Passivhaus Trust Publishes Social Housing Guidance', summary: 'New guidance document for achieving Passivhaus certification on social housing retrofit projects.', category: 'construction', source: 'Passivhaus Trust', published_at: '2026-05-20', pinned: false, hidden: false },
+  { id: 'news6', title: 'Practice Insurance Premiums Expected to Rise 8%', summary: 'Broker survey indicates PI premiums increasing across the sector due to cladding-related claims.', category: 'architecture', source: 'AJ', published_at: '2026-05-18', pinned: false, hidden: false },
+  { id: 'news7', title: 'New CPD requirements from ARB take effect January 2027', summary: 'ARB confirms 35-hour annual CPD requirement with mandatory competence areas.', category: 'regulations', source: 'ARB', published_at: '2026-05-15', pinned: false, hidden: false },
+  { id: 'news8', title: 'Studio Mitchell Wins Worcester Design Award', summary: 'The practice received recognition for the Riverside Academy project at the annual Worcester Design Awards.', category: 'company', source: 'Internal', published_at: '2026-05-12', pinned: true, hidden: false },
+]
+
+export function getNewsItems(): NewsItem[] { return NEWS_ITEMS.filter(n => !n.hidden) }
+export function getPinnedNews(): NewsItem[] { return NEWS_ITEMS.filter(n => n.pinned && !n.hidden) }
+export function getNewsByCategory(category: string): NewsItem[] {
+  return NEWS_ITEMS.filter(n => n.category === category && !n.hidden)
+}
+
+// ══════════════════════════════════════════════════════════════
+// PHASE 5: PROJECT UPDATES FEED
+// ══════════════════════════════════════════════════════════════
+
+export const PROJECT_UPDATES: ProjectUpdate[] = [
+  { id: 'pu1', project_id: 'p1', project_name: 'Riverside Academy', event_type: 'milestone', description: 'Stage 3 gateway review scheduled for 2 June', severity: 'info', timestamp: '2026-05-29T09:00:00', actor: 'Sarah Mitchell' },
+  { id: 'pu2', project_id: 'p1', project_name: 'Riverside Academy', event_type: 'upload_missing', description: 'Structural consultant has not uploaded Stage 3 calcs — 5 days overdue', severity: 'warning', timestamp: '2026-05-28T14:30:00' },
+  { id: 'pu3', project_id: 'p3', project_name: 'Civic Centre Extension', event_type: 'planning_due', description: 'Planning determination expected 4 June', severity: 'info', timestamp: '2026-05-28T10:00:00' },
+  { id: 'pu4', project_id: 'p2', project_name: 'The Old Rectory', event_type: 'approval_returned', description: 'Heritage officer returned design approval with 3 conditions', severity: 'warning', timestamp: '2026-05-27T16:45:00', actor: 'Heritage England' },
+  { id: 'pu5', project_id: 'p5', project_name: 'Sustainable Housing Ph.2', event_type: 'stage_blocked', description: 'Stage 5 progress blocked — awaiting revised structural details', severity: 'critical', timestamp: '2026-05-27T11:20:00' },
+  { id: 'pu6', project_id: 'p4', project_name: 'Clubhouse Refurbishment', event_type: 'quote_accepted', description: 'Fee quote FQ-2026-004 accepted by Worcester RFC (£18,500)', severity: 'info', timestamp: '2026-05-26T15:00:00', actor: 'Client' },
+  { id: 'pu7', project_id: 'p1', project_name: 'Riverside Academy', event_type: 'brpd_upload', description: 'Fire strategy document uploaded by fire consultant', severity: 'info', timestamp: '2026-05-26T09:30:00', actor: 'FireSafe Consulting' },
+  { id: 'pu8', project_id: 'p3', project_name: 'Civic Centre Extension', event_type: 'invoice_issued', description: 'Invoice INV-2026-004 issued — £54,000 inc. VAT', severity: 'info', timestamp: '2026-05-25T14:00:00', actor: 'Sarah Mitchell' },
+  { id: 'pu9', project_id: 'p5', project_name: 'Sustainable Housing Ph.2', event_type: 'site_query', description: 'SQ-015: Foundation detail query from contractor — unresolved', severity: 'warning', timestamp: '2026-05-24T10:15:00', actor: 'BuildRight Ltd' },
+  { id: 'pu10', project_id: 'p2', project_name: 'The Old Rectory', event_type: 'drawing_issued', description: 'Drawing Issue DI-008 sent to structural engineer (6 drawings)', severity: 'info', timestamp: '2026-05-23T13:45:00', actor: 'James Chen' },
+]
+
+export function getProjectUpdates(): ProjectUpdate[] {
+  return PROJECT_UPDATES.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+export function getCriticalUpdates(): ProjectUpdate[] {
+  return PROJECT_UPDATES.filter(u => u.severity === 'critical' || u.severity === 'warning')
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+
+// ══════════════════════════════════════════════════════════════
+// PHASE 5: EXECUTIVE DASHBOARD HELPERS
+// ══════════════════════════════════════════════════════════════
+
+export function getDashboardKPIs(): DashboardKPIs {
+  const activeProjects = PROJECTS.filter(p => p.status === 'active').length
+  const overdue = INVOICES.filter(i => i.status === 'overdue')
+  const expiringQuotes = FEE_QUOTE_RECORDS.filter((q: FeeQuoteRecord) => q.status === 'sent' || q.status === 'viewed').length
+  const missingTs = getMissingTimesheetUsers().length
+  const pendingApprovals = APPROVALS.filter(a => a.status === 'pending').length
+  const brpdDeadlines = BRPD_REQUIREMENTS ? BRPD_REQUIREMENTS.filter((r: BRPDRequirement) => r.status === 'in_progress' || r.status === 'not_started').length : 0
+
+  return {
+    active_projects: activeProjects,
+    projects_at_risk: PROJECTS.filter(p => p.status === 'active').filter(p => {
+      const tasks = getProjectTasks(p.id)
+      const risks = ALL_TASKS.filter(t => t.project_id === p.id && t.status === 'blocked')
+      return risks.length > 0 || tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done').length > 2
+    }).length,
+    missing_timesheets: missingTs,
+    open_invoice_value: getOpenInvoiceValue(),
+    quotes_expiring: expiringQuotes,
+    brpd_deadlines: brpdDeadlines,
+    approvals_waiting: pendingApprovals,
+  }
+}
+
+export function getFeeRecoveryRate(): number {
+  const totalBillable = TIMESHEET_ENTRIES.filter(t => t.billable).reduce((s, t) => s + t.hours, 0)
+  const totalHours = TIMESHEET_ENTRIES.reduce((s, t) => s + t.hours, 0)
+  return totalHours > 0 ? Math.round((totalBillable / totalHours) * 100) : 0
+}
+
+export function getPracticeRevenueThisMonth(): number {
+  return INVOICES.filter(i => i.paid_date && i.paid_date.startsWith('2026-05'))
+    .reduce((s, i) => s + i.total_amount, 0)
+    + INVOICES.filter(i => i.issued_date && i.issued_date.startsWith('2026-05') && i.status !== 'draft')
+    .reduce((s, i) => s + i.total_amount, 0)
 }

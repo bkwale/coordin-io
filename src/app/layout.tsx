@@ -3,8 +3,8 @@ import './globals.css'
 import { Sidebar } from '@/components/Sidebar'
 
 export const metadata: Metadata = {
-  title: 'ArchitectOps — Project Control for Architecture Practices',
-  description: 'RIBA stage tracking, risk detection and project dashboards for architecture offices.',
+  title: 'Coordin.io — Project Control for the Built Environment',
+  description: 'RIBA stage tracking, risk detection and executive dashboards for multidisciplinary practices.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

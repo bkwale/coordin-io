@@ -1156,6 +1156,130 @@ export interface BankHoliday {
   region: 'england-wales' | 'scotland' | 'northern-ireland' | 'all'
 }
 
+// ── Phase 5: Timesheets ─────────────────────────────────────
+
+export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected'
+
+export interface TimesheetEntry {
+  id: string
+  user_id: string
+  project_id: string
+  date: string
+  hours: number
+  description?: string
+  stage: RIBAStage
+  billable: boolean
+  status: TimesheetStatus
+  submitted_at?: string
+  approved_by?: string
+  approved_at?: string
+  created_at: string
+}
+
+export interface TimesheetWeekSummary {
+  user_id: string
+  week_start: string
+  total_hours: number
+  billable_hours: number
+  submitted: boolean
+  missing_days: number
+}
+
+// ── Phase 5: Invoices ───────────────────────────────────────
+
+export type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'due' | 'overdue' | 'paid' | 'void'
+
+export interface Invoice {
+  id: string
+  invoice_number: string
+  project_id: string
+  client: string
+  quote_id?: string
+  amount: number
+  vat_amount: number
+  total_amount: number
+  status: InvoiceStatus
+  issued_date?: string
+  due_date: string
+  paid_date?: string
+  payment_reference?: string
+  xero_synced: boolean
+  xero_invoice_id?: string
+  description: string
+  line_items: InvoiceLineItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface InvoiceLineItem {
+  id: string
+  description: string
+  stage?: RIBAStage
+  quantity: number
+  unit_price: number
+  amount: number
+}
+
+// ── Phase 5: Overheads ──────────────────────────────────────
+
+export type OverheadCategory = 'rent' | 'internet' | 'telephones' | 'printing' | 'software' | 'insurance' | 'utilities' | 'office_admin' | 'travel' | 'professional_fees'
+
+export interface OverheadEntry {
+  id: string
+  category: OverheadCategory
+  description: string
+  amount: number
+  date: string
+  recurring: boolean
+  frequency?: 'monthly' | 'quarterly' | 'annual'
+}
+
+export interface OverheadSummary {
+  category: OverheadCategory
+  monthly_total: number
+  ytd_total: number
+  budget?: number
+}
+
+// ── Phase 5: News & Regulations ─────────────────────────────
+
+export type NewsCategory = 'architecture' | 'construction' | 'regulations' | 'planning' | 'company'
+
+export interface NewsItem {
+  id: string
+  title: string
+  summary: string
+  category: NewsCategory
+  source: string
+  url?: string
+  published_at: string
+  pinned: boolean
+  hidden: boolean
+}
+
+// ── Phase 5: Dashboard Metrics ──────────────────────────────
+
+export interface DashboardKPIs {
+  active_projects: number
+  projects_at_risk: number
+  missing_timesheets: number
+  open_invoice_value: number
+  quotes_expiring: number
+  brpd_deadlines: number
+  approvals_waiting: number
+}
+
+export interface ProjectUpdate {
+  id: string
+  project_id: string
+  project_name: string
+  event_type: 'milestone' | 'upload_missing' | 'planning_due' | 'approval_returned' | 'stage_blocked' | 'drawing_issued' | 'brpd_upload' | 'site_query' | 'invoice_issued' | 'quote_accepted'
+  description: string
+  severity: 'info' | 'warning' | 'critical'
+  timestamp: string
+  actor?: string
+}
+
 // ── RIBA Stage Info ─────────────────────────────────────────
 
 export const RIBA_STAGES: Record<RIBAStage, string> = {

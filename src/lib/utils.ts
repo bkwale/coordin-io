@@ -1,4 +1,4 @@
-import { HealthStatus, TaskStatus, RiskSeverity, ApprovalStatus, IssueStatus, ChangeStatus, RiskRegisterStatus, ActionStatus, RiskProbability, RiskImpact, MeetingType, DesignRiskReviewStatus, ContractEventStatus, TenderStatus, SiteQueryStatus, BuildingRegStatus, InspectionStatus, ComplianceStatus, DocumentStatus, KnowledgeCategory, DutyholderRole, DrawingIssueType, CommercialHealthFlag, UtilisationStatus, FeeQuoteStatus, OpportunityStatus, IntegrationStatus, QuoteSectionType, FeeQuoteRecord, HealthAlertSeverity, HealthAlertCategory, ComplianceStatementStatus, BRPDRequirementStatus, BRPDChangeType, DrawingWorkflowStatus, DrawingEmailDirection, WizardStepStatus, BriefSectionStatus, AccountingSyncStatus, FeatureArea, LeaveType, LeaveStatus } from './types'
+import { HealthStatus, TaskStatus, RiskSeverity, ApprovalStatus, IssueStatus, ChangeStatus, RiskRegisterStatus, ActionStatus, RiskProbability, RiskImpact, MeetingType, DesignRiskReviewStatus, ContractEventStatus, TenderStatus, SiteQueryStatus, BuildingRegStatus, InspectionStatus, ComplianceStatus, DocumentStatus, KnowledgeCategory, DutyholderRole, DrawingIssueType, CommercialHealthFlag, UtilisationStatus, FeeQuoteStatus, OpportunityStatus, IntegrationStatus, QuoteSectionType, FeeQuoteRecord, HealthAlertSeverity, HealthAlertCategory, ComplianceStatementStatus, BRPDRequirementStatus, BRPDChangeType, DrawingWorkflowStatus, DrawingEmailDirection, WizardStepStatus, BriefSectionStatus, AccountingSyncStatus, FeatureArea, LeaveType, LeaveStatus, TimesheetStatus, InvoiceStatus, OverheadCategory, NewsCategory } from './types'
 
 export function cn(...classes: (string | undefined | false | null)[]): string {
   return classes.filter(Boolean).join(' ')
@@ -868,6 +868,124 @@ export function leaveStatusLabel(status: LeaveStatus): string {
     case 'approved': return 'Approved'
     case 'declined': return 'Declined'
     case 'cancelled': return 'Cancelled'
+  }
+}
+
+// ── Phase 5: Timesheet utils ────────────────────────────────
+
+export function timesheetStatusColor(status: TimesheetStatus): string {
+  switch (status) {
+    case 'draft': return 'bg-slate-100 text-slate-600'
+    case 'submitted': return 'bg-blue-100 text-blue-700'
+    case 'approved': return 'bg-emerald-100 text-emerald-700'
+    case 'rejected': return 'bg-red-100 text-red-700'
+  }
+}
+
+export function timesheetStatusLabel(status: TimesheetStatus): string {
+  switch (status) {
+    case 'draft': return 'Draft'
+    case 'submitted': return 'Submitted'
+    case 'approved': return 'Approved'
+    case 'rejected': return 'Rejected'
+  }
+}
+
+// ── Phase 5: Invoice utils ──────────────────────────────────
+
+export function invoiceStatusColor(status: InvoiceStatus): string {
+  switch (status) {
+    case 'draft': return 'bg-slate-100 text-slate-600'
+    case 'sent': return 'bg-blue-100 text-blue-700'
+    case 'viewed': return 'bg-indigo-100 text-indigo-700'
+    case 'due': return 'bg-amber-100 text-amber-700'
+    case 'overdue': return 'bg-red-100 text-red-700'
+    case 'paid': return 'bg-emerald-100 text-emerald-700'
+    case 'void': return 'bg-slate-100 text-slate-400'
+  }
+}
+
+export function invoiceStatusLabel(status: InvoiceStatus): string {
+  switch (status) {
+    case 'draft': return 'Draft'
+    case 'sent': return 'Sent'
+    case 'viewed': return 'Viewed'
+    case 'due': return 'Due'
+    case 'overdue': return 'Overdue'
+    case 'paid': return 'Paid'
+    case 'void': return 'Void'
+  }
+}
+
+// ── Phase 5: Overhead utils ─────────────────────────────────
+
+export function overheadCategoryLabel(category: OverheadCategory): string {
+  switch (category) {
+    case 'rent': return 'Rent'
+    case 'internet': return 'Internet'
+    case 'telephones': return 'Telephones'
+    case 'printing': return 'Printing'
+    case 'software': return 'Software'
+    case 'insurance': return 'Insurance'
+    case 'utilities': return 'Utilities'
+    case 'office_admin': return 'Office Admin'
+    case 'travel': return 'Travel'
+    case 'professional_fees': return 'Professional Fees'
+  }
+}
+
+export function overheadCategoryColor(category: OverheadCategory): string {
+  switch (category) {
+    case 'rent': return 'bg-violet-100 text-violet-700'
+    case 'internet': return 'bg-sky-100 text-sky-700'
+    case 'telephones': return 'bg-cyan-100 text-cyan-700'
+    case 'printing': return 'bg-amber-100 text-amber-700'
+    case 'software': return 'bg-indigo-100 text-indigo-700'
+    case 'insurance': return 'bg-rose-100 text-rose-700'
+    case 'utilities': return 'bg-emerald-100 text-emerald-700'
+    case 'office_admin': return 'bg-slate-100 text-slate-600'
+    case 'travel': return 'bg-orange-100 text-orange-700'
+    case 'professional_fees': return 'bg-blue-100 text-blue-700'
+  }
+}
+
+// ── Phase 5: News utils ─────────────────────────────────────
+
+export function newsCategoryLabel(category: NewsCategory): string {
+  switch (category) {
+    case 'architecture': return 'Architecture'
+    case 'construction': return 'Construction'
+    case 'regulations': return 'Regulations'
+    case 'planning': return 'Planning'
+    case 'company': return 'Company'
+  }
+}
+
+export function newsCategoryColor(category: NewsCategory): string {
+  switch (category) {
+    case 'architecture': return 'bg-violet-100 text-violet-700'
+    case 'construction': return 'bg-amber-100 text-amber-700'
+    case 'regulations': return 'bg-red-100 text-red-700'
+    case 'planning': return 'bg-sky-100 text-sky-700'
+    case 'company': return 'bg-emerald-100 text-emerald-700'
+  }
+}
+
+// ── Phase 5: Update severity utils ──────────────────────────
+
+export function updateSeverityColor(severity: 'info' | 'warning' | 'critical'): string {
+  switch (severity) {
+    case 'info': return 'bg-blue-100 text-blue-700'
+    case 'warning': return 'bg-amber-100 text-amber-700'
+    case 'critical': return 'bg-red-100 text-red-700'
+  }
+}
+
+export function updateSeverityDot(severity: 'info' | 'warning' | 'critical'): string {
+  switch (severity) {
+    case 'info': return 'bg-blue-400'
+    case 'warning': return 'bg-amber-400'
+    case 'critical': return 'bg-red-500'
   }
 }
 

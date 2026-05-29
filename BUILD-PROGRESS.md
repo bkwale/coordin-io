@@ -1,4 +1,4 @@
-# ArchitectOps — Build Progress
+# Coordin.io — Build Progress
 
 ## Phase 1 — COMPLETE
 Core RIBA stage tracking, project dashboards, task management, risk detection engine.
@@ -197,3 +197,36 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 - **Phase 4 Wave 2:** 9 health alerts, 9 burn-budget metrics, 5 quote-project links, 5 conversion metrics
 - **Phase 4 Wave 3:** 7 compliance statements, 8 BRPD requirements, 10 changelog entries, 6 drawing workflows, 11 drawing emails
 - **Phase 4 Wave 4:** 12 wizard steps, 2 project briefs (12 brief sections), 5 quote accounting links, 18 role visibility rules
+- **Phase 5:** 15 timesheet entries, 6 invoices (all statuses), 13 overhead entries (10 categories), 8 news items, 10 project updates
+
+## Phase 5 — IN PROGRESS (Rebrand: Coordin.io)
+
+### Wave 1 — Executive Dashboard (COMPLETE)
+| Feature | Route/Component | Status |
+|---------|----------------|--------|
+| Rebrand: ArchitectOps → Coordin.io | Global (package.json, layout, sidebar, docs) | Done |
+| Timesheets data model | types.ts + mock-data.ts | Done |
+| Invoices data model (full pipeline) | types.ts + mock-data.ts | Done |
+| Overhead categories | types.ts + mock-data.ts | Done |
+| News & Regulations data model | types.ts + mock-data.ts | Done |
+| Project Updates feed | types.ts + mock-data.ts | Done |
+| Dashboard KPI engine | mock-data.ts (getDashboardKPIs, helpers) | Done |
+| WidgetCard shell component | components/widgets/WidgetCard.tsx | Done |
+| Practice Summary Widget | components/widgets/PracticeSummaryWidget.tsx | Done |
+| Staff & Resourcing Widget | components/widgets/StaffResourcingWidget.tsx | Done |
+| Financial Health Widget | components/widgets/FinancialHealthWidget.tsx | Done |
+| Quote & Invoice Pipeline Widget | components/widgets/QuoteInvoiceWidget.tsx | Done |
+| Jobs At Risk Widget | components/widgets/JobsAtRiskWidget.tsx | Done |
+| Calendar & Deadlines Widget | components/widgets/CalendarDeadlinesWidget.tsx | Done |
+| Project Updates Widget | components/widgets/ProjectUpdatesWidget.tsx | Done |
+| BRPD / Compliance Widget | components/widgets/BRPDWidget.tsx | Done |
+| News & Regulations Widget | components/widgets/NewsWidget.tsx | Done |
+| Recent Activity Widget | components/widgets/RecentActivityWidget.tsx | Done |
+| Executive Dashboard page (widget grid) | `/` (page.tsx rewrite) | Done |
+| Quick-view filter bar | `/` (Today/Week/Practice/Commercial/Staff/BRPD) | Done |
+| 7 KPI cards row | `/` (Active, At Risk, Missing TS, Open Invoices, Quotes, BRPD, Approvals) | Done |
+
+**Types added:** TimesheetEntry, TimesheetWeekSummary, TimesheetStatus, Invoice, InvoiceLineItem, InvoiceStatus, OverheadEntry, OverheadSummary, OverheadCategory, NewsItem, NewsCategory, DashboardKPIs, ProjectUpdate
+**Mock data:** 15 timesheet entries, 6 invoices, 13 overhead entries, 8 news items, 10 project updates, 20+ helper functions
+**Utils:** timesheetStatusColor/Label, invoiceStatusColor/Label, overheadCategoryColor/Label, newsCategoryColor/Label, updateSeverityColor/Dot
+**Components:** 11 new widget components in components/widgets/

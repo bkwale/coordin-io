@@ -121,10 +121,10 @@ export function Sidebar() {
         <div className="px-6 pt-7 pb-6">
           <Link href="/" className="flex items-center gap-3" onClick={close}>
             <div className="w-9 h-9 rounded-xl bg-gradient-accent flex items-center justify-center shadow-glow-indigo">
-              <span className="text-white font-bold text-[14px] tracking-tight">A</span>
+              <span className="text-white font-bold text-[14px] tracking-tight">C</span>
             </div>
             <div>
-              <h1 className="text-[16px] font-semibold text-white leading-tight tracking-tight">ArchitectOps</h1>
+              <h1 className="text-[16px] font-semibold text-white leading-tight tracking-tight">Coordin.io</h1>
               <p className="text-[9px] text-white/25 font-medium tracking-[0.2em] uppercase mt-0.5">Project Control</p>
             </div>
           </Link>
