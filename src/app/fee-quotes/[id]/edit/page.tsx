@@ -49,7 +49,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
               { label: 'Not Found' },
             ]}
           />
-          <div className="mt-8 bg-white rounded-xl border border-slate-200 p-8 text-center">
+          <div className="mt-8 card-premium p-8 text-center">
             <h1 className="text-2xl font-display font-bold text-ink-900 mb-2">Quote Not Found</h1>
             <p className="text-slate-600 mb-6">The fee quote you're looking for doesn't exist or has been deleted.</p>
             <a
@@ -100,7 +100,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen bg-surface-50 animate-fade-in">
       {/* Header */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-8 py-6">
@@ -160,7 +160,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
           {/* Left Column — Builder */}
           <div className="col-span-2 space-y-6">
             {/* 1. Client Summary Card */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <div className="card-premium p-6">
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Client Summary</h2>
@@ -231,7 +231,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
               <div className="space-y-4">
                 <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold px-1">Quote Sections</h2>
                 {sections.map((section, idx) => (
-                  <div key={section.id} className="bg-white rounded-xl border border-slate-200 p-6">
+                  <div key={section.id} className="card-premium p-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
@@ -286,7 +286,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
 
             {/* 3. Line Items Table */}
             {lineItems.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="card-premium overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-200">
                   <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Fee Breakdown</h2>
                 </div>
@@ -309,7 +309,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
                         <tr
                           key={item.id}
                           className={cn(
-                            'border-b border-slate-100 hover:bg-surface-50 transition-colors',
+                            'stripe-row border-b border-slate-100 hover:bg-surface-50 transition-colors',
                             item.optional_flag && 'opacity-60'
                           )}
                         >
@@ -388,7 +388,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
 
             {/* 4. Meetings & Travel Panel */}
             {(quote.meetings_included_count || quote.mileage_rate || quote.expense_allowance) && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Meetings & Travel</h2>
 
                 <div className="grid grid-cols-3 gap-6">
@@ -420,7 +420,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
             {/* 5. Terms & Exclusions */}
             <div className="space-y-4">
               {/* Terms */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <div className="flex items-start justify-between mb-4">
                   <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Terms & Conditions</h2>
                   <button className="text-[12px] font-medium text-brand-600 hover:text-brand-700 transition-colors">
@@ -435,7 +435,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
               </div>
 
               {/* Exclusions */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <div className="flex items-start justify-between mb-4">
                   <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Exclusions</h2>
                   <button className="text-[12px] font-medium text-brand-600 hover:text-brand-700 transition-colors">
@@ -450,7 +450,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
               </div>
 
               {/* Assumptions */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Assumptions</h2>
                 <textarea
                   value={quote.assumptions_text}
@@ -460,7 +460,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
               </div>
 
               {/* Payment Schedule */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Payment Schedule</h2>
                 <textarea
                   value={quote.payment_schedule_text}
@@ -474,7 +474,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
           {/* Right Column — Sidebar */}
           <div className="col-span-1 space-y-6">
             {/* Quote Status Card */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <div className="card-premium p-6">
               <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Quote Status</h2>
 
               <div className={cn('inline-block px-3 py-1 rounded-full text-xs font-semibold mb-6', feeQuoteStatusColor(quote.status))}>
@@ -526,7 +526,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
             </div>
 
             {/* Branding Preview Card */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <div className="card-premium p-6">
               <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Branding Customisation</h2>
 
               <div className="bg-surface-50 rounded-lg border border-slate-200 p-4 h-48 flex flex-col items-center justify-center text-slate-400 text-center">
@@ -539,7 +539,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
 
             {/* Templates Card */}
             {templates.length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Templates</h2>
 
                 <div className="space-y-2">
@@ -563,7 +563,7 @@ export default function EnhancedFeeQuoteBuilderPage() {
 
             {/* Activity / Views */}
             {quote.viewed_count > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="card-premium p-6">
                 <h2 className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-4">Activity</h2>
 
                 <div className="text-[13px] text-slate-600">

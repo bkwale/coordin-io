@@ -29,7 +29,7 @@ export default function InternationalSettingsPage() {
   }
 
   return (
-    <div className="max-w-5xl">
+    <div className="max-w-5xl animate-fade-in">
       {/* ━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb
@@ -52,7 +52,7 @@ export default function InternationalSettingsPage() {
 
       {/* ━━━ ORGANISATION SETTINGS ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
-        <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+        <div className="card-premium p-6">
           <h2 className="font-display text-[1.25rem] text-ink-900 mb-6">
             Organisation Settings
           </h2>
@@ -138,10 +138,10 @@ export default function InternationalSettingsPage() {
               <div
                 key={pack.id}
                 className={cn(
-                  'bg-white rounded-2xl border shadow-card p-6',
+                  'card-premium p-6',
                   isActive
-                    ? 'border-emerald-300 bg-emerald-50/40'
-                    : 'border-surface-200'
+                    ? '!border-emerald-300 !bg-emerald-50/40'
+                    : ''
                 )}
               >
                 {/* Header with title and active badge */}
@@ -245,7 +245,7 @@ export default function InternationalSettingsPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+          <div className="card-premium p-6">
             <div className="space-y-0">
               {Object.entries(settings.terminology_overrides).map(([original, override], i, arr) => (
                 <div

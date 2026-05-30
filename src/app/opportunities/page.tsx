@@ -112,7 +112,7 @@ export default function OpportunitiesPage() {
   const winLossOpportunities = opportunities.filter(o => ['won', 'lost'].includes(o.status))
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb
@@ -125,28 +125,26 @@ export default function OpportunitiesPage() {
           <h1 className="font-display text-[2rem] text-ink-900">
             Opportunities & Proposals
           </h1>
-          <p className="text-[13px] text-ink-400 mt-2">
-            Pipeline tracking, proposals, and win/loss management
-          </p>
+          <p className="text-[13px] text-ink-400 mt-1">{opportunities.length} opportunities &middot; {summaries.activeOpportunities} active</p>
         </div>
       </section>
 
       {/* ━━━ SUMMARY CARDS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+          <div className="card-premium p-4 text-center">
             <p className="text-2xl font-light tracking-tight text-ink-900">{formatCurrency(summaries.totalPipelineValue)}</p>
             <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">Total Pipeline Value</p>
           </div>
-          <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+          <div className="card-premium p-4 text-center">
             <p className="text-2xl font-light tracking-tight text-ink-900">{summaries.activeOpportunities}</p>
             <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">Active Opportunities</p>
           </div>
-          <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+          <div className="card-premium p-4 text-center">
             <p className="text-2xl font-light tracking-tight text-ink-900">{summaries.winRate.toFixed(0)}%</p>
             <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">Win Rate</p>
           </div>
-          <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+          <div className="card-premium p-4 text-center">
             <p className="text-2xl font-light tracking-tight text-ink-900">{summaries.proposalsSent}</p>
             <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">Proposals Sent</p>
           </div>
@@ -155,7 +153,7 @@ export default function OpportunitiesPage() {
 
       {/* ━━━ PIPELINE VISUALIZATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-16">
-        <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+        <div className="card-premium p-6">
           <h2 className="font-display text-[1.25rem] text-ink-900 mb-6">Sales Pipeline</h2>
 
           {/* Visual Pipeline */}
@@ -217,7 +215,7 @@ export default function OpportunitiesPage() {
         </div>
 
         {sorted.length === 0 ? (
-          <EmptyState text="No opportunities in this category." />
+          <EmptyState message="No opportunities in this category." />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {sorted.map(opportunity => {
@@ -227,7 +225,7 @@ export default function OpportunitiesPage() {
               return (
                 <div
                   key={opportunity.id}
-                  className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-card-hover transition-all"
+                  className="card-premium p-5 hover:shadow-card-hover transition-all"
                 >
                   {/* Title & Client */}
                   <div className="mb-3">
@@ -343,7 +341,7 @@ export default function OpportunitiesPage() {
                     <tr
                       key={opportunity.id}
                       className={cn(
-                        'border-b border-surface-200/40 transition-colors',
+                        'border-b border-surface-200/40 transition-colors stripe-row',
                         opportunity.status === 'won' ? 'bg-emerald-50/30' : 'bg-red-50/30'
                       )}
                     >

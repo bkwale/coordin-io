@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectTenders, getTenderReturns, getTenderEvaluations } from '@/lib/mock-data'
 import { cn, tenderStatusColor, formatDate } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -13,27 +13,21 @@ export default function TenderPage() {
   const project = PROJECTS.find(p => p.id === params.id)
   const [selectedTender, setSelectedTender] = useState<string | null>(null)
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const tenders = getProjectTenders(project.id)
   const activeTender = selectedTender ? tenders.find(t => t.id === selectedTender) : tenders[0] || null
   const returns = activeTender ? getTenderReturns(activeTender.id) : []
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Tender' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Tender Workspace</h1>
-        <p className="text-sm text-slate-500 mt-1">{project.name} — {project.client}</p>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Tender Workspace</h1>
+        <p className="text-sm text-ink-400 mt-1">{project.name} — {project.client}</p>
       </div>
 
       {tenders.length === 0 ? (
-        <EmptyState text="No tender records for this project." />
+        <EmptyState message="No tender records for this project." />
       ) : (
         <>
           {/* Tender Selector */}
@@ -59,7 +53,7 @@ export default function TenderPage() {
           {activeTender && (
             <>
               {/* Tender Summary */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="card-premium p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <StatusBadge label={activeTender.status} colorClass={tenderStatusColor(activeTender.status)} />
                 </div>
@@ -93,9 +87,9 @@ export default function TenderPage() {
 
               {/* Tender Returns */}
               {returns.length > 0 && (
-                <div className="bg-white rounded-xl border border-slate-200">
+                <div className="card-premium">
                   <div className="p-5 border-b border-slate-100">
-                    <h2 className="text-sm font-semibold text-slate-900">Tender Returns</h2>
+                    <h2 className="text-[15px] font-semibold text-ink-900">Tender Returns</h2>
                   </div>
 
                   {/* Desktop Table */}
@@ -116,7 +110,7 @@ export default function TenderPage() {
                           const evals = getTenderEvaluations(ret.id)
                           const weightedScore = evals.reduce((sum, e) => sum + (e.weighting / 100) * e.score, 0)
                           return (
-                            <tr key={ret.id} className="hover:bg-slate-50">
+                            <tr key={ret.id} className="stripe-row hover:bg-slate-50">
                               <td className="px-5 py-3 text-sm font-medium text-slate-900">{ret.bidder_name}</td>
                               <td className="px-5 py-3 text-xs text-slate-600">{formatDate(ret.return_date)}</td>
                               <td className="px-5 py-3">
@@ -169,8 +163,8 @@ export default function TenderPage() {
 
               {/* Evaluation Matrix */}
               {returns.some(r => getTenderEvaluations(r.id).length > 0) && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
-                  <h2 className="text-sm font-semibold text-slate-900 mb-3">Evaluation Matrix</h2>
+                <div className="card-premium p-5">
+                  <h2 className="text-[15px] font-semibold text-ink-900 mb-3">Evaluation Matrix</h2>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
@@ -184,7 +178,7 @@ export default function TenderPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {['Price', 'Quality', 'Programme'].map(criterion => (
-                          <tr key={criterion}>
+                          <tr key={criterion} className="stripe-row">
                             <td className="py-2 pr-4 font-medium text-slate-700">{criterion}</td>
                             <td className="py-2 pr-4 text-slate-500">
                               {getTenderEvaluations(returns[0].id).find(e => e.criterion_name === criterion)?.weighting || 0}%

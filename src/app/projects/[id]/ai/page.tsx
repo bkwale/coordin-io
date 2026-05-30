@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { PROJECTS, getAISuggestedPrompts, getAIConversations, getUser } from '@/lib/mock-data'
 import { AIConversation, AISuggestedPrompt, AIMessage } from '@/lib/types'
 import { cn, formatDate, timeAgo } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { EmptyState } from '@/components/EmptyState'
 
 export default function ProjectAITeammatePage() {
@@ -36,7 +36,7 @@ export default function ProjectAITeammatePage() {
 
   // ── Guard: Project not found ──────────────────────────────
   if (!project) {
-    return <EmptyState text="Project not found." />
+    return <EmptyState message="Project not found." />
   }
 
   // ── Handle prompt click (from suggested pills) ────────────
@@ -102,19 +102,10 @@ export default function ProjectAITeammatePage() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8 flex flex-col h-full">
-      {/* ── Breadcrumb & Title ────────────────────────────── */}
+    <div className="space-y-6 sm:space-y-8 flex flex-col h-full animate-fade-in">
+      {/* ── Title ────────────────────────────── */}
       <div className="flex-shrink-0">
-        <Breadcrumb
-          items={[
-            { label: 'Dashboard', href: '/' },
-            { label: 'Projects', href: '/projects' },
-            { label: project.name, href: `/projects/${projectId}` },
-            { label: 'AI Teammate' },
-          ]}
-        />
-
-        <div className="mt-6">
+        <div>
           <h1 className="text-2xl font-display font-bold text-ink-900">
             AI Teammate — {project.name}
           </h1>

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { WidgetCard } from './WidgetCard'
 import { getProjectUpdates, INVOICES, APPROVALS, FEE_QUOTE_RECORDS, USERS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
+import { Clock } from 'lucide-react'
 
 interface ActivityItem {
   id: string
@@ -76,7 +77,7 @@ export function RecentActivityWidget() {
   return (
     <WidgetCard
       title="Recent Activity"
-      icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+      icon={<Clock className="w-4 h-4" />}
     >
       <div className="space-y-0.5">
         {activities.slice(0, 10).map(item => {

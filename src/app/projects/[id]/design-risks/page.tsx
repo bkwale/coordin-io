@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectDesignRisks, getUser } from '@/lib/mock-data'
 import { DesignRiskReviewStatus, RIBA_STAGES } from '@/lib/types'
 import { cn, designRiskStatusColor, formatDate } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { TabBar } from '@/components/TabBar'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -16,7 +16,7 @@ export default function DesignRiskPage() {
   const project = PROJECTS.find(p => p.id === params.id)
   const [filterStatus, setFilterStatus] = useState<DesignRiskReviewStatus | 'all'>('all')
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const risks = getProjectDesignRisks(project.id)
   const filtered = filterStatus === 'all' ? risks : risks.filter(r => r.review_status === filterStatus)
@@ -34,15 +34,9 @@ export default function DesignRiskPage() {
   ]
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Design Risks' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Design Risk Workspace</h1>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Design Risk Workspace</h1>
         <p className="text-sm text-slate-500 mt-1">{project.name} — Stage {project.current_stage} {RIBA_STAGES[project.current_stage]}</p>
       </div>
 
@@ -56,14 +50,14 @@ export default function DesignRiskPage() {
 
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <EmptyState text="No design risks in this category." />
+          <EmptyState message="No design risks in this category." />
         ) : (
           filtered.map(risk => {
             const owner = getUser(risk.owner_user_id)
             return (
               <div key={risk.id} className={cn(
-                'bg-white rounded-xl border p-5',
-                risk.unusual_or_significant_flag ? 'border-violet-200' : 'border-slate-200'
+                'card-premium p-5',
+                risk.unusual_or_significant_flag ? 'border-violet-200' : ''
               )}>
                 <div className="flex items-start gap-3">
                   {risk.unusual_or_significant_flag && (

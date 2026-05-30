@@ -37,7 +37,7 @@ export default function CommercialAnalytics() {
   const watchList = commercials.filter(c => ['watch', 'at_risk', 'critical'].includes(c.health_flag))
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb items={[
@@ -63,19 +63,19 @@ export default function CommercialAnalytics() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Total Agreed Fees</p>
               <p className="text-2xl font-light text-ink-900 tracking-tight">{formatCurrency(totalAgreedFees)}</p>
             </div>
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Total Invoiced</p>
               <p className="text-2xl font-light text-ink-900 tracking-tight">{formatCurrency(totalInvoiced)}</p>
             </div>
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Total WIP</p>
               <p className="text-2xl font-light text-ink-900 tracking-tight">{formatCurrency(totalWIP)}</p>
             </div>
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Avg Margin</p>
               <p className="text-2xl font-light text-ink-900 tracking-tight">{formatPercent(avgMargin)}</p>
             </div>
@@ -87,7 +87,7 @@ export default function CommercialAnalytics() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Project Commercial Health</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -109,7 +109,7 @@ export default function CommercialAnalytics() {
                     const bgClass = isOverspend ? 'bg-red-50/30' : 'bg-white'
 
                     return (
-                      <tr key={`${commercial.project_id}-${i}`} className={`border-b border-surface-200 hover:bg-surface-50/50 transition-colors ${bgClass}`}>
+                      <tr key={`${commercial.project_id}-${i}`} className={`stripe-row border-b border-surface-200 hover:bg-surface-50/50 transition-colors ${bgClass}`}>
                         <td className="px-5 py-4 text-[12px] font-medium text-ink-900">{project?.name || 'Unknown'}</td>
                         <td className="px-5 py-4 text-[12px] text-ink-600">{project?.client || '—'}</td>
                         <td className="text-right px-5 py-4 text-[12px] text-ink-900 font-mono">{formatCurrency(commercial.agreed_fee)}</td>
@@ -143,7 +143,7 @@ export default function CommercialAnalytics() {
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Fee Recovery</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {feeRecoveryProjects.map((proj, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+              <div key={i} className="card-premium p-5">
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[12px] font-medium text-ink-900">{proj.projectName}</p>

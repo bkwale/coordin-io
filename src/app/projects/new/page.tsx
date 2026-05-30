@@ -112,7 +112,7 @@ export default function NewProjectPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-slate-400">
         <Link href="/" className="hover:text-brand-600 transition-colors">Dashboard</Link>
@@ -127,9 +127,9 @@ export default function NewProjectPage() {
       </div>
 
       {/* Progress Bar */}
-      <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+      <div className="card-premium p-6">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold text-ink-400 uppercase tracking-[0.08em]">Progress</span>
+          <span className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em]">Progress</span>
           <span className="text-sm font-medium text-slate-900">{completionPercent}%</span>
         </div>
         <div className="w-full h-2 bg-surface-100 rounded-full overflow-hidden">
@@ -144,7 +144,7 @@ export default function NewProjectPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left Sidebar: Step Navigator */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-4 space-y-2 sticky top-6">
+          <div className="card-premium p-4 space-y-2 sticky top-6">
             {steps.map((s) => {
               const status = stepStatuses[s.number]
               const isCurrent = s.number === currentStep
@@ -187,7 +187,7 @@ export default function NewProjectPage() {
 
         {/* Right Content: Step Form */}
         <div className="lg:col-span-3">
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6 space-y-6">
+          <div className="card-premium p-6 space-y-6">
             {/* Step Header */}
             <div>
               <h2 className="text-lg font-display text-slate-900">{step.title}</h2>

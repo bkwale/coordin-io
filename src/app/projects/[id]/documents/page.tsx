@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { getProject, getProjectDocuments, getProjectTransmittals, USERS } from '@/lib/mock-data'
 import { DocumentRecord, DocumentTransmittal, RIBA_STAGES } from '@/lib/types'
 import { cn, formatDate, documentStatusColor, transmittalStatusColor } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -21,7 +21,7 @@ export default function ProjectDocumentsPage() {
   const [categoryFilter, setCategoryFilter] = useState<DocumentCategory>('all')
 
   if (!project) {
-    return <EmptyState text="Project not found." />
+    return <EmptyState message="Project not found." />
   }
 
   const documents = getProjectDocuments(project.id)
@@ -66,14 +66,7 @@ export default function ProjectDocumentsPage() {
   ]
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: 'Projects', href: '/projects' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Documents' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
         <h1 className="text-xl sm:text-2xl font-display font-bold text-ink-900">Documents & Transmittals</h1>
         <p className="text-sm text-ink-400 mt-1">{project.name} — {project.client}</p>
@@ -108,9 +101,9 @@ export default function ProjectDocumentsPage() {
 
           {/* ── Document Table ───────────────────────────── */}
           {filteredDocuments.length === 0 ? (
-            <EmptyState text={categoryFilter === 'all' ? 'No documents uploaded.' : `No ${categoryFilter} documents.`} />
+            <EmptyState message={categoryFilter === 'all' ? 'No documents uploaded.' : `No ${categoryFilter} documents.`} />
           ) : (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+            <div className="card-premium overflow-hidden">
               {/* Mobile: Cards */}
               <div className="sm:hidden divide-y divide-surface-200/60">
                 {filteredDocuments.map(doc => {
@@ -160,7 +153,7 @@ export default function ProjectDocumentsPage() {
                 </thead>
                 <tbody>
                   {filteredDocuments.map((doc) => (
-                    <tr key={doc.id} className="border-b border-surface-200/60 last:border-0 hover:bg-surface-50 transition-colors">
+                    <tr key={doc.id} className="stripe-row border-b border-surface-200/60 last:border-0 hover:bg-surface-50 transition-colors">
                       <td className="px-5 py-3">
                         <span className="text-[11px] font-medium text-ink-600 font-mono">{doc.document_ref}</span>
                       </td>
@@ -213,7 +206,7 @@ export default function ProjectDocumentsPage() {
 
           {/* ── Transmittal Cards ────────────────────────── */}
           {transmittals.length === 0 ? (
-            <EmptyState text="No transmittals recorded." />
+            <EmptyState message="No transmittals recorded." />
           ) : (
             <div className="space-y-3">
               {transmittals.map(transmittal => {
@@ -235,7 +228,7 @@ export default function ProjectDocumentsPage() {
                 }
 
                 return (
-                  <div key={transmittal.id} className="bg-white rounded-2xl border border-surface-200 p-5 shadow-card">
+                  <div key={transmittal.id} className="card-premium p-5">
                     <div className="space-y-4">
                       {/* Header Row */}
                       <div className="flex items-start justify-between gap-3">

@@ -31,7 +31,7 @@ export default function FeeRecommendationsPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-16">
         <Breadcrumb
@@ -55,15 +55,15 @@ export default function FeeRecommendationsPage() {
         <section className="pb-16">
           <div className="border-t border-surface-300 pt-10">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-              <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+              <div className="card-premium p-4 text-center">
                 <p className="text-2xl font-light tracking-tight text-ink-900">{recommendations.length}</p>
                 <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">Recommendations Generated</p>
               </div>
-              <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+              <div className="card-premium p-4 text-center">
                 <p className="text-2xl font-light tracking-tight text-ink-900">{highConfidenceCount}</p>
                 <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">High Confidence</p>
               </div>
-              <div className="bg-white border border-surface-200 rounded-2xl p-4 text-center shadow-card">
+              <div className="card-premium p-4 text-center">
                 <p className="text-2xl font-light tracking-tight text-ink-900">{formatCurrency(avgFeeRangeLow)} — {formatCurrency(avgFeeRangeHigh)}</p>
                 <p className="text-[11px] text-ink-400 font-medium mt-1.5 tracking-wide">Avg Fee Range</p>
               </div>
@@ -76,7 +76,7 @@ export default function FeeRecommendationsPage() {
       <section className="pb-16">
         <div className="border-t border-surface-300 pt-10">
           {recommendations.length === 0 ? (
-            <EmptyState text="No fee recommendations available yet. Start by creating a project to generate benchmarks." />
+            <EmptyState message="No fee recommendations available yet. Start by creating a project to generate benchmarks." />
           ) : (
             <div className="space-y-6">
               {recommendations.map(rec => {
@@ -87,7 +87,7 @@ export default function FeeRecommendationsPage() {
                 return (
                   <div
                     key={rec.id}
-                    className="bg-white rounded-2xl border border-surface-200 shadow-card p-6"
+                    className="card-premium p-6"
                   >
                     {/* ─── Header ─── */}
                     <div className="flex items-start justify-between mb-6">
@@ -96,12 +96,12 @@ export default function FeeRecommendationsPage() {
                           <h3 className="font-display text-[1.125rem] text-ink-900">
                             {rec.project_type}
                           </h3>
-                          <span className="text-[10px] font-semibold text-ink-600 bg-surface-100 px-2.5 py-1 rounded-full uppercase tracking-[0.1em]">
+                          <span className="status-pill bg-surface-100 text-ink-600">
                             {rec.sector}
                           </span>
                           <span
                             className={cn(
-                              'text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-[0.1em]',
+                              'status-pill',
                               rec.confidence_level === 'high'
                                 ? 'bg-emerald-50 text-emerald-700'
                                 : rec.confidence_level === 'medium'
@@ -309,7 +309,7 @@ export default function FeeRecommendationsPage() {
             </p>
 
             {recommendations.length > 0 && (
-              <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+              <div className="card-premium p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                   <div>
                     <p className="text-[10px] text-ink-400 uppercase tracking-[0.1em] mb-2 font-semibold">

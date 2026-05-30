@@ -54,7 +54,7 @@ export default function CPDDashboard() {
   ]
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* Breadcrumb */}
       <section className="pb-8">
         <Breadcrumb items={[
@@ -112,11 +112,11 @@ export default function CPDDashboard() {
           </div>
 
           {filteredMyCPD.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-surface-200 p-10 text-center shadow-card">
+            <div className="card-premium p-10 text-center">
               <p className="text-[13px] text-ink-300">No CPD records found.</p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+            <div className="card-premium overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-surface-200/60">
@@ -130,7 +130,7 @@ export default function CPDDashboard() {
                 </thead>
                 <tbody>
                   {filteredMyCPD.map(record => (
-                    <tr key={record.id} className="border-b border-surface-200/60 hover:bg-surface-50 transition-colors">
+                    <tr key={record.id} className="stripe-row border-b border-surface-200/60 hover:bg-surface-50 transition-colors">
                       <td className="px-6 py-4 text-[12px] text-ink-900 font-medium">{record.title}</td>
                       <td className="px-6 py-4 text-[12px] text-ink-600">{record.provider}</td>
                       <td className="px-6 py-4 text-[12px] text-ink-600">{record.cpd_topic}</td>
@@ -156,7 +156,7 @@ export default function CPDDashboard() {
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-8">Team Overview</h2>
 
           {teamOverview.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-surface-200 p-10 text-center shadow-card">
+            <div className="card-premium p-10 text-center">
               <p className="text-[13px] text-ink-300">No team CPD data available.</p>
             </div>
           ) : (
@@ -164,7 +164,7 @@ export default function CPDDashboard() {
               {teamOverview.map(item => (
                 <div
                   key={item.user.id}
-                  className="bg-white rounded-2xl border border-surface-200 p-5 shadow-card hover:shadow-lg transition-shadow"
+                  className="card-premium p-5"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>

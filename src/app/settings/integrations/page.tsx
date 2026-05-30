@@ -59,7 +59,7 @@ function getLastSyncDisplay(lastSyncAt?: string, syncFrequency?: number): string
 // ── Component: Summary Card ────────────────────────────────
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-4">
+    <div className="card-premium p-4">
       <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">{label}</p>
       <p className="text-2xl font-semibold text-ink-900">{value}</p>
     </div>
@@ -72,7 +72,7 @@ function IntegrationCard({ integration }: { integration: Integration }) {
   const user = integration.connected_by_user_id ? getUser(integration.connected_by_user_id) : null
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
+    <div className="card-premium p-5">
       {/* Header: Icon + Title + Status */}
       <div className="flex gap-4 mb-4">
         <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center font-semibold shrink-0', bg, text)}>
@@ -153,7 +153,7 @@ export default function IntegrationsHubPage() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HERO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb
@@ -164,7 +164,7 @@ export default function IntegrationsHubPage() {
         />
 
         <div className="mt-8">
-          <h1 className="font-display text-3xl text-ink-900 mb-2">Integrations</h1>
+          <h1 className="font-display text-[2rem] sm:text-[2.5rem] text-ink-900 mb-2">Integrations</h1>
           <p className="text-sm text-ink-400">
             Connect your practice tools to sync data automatically
           </p>
@@ -238,7 +238,7 @@ function QuoteAccountingLinksSection() {
         </div>
 
         {/* Links Table */}
-        <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+        <div className="card-premium overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -255,7 +255,7 @@ function QuoteAccountingLinksSection() {
               <tbody className="divide-y divide-surface-200">
                 {links.map(link => (
                   <React.Fragment key={link.id}>
-                    <tr className="hover:bg-surface-50 transition-colors">
+                    <tr className="stripe-row hover:bg-surface-50 transition-colors">
                       <td className="px-6 py-4 text-sm font-medium text-ink-900">{link.fee_quote_id}</td>
                       <td className="px-6 py-4">
                         <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold', getProviderBadgeClass(link.provider))}>

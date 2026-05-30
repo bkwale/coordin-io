@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectIssues, getProjectChanges, getProjectRisks, getUser } from '@/lib/mock-data'
 import { cn, issueStatusColor, changeStatusColor, riskRegisterStatusColor, riskScoreColor, formatDate } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { TabBar } from '@/components/TabBar'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -17,7 +17,7 @@ export default function ProjectRegistersPage() {
   const project = PROJECTS.find(p => p.id === params.id)
   const [activeTab, setActiveTab] = useState<RegisterTab>('issues')
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const issues = getProjectIssues(project.id)
   const changes = getProjectChanges(project.id)
@@ -34,16 +34,9 @@ export default function ProjectRegistersPage() {
   const openRisks = risks.filter(r => r.status === 'open').length
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: 'Projects', href: '/projects' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Registers' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Issues, Changes & Risks</h1>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Issues, Changes & Risks</h1>
         <p className="text-sm text-slate-500 mt-1">{project.name} — {project.client}</p>
       </div>
 
@@ -58,12 +51,12 @@ export default function ProjectRegistersPage() {
       {activeTab === 'issues' && (
         <div className="space-y-3">
           {issues.length === 0 ? (
-            <EmptyState text="No issues recorded." />
+            <EmptyState message="No issues recorded." />
           ) : (
             issues.map(issue => {
               const owner = getUser(issue.owner_user_id)
               return (
-                <div key={issue.id} className="bg-white rounded-xl border border-slate-200 p-5">
+                <div key={issue.id} className="card-premium p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1.5">
@@ -89,12 +82,12 @@ export default function ProjectRegistersPage() {
       {activeTab === 'changes' && (
         <div className="space-y-3">
           {changes.length === 0 ? (
-            <EmptyState text="No changes recorded." />
+            <EmptyState message="No changes recorded." />
           ) : (
             changes.map(change => {
               const initiator = getUser(change.initiated_by_user_id)
               return (
-                <div key={change.id} className="bg-white rounded-xl border border-slate-200 p-5">
+                <div key={change.id} className="card-premium p-5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
                       <StatusBadge label={change.approval_status.replace('_', ' ')} colorClass={changeStatusColor(change.approval_status)} />
@@ -133,12 +126,12 @@ export default function ProjectRegistersPage() {
       {activeTab === 'risks' && (
         <div className="space-y-3">
           {risks.length === 0 ? (
-            <EmptyState text="No risks in register." />
+            <EmptyState message="No risks in register." />
           ) : (
             risks.map(risk => {
               const owner = getUser(risk.owner_user_id)
               return (
-                <div key={risk.id} className="bg-white rounded-xl border border-slate-200 p-5">
+                <div key={risk.id} className="card-premium p-5">
                   <div className="flex items-start gap-3">
                     <div className={cn('w-3 h-3 rounded-full mt-1 shrink-0', riskScoreColor(risk.probability, risk.impact))} />
                     <div className="min-w-0 flex-1">

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectSiteQueries, getUser } from '@/lib/mock-data'
 import { SiteQueryStatus } from '@/lib/types'
 import { cn, siteQueryStatusColor, formatDate, isOverdue } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { TabBar } from '@/components/TabBar'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -18,7 +18,7 @@ export default function SiteQueriesPage() {
   const project = PROJECTS.find(p => p.id === params.id)
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const queries = getProjectSiteQueries(project.id)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -37,15 +37,9 @@ export default function SiteQueriesPage() {
   ]
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Site Queries' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Site Queries</h1>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Site Queries</h1>
         <p className="text-sm text-slate-500 mt-1">{project.name} — site-to-office workflow</p>
       </div>
 
@@ -56,8 +50,8 @@ export default function SiteQueriesPage() {
       </div>
 
       {/* Quick-add form */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 className="text-sm font-semibold text-slate-900 mb-3">Raise a Query</h2>
+      <div className="card-premium p-5">
+        <h2 className="text-[15px] font-semibold text-ink-900 mb-3">Raise a Query</h2>
         <div className="space-y-3">
           <input
             type="text"
@@ -85,7 +79,7 @@ export default function SiteQueriesPage() {
 
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <EmptyState text="No queries in this category." />
+          <EmptyState message="No queries in this category." />
         ) : (
           filtered.map(query => {
             const raisedBy = getUser(query.raised_by_user_id)
@@ -94,8 +88,8 @@ export default function SiteQueriesPage() {
 
             return (
               <div key={query.id} className={cn(
-                'bg-white rounded-xl border p-5',
-                overdue ? 'border-red-200' : 'border-slate-200'
+                'card-premium p-5',
+                overdue ? 'border-red-200' : ''
               )}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <StatusBadge label={query.status} colorClass={siteQueryStatusColor(query.status)} />

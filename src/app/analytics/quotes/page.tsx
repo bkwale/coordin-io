@@ -123,14 +123,14 @@ export default function QuotePerformanceAnalytics() {
   }
 
   return (
-    <div className="max-w-7xl">
+    <div className="max-w-7xl animate-fade-in">
       {/* ━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb items={[
           { label: 'Analytics' },
           { label: 'Quote Performance' }
         ]} />
-        <h1 className="font-display text-3xl text-ink-900 mt-6 mb-2">Quote Performance</h1>
+        <h1 className="font-display text-[2rem] sm:text-[2.5rem] text-ink-900 mt-6 mb-2">Quote Performance</h1>
         <p className="text-[14px] text-ink-400">Track proposals, conversions and revenue pipeline</p>
       </section>
 
@@ -139,7 +139,7 @@ export default function QuotePerformanceAnalytics() {
         <div className="border-t border-surface-200/60 pt-10">
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Drafts */}
-            <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-slate-300 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -151,7 +151,7 @@ export default function QuotePerformanceAnalytics() {
             </div>
 
             {/* Sent */}
-            <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-blue-500 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -163,7 +163,7 @@ export default function QuotePerformanceAnalytics() {
             </div>
 
             {/* Viewed */}
-            <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-indigo-500 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -175,7 +175,7 @@ export default function QuotePerformanceAnalytics() {
             </div>
 
             {/* Accepted */}
-            <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-emerald-500 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -187,7 +187,7 @@ export default function QuotePerformanceAnalytics() {
             </div>
 
             {/* Declined */}
-            <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-red-500 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -199,7 +199,7 @@ export default function QuotePerformanceAnalytics() {
             </div>
 
             {/* Expired */}
-            <div className="bg-white rounded-xl border border-surface-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-slate-300 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -217,7 +217,7 @@ export default function QuotePerformanceAnalytics() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-xl text-ink-900 mb-6">Quote Values by Status</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+          <div className="card-premium p-6">
             <div className="space-y-3">
               {quotes.slice(0, 12).map((quote) => {
                 const barWidth = (quote.total_fee / maxFee) * 100
@@ -253,7 +253,7 @@ export default function QuotePerformanceAnalytics() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-xl text-ink-900 mb-6">Conversion Funnel</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 p-8 shadow-sm">
+          <div className="card-premium p-8">
             <div className="space-y-6">
               {/* Total Quotes */}
               <div className="flex items-center justify-between">
@@ -339,7 +339,7 @@ export default function QuotePerformanceAnalytics() {
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-xl text-ink-900 mb-6">Quotes Needing Follow-Up</h2>
           {quoteNeedingFollowUp.length > 0 ? (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+            <div className="card-premium overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -373,7 +373,7 @@ export default function QuotePerformanceAnalytics() {
                       }
 
                       return (
-                        <tr key={idx} className="border-b border-surface-100 hover:bg-surface-50/50 transition-colors">
+                        <tr key={idx} className="stripe-row border-b border-surface-100 hover:bg-surface-50/50 transition-colors">
                           <td className="px-6 py-4">
                             <p className="text-[13px] font-medium text-ink-900">{quote.quote_reference}</p>
                           </td>
@@ -407,7 +407,7 @@ export default function QuotePerformanceAnalytics() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-surface-200 p-8 text-center">
+            <div className="card-premium p-8 text-center">
               <p className="text-[14px] text-ink-400">No quotes currently need follow-up action</p>
             </div>
           )}
@@ -427,7 +427,7 @@ export default function QuotePerformanceAnalytics() {
                 : 'bg-red-500'
 
               return (
-                <div key={metric.sector} className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+                <div key={metric.sector} className="card-premium p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <p className="text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold mb-1">Sector</p>
@@ -475,7 +475,7 @@ export default function QuotePerformanceAnalytics() {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+            <div className="card-premium p-6">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-emerald-500 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -485,7 +485,7 @@ export default function QuotePerformanceAnalytics() {
               <p className="text-3xl font-light text-ink-900">{linkedToProjects}</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+            <div className="card-premium p-6">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-amber-500 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -495,7 +495,7 @@ export default function QuotePerformanceAnalytics() {
               <p className="text-3xl font-light text-ink-900">{awaitingLink}</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+            <div className="card-premium p-6">
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-1 h-8 bg-slate-300 rounded-r-sm"></div>
                 <div className="flex-1">
@@ -508,7 +508,7 @@ export default function QuotePerformanceAnalytics() {
 
           {/* Pipeline table */}
           {quoteProjectLinks.length > 0 ? (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+            <div className="card-premium overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -535,7 +535,7 @@ export default function QuotePerformanceAnalytics() {
                       }
 
                       return (
-                        <tr key={idx} className="border-b border-surface-100 hover:bg-surface-50/50 transition-colors">
+                        <tr key={idx} className="stripe-row border-b border-surface-100 hover:bg-surface-50/50 transition-colors">
                           <td className="px-6 py-4">
                             <p className="text-[13px] font-medium text-ink-900">{quote ? quote.quote_reference : 'Quote not found'}</p>
                           </td>
@@ -560,7 +560,7 @@ export default function QuotePerformanceAnalytics() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-surface-200 p-8 text-center">
+            <div className="card-premium p-8 text-center">
               <p className="text-[14px] text-ink-400">No quote-to-project links</p>
             </div>
           )}
@@ -571,7 +571,7 @@ export default function QuotePerformanceAnalytics() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-xl text-ink-900 mb-6">Average Time to Accept</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 p-8 shadow-sm">
+          <div className="card-premium p-8">
             {/* Overall metric */}
             <div className="mb-10 pb-10 border-b border-surface-200/60">
               <div className="flex items-baseline justify-between mb-4">
@@ -614,13 +614,13 @@ export default function QuotePerformanceAnalytics() {
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-xl text-ink-900 mb-6">Pipeline Value Forecast</h2>
           <div className="grid grid-cols-2 gap-6 mb-8">
-            <div className="bg-white rounded-2xl border border-surface-200 p-8 shadow-sm">
+            <div className="card-premium p-8">
               <p className="text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold mb-3">Total Pipeline Value</p>
               <p className="text-4xl font-light text-ink-900 mb-2">{formatCurrency(totalPipelineValue)}</p>
               <p className="text-[13px] text-ink-400">Sent & viewed quotes</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-surface-200 p-8 shadow-sm">
+            <div className="card-premium p-8">
               <p className="text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold mb-3">Expected Value</p>
               <p className="text-4xl font-light text-emerald-600 mb-2">{formatCurrency(expectedValue)}</p>
               <p className="text-[13px] text-ink-400">Based on {formatPercent(weightedAvgWinRate)} win rate</p>
@@ -628,7 +628,7 @@ export default function QuotePerformanceAnalytics() {
           </div>
 
           {/* Breakdown */}
-          <div className="bg-white rounded-2xl border border-surface-200 p-6 shadow-sm">
+          <div className="card-premium p-6">
             <p className="text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold mb-6">Breakdown by Status</p>
             <div className="space-y-4">
               <div>
@@ -678,7 +678,7 @@ export default function QuotePerformanceAnalytics() {
           {recentViews.length > 0 ? (
             <div className="space-y-0">
               {recentViews.map((view, idx) => (
-                <div key={idx} className="bg-white border border-surface-200 border-t-0 first:border-t p-6 hover:bg-surface-50/50 transition-colors group">
+                <div key={idx} className="card-premium border-t-0 first:border-t p-6 hover:bg-surface-50/50 transition-colors group">
                   <div className="flex items-start gap-6">
                     {/* Timeline dot */}
                     <div className="pt-1">
@@ -712,7 +712,7 @@ export default function QuotePerformanceAnalytics() {
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-surface-200 p-8 text-center">
+            <div className="card-premium p-8 text-center">
               <p className="text-[14px] text-ink-400">No recent activity</p>
             </div>
           )}

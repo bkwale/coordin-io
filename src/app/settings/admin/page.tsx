@@ -60,7 +60,7 @@ export default function AdminControlsPage() {
   const visibilityRules = getAllVisibilityRules()
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HERO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb
@@ -94,7 +94,7 @@ export default function AdminControlsPage() {
               return (
                 <div
                   key={perm.id}
-                  className="flex items-center justify-between p-4 bg-white rounded-xl border border-surface-200 hover:shadow-card transition-shadow"
+                  className="flex items-center justify-between p-4 card-premium"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-ink-900">{label}</p>
@@ -134,7 +134,7 @@ export default function AdminControlsPage() {
           </div>
 
           {logs.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-surface-200 p-10 text-center shadow-card">
+            <div className="card-premium p-10 text-center">
               <p className="text-[13px] text-ink-300">No AI interactions logged yet.</p>
             </div>
           ) : (
@@ -168,7 +168,7 @@ export default function AdminControlsPage() {
                     const project = log.project_id ? null : null // Could fetch project if needed
 
                     return (
-                      <tr key={log.id} className="border-b border-surface-200/40 hover:bg-surface-50 transition-colors">
+                      <tr key={log.id} className="stripe-row border-b border-surface-200/40 hover:bg-surface-50 transition-colors">
                         {/* User */}
                         <td className="py-3 px-4 text-ink-700">
                           {user?.name || 'Unknown'}
@@ -276,7 +276,7 @@ export default function AdminControlsPage() {
                     </thead>
                     <tbody>
                       {rulesForRole.map(rule => (
-                        <tr key={rule.id} className="border-b border-surface-200/40 hover:bg-surface-50 transition-colors">
+                        <tr key={rule.id} className="stripe-row border-b border-surface-200/40 hover:bg-surface-50 transition-colors">
                           {/* Feature Area */}
                           <td className="py-3 px-4 text-ink-700 font-medium">
                             {featureAreaLabel(rule.feature_area)}

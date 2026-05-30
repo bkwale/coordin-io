@@ -3,6 +3,7 @@ import { WidgetCard, WidgetDivider } from './WidgetCard'
 import { PROJECTS, getProjectTasks, getUser, INVOICES } from '@/lib/mock-data'
 import { calculateRisks, calculateHealth } from '@/lib/risk-engine'
 import { isOverdue, cn } from '@/lib/utils'
+import { AlertTriangle } from 'lucide-react'
 
 interface RiskRow {
   projectId: string
@@ -57,7 +58,7 @@ export function JobsAtRiskWidget() {
   return (
     <WidgetCard
       title="Jobs At Risk"
-      icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>}
+      icon={<AlertTriangle className="w-4 h-4" />}
     >
       {riskRows.length === 0 ? (
         <p className="text-[12px] text-ink-300 italic">No projects at risk — all clear.</p>

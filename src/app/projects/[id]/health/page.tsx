@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import {
   getProject,
   getProjectHealthSnapshots,
@@ -57,7 +57,7 @@ export default function ProjectHealthPage() {
     return (
       <div className="min-h-screen bg-surface-50 p-8">
         <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-2xl border border-surface-200 p-8 text-center">
+          <div className="card-premium p-8 text-center">
             <p className="text-ink-600 mb-4">Project not found</p>
             <Link
               href="/projects"
@@ -106,19 +106,11 @@ export default function ProjectHealthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen bg-surface-50 animate-fade-in">
       {/* Header */}
       <div className="bg-white border-b border-surface-200">
         <div className="max-w-7xl mx-auto px-8 py-6">
-          <Breadcrumb
-            items={[
-              { label: 'Dashboard', href: '/' },
-              { label: 'Projects', href: '/projects' },
-              { label: project.name, href: `/projects/${projectId}` },
-              { label: 'Health', href: `/projects/${projectId}/health` },
-            ]}
-          />
-          <div className="mt-6">
+          <div>
             <h1 className="font-display text-[2rem] text-ink-900">Project Health</h1>
             <p className="text-[13px] text-ink-500 mt-1">{project.name}</p>
           </div>
@@ -222,14 +214,14 @@ export default function ProjectHealthPage() {
 
           <div className="space-y-3">
             {filteredAlerts.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-surface-200 p-6 text-center">
+              <div className="card-premium p-6 text-center">
                 <p className="text-[13px] text-ink-500">No {alertFilter !== 'All' ? alertFilter.toLowerCase() : ''} alerts</p>
               </div>
             ) : (
               filteredAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="bg-white rounded-2xl border border-surface-200 p-5 hover:shadow-lg transition-shadow"
+                  className="card-premium p-5"
                 >
                   <div
                     className="flex items-start gap-4 cursor-pointer"
@@ -291,7 +283,7 @@ export default function ProjectHealthPage() {
         {/* Burn vs Budget */}
         <div className="space-y-4 border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900">Burn vs Budget</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-surface-200 bg-surface-50">
@@ -322,7 +314,7 @@ export default function ProjectHealthPage() {
                   const maxHours = Math.max(metric.budgeted_hours, metric.actual_hours)
 
                   return (
-                    <tr key={metric.stage} className="border-b border-surface-100 hover:bg-surface-50 transition-colors">
+                    <tr key={metric.stage} className="stripe-row border-b border-surface-100 hover:bg-surface-50 transition-colors">
                       <td className="px-6 py-4 text-ink-900 font-medium">{metric.stage}</td>
                       <td className="px-6 py-4 text-ink-600">{metric.budgeted_hours}h</td>
                       <td className="px-6 py-4 text-ink-600">{metric.actual_hours}h</td>
@@ -367,7 +359,7 @@ export default function ProjectHealthPage() {
           <h2 className="font-display text-[1.5rem] text-ink-900">Stage Completion</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {stageCompletions.map(({ stage, completion }) => (
-              <div key={stage} className="bg-white rounded-2xl border border-surface-200 p-5">
+              <div key={stage} className="card-premium p-5">
                 <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">
                   {stage}
                 </p>
@@ -397,7 +389,7 @@ export default function ProjectHealthPage() {
         {/* Health Trend */}
         <div className="space-y-4 border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900">Health Trend</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-surface-200 bg-surface-50">
@@ -423,7 +415,7 @@ export default function ProjectHealthPage() {
                   <tr
                     key={snapshot.id}
                     className={cn(
-                      'border-b border-surface-100 transition-colors',
+                      'stripe-row border-b border-surface-100 transition-colors',
                       snapshot.health_score >= 75
                         ? 'hover:bg-green-50'
                         : snapshot.health_score >= 50
@@ -502,7 +494,7 @@ export default function ProjectHealthPage() {
         <div className="space-y-4 border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900">Commercial Summary</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">
                 Agreed Fee
               </p>
@@ -510,7 +502,7 @@ export default function ProjectHealthPage() {
                 {formatCurrency(commercial.agreed_fee)}
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">
                 Invoiced
               </p>
@@ -518,7 +510,7 @@ export default function ProjectHealthPage() {
                 {formatCurrency(commercial.fee_invoiced)}
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">
                 Paid
               </p>
@@ -526,7 +518,7 @@ export default function ProjectHealthPage() {
                 {formatCurrency(commercial.fee_paid)}
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">
                 WIP
               </p>
@@ -534,7 +526,7 @@ export default function ProjectHealthPage() {
                 {formatCurrency(commercial.wip_value)}
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">
                 Expenses
               </p>
@@ -542,7 +534,7 @@ export default function ProjectHealthPage() {
                 {formatCurrency(commercial.expenses)}
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-surface-200 p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">
                 Margin %
               </p>

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { getProject, getProjectChangelog, getProjectComplianceStatements, getUser } from '@/lib/mock-data'
 import { BRPDChangeType } from '@/lib/types'
 import { cn, formatDate, brpdChangeTypeLabel, brpdChangeTypeColor, complianceStatementStatusColor, complianceStatementStatusLabel } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -33,7 +33,7 @@ export default function BRPDChangelogPage() {
   const [activeFilter, setActiveFilter] = useState<BRPDChangeType | 'All'>('All')
 
   if (!project) {
-    return <EmptyState text="Project not found." />
+    return <EmptyState message="Project not found." />
   }
 
   const filteredChangelog = activeFilter === 'All'
@@ -44,15 +44,7 @@ export default function BRPDChangelogPage() {
   const pendingCount = changelog.filter(entry => !entry.approved_flag).length
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: 'Projects', href: '/projects' },
-        { label: project.name, href: `/projects/${projectId}` },
-        { label: 'BRPD', href: `/projects/${projectId}/brpd` },
-        { label: 'Changelog' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl text-ink-900">BRPD Changelog & Document Control</h1>
         <p className="text-sm text-ink-400 mt-1">Track all changes to dutyholders, gateways, compliance and documents</p>
@@ -110,7 +102,7 @@ export default function BRPDChangelogPage() {
 
         {/* Changelog Entries */}
         {filteredChangelog.length === 0 ? (
-          <EmptyState text="No changelog entries match this filter." />
+          <EmptyState message="No changelog entries match this filter." />
         ) : (
           <div className="space-y-4">
             {filteredChangelog.map(entry => {
@@ -120,7 +112,7 @@ export default function BRPDChangelogPage() {
               return (
                 <div
                   key={entry.id}
-                  className="bg-white rounded-2xl border border-surface-200 shadow-card p-5"
+                  className="card-premium p-5"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -176,9 +168,9 @@ export default function BRPDChangelogPage() {
         <h2 className="font-display text-[1.5rem] text-ink-900">Document Control Summary</h2>
 
         {complianceStatements.length === 0 ? (
-          <EmptyState text="No compliance statements found for this project." />
+          <EmptyState message="No compliance statements found for this project." />
         ) : (
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-surface-50 border-b border-surface-200/60">
@@ -194,7 +186,7 @@ export default function BRPDChangelogPage() {
                     <tr
                       key={cs.id}
                       className={cn(
-                        'bg-white',
+                        'stripe-row bg-white',
                         idx !== complianceStatements.length - 1 && 'border-b border-surface-200/60'
                       )}
                     >

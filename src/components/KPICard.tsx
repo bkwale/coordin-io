@@ -51,7 +51,7 @@ export function KPICard({ label, value, sublabel, accent = 'slate', icon }: KPIC
 
   return (
     <div className={cn(
-      'card-premium p-5 relative overflow-hidden group cursor-default',
+      'card-static p-5 relative overflow-hidden group cursor-default',
     )}>
       {/* Subtle accent gradient overlay */}
       <div className={cn(
@@ -79,7 +79,7 @@ export function KPICard({ label, value, sublabel, accent = 'slate', icon }: KPIC
 
         {/* Value */}
         <p className={cn(
-          'font-display text-[2.5rem] leading-none tracking-tight',
+          'text-[2.5rem] font-semibold leading-none tracking-tight tabular-nums',
           a.value
         )}>
           {value}

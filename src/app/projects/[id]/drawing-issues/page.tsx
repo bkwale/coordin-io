@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -23,7 +23,7 @@ export default function DrawingIssuesPage() {
   const [expandedWorkflow, setExpandedWorkflow] = useState<string | null>(null)
 
   if (!project) {
-    return <EmptyState text="Project not found." />
+    return <EmptyState message="Project not found." />
   }
 
   const filteredWorkflows = activeFilter === 'all'
@@ -50,14 +50,7 @@ export default function DrawingIssuesPage() {
     : []
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: 'Projects', href: '/projects' },
-        { label: project.name, href: `/projects/${projectId}` },
-        { label: 'Drawing Issues' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
         <h1 className="font-display text-2xl sm:text-3xl text-ink-900">Drawing Issue & Email Workflow</h1>
         <p className="text-sm text-ink-400 mt-1">Track drawing issues, responses, queries and escalations</p>
@@ -133,9 +126,9 @@ export default function DrawingIssuesPage() {
         </div>
 
         {filteredWorkflows.length === 0 ? (
-          <EmptyState text="No workflows match this filter." />
+          <EmptyState message="No workflows match this filter." />
         ) : (
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-surface-50 border-b border-surface-200/60">
@@ -160,7 +153,7 @@ export default function DrawingIssuesPage() {
                         key={wf.id}
                         onClick={() => setExpandedWorkflow(isExpanded ? null : wf.id)}
                         className={cn(
-                          'cursor-pointer hover:bg-surface-50 transition-colors',
+                          'stripe-row cursor-pointer hover:bg-surface-50 transition-colors',
                           idx !== filteredWorkflows.length - 1 && 'border-b border-surface-200/60'
                         )}
                       >
@@ -210,13 +203,13 @@ export default function DrawingIssuesPage() {
               <div className="border-t border-surface-200/60 bg-surface-50/30 p-5">
                 <h3 className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-4">Email Trail</h3>
                 {expandedEmails.length === 0 ? (
-                  <EmptyState text="No emails recorded for this workflow." />
+                  <EmptyState message="No emails recorded for this workflow." />
                 ) : (
                   <div className="space-y-3">
                     {expandedEmails.map(email => (
                       <div
                         key={email.id}
-                        className="bg-white rounded-xl border border-surface-200 p-4"
+                        className="card-premium p-4"
                       >
                         <div className="flex items-start justify-between gap-4 mb-2">
                           <div className="flex items-center gap-3">
@@ -262,7 +255,7 @@ export default function DrawingIssuesPage() {
               return (
                 <div
                   key={wf.id}
-                  className="bg-white rounded-2xl border-2 border-red-200 shadow-card p-5"
+                  className="card-premium border-2 border-red-200 p-5"
                 >
                   <div className="flex items-start gap-3 mb-3">
                     <span className="text-red-500 text-lg">⚠</span>

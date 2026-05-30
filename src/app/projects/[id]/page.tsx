@@ -7,7 +7,7 @@ import { StageBadge } from '@/components/StageBadge'
 import { ProgressBar } from '@/components/ProgressBar'
 import { RiskAlertCard } from '@/components/RiskAlertCard'
 import { TaskList } from '@/components/TaskList'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { Phase2Warnings } from '@/components/Phase2Warnings'
 import { cn, isOverdue, statusLabel, formatDate, healthColor } from '@/lib/utils'
 
@@ -49,19 +49,13 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
     .slice(0, 5)
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: 'Projects', href: '/projects' },
-        { label: project.name },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       {/* Project Header */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6">
+      <div className="card-premium p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">{project.name}</h1>
+              <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">{project.name}</h1>
               <span className={cn('px-2 py-0.5 rounded text-[11px] font-bold uppercase', healthColor(health))}>
                 {health}
               </span>
@@ -98,16 +92,16 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
 
       {/* Progress + Task Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-4">Progress</h3>
+        <div className="card-premium p-5">
+          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-4">Progress</h3>
           <div className="space-y-4">
             <ProgressBar value={completion} label="Overall Completion" />
             <ProgressBar value={stageCompletion} label={`Stage ${project.current_stage}: ${RIBA_STAGES[project.current_stage]}`} />
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-4">Task Summary</h3>
+        <div className="card-premium p-5">
+          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-4">Task Summary</h3>
           <div className="grid grid-cols-2 gap-3">
             {(['not_started', 'in_progress', 'done', 'blocked'] as TaskStatus[]).map(status => (
               <div key={status} className="text-center p-2 rounded-lg bg-slate-50">
@@ -128,8 +122,8 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
       {/* Risks + Required Outstanding + Next Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Risks */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Risk Alerts</h3>
+        <div className="card-premium p-5">
+          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Risk Alerts</h3>
           {risks.length === 0 ? (
             <div className="text-center py-4">
               <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-sm font-bold leading-8 mb-1">✓</span>
@@ -148,8 +142,8 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
         </div>
 
         {/* Required Outstanding */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Required Tasks Outstanding</h3>
+        <div className="card-premium p-5">
+          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Required Tasks Outstanding</h3>
           {requiredOutstanding.length === 0 ? (
             <div className="text-center py-4">
               <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-sm font-bold leading-8 mb-1">✓</span>
@@ -168,8 +162,8 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
         </div>
 
         {/* Next Actions */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Next Actions</h3>
+        <div className="card-premium p-5">
+          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Next Actions</h3>
           {nextActions.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4">No pending actions.</p>
           ) : (
@@ -199,7 +193,7 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
 
       {/* Project Workspaces Grid */}
       <div>
-        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Workspaces</h2>
+        <h2 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Workspaces</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { href: `/projects/${project.id}/health`, label: 'Health', sub: 'Scorecards & Alerts' },
@@ -222,7 +216,7 @@ export default function ProjectDashboard({ params }: { params: { id: string } })
             <Link
               key={link.href}
               href={link.href}
-              className="bg-white rounded-xl border border-slate-200 p-3.5 hover:border-brand-200 hover:bg-brand-50/30 transition-all group"
+              className="card-premium p-3.5 hover:border-brand-200 hover:bg-brand-50/30 transition-all group"
             >
               <p className="text-sm font-semibold text-slate-900 group-hover:text-brand-700 transition-colors">{link.label}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">{link.sub}</p>

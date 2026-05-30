@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { SummaryCard } from '@/components/SummaryCard'
@@ -20,18 +20,10 @@ export default function ProjectBriefPage() {
   if (!project) {
     return (
       <div className="min-h-screen bg-surface-50 p-8">
-        <EmptyState text="Project not found" />
+        <EmptyState message="Project not found" />
       </div>
     )
   }
-
-  // Breadcrumb navigation
-  const breadcrumbs = [
-    { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Projects', href: '/projects' },
-    { label: project.name, href: `/projects/${projectId}` },
-    { label: 'Brief' },
-  ]
 
   // Calculate completeness
   const sections = brief?.sections || []
@@ -51,11 +43,6 @@ export default function ProjectBriefPage() {
   return (
     <div className="min-h-screen bg-surface-50">
       <div className="mx-auto max-w-6xl px-6 py-8">
-        {/* Breadcrumb */}
-        <div className="mb-8">
-          <Breadcrumb items={breadcrumbs} />
-        </div>
-
         {/* Header Section */}
         <div className="mb-10">
           <div className="flex items-start justify-between">
@@ -94,7 +81,7 @@ export default function ProjectBriefPage() {
         {/* Show empty state if no brief */}
         {!brief ? (
           <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-12">
-            <EmptyState text="No brief created yet. Start by adding content to the sections below." />
+            <EmptyState message="No brief created yet. Start by adding content to the sections below." />
           </div>
         ) : (
           <>

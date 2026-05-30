@@ -31,16 +31,16 @@ export function statusLabel(s: TaskStatus): string {
 
 export function statusColor(s: TaskStatus): string {
   switch (s) {
-    case 'not_started': return 'bg-slate-100 text-slate-600'
-    case 'in_progress': return 'bg-blue-100 text-blue-700'
-    case 'done': return 'bg-emerald-100 text-emerald-700'
-    case 'blocked': return 'bg-red-100 text-red-700'
+    case 'not_started': return 'bg-slate-50 text-slate-500'
+    case 'in_progress': return 'bg-blue-50 text-blue-600'
+    case 'done': return 'bg-emerald-50 text-emerald-600'
+    case 'blocked': return 'bg-red-50 text-red-600'
   }
 }
 
 export function severityColor(s: RiskSeverity): string {
   switch (s) {
-    case 'low': return 'bg-slate-100 text-slate-600 border-slate-200'
+    case 'low': return 'bg-slate-50 text-slate-500 border-slate-200'
     case 'medium': return 'bg-amber-50 text-amber-800 border-amber-200'
     case 'high': return 'bg-red-50 text-red-800 border-red-200'
   }
@@ -92,9 +92,9 @@ export function timeAgo(dateStr: string): string {
 
 export function approvalStatusColor(s: ApprovalStatus): string {
   switch (s) {
-    case 'pending': return 'bg-amber-100 text-amber-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'returned': return 'bg-red-100 text-red-700'
+    case 'pending': return 'bg-amber-50 text-amber-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'returned': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -108,35 +108,35 @@ export function approvalStatusLabel(s: ApprovalStatus): string {
 
 export function issueStatusColor(s: IssueStatus): string {
   switch (s) {
-    case 'open': return 'bg-red-100 text-red-700'
-    case 'in_progress': return 'bg-blue-100 text-blue-700'
-    case 'resolved': return 'bg-emerald-100 text-emerald-700'
-    case 'closed': return 'bg-slate-100 text-slate-600'
+    case 'open': return 'bg-red-50 text-red-600'
+    case 'in_progress': return 'bg-blue-50 text-blue-600'
+    case 'resolved': return 'bg-emerald-50 text-emerald-600'
+    case 'closed': return 'bg-slate-50 text-slate-500'
   }
 }
 
 export function changeStatusColor(s: ChangeStatus): string {
   switch (s) {
-    case 'raised': return 'bg-amber-100 text-amber-700'
-    case 'under_review': return 'bg-blue-100 text-blue-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'rejected': return 'bg-red-100 text-red-700'
+    case 'raised': return 'bg-amber-50 text-amber-600'
+    case 'under_review': return 'bg-blue-50 text-blue-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'rejected': return 'bg-red-50 text-red-600'
   }
 }
 
 export function riskRegisterStatusColor(s: RiskRegisterStatus): string {
   switch (s) {
-    case 'open': return 'bg-red-100 text-red-700'
-    case 'mitigated': return 'bg-amber-100 text-amber-700'
-    case 'closed': return 'bg-slate-100 text-slate-600'
+    case 'open': return 'bg-red-50 text-red-600'
+    case 'mitigated': return 'bg-amber-50 text-amber-600'
+    case 'closed': return 'bg-slate-50 text-slate-500'
   }
 }
 
 export function actionStatusColor(s: ActionStatus): string {
   switch (s) {
-    case 'open': return 'bg-blue-100 text-blue-700'
-    case 'done': return 'bg-emerald-100 text-emerald-700'
-    case 'overdue': return 'bg-red-100 text-red-700'
+    case 'open': return 'bg-blue-50 text-blue-600'
+    case 'done': return 'bg-emerald-50 text-emerald-600'
+    case 'overdue': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -162,11 +162,11 @@ export function meetingTypeLabel(t: MeetingType): string {
 export function meetingTypeColor(t: MeetingType): string {
   switch (t) {
     case 'design_team': return 'bg-brand-100 text-brand-700'
-    case 'client_review': return 'bg-violet-100 text-violet-700'
-    case 'site_meeting': return 'bg-amber-100 text-amber-700'
-    case 'consultant': return 'bg-cyan-100 text-cyan-700'
-    case 'contractor': return 'bg-orange-100 text-orange-700'
-    case 'other': return 'bg-slate-100 text-slate-600'
+    case 'client_review': return 'bg-violet-50 text-violet-600'
+    case 'site_meeting': return 'bg-amber-50 text-amber-600'
+    case 'consultant': return 'bg-cyan-50 text-cyan-600'
+    case 'contractor': return 'bg-orange-50 text-orange-600'
+    case 'other': return 'bg-slate-50 text-slate-500'
   }
 }
 
@@ -174,39 +174,39 @@ export function meetingTypeColor(t: MeetingType): string {
 
 export function designRiskStatusColor(s: DesignRiskReviewStatus): string {
   switch (s) {
-    case 'open': return 'bg-red-100 text-red-700'
-    case 'under_review': return 'bg-amber-100 text-amber-700'
-    case 'accepted': return 'bg-emerald-100 text-emerald-700'
-    case 'closed': return 'bg-slate-100 text-slate-600'
+    case 'open': return 'bg-red-50 text-red-600'
+    case 'under_review': return 'bg-amber-50 text-amber-600'
+    case 'accepted': return 'bg-emerald-50 text-emerald-600'
+    case 'closed': return 'bg-slate-50 text-slate-500'
   }
 }
 
 export function contractEventStatusColor(s: ContractEventStatus): string {
   switch (s) {
-    case 'draft': return 'bg-slate-100 text-slate-600'
-    case 'issued': return 'bg-blue-100 text-blue-700'
-    case 'responded': return 'bg-emerald-100 text-emerald-700'
-    case 'overdue': return 'bg-red-100 text-red-700'
+    case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'issued': return 'bg-blue-50 text-blue-600'
+    case 'responded': return 'bg-emerald-50 text-emerald-600'
+    case 'overdue': return 'bg-red-50 text-red-600'
     case 'closed': return 'bg-slate-100 text-slate-500'
   }
 }
 
 export function tenderStatusColor(s: TenderStatus): string {
   switch (s) {
-    case 'preparation': return 'bg-slate-100 text-slate-600'
-    case 'issued': return 'bg-blue-100 text-blue-700'
-    case 'returned': return 'bg-amber-100 text-amber-700'
-    case 'evaluation': return 'bg-violet-100 text-violet-700'
-    case 'awarded': return 'bg-emerald-100 text-emerald-700'
-    case 'cancelled': return 'bg-red-100 text-red-700'
+    case 'preparation': return 'bg-slate-50 text-slate-500'
+    case 'issued': return 'bg-blue-50 text-blue-600'
+    case 'returned': return 'bg-amber-50 text-amber-600'
+    case 'evaluation': return 'bg-violet-50 text-violet-600'
+    case 'awarded': return 'bg-emerald-50 text-emerald-600'
+    case 'cancelled': return 'bg-red-50 text-red-600'
   }
 }
 
 export function siteQueryStatusColor(s: SiteQueryStatus): string {
   switch (s) {
-    case 'open': return 'bg-red-100 text-red-700'
-    case 'responded': return 'bg-blue-100 text-blue-700'
-    case 'closed': return 'bg-slate-100 text-slate-600'
+    case 'open': return 'bg-red-50 text-red-600'
+    case 'responded': return 'bg-blue-50 text-blue-600'
+    case 'closed': return 'bg-slate-50 text-slate-500'
   }
 }
 
@@ -214,39 +214,39 @@ export function siteQueryStatusColor(s: SiteQueryStatus): string {
 
 export function buildingRegStatusColor(s: BuildingRegStatus): string {
   switch (s) {
-    case 'not_submitted': return 'bg-slate-100 text-slate-600'
-    case 'submitted': return 'bg-blue-100 text-blue-700'
-    case 'in_progress': return 'bg-amber-100 text-amber-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'rejected': return 'bg-red-100 text-red-700'
-    case 'conditional': return 'bg-violet-100 text-violet-700'
+    case 'not_submitted': return 'bg-slate-50 text-slate-500'
+    case 'submitted': return 'bg-blue-50 text-blue-600'
+    case 'in_progress': return 'bg-amber-50 text-amber-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'rejected': return 'bg-red-50 text-red-600'
+    case 'conditional': return 'bg-violet-50 text-violet-600'
   }
 }
 
 export function inspectionStatusColor(s: InspectionStatus): string {
   switch (s) {
-    case 'scheduled': return 'bg-blue-100 text-blue-700'
-    case 'passed': return 'bg-emerald-100 text-emerald-700'
-    case 'failed': return 'bg-red-100 text-red-700'
-    case 'requires_revisit': return 'bg-amber-100 text-amber-700'
+    case 'scheduled': return 'bg-blue-50 text-blue-600'
+    case 'passed': return 'bg-emerald-50 text-emerald-600'
+    case 'failed': return 'bg-red-50 text-red-600'
+    case 'requires_revisit': return 'bg-amber-50 text-amber-600'
   }
 }
 
 export function complianceStatusColor(s: ComplianceStatus): string {
   switch (s) {
-    case 'compliant': return 'bg-emerald-100 text-emerald-700'
-    case 'non_compliant': return 'bg-red-100 text-red-700'
-    case 'pending_review': return 'bg-amber-100 text-amber-700'
+    case 'compliant': return 'bg-emerald-50 text-emerald-600'
+    case 'non_compliant': return 'bg-red-50 text-red-600'
+    case 'pending_review': return 'bg-amber-50 text-amber-600'
     case 'not_applicable': return 'bg-slate-100 text-slate-500'
   }
 }
 
 export function documentStatusColor(s: DocumentStatus): string {
   switch (s) {
-    case 'draft': return 'bg-slate-100 text-slate-600'
-    case 'for_review': return 'bg-amber-100 text-amber-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'superseded': return 'bg-violet-100 text-violet-700'
+    case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'for_review': return 'bg-amber-50 text-amber-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'superseded': return 'bg-violet-50 text-violet-600'
     case 'archived': return 'bg-slate-100 text-slate-500'
   }
 }
@@ -265,22 +265,22 @@ export function knowledgeCategoryLabel(c: KnowledgeCategory): string {
 
 export function knowledgeCategoryColor(c: KnowledgeCategory): string {
   switch (c) {
-    case 'lessons_learned': return 'bg-amber-100 text-amber-700'
-    case 'office_procedure': return 'bg-blue-100 text-blue-700'
-    case 'checklist': return 'bg-emerald-100 text-emerald-700'
-    case 'reference_note': return 'bg-violet-100 text-violet-700'
-    case 'fee_clause': return 'bg-cyan-100 text-cyan-700'
-    case 'template': return 'bg-orange-100 text-orange-700'
-    case 'guidance': return 'bg-indigo-100 text-indigo-700'
+    case 'lessons_learned': return 'bg-amber-50 text-amber-600'
+    case 'office_procedure': return 'bg-blue-50 text-blue-600'
+    case 'checklist': return 'bg-emerald-50 text-emerald-600'
+    case 'reference_note': return 'bg-violet-50 text-violet-600'
+    case 'fee_clause': return 'bg-cyan-50 text-cyan-600'
+    case 'template': return 'bg-orange-50 text-orange-600'
+    case 'guidance': return 'bg-indigo-50 text-indigo-600'
   }
 }
 
 export function trainingPlanStatusColor(s: 'not_started' | 'in_progress' | 'completed' | 'overdue'): string {
   switch (s) {
-    case 'not_started': return 'bg-slate-100 text-slate-600'
-    case 'in_progress': return 'bg-blue-100 text-blue-700'
-    case 'completed': return 'bg-emerald-100 text-emerald-700'
-    case 'overdue': return 'bg-red-100 text-red-700'
+    case 'not_started': return 'bg-slate-50 text-slate-500'
+    case 'in_progress': return 'bg-blue-50 text-blue-600'
+    case 'completed': return 'bg-emerald-50 text-emerald-600'
+    case 'overdue': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -291,28 +291,28 @@ export function proficiencyLabel(l: 'none' | 'basic' | 'intermediate' | 'advance
 export function proficiencyColor(l: 'none' | 'basic' | 'intermediate' | 'advanced' | 'expert'): string {
   switch (l) {
     case 'none': return 'bg-slate-100 text-slate-500'
-    case 'basic': return 'bg-amber-100 text-amber-700'
-    case 'intermediate': return 'bg-blue-100 text-blue-700'
-    case 'advanced': return 'bg-emerald-100 text-emerald-700'
-    case 'expert': return 'bg-violet-100 text-violet-700'
+    case 'basic': return 'bg-amber-50 text-amber-600'
+    case 'intermediate': return 'bg-blue-50 text-blue-600'
+    case 'advanced': return 'bg-emerald-50 text-emerald-600'
+    case 'expert': return 'bg-violet-50 text-violet-600'
   }
 }
 
 export function gatewayStatusColor(s: 'not_started' | 'in_progress' | 'submitted' | 'passed' | 'failed'): string {
   switch (s) {
-    case 'not_started': return 'bg-slate-100 text-slate-600'
-    case 'in_progress': return 'bg-blue-100 text-blue-700'
-    case 'submitted': return 'bg-amber-100 text-amber-700'
-    case 'passed': return 'bg-emerald-100 text-emerald-700'
-    case 'failed': return 'bg-red-100 text-red-700'
+    case 'not_started': return 'bg-slate-50 text-slate-500'
+    case 'in_progress': return 'bg-blue-50 text-blue-600'
+    case 'submitted': return 'bg-amber-50 text-amber-600'
+    case 'passed': return 'bg-emerald-50 text-emerald-600'
+    case 'failed': return 'bg-red-50 text-red-600'
   }
 }
 
 export function transmittalStatusColor(s: 'draft' | 'issued' | 'acknowledged'): string {
   switch (s) {
-    case 'draft': return 'bg-slate-100 text-slate-600'
-    case 'issued': return 'bg-blue-100 text-blue-700'
-    case 'acknowledged': return 'bg-emerald-100 text-emerald-700'
+    case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'issued': return 'bg-blue-50 text-blue-600'
+    case 'acknowledged': return 'bg-emerald-50 text-emerald-600'
   }
 }
 
@@ -342,22 +342,22 @@ export function drawingIssueTypeLabel(t: DrawingIssueType): string {
 
 export function drawingIssueTypeColor(t: DrawingIssueType): string {
   switch (t) {
-    case 'planning': return 'bg-indigo-100 text-indigo-700'
-    case 'sketch': return 'bg-slate-100 text-slate-600'
-    case 'working': return 'bg-blue-100 text-blue-700'
-    case 'as_built': return 'bg-emerald-100 text-emerald-700'
-    case 'tender': return 'bg-amber-100 text-amber-700'
-    case 'construction': return 'bg-orange-100 text-orange-700'
-    case 'custom': return 'bg-violet-100 text-violet-700'
+    case 'planning': return 'bg-indigo-50 text-indigo-600'
+    case 'sketch': return 'bg-slate-50 text-slate-500'
+    case 'working': return 'bg-blue-50 text-blue-600'
+    case 'as_built': return 'bg-emerald-50 text-emerald-600'
+    case 'tender': return 'bg-amber-50 text-amber-600'
+    case 'construction': return 'bg-orange-50 text-orange-600'
+    case 'custom': return 'bg-violet-50 text-violet-600'
   }
 }
 
 export function commercialHealthColor(h: CommercialHealthFlag): string {
   switch (h) {
-    case 'healthy': return 'bg-emerald-100 text-emerald-700'
-    case 'watch': return 'bg-amber-100 text-amber-700'
-    case 'at_risk': return 'bg-orange-100 text-orange-700'
-    case 'critical': return 'bg-red-100 text-red-700'
+    case 'healthy': return 'bg-emerald-50 text-emerald-600'
+    case 'watch': return 'bg-amber-50 text-amber-600'
+    case 'at_risk': return 'bg-orange-50 text-orange-600'
+    case 'critical': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -372,9 +372,9 @@ export function commercialHealthDot(h: CommercialHealthFlag): string {
 
 export function utilisationColor(s: UtilisationStatus): string {
   switch (s) {
-    case 'under': return 'bg-blue-100 text-blue-700'
-    case 'optimal': return 'bg-emerald-100 text-emerald-700'
-    case 'over': return 'bg-red-100 text-red-700'
+    case 'under': return 'bg-blue-50 text-blue-600'
+    case 'optimal': return 'bg-emerald-50 text-emerald-600'
+    case 'over': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -390,14 +390,14 @@ export function formatPercent(value: number): string {
 
 export function feeQuoteStatusColor(s: FeeQuoteStatus): string {
   switch (s) {
-    case 'draft': return 'bg-slate-100 text-slate-600'
-    case 'sent': return 'bg-blue-100 text-blue-700'
-    case 'viewed': return 'bg-indigo-100 text-indigo-700'
-    case 'revised': return 'bg-amber-100 text-amber-700'
-    case 'accepted': return 'bg-emerald-100 text-emerald-700'
-    case 'declined': return 'bg-red-100 text-red-700'
+    case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'sent': return 'bg-blue-50 text-blue-600'
+    case 'viewed': return 'bg-indigo-50 text-indigo-600'
+    case 'revised': return 'bg-amber-50 text-amber-600'
+    case 'accepted': return 'bg-emerald-50 text-emerald-600'
+    case 'declined': return 'bg-red-50 text-red-600'
     case 'expired': return 'bg-slate-100 text-slate-400'
-    case 'superseded': return 'bg-violet-100 text-violet-700'
+    case 'superseded': return 'bg-violet-50 text-violet-600'
   }
 }
 
@@ -416,12 +416,12 @@ export function feeQuoteStatusLabel(s: FeeQuoteStatus): string {
 
 export function opportunityStatusColor(s: OpportunityStatus): string {
   switch (s) {
-    case 'lead': return 'bg-slate-100 text-slate-600'
-    case 'qualifying': return 'bg-blue-100 text-blue-700'
-    case 'proposal_sent': return 'bg-indigo-100 text-indigo-700'
-    case 'negotiation': return 'bg-amber-100 text-amber-700'
-    case 'won': return 'bg-emerald-100 text-emerald-700'
-    case 'lost': return 'bg-red-100 text-red-700'
+    case 'lead': return 'bg-slate-50 text-slate-500'
+    case 'qualifying': return 'bg-blue-50 text-blue-600'
+    case 'proposal_sent': return 'bg-indigo-50 text-indigo-600'
+    case 'negotiation': return 'bg-amber-50 text-amber-600'
+    case 'won': return 'bg-emerald-50 text-emerald-600'
+    case 'lost': return 'bg-red-50 text-red-600'
     case 'dormant': return 'bg-slate-100 text-slate-500'
   }
 }
@@ -440,9 +440,9 @@ export function opportunityStatusLabel(s: OpportunityStatus): string {
 
 export function confidenceBadgeColor(c: 'high' | 'medium' | 'low'): string {
   switch (c) {
-    case 'high': return 'bg-emerald-100 text-emerald-700'
-    case 'medium': return 'bg-amber-100 text-amber-700'
-    case 'low': return 'bg-red-100 text-red-700'
+    case 'high': return 'bg-emerald-50 text-emerald-600'
+    case 'medium': return 'bg-amber-50 text-amber-600'
+    case 'low': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -513,10 +513,10 @@ export function healthScoreBg(score: number): string {
 
 export function integrationStatusColor(s: IntegrationStatus): string {
   switch (s) {
-    case 'connected': return 'bg-emerald-100 text-emerald-700'
+    case 'connected': return 'bg-emerald-50 text-emerald-600'
     case 'disconnected': return 'bg-slate-100 text-slate-500'
-    case 'error': return 'bg-red-100 text-red-700'
-    case 'syncing': return 'bg-blue-100 text-blue-700'
+    case 'error': return 'bg-red-50 text-red-600'
+    case 'syncing': return 'bg-blue-50 text-blue-600'
   }
 }
 
@@ -548,9 +548,9 @@ export function portalAccessLabel(level: 'view_only' | 'comment' | 'approve'): s
 
 export function portalAccessColor(level: 'view_only' | 'comment' | 'approve'): string {
   switch (level) {
-    case 'view_only': return 'bg-slate-100 text-slate-600'
-    case 'comment': return 'bg-blue-100 text-blue-700'
-    case 'approve': return 'bg-emerald-100 text-emerald-700'
+    case 'view_only': return 'bg-slate-50 text-slate-500'
+    case 'comment': return 'bg-blue-50 text-blue-600'
+    case 'approve': return 'bg-emerald-50 text-emerald-600'
   }
 }
 
@@ -568,9 +568,9 @@ export function portalItemTypeIcon(type: 'document' | 'approval' | 'drawing' | '
 
 export function healthAlertSeverityColor(s: HealthAlertSeverity): string {
   switch (s) {
-    case 'info': return 'bg-blue-100 text-blue-700'
-    case 'warning': return 'bg-amber-100 text-amber-700'
-    case 'critical': return 'bg-red-100 text-red-700'
+    case 'info': return 'bg-blue-50 text-blue-600'
+    case 'warning': return 'bg-amber-50 text-amber-600'
+    case 'critical': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -635,10 +635,10 @@ export function formatBurnRatio(ratio: number): string {
 export function complianceStatementStatusColor(status: ComplianceStatementStatus): string {
   switch (status) {
     case 'draft': return 'bg-slate-100 text-slate-700'
-    case 'under_review': return 'bg-blue-100 text-blue-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'expired': return 'bg-amber-100 text-amber-700'
-    case 'rejected': return 'bg-red-100 text-red-700'
+    case 'under_review': return 'bg-blue-50 text-blue-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'expired': return 'bg-amber-50 text-amber-600'
+    case 'rejected': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -655,10 +655,10 @@ export function complianceStatementStatusLabel(status: ComplianceStatementStatus
 export function brpdRequirementStatusColor(status: BRPDRequirementStatus): string {
   switch (status) {
     case 'not_started': return 'bg-slate-100 text-slate-700'
-    case 'in_progress': return 'bg-blue-100 text-blue-700'
-    case 'evidenced': return 'bg-cyan-100 text-cyan-700'
-    case 'verified': return 'bg-emerald-100 text-emerald-700'
-    case 'non_compliant': return 'bg-red-100 text-red-700'
+    case 'in_progress': return 'bg-blue-50 text-blue-600'
+    case 'evidenced': return 'bg-cyan-50 text-cyan-600'
+    case 'verified': return 'bg-emerald-50 text-emerald-600'
+    case 'non_compliant': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -686,10 +686,10 @@ export function brpdChangeTypeLabel(changeType: BRPDChangeType): string {
 export function brpdChangeTypeColor(changeType: BRPDChangeType): string {
   switch (changeType) {
     case 'dutyholder_change': return 'bg-purple-100 text-purple-700'
-    case 'gateway_update': return 'bg-blue-100 text-blue-700'
-    case 'compliance_update': return 'bg-emerald-100 text-emerald-700'
-    case 'document_revision': return 'bg-amber-100 text-amber-700'
-    case 'requirement_update': return 'bg-cyan-100 text-cyan-700'
+    case 'gateway_update': return 'bg-blue-50 text-blue-600'
+    case 'compliance_update': return 'bg-emerald-50 text-emerald-600'
+    case 'document_revision': return 'bg-amber-50 text-amber-600'
+    case 'requirement_update': return 'bg-cyan-50 text-cyan-600'
     case 'evidence_upload': return 'bg-slate-100 text-slate-700'
   }
 }
@@ -697,11 +697,11 @@ export function brpdChangeTypeColor(changeType: BRPDChangeType): string {
 export function drawingWorkflowStatusColor(status: DrawingWorkflowStatus): string {
   switch (status) {
     case 'draft': return 'bg-slate-100 text-slate-700'
-    case 'issued': return 'bg-blue-100 text-blue-700'
-    case 'queried': return 'bg-amber-100 text-amber-700'
-    case 'responded': return 'bg-cyan-100 text-cyan-700'
-    case 'closed': return 'bg-emerald-100 text-emerald-700'
-    case 'escalated': return 'bg-red-100 text-red-700'
+    case 'issued': return 'bg-blue-50 text-blue-600'
+    case 'queried': return 'bg-amber-50 text-amber-600'
+    case 'responded': return 'bg-cyan-50 text-cyan-600'
+    case 'closed': return 'bg-emerald-50 text-emerald-600'
+    case 'escalated': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -721,7 +721,7 @@ export function drawingEmailDirectionLabel(direction: DrawingEmailDirection): st
 }
 
 export function drawingEmailDirectionColor(direction: DrawingEmailDirection): string {
-  return direction === 'outbound' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+  return direction === 'outbound' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
 }
 
 export function requirementCategoryLabel(category: string): string {
@@ -738,9 +738,9 @@ export function requirementCategoryLabel(category: string): string {
 
 export function requirementCategoryColor(category: string): string {
   switch (category) {
-    case 'design': return 'bg-indigo-100 text-indigo-700'
-    case 'safety': return 'bg-red-100 text-red-700'
-    case 'fire': return 'bg-orange-100 text-orange-700'
+    case 'design': return 'bg-indigo-50 text-indigo-600'
+    case 'safety': return 'bg-red-50 text-red-600'
+    case 'fire': return 'bg-orange-50 text-orange-600'
     case 'structural': return 'bg-slate-100 text-slate-700'
     case 'accessibility': return 'bg-purple-100 text-purple-700'
     case 'environmental': return 'bg-green-100 text-green-700'
@@ -752,9 +752,9 @@ export function requirementCategoryColor(category: string): string {
 
 export function wizardStepStatusColor(status: WizardStepStatus): string {
   switch (status) {
-    case 'not_started': return 'bg-slate-100 text-slate-600'
-    case 'in_progress': return 'bg-blue-100 text-blue-700'
-    case 'complete': return 'bg-emerald-100 text-emerald-700'
+    case 'not_started': return 'bg-slate-50 text-slate-500'
+    case 'in_progress': return 'bg-blue-50 text-blue-600'
+    case 'complete': return 'bg-emerald-50 text-emerald-600'
     case 'skipped': return 'bg-amber-100 text-amber-600'
   }
 }
@@ -771,9 +771,9 @@ export function wizardStepStatusLabel(status: WizardStepStatus): string {
 export function briefSectionStatusColor(status: BriefSectionStatus): string {
   switch (status) {
     case 'empty': return 'bg-slate-100 text-slate-500'
-    case 'draft': return 'bg-amber-100 text-amber-700'
-    case 'complete': return 'bg-blue-100 text-blue-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
+    case 'draft': return 'bg-amber-50 text-amber-600'
+    case 'complete': return 'bg-blue-50 text-blue-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
   }
 }
 
@@ -788,9 +788,9 @@ export function briefSectionStatusLabel(status: BriefSectionStatus): string {
 
 export function accountingSyncStatusColor(status: AccountingSyncStatus): string {
   switch (status) {
-    case 'synced': return 'bg-emerald-100 text-emerald-700'
-    case 'pending': return 'bg-blue-100 text-blue-700'
-    case 'failed': return 'bg-red-100 text-red-700'
+    case 'synced': return 'bg-emerald-50 text-emerald-600'
+    case 'pending': return 'bg-blue-50 text-blue-600'
+    case 'failed': return 'bg-red-50 text-red-600'
     case 'not_linked': return 'bg-slate-100 text-slate-500'
   }
 }
@@ -833,12 +833,12 @@ export function roleLabel(role: string): string {
 
 export function leaveTypeColor(type: LeaveType): string {
   switch (type) {
-    case 'holiday': return 'bg-blue-100 text-blue-700'
-    case 'sick': return 'bg-red-100 text-red-700'
+    case 'holiday': return 'bg-blue-50 text-blue-600'
+    case 'sick': return 'bg-red-50 text-red-600'
     case 'cpd': return 'bg-purple-100 text-purple-700'
     case 'parental': return 'bg-pink-100 text-pink-700'
-    case 'compassionate': return 'bg-amber-100 text-amber-700'
-    case 'unpaid': return 'bg-slate-100 text-slate-600'
+    case 'compassionate': return 'bg-amber-50 text-amber-600'
+    case 'unpaid': return 'bg-slate-50 text-slate-500'
   }
 }
 
@@ -855,9 +855,9 @@ export function leaveTypeLabel(type: LeaveType): string {
 
 export function leaveStatusColor(status: LeaveStatus): string {
   switch (status) {
-    case 'pending': return 'bg-amber-100 text-amber-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'declined': return 'bg-red-100 text-red-700'
+    case 'pending': return 'bg-amber-50 text-amber-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'declined': return 'bg-red-50 text-red-600'
     case 'cancelled': return 'bg-slate-100 text-slate-500'
   }
 }
@@ -875,10 +875,10 @@ export function leaveStatusLabel(status: LeaveStatus): string {
 
 export function timesheetStatusColor(status: TimesheetStatus): string {
   switch (status) {
-    case 'draft': return 'bg-slate-100 text-slate-600'
-    case 'submitted': return 'bg-blue-100 text-blue-700'
-    case 'approved': return 'bg-emerald-100 text-emerald-700'
-    case 'rejected': return 'bg-red-100 text-red-700'
+    case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'submitted': return 'bg-blue-50 text-blue-600'
+    case 'approved': return 'bg-emerald-50 text-emerald-600'
+    case 'rejected': return 'bg-red-50 text-red-600'
   }
 }
 
@@ -895,12 +895,12 @@ export function timesheetStatusLabel(status: TimesheetStatus): string {
 
 export function invoiceStatusColor(status: InvoiceStatus): string {
   switch (status) {
-    case 'draft': return 'bg-slate-100 text-slate-600'
-    case 'sent': return 'bg-blue-100 text-blue-700'
-    case 'viewed': return 'bg-indigo-100 text-indigo-700'
-    case 'due': return 'bg-amber-100 text-amber-700'
-    case 'overdue': return 'bg-red-100 text-red-700'
-    case 'paid': return 'bg-emerald-100 text-emerald-700'
+    case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'sent': return 'bg-blue-50 text-blue-600'
+    case 'viewed': return 'bg-indigo-50 text-indigo-600'
+    case 'due': return 'bg-amber-50 text-amber-600'
+    case 'overdue': return 'bg-red-50 text-red-600'
+    case 'paid': return 'bg-emerald-50 text-emerald-600'
     case 'void': return 'bg-slate-100 text-slate-400'
   }
 }
@@ -936,16 +936,16 @@ export function overheadCategoryLabel(category: OverheadCategory): string {
 
 export function overheadCategoryColor(category: OverheadCategory): string {
   switch (category) {
-    case 'rent': return 'bg-violet-100 text-violet-700'
-    case 'internet': return 'bg-sky-100 text-sky-700'
-    case 'telephones': return 'bg-cyan-100 text-cyan-700'
-    case 'printing': return 'bg-amber-100 text-amber-700'
-    case 'software': return 'bg-indigo-100 text-indigo-700'
-    case 'insurance': return 'bg-rose-100 text-rose-700'
-    case 'utilities': return 'bg-emerald-100 text-emerald-700'
-    case 'office_admin': return 'bg-slate-100 text-slate-600'
-    case 'travel': return 'bg-orange-100 text-orange-700'
-    case 'professional_fees': return 'bg-blue-100 text-blue-700'
+    case 'rent': return 'bg-violet-50 text-violet-600'
+    case 'internet': return 'bg-sky-50 text-sky-600'
+    case 'telephones': return 'bg-cyan-50 text-cyan-600'
+    case 'printing': return 'bg-amber-50 text-amber-600'
+    case 'software': return 'bg-indigo-50 text-indigo-600'
+    case 'insurance': return 'bg-rose-50 text-rose-600'
+    case 'utilities': return 'bg-emerald-50 text-emerald-600'
+    case 'office_admin': return 'bg-slate-50 text-slate-500'
+    case 'travel': return 'bg-orange-50 text-orange-600'
+    case 'professional_fees': return 'bg-blue-50 text-blue-600'
   }
 }
 
@@ -963,11 +963,11 @@ export function newsCategoryLabel(category: NewsCategory): string {
 
 export function newsCategoryColor(category: NewsCategory): string {
   switch (category) {
-    case 'architecture': return 'bg-violet-100 text-violet-700'
-    case 'construction': return 'bg-amber-100 text-amber-700'
-    case 'regulations': return 'bg-red-100 text-red-700'
-    case 'planning': return 'bg-sky-100 text-sky-700'
-    case 'company': return 'bg-emerald-100 text-emerald-700'
+    case 'architecture': return 'bg-violet-50 text-violet-600'
+    case 'construction': return 'bg-amber-50 text-amber-600'
+    case 'regulations': return 'bg-red-50 text-red-600'
+    case 'planning': return 'bg-sky-50 text-sky-600'
+    case 'company': return 'bg-emerald-50 text-emerald-600'
   }
 }
 
@@ -975,9 +975,9 @@ export function newsCategoryColor(category: NewsCategory): string {
 
 export function updateSeverityColor(severity: 'info' | 'warning' | 'critical'): string {
   switch (severity) {
-    case 'info': return 'bg-blue-100 text-blue-700'
-    case 'warning': return 'bg-amber-100 text-amber-700'
-    case 'critical': return 'bg-red-100 text-red-700'
+    case 'info': return 'bg-blue-50 text-blue-600'
+    case 'warning': return 'bg-amber-50 text-amber-600'
+    case 'critical': return 'bg-red-50 text-red-600'
   }
 }
 

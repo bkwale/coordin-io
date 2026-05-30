@@ -28,12 +28,12 @@ export default function NumberingTemplatesPage() {
   const drawingTemplates = getDrawingIssueTemplates()
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen bg-surface-50 animate-fade-in">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <Breadcrumb items={[{ label: 'Settings' }, { label: 'Numbering & Templates' }]} />
-          <h1 className="font-display text-3xl text-slate-900 mt-4 mb-1">Numbering & Templates</h1>
+          <h1 className="font-display text-[2rem] sm:text-[2.5rem] text-ink-900 mt-4 mb-1">Numbering & Templates</h1>
           <p className="text-slate-600">
             Configure automatic numbering for projects, quotes and drawing issues
           </p>
@@ -192,7 +192,7 @@ interface TemplateCardProps {
 
 function TemplateCard({ name, scope, format, preview, isActive }: TemplateCardProps) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-sm transition-shadow">
+    <div className="card-premium p-5">
       {/* Top row: Name and Active Badge */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">

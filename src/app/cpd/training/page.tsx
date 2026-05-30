@@ -45,7 +45,7 @@ export default function TrainingPlans() {
   ]
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* Breadcrumb */}
       <section className="pb-8">
         <Breadcrumb items={[
@@ -86,9 +86,9 @@ export default function TrainingPlans() {
       {/* Training Plans Table */}
       <section className="pb-16">
         {filteredPlans.length === 0 ? (
-          <EmptyState text="No training plans found." />
+          <EmptyState message="No training plans found." />
         ) : (
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-surface-200/60">
@@ -108,7 +108,7 @@ export default function TrainingPlans() {
                     <tr
                       key={plan.id}
                       className={cn(
-                        'border-b border-surface-200/60 hover:bg-surface-50 transition-colors',
+                        'stripe-row border-b border-surface-200/60 hover:bg-surface-50 transition-colors',
                         isOverdueStatus && 'bg-red-50'
                       )}
                     >
@@ -155,7 +155,7 @@ export default function TrainingPlans() {
                 return (
                   <div
                     key={plan.id}
-                    className="bg-white rounded-2xl border border-surface-200 p-5 shadow-card"
+                    className="card-premium p-5"
                   >
                     <div className="mb-4">
                       <p className="text-[12px] font-semibold text-ink-900">{plan.title}</p>

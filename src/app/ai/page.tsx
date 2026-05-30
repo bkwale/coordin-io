@@ -98,7 +98,7 @@ export default function AITeammatesPage() {
   const isInputEmpty = !inputValue.trim()
 
   return (
-    <div className="max-w-7xl">
+    <div className="max-w-7xl animate-fade-in">
       {/* ━━━ HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-8">
         <Breadcrumb items={[{ label: 'AI Teammate' }]} />
@@ -143,7 +143,7 @@ export default function AITeammatesPage() {
                           onClick={() => handleSelectPrompt(prompt)}
                           className={cn(
                             'p-4 text-left rounded-xl border transition-all',
-                            'bg-white border-slate-200 hover:border-accent-300 hover:bg-accent-50'
+                            'card-premium hover:border-accent-300 hover:bg-accent-50'
                           )}
                         >
                           <p className="text-[12px] font-medium text-ink-900">{prompt.label}</p>
@@ -158,7 +158,7 @@ export default function AITeammatesPage() {
             // Chat area with messages
             <>
               {/* Messages container */}
-              <div className="max-h-[600px] overflow-y-auto mb-6 space-y-4 bg-white rounded-xl border border-slate-200 p-6">
+              <div className="max-h-[600px] overflow-y-auto mb-6 space-y-4 card-premium p-6">
                 {displayMessages.map(msg => (
                   <div
                     key={msg.id}
@@ -279,7 +279,7 @@ export default function AITeammatesPage() {
                       'w-full text-left p-3 rounded-lg border transition-all text-[12px]',
                       activeConversation?.id === conversation.id
                         ? 'bg-accent-50 border-accent-300'
-                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        : 'card-premium hover:border-slate-300 hover:bg-slate-50'
                     )}
                   >
                     <p className="font-medium text-ink-900 truncate">{conversation.title}</p>
@@ -313,7 +313,7 @@ export default function AITeammatesPage() {
                       <button
                         key={prompt.id}
                         onClick={() => handleSelectPrompt(prompt)}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white border border-slate-200 hover:border-accent-200 hover:bg-accent-50 transition-all text-[12px] font-medium text-ink-900"
+                        className="w-full text-left px-3 py-2 rounded-lg card-premium hover:border-accent-200 hover:bg-accent-50 transition-all text-[12px] font-medium text-ink-900"
                       >
                         {prompt.label}
                       </button>

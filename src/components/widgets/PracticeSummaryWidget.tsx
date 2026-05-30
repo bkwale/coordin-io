@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { WidgetCard, WidgetStat, WidgetDivider } from './WidgetCard'
 import { PROJECTS, ALL_TASKS, APPROVALS, getOpenInvoiceValue, getDashboardKPIs } from '@/lib/mock-data'
 import { isOverdue } from '@/lib/utils'
+import { LayoutGrid } from 'lucide-react'
 
 export function PracticeSummaryWidget() {
   const kpis = getDashboardKPIs()
@@ -13,7 +14,7 @@ export function PracticeSummaryWidget() {
   return (
     <WidgetCard
       title="Practice Summary"
-      icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>}
+      icon={<LayoutGrid className="w-4 h-4" />}
     >
       <div className="grid grid-cols-4 gap-4">
         <WidgetStat label="Active Projects" value={activeProjects.length} />

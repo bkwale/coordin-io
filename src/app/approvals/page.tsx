@@ -33,15 +33,15 @@ export default function ApprovalsQueuePage() {
   })
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <Breadcrumb items={[
         { label: 'Dashboard', href: '/' },
         { label: 'Approvals' },
       ]} />
 
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Approvals Queue</h1>
-        <p className="text-sm text-slate-500 mt-1">Tasks and documents awaiting your review</p>
+        <h1 className="font-display text-[2rem] sm:text-[2.5rem] text-ink-900">Approvals Queue</h1>
+        <p className="text-[13px] text-ink-400 mt-1">{tabs[0].count} items awaiting review</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -54,7 +54,7 @@ export default function ApprovalsQueuePage() {
 
       <div className="space-y-3">
         {sorted.length === 0 ? (
-          <EmptyState text="No items in this category." />
+          <EmptyState message="No items in this category." />
         ) : (
           sorted.map(approval => {
             const submitter = getUser(approval.submitted_by_user_id)
@@ -65,10 +65,10 @@ export default function ApprovalsQueuePage() {
               <div
                 key={approval.id}
                 className={cn(
-                  'bg-white rounded-xl border p-5 transition-colors',
+                  'card-premium p-5 transition-colors',
                   approval.status === 'pending' ? 'border-amber-200 hover:border-amber-300' :
                   approval.status === 'returned' ? 'border-red-200 hover:border-red-300' :
-                  'border-slate-200 hover:border-slate-300'
+                  ''
                 )}
               >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">

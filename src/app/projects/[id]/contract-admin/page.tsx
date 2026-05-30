@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectContractAdmin, getProjectContractEvents, getUser } from '@/lib/mock-data'
 import { cn, contractEventStatusColor, formatDate, isOverdue } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -12,7 +12,7 @@ export default function ContractAdminPage() {
   const params = useParams()
   const project = PROJECTS.find(p => p.id === params.id)
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const contractAdmin = getProjectContractAdmin(project.id)
   const events = getProjectContractEvents(project.id)
@@ -22,22 +22,16 @@ export default function ContractAdminPage() {
   const openEvents = events.filter(e => e.status === 'issued' || e.status === 'draft').length
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Contract Admin' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Contract Administration</h1>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Contract Administration</h1>
         <p className="text-sm text-slate-500 mt-1">{project.name} — {project.client}</p>
       </div>
 
       {/* Contract Summary */}
       {contractAdmin ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Contract Summary</h2>
+        <div className="card-premium p-5">
+          <h2 className="text-[15px] font-semibold text-ink-900 mb-3">Contract Summary</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase">Procurement</p>
@@ -96,9 +90,9 @@ export default function ContractAdminPage() {
       </div>
 
       {/* Contract Events Register */}
-      <div className="bg-white rounded-xl border border-slate-200">
+      <div className="card-premium">
         <div className="p-5 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-900">Contract Events</h2>
+          <h2 className="text-[15px] font-semibold text-ink-900">Contract Events</h2>
         </div>
 
         {events.length === 0 ? (

@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { getProject, getProjectBuildingRegs, getProjectInspections, getUser, USERS } from '@/lib/mock-data'
 import { BuildingRegRecord, BuildingInspection } from '@/lib/types'
 import { cn, formatDate, isOverdue, buildingRegStatusColor, inspectionStatusColor } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -15,7 +15,7 @@ export default function BuildingRegsPage() {
   const params = useParams()
   const project = getProject(params.id as string)
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const buildingRegs = getProjectBuildingRegs(project.id)
   const inspections = getProjectInspections(project.id)
@@ -45,13 +45,7 @@ export default function BuildingRegsPage() {
   )
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Building Regulations' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
         <h1 className="text-xl sm:text-2xl font-display font-bold text-ink-900">Building Regulations</h1>
         <p className="text-sm text-ink-400 mt-1">{project.name} — {project.client}</p>
@@ -78,9 +72,9 @@ export default function BuildingRegsPage() {
       />
 
       {/* Building Regulations Records */}
-      <div className="bg-white rounded-2xl border border-surface-200 shadow-card">
+      <div className="card-premium">
         <div className="p-5 border-b border-surface-200/60">
-          <h2 className="text-sm font-semibold text-ink-900">Applications</h2>
+          <h2 className="text-[15px] font-semibold text-ink-900">Applications</h2>
         </div>
 
         {filteredRegs.length === 0 ? (
@@ -168,7 +162,7 @@ export default function BuildingRegsPage() {
           {inspections.filter(i => i.status === 'scheduled').length > 0 && (
             <div className="mb-8">
               <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.08em] mb-3">Upcoming</h3>
-              <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+              <div className="card-premium overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="border-b border-surface-200/60 bg-surface-50">
                     <tr>
@@ -180,7 +174,7 @@ export default function BuildingRegsPage() {
                   </thead>
                   <tbody className="divide-y divide-surface-200/60">
                     {inspections.filter(i => i.status === 'scheduled').map(insp => (
-                      <tr key={insp.id} className="hover:bg-surface-50 transition-colors">
+                      <tr key={insp.id} className="stripe-row hover:bg-surface-50 transition-colors">
                         <td className="px-5 py-4 text-xs font-medium text-ink-900">{insp.inspection_type}</td>
                         <td className="px-5 py-4 text-xs text-ink-600">{formatDate(insp.scheduled_date)}</td>
                         <td className="px-5 py-4">
@@ -201,7 +195,7 @@ export default function BuildingRegsPage() {
           {completedInspections.length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.08em] mb-3">Completed</h3>
-              <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+              <div className="card-premium overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="border-b border-surface-200/60 bg-surface-50">
                     <tr>
@@ -214,7 +208,7 @@ export default function BuildingRegsPage() {
                   </thead>
                   <tbody className="divide-y divide-surface-200/60">
                     {completedInspections.map(insp => (
-                      <tr key={insp.id} className="hover:bg-surface-50 transition-colors">
+                      <tr key={insp.id} className="stripe-row hover:bg-surface-50 transition-colors">
                         <td className="px-5 py-4 text-xs font-medium text-ink-900">{insp.inspection_type}</td>
                         <td className="px-5 py-4 text-xs text-ink-600">{formatDate(insp.completed_date!)}</td>
                         <td className="px-5 py-4">

@@ -34,7 +34,7 @@ export default function KnowledgeBasePage() {
   })
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8 max-w-6xl animate-fade-in">
       {/* Breadcrumb */}
       <Breadcrumb items={[
         { label: 'Dashboard', href: '/' },
@@ -48,7 +48,7 @@ export default function KnowledgeBasePage() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl border border-surface-200 shadow-card flex items-center gap-3 px-4 py-3">
+      <div className="card-premium flex items-center gap-3 px-4 py-3">
         <svg className="w-4 h-4 text-ink-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
           <path strokeLinecap="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
@@ -97,7 +97,7 @@ export default function KnowledgeBasePage() {
             <Link
               key={article.id}
               href={`/knowledge/${article.id}`}
-              className="bg-white rounded-2xl border border-surface-200 shadow-card hover:shadow-card-hover transition-all p-5 group flex flex-col"
+              className="card-premium hover:shadow-card-hover transition-all p-5 group flex flex-col"
             >
               {/* Category Badge */}
               <div className="mb-3">
@@ -149,7 +149,7 @@ export default function KnowledgeBasePage() {
           ))}
         </div>
       ) : (
-        <EmptyState text="No articles match your search. Try different keywords or filters." />
+        <EmptyState message="No articles match your search. Try different keywords or filters." />
       )}
     </div>
   )

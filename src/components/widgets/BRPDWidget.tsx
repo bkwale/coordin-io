@@ -3,6 +3,7 @@ import { WidgetCard, WidgetStat, WidgetDivider } from './WidgetCard'
 import { PROJECTS, BRPD_GATEWAYS, BRPD_REQUIREMENTS, COMPLIANCE_STATEMENTS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import { BRPDRequirement, ComplianceStatement } from '@/lib/types'
+import { ShieldCheck } from 'lucide-react'
 
 export function BRPDWidget() {
   const brpdProjects = PROJECTS.filter(p => p.status === 'active').length // Simplified — all active projects assumed BRPD-enabled
@@ -20,7 +21,7 @@ export function BRPDWidget() {
   return (
     <WidgetCard
       title="BRPD / Compliance"
-      icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>}
+      icon={<ShieldCheck className="w-4 h-4" />}
     >
       <div className="grid grid-cols-3 gap-3">
         <WidgetStat label="Open Actions" value={openActions} color={openActions > 0 ? 'text-amber-600' : 'text-emerald-600'} />

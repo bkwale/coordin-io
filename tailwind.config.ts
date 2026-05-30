@@ -38,40 +38,6 @@ const config: Config = {
           800: '#3730a3',
           900: '#312e81',
         },
-        // Warm earth accent — terracotta for warmth
-        warm: {
-          50: '#fef7f0',
-          100: '#fdecd8',
-          200: '#fad5af',
-          300: '#f5b77c',
-          400: '#ef9148',
-          500: '#ea7525',
-          600: '#db5d1b',
-          700: '#b64518',
-        },
-        // Status colors — muted, not screaming
-        status: {
-          green: '#3d9970',
-          'green-light': '#ecfdf0',
-          amber: '#c78d20',
-          'amber-light': '#fef9ec',
-          red: '#c0392b',
-          'red-light': '#fef2f2',
-        },
-        // Legacy brand alias (for components still referencing it)
-        brand: {
-          50: '#f0f1ff',
-          100: '#e0e3ff',
-          200: '#c7cbfe',
-          300: '#a5a9fc',
-          400: '#8185f7',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
-          950: '#1e1b4b',
-        },
         slate: {
           925: '#0c1222',
         }
@@ -82,6 +48,10 @@ const config: Config = {
         mono: ['"JetBrains Mono"', 'Menlo', 'monospace'],
       },
       fontSize: {
+        'micro': ['10px', { lineHeight: '1.4', fontWeight: '500' }],
+        'caption': ['11px', { lineHeight: '1.4', fontWeight: '500' }],
+        'body': ['13px', { lineHeight: '1.5', fontWeight: '400' }],
+        'subtitle': ['15px', { lineHeight: '1.4', fontWeight: '600' }],
         'display-lg': ['2.25rem', { lineHeight: '1.1', letterSpacing: '-0.025em', fontWeight: '400' }],
         'display': ['1.75rem', { lineHeight: '1.15', letterSpacing: '-0.02em', fontWeight: '400' }],
         'heading': ['1.125rem', { lineHeight: '1.3', letterSpacing: '-0.01em', fontWeight: '500' }],

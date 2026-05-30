@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectPlanningRecords, getProjectSiteConstraints } from '@/lib/mock-data'
 import { cn, formatDate, severityColor, severityDot } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { EmptyState } from '@/components/EmptyState'
 
@@ -11,22 +11,16 @@ export default function PlanningPage() {
   const params = useParams()
   const project = PROJECTS.find(p => p.id === params.id)
 
-  if (!project) return <EmptyState text="Project not found." />
+  if (!project) return <EmptyState message="Project not found." />
 
   const records = getProjectPlanningRecords(project.id)
   const constraints = getProjectSiteConstraints(project.id)
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Planning' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Planning & Site Context</h1>
-        <p className="text-sm text-slate-500 mt-1">{project.name} — {project.client}</p>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Planning & Site Context</h1>
+        <p className="text-sm text-ink-400 mt-1">{project.name} — {project.client}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -35,9 +29,9 @@ export default function PlanningPage() {
       </div>
 
       {/* Planning Records */}
-      <div className="bg-white rounded-xl border border-slate-200">
+      <div className="card-premium">
         <div className="p-5 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-900">Planning Records</h2>
+          <h2 className="text-[15px] font-semibold text-ink-900">Planning Records</h2>
         </div>
 
         {records.length === 0 ? (
@@ -86,9 +80,9 @@ export default function PlanningPage() {
       </div>
 
       {/* Site Constraints */}
-      <div className="bg-white rounded-xl border border-slate-200">
+      <div className="card-premium">
         <div className="p-5 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-900">Site Constraints</h2>
+          <h2 className="text-[15px] font-semibold text-ink-900">Site Constraints</h2>
         </div>
 
         {constraints.length === 0 ? (

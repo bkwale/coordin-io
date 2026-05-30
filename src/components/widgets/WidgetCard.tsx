@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { ChevronDown } from 'lucide-react'
 
 interface WidgetCardProps {
   title: string
@@ -11,13 +12,14 @@ interface WidgetCardProps {
   className?: string
   collapsible?: boolean
   defaultCollapsed?: boolean
+  isLoading?: boolean
 }
 
-export function WidgetCard({ title, icon, actions, children, className, collapsible = true, defaultCollapsed = false }: WidgetCardProps) {
+export function WidgetCard({ title, icon, actions, children, className, collapsible = true, defaultCollapsed = false, isLoading = false }: WidgetCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
   return (
-    <div className={cn('card-premium overflow-hidden', className)}>
+    <div className={cn('card-static overflow-hidden', className)}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
@@ -32,20 +34,25 @@ export function WidgetCard({ title, icon, actions, children, className, collapsi
               className="p-1 rounded-md hover:bg-surface-100 text-ink-300 hover:text-ink-500 transition-colors"
               aria-label={collapsed ? 'Expand' : 'Collapse'}
             >
-              <svg className={cn('w-4 h-4 transition-transform', collapsed && '-rotate-90')} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              </svg>
+              <ChevronDown className={cn('w-4 h-4 transition-transform', collapsed && '-rotate-90')} />
             </button>
           )}
         </div>
       </div>
 
       {/* Body */}
-      {!collapsed && (
+      {isLoading ? (
+        <div className="px-5 pb-5 space-y-3">
+          <div className="h-4 bg-surface-100 rounded animate-pulse w-3/4" />
+          <div className="h-4 bg-surface-100 rounded animate-pulse w-1/2" />
+          <div className="h-8 bg-surface-100 rounded animate-pulse w-full" />
+          <div className="h-4 bg-surface-100 rounded animate-pulse w-2/3" />
+        </div>
+      ) : !collapsed ? (
         <div className="px-5 pb-5">
           {children}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

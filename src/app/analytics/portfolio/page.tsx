@@ -75,7 +75,7 @@ export default function PortfolioHealth() {
   }
 
   return (
-    <div className="max-w-7xl">
+    <div className="max-w-7xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb items={[
@@ -105,7 +105,7 @@ export default function PortfolioHealth() {
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Health Distribution</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {/* Healthy */}
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-lg transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">Healthy</span>
@@ -124,7 +124,7 @@ export default function PortfolioHealth() {
             </div>
 
             {/* Watch */}
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-lg transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">Watch</span>
@@ -143,7 +143,7 @@ export default function PortfolioHealth() {
             </div>
 
             {/* At Risk */}
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-lg transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-orange-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">At Risk</span>
@@ -162,7 +162,7 @@ export default function PortfolioHealth() {
             </div>
 
             {/* Critical */}
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-lg transition-shadow">
+            <div className="card-premium p-5">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-red-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">Critical</span>
@@ -188,19 +188,19 @@ export default function PortfolioHealth() {
         <div className="border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Key Metrics</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Total Active Projects</p>
               <p className="text-3xl font-light text-ink-900 mb-1">{totalActiveProjects}</p>
               <p className="text-[10px] text-ink-300">Projects in portfolio</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Total Agreed Fee Value</p>
               <p className="text-3xl font-light text-ink-900 mb-1 font-mono">{formatCurrency(totalAgreedFees)}</p>
               <p className="text-[10px] text-ink-300">Across all contracts</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Avg Utilisation</p>
               <p className="text-3xl font-light text-ink-900 mb-1">{formatPercent(avgUtilisation)}</p>
               <p className="text-[10px] text-ink-300">Team capacity</p>
@@ -218,7 +218,7 @@ export default function PortfolioHealth() {
               <p className="text-[10px] text-ink-400">Negative margin</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Debtors Value</p>
               <p className="text-3xl font-light text-ink-900 mb-1 font-mono">{formatCurrency(debtorsValue)}</p>
               <p className="text-[10px] text-ink-300">Invoiced but not paid</p>
@@ -231,7 +231,7 @@ export default function PortfolioHealth() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Health Score Trends</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -253,7 +253,7 @@ export default function PortfolioHealth() {
                     const latestDate = getLatestSnapshotDate(project.id)
 
                     return (
-                      <tr key={i} className="border-b border-surface-200 hover:bg-surface-50/50 transition-colors">
+                      <tr key={i} className="stripe-row border-b border-surface-200 hover:bg-surface-50/50 transition-colors">
                         <td className="px-5 py-4 text-[12px] font-medium text-ink-900">{project.name}</td>
 
                         {/* Current Score */}
@@ -309,7 +309,7 @@ export default function PortfolioHealth() {
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Alert Summary</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Critical Alerts */}
-            <Link href="/projects?filter=critical_alerts" className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-lg transition-shadow cursor-pointer">
+            <Link href="/projects?filter=critical_alerts" className="card-premium p-5 cursor-pointer">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-red-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">Critical Alerts</span>
@@ -324,7 +324,7 @@ export default function PortfolioHealth() {
             </Link>
 
             {/* Warning Alerts */}
-            <Link href="/projects?filter=warning_alerts" className="bg-white rounded-2xl border border-surface-200 shadow-card p-5 hover:shadow-lg transition-shadow cursor-pointer">
+            <Link href="/projects?filter=warning_alerts" className="card-premium p-5 cursor-pointer">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-amber-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">Warning Alerts</span>
@@ -339,7 +339,7 @@ export default function PortfolioHealth() {
             </Link>
 
             {/* Info Alerts */}
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+            <div className="card-premium p-5">
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
                 <span className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">Info Alerts</span>
@@ -432,7 +432,7 @@ export default function PortfolioHealth() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Project Risk Matrix</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -458,7 +458,7 @@ export default function PortfolioHealth() {
                     const alertCount = getProjectAlertCount(commercial.project_id)
 
                     return (
-                      <tr key={i} className="border-b border-surface-200 hover:bg-surface-50/50 transition-colors">
+                      <tr key={i} className="stripe-row border-b border-surface-200 hover:bg-surface-50/50 transition-colors">
                         <td className="px-5 py-4 text-[12px] font-medium text-ink-900">{project?.name || 'Unknown'}</td>
 
                         {/* Health */}

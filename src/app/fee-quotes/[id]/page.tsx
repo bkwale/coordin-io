@@ -39,7 +39,7 @@ export default function FeeQuoteDetailPage() {
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0)
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-10">
         <Breadcrumb items={[
@@ -107,7 +107,7 @@ export default function FeeQuoteDetailPage() {
         <div className="border-t border-surface-300 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Fee Breakdown</h2>
 
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             {/* Table Header */}
             <div className="grid grid-cols-[2rem_1fr_2fr_3fr_1fr] gap-6 px-6 py-3 bg-surface-50 border-b border-surface-200">
               <div className="text-[10px] font-semibold text-ink-400 uppercase tracking-[0.1em]">#</div>
@@ -184,7 +184,7 @@ export default function FeeQuoteDetailPage() {
         <section className="pb-16">
           <div className="border-t border-surface-200/60 pt-10 mt-10">
             <h3 className="text-[13px] font-semibold text-ink-900 uppercase tracking-[0.1em] mb-4">Terms & Conditions</h3>
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+            <div className="card-premium p-6">
               <div className="prose prose-sm max-w-none">
                 <p className="text-[12px] text-ink-700 leading-relaxed whitespace-pre-wrap">
                   {quote.terms_text}
@@ -200,7 +200,7 @@ export default function FeeQuoteDetailPage() {
         <section className="pb-16">
           <div className="border-t border-surface-200/60 pt-10 mt-10">
             <h3 className="text-[13px] font-semibold text-ink-900 uppercase tracking-[0.1em] mb-4">Exclusions</h3>
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+            <div className="card-premium p-6">
               <ul className="space-y-2">
                 {quote.exclusions_text.split('\n').filter(line => line.trim()).map((exclusion, i) => (
                   <li key={i} className="flex gap-3 text-[12px] text-ink-700">
@@ -247,7 +247,7 @@ export default function FeeQuoteDetailPage() {
           <h3 className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-4">Project Link</h3>
 
           {quoteLink?.project_creation_status === 'created' && linkedProject ? (
-            <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-card p-6">
+            <div className="card-premium !bg-emerald-50 !border-emerald-200 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-[11px] text-emerald-700 uppercase tracking-[0.08em] font-semibold mb-2">Linked to Project</p>
@@ -268,7 +268,7 @@ export default function FeeQuoteDetailPage() {
               </div>
             </div>
           ) : quoteLink?.project_creation_status === 'pending' && quote.status === 'accepted' ? (
-            <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-card p-6">
+            <div className="card-premium !bg-amber-50 !border-amber-200 p-6">
               <p className="text-[11px] text-amber-700 uppercase tracking-[0.08em] font-semibold mb-4">Quote Accepted — Ready to Create Project</p>
               <p className="text-[12px] text-amber-800 mb-4">This will create a new project pre-populated with the quote details.</p>
               <div className="flex gap-3">
@@ -281,7 +281,7 @@ export default function FeeQuoteDetailPage() {
               </div>
             </div>
           ) : quoteLink?.project_creation_status === 'skipped' || quote.status === 'declined' || quote.status === 'expired' ? (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+            <div className="card-premium p-6">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-2">No project linked</p>
               <p className="text-[12px] text-ink-600">
                 {quote.status === 'declined'

@@ -23,25 +23,25 @@ function KPICards() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       {/* Total Invites */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="card-premium p-4">
         <p className="text-xs font-medium text-ink-400 uppercase tracking-[0.05em]">Total Invites</p>
         <p className="text-2xl font-bold text-ink-900 mt-2">{invites.length}</p>
       </div>
 
       {/* Accepted */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="card-premium p-4">
         <p className="text-xs font-medium text-ink-400 uppercase tracking-[0.05em]">Accepted</p>
         <p className="text-2xl font-bold text-emerald-700 mt-2">{acceptedCount}</p>
       </div>
 
       {/* Pending */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="card-premium p-4">
         <p className="text-xs font-medium text-ink-400 uppercase tracking-[0.05em]">Pending</p>
         <p className="text-2xl font-bold text-amber-700 mt-2">{pendingCount}</p>
       </div>
 
       {/* Shared Items */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="card-premium p-4">
         <p className="text-xs font-medium text-ink-400 uppercase tracking-[0.05em]">Shared Items</p>
         <p className="text-2xl font-bold text-ink-900 mt-2">{sharedItems.length}</p>
       </div>
@@ -82,7 +82,7 @@ function PeopleTabContent() {
               return (
                 <div
                   key={invite.id}
-                  className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between"
+                  className="card-premium p-4 flex items-center justify-between"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -157,7 +157,7 @@ function SharedItemsTabContent() {
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-xl border border-slate-200 p-4 flex items-start gap-4"
+                  className="card-premium p-4 flex items-start gap-4"
                 >
                   <div className="text-xl shrink-0">
                     {portalItemTypeIcon(item.item_type)}
@@ -208,7 +208,7 @@ export default function CollaborationPortalPage() {
   const sharedItems = getPortalSharedItems()
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HERO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-8">
         <Breadcrumb

@@ -23,7 +23,7 @@ import {
   requirementCategoryLabel,
   requirementCategoryColor,
 } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -33,7 +33,7 @@ export default function BRPDPage() {
   const project = getProject(params.id as string)
 
   if (!project) {
-    return <EmptyState text="Project not found." />
+    return <EmptyState message="Project not found." />
   }
 
   const dutyholders = getProjectDutyholders(project.id)
@@ -57,22 +57,11 @@ export default function BRPDPage() {
   const requirementProgress = totalRequirements > 0 ? Math.round((completedRequirements / totalRequirements) * 100) : 0
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* ── BREADCRUMB & PAGE HEADER ── */}
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
+      {/* ── PAGE HEADER ── */}
       <div>
-        <Breadcrumb
-          items={[
-            { label: 'Dashboard', href: '/' },
-            { label: 'Projects', href: '/projects' },
-            { label: project.name, href: `/projects/${project.id}` },
-            { label: 'BRPD & Dutyholders' },
-          ]}
-        />
-
-        <div className="mt-6">
-          <h1 className="text-xl sm:text-2xl font-bold text-ink-900">BRPD & Dutyholder Coordination</h1>
-          <p className="text-sm text-ink-400 mt-1">Manage Building Safety Act roles and compliance records</p>
-        </div>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">BRPD & Dutyholder Coordination</h1>
+        <p className="text-sm text-ink-400 mt-1">Manage Building Safety Act roles and compliance records</p>
       </div>
 
       {/* ── SECTION 1: SUMMARY STATS ── */}
@@ -141,7 +130,7 @@ export default function BRPDPage() {
         </div>
 
         {/* Requirements Progress Bar */}
-        <div className="mt-6 bg-white rounded-2xl border border-surface-200 shadow-card p-5">
+        <div className="mt-6 card-premium p-5">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-ink-900">Requirement Progress</p>
             <p className="text-sm font-semibold text-brand-600">
@@ -165,10 +154,10 @@ export default function BRPDPage() {
 
         {complianceStatements.length === 0 ? (
           <div className="mt-8">
-            <EmptyState text="No compliance statements added yet." />
+            <EmptyState message="No compliance statements added yet." />
           </div>
         ) : (
-          <div className="mt-8 bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="mt-8 card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-surface-50 border-b border-surface-200/60">
@@ -200,7 +189,7 @@ export default function BRPDPage() {
                       <tr
                         key={cs.id}
                         className={cn(
-                          'bg-white',
+                          'stripe-row bg-white',
                           idx !== complianceStatements.length - 1 && 'border-b border-surface-200/60'
                         )}
                       >
@@ -245,7 +234,7 @@ export default function BRPDPage() {
 
         {brpdRequirements.length === 0 ? (
           <div className="mt-8">
-            <EmptyState text="No BRPD requirements configured for this project yet." />
+            <EmptyState message="No BRPD requirements configured for this project yet." />
           </div>
         ) : (
           <div className="mt-8 space-y-8">
@@ -283,7 +272,7 @@ export default function BRPDPage() {
                       return (
                         <div
                           key={req.id}
-                          className="bg-white rounded-2xl border border-surface-200 shadow-card p-4"
+                          className="card-premium p-4"
                         >
                           {/* Header with ref and status */}
                           <div className="mb-3">
@@ -345,10 +334,10 @@ export default function BRPDPage() {
 
         {dutyholders.length === 0 ? (
           <div className="mt-8">
-            <EmptyState text="No dutyholders assigned to this project yet." />
+            <EmptyState message="No dutyholders assigned to this project yet." />
           </div>
         ) : (
-          <div className="mt-8 bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="mt-8 card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-surface-50 border-b border-surface-200/60">
@@ -378,7 +367,7 @@ export default function BRPDPage() {
                     <tr
                       key={dh.id}
                       className={cn(
-                        'bg-white',
+                        'stripe-row bg-white',
                         idx !== dutyholders.length - 1 && 'border-b border-surface-200/60'
                       )}
                     >
@@ -421,7 +410,7 @@ export default function BRPDPage() {
 
         {gateways.length === 0 ? (
           <div className="mt-8">
-            <EmptyState text="No BRPD gateways configured for this project yet. Gateways are required under the Building Safety Act for higher-risk building work." />
+            <EmptyState message="No BRPD gateways configured for this project yet. Gateways are required under the Building Safety Act for higher-risk building work." />
           </div>
         ) : (
           <div className="mt-8">
@@ -469,7 +458,7 @@ export default function BRPDPage() {
                 return (
                   <div
                     key={gateway.id}
-                    className="bg-white rounded-2xl border border-surface-200 shadow-card p-5"
+                    className="card-premium p-5"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>

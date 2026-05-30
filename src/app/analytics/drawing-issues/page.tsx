@@ -84,7 +84,7 @@ export default function DrawingIssuesPage() {
   const maxStageCount = Math.max(...Object.values(issuesByStage), 1)
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-6xl animate-fade-in">
       {/* ━━━ BREADCRUMB ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-8">
         <Breadcrumb items={[
@@ -114,7 +114,7 @@ export default function DrawingIssuesPage() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-8">Issue Volume by Type</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6 space-y-4">
+          <div className="card-premium p-6 space-y-4">
             {Object.entries(issuesByType)
               .sort(([, a], [, b]) => b - a)
               .map(([type, count]) => {
@@ -147,7 +147,7 @@ export default function DrawingIssuesPage() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-8">Issue Volume by RIBA Stage</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6 space-y-4">
+          <div className="card-premium p-6 space-y-4">
             {(Object.entries(issuesByStage) as [string, number][])
               .map(([stage]) => stage as unknown as RIBAStage)
               .filter(stage => issuesByStage[stage])
@@ -190,9 +190,9 @@ export default function DrawingIssuesPage() {
           <p className="text-[13px] text-ink-400 mb-8">Drawings that have been re-issued. Frequent re-issues may indicate scope creep or coordination gaps.</p>
 
           {reissuedDrawings.length === 0 ? (
-            <EmptyState text="No re-issued drawings found." />
+            <EmptyState message="No re-issued drawings found." />
           ) : (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+            <div className="card-premium overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead className="bg-surface-50 border-b border-surface-200">
@@ -218,7 +218,7 @@ export default function DrawingIssuesPage() {
                           <tr
                             key={`${issue.id}-${i}`}
                             className={cn(
-                              'border-b border-surface-200 transition-colors',
+                              'stripe-row border-b border-surface-200 transition-colors',
                               highlight ? 'bg-amber-50' : 'hover:bg-surface-50'
                             )}
                           >
@@ -258,7 +258,7 @@ export default function DrawingIssuesPage() {
           </div>
 
           {filteredIssues.length === 0 ? (
-            <EmptyState text="No issues found for this project." />
+            <EmptyState message="No issues found for this project." />
           ) : (
             <div className="space-y-10">
               {Object.entries(issuesByProject)

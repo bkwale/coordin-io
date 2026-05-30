@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { PROJECTS, getProjectMeetings, getMeetingActions, getUser } from '@/lib/mock-data'
 import { Meeting } from '@/lib/types'
 import { cn, meetingTypeLabel, meetingTypeColor, actionStatusColor, formatDate } from '@/lib/utils'
-import { Breadcrumb } from '@/components/Breadcrumb'
+
 import { SummaryCard } from '@/components/SummaryCard'
 
 export default function ProjectMeetingsPage() {
@@ -31,16 +31,9 @@ export default function ProjectMeetingsPage() {
   const activeMeetingActions = activeMeeting ? getMeetingActions(activeMeeting.id) : []
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <Breadcrumb items={[
-        { label: 'Dashboard', href: '/' },
-        { label: 'Projects', href: '/projects' },
-        { label: project.name, href: `/projects/${project.id}` },
-        { label: 'Meetings' },
-      ]} />
-
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Meetings & Actions</h1>
+        <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">Meetings & Actions</h1>
         <p className="text-sm text-slate-500 mt-1">{project.name} — {project.client}</p>
       </div>
 
@@ -57,7 +50,7 @@ export default function ProjectMeetingsPage() {
         <div className="lg:col-span-2 space-y-4">
           {upcomingMeetings.length > 0 && (
             <div>
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Upcoming</h2>
+              <h2 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-2">Upcoming</h2>
               <div className="space-y-2">
                 {upcomingMeetings.map(meeting => (
                   <MeetingCard
@@ -74,7 +67,7 @@ export default function ProjectMeetingsPage() {
 
           {pastMeetings.length > 0 && (
             <div>
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Past Meetings</h2>
+              <h2 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-2">Past Meetings</h2>
               <div className="space-y-2">
                 {pastMeetings.map(meeting => (
                   <MeetingCard
@@ -93,7 +86,7 @@ export default function ProjectMeetingsPage() {
         {/* Detail Panel */}
         <div className="lg:col-span-3">
           {activeMeeting ? (
-            <div className="bg-white rounded-xl border border-slate-200 p-5 sticky top-6">
+            <div className="card-premium p-5 sticky top-6">
               <div className="flex items-center gap-2 mb-3">
                 <span className={cn('px-2 py-0.5 rounded text-[10px] font-bold', meetingTypeColor(activeMeeting.meeting_type))}>
                   {meetingTypeLabel(activeMeeting.meeting_type)}
@@ -117,7 +110,7 @@ export default function ProjectMeetingsPage() {
                 </div>
               )}
 
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">
+              <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">
                 Actions ({activeMeetingActions.length})
               </h3>
 
@@ -150,7 +143,7 @@ export default function ProjectMeetingsPage() {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center lg:sticky lg:top-6">
+            <div className="card-premium p-8 text-center lg:sticky lg:top-6">
               <svg className="w-10 h-10 text-slate-200 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>

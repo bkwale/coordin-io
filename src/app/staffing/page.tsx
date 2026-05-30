@@ -139,7 +139,7 @@ export default function StaffingForecastPage() {
           <h1 className="font-display text-[2rem] text-ink-900 tracking-tight mb-2">
             Staffing & Leave
           </h1>
-          <p className="text-[13px] text-ink-400">Team utilisation, leave calendar, and capacity planning</p>
+          <p className="text-[13px] text-ink-400 mt-1">{summaryMetrics.teamSize} team members &middot; {summaryMetrics.avgUtilisation}% avg utilisation</p>
         </div>
       </section>
 

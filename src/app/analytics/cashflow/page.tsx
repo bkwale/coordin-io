@@ -56,7 +56,7 @@ export default function CashflowForecast() {
   }
 
   return (
-    <div className="max-w-7xl">
+    <div className="max-w-7xl animate-fade-in">
       {/* ━━━ BREADCRUMB & HEADER ━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section className="pb-12">
         <Breadcrumb items={[
@@ -81,23 +81,23 @@ export default function CashflowForecast() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Current Month Net</p>
               <p className={`text-2xl font-light tracking-tight ${currentMonthNet >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {formatCurrency(currentMonthNet)}
               </p>
             </div>
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">3-Month Projected Net</p>
               <p className={`text-2xl font-light tracking-tight ${projectedNetNext3 >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {formatCurrency(projectedNetNext3)}
               </p>
             </div>
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Pipeline Value</p>
               <p className="text-2xl font-light text-ink-900 tracking-tight">{formatCurrency(pipelineValue)}</p>
             </div>
-            <div className="bg-white border border-surface-200 rounded-2xl p-5 shadow-card">
+            <div className="card-premium p-5">
               <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold mb-3">Months Available</p>
               <p className="text-2xl font-light text-ink-900 tracking-tight">{monthsCount}</p>
             </div>
@@ -109,7 +109,7 @@ export default function CashflowForecast() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Monthly Forecast</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -132,7 +132,7 @@ export default function CashflowForecast() {
                     return (
                       <tr
                         key={i}
-                        className={`border-b border-surface-200 hover:bg-surface-50/50 transition-colors ${
+                        className={`stripe-row border-b border-surface-200 hover:bg-surface-50/50 transition-colors ${
                           f.hasActuals ? 'bg-blue-50/20' : ''
                         }`}
                       >
@@ -165,7 +165,7 @@ export default function CashflowForecast() {
       <section className="pb-16">
         <div className="border-t border-surface-200/60 pt-10 mb-8">
           <h2 className="font-display text-[1.5rem] text-ink-900 mb-6">Cashflow Visualization</h2>
-          <div className="bg-white rounded-2xl border border-surface-200 shadow-card p-6">
+          <div className="card-premium p-6">
             <div className="flex gap-8">
               {/* Chart */}
               <div className="flex-1 min-w-0">

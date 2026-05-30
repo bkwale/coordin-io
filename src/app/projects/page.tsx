@@ -41,11 +41,11 @@ export default function ProjectsPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Projects</h1>
-          <p className="text-sm text-slate-500 mt-1">{PROJECTS.length} projects total</p>
+          <h1 className="font-display text-[2rem] sm:text-[2.5rem] text-ink-900">Projects</h1>
+          <p className="text-[13px] text-ink-400 mt-1">{filtered.length} of {PROJECTS.length} projects shown</p>
         </div>
         <Link
           href="/projects/new"
@@ -96,7 +96,7 @@ export default function ProjectsPage() {
           <Link
             key={s.project.id}
             href={`/projects/${s.project.id}`}
-            className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-slate-300 transition-all group"
+            className="card-premium p-5 hover:shadow-md hover:border-slate-300 transition-all group"
           >
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -116,7 +116,7 @@ export default function ProjectsPage() {
               {s.open_risks > 0 && <span className="text-red-600 font-medium">{s.open_risks} risks</span>}
               {s.overdue_tasks > 0 && <span className="text-amber-600 font-medium">{s.overdue_tasks} overdue</span>}
               <span className={cn(
-                'ml-auto px-2 py-0.5 rounded text-[10px] font-medium capitalize',
+                'ml-auto status-pill capitalize',
                 s.project.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
                 s.project.status === 'paused' ? 'bg-amber-100 text-amber-700' :
                 'bg-slate-100 text-slate-600'

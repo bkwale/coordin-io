@@ -59,7 +59,7 @@ export default function FeeQuotesPage() {
   ]
 
   return (
-    <div className="bg-surface-50 min-h-screen">
+    <div className="bg-surface-50 min-h-screen animate-fade-in">
       <div className="max-w-6xl mx-auto px-0 py-0">
         {/* ━━━ BREADCRUMB ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <section className="pt-10 pb-6">
@@ -70,7 +70,7 @@ export default function FeeQuotesPage() {
         <section className="px-10 pb-8 flex items-start justify-between">
           <div>
             <h1 className="font-display text-3xl font-semibold text-ink-900 mb-2">Fee Quotes</h1>
-            <p className="text-[14px] text-ink-500">Manage proposals and track client responses</p>
+            <p className="text-[13px] text-ink-400 mt-1">{totalQuotes} quotes &middot; {formatCurrency(pipelineValue)} in pipeline</p>
           </div>
           <Link
             href="/fee-quotes/new"
@@ -131,14 +131,14 @@ export default function FeeQuotesPage() {
                   <Link
                     key={quote.id}
                     href={`/fee-quotes/${quote.id}`}
-                    className="bg-white rounded-xl border border-slate-200 p-5 hover:border-accent-200 hover:shadow-sm transition-all"
+                    className="card-premium p-5 hover:border-accent-200 transition-all"
                   >
                     {/* Status + Reference */}
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2">
                         <span
                           className={cn(
-                            'inline-block px-2 py-1 rounded-full text-[11px] font-medium',
+                            'status-pill',
                             feeQuoteStatusColor(quote.status)
                           )}
                         >
