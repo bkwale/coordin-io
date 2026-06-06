@@ -8,7 +8,7 @@ import { CommandPalette } from '@/components/CommandPalette'
 import { DemoBanner } from '@/components/DemoBanner'
 import { cn } from '@/lib/utils'
 
-const MARKETING_ROUTES = ['/welcome', '/faq', '/demo-access']
+const MARKETING_ROUTES = ['/', '/welcome', '/faq', '/demo-access']
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

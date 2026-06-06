@@ -15,7 +15,7 @@ import {
 /* ── Navigation structure ──────────────────────────────── */
 
 const MAIN_ITEMS = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt },
   { href: '/staffing', label: 'Staffing', icon: Users },

@@ -10,7 +10,7 @@ export default function DemoAccessPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.push('/')
+      router.push('/dashboard')
     }, 3000)
     return () => clearTimeout(timer)
   }, [router])
@@ -44,7 +44,7 @@ export default function DemoAccessPage() {
         <p className="text-[11px] text-ink-400 mb-6">Redirecting to dashboard...</p>
 
         <Link
-          href="/"
+          href="/dashboard"
           className="inline-flex items-center gap-2 bg-gradient-accent text-white font-semibold text-[14px] px-6 py-3 rounded-lg hover:opacity-90 transition-opacity shadow-glow-indigo"
         >
           Go to dashboard now

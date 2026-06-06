@@ -53,7 +53,7 @@ const FAQ_ITEMS = [
 function FAQNav() {
   return (
     <nav className="flex items-center justify-between px-6 sm:px-10 py-5 max-w-6xl mx-auto">
-      <Link href="/welcome" className="flex items-center gap-2.5">
+      <Link href="/" className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center text-white font-display text-lg">
           C
         </div>
@@ -61,13 +61,13 @@ function FAQNav() {
       </Link>
       <div className="flex items-center gap-6">
         <Link
-          href="/welcome"
+          href="/"
           className="text-[13px] font-medium text-ink-500 hover:text-ink-900"
         >
           Request Access
         </Link>
         <Link
-          href="/"
+          href="/dashboard"
           className="text-[13px] font-medium text-accent-600 hover:text-accent-700"
         >
           Try Demo
@@ -157,7 +157,7 @@ export default function FAQPage() {
             </a>
             <span className="text-ink-300">|</span>
             <Link
-              href="/welcome"
+              href="/"
               className="text-[13px] font-medium text-accent-600 hover:text-accent-700"
             >
               Request early access
@@ -171,7 +171,7 @@ export default function FAQPage() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-[13px] text-ink-400">Coordin.io &mdash; Built for practices that build.</p>
           <div className="flex items-center gap-6">
-            <Link href="/welcome" className="text-[13px] text-ink-500 hover:text-ink-900">Home</Link>
+            <Link href="/" className="text-[13px] text-ink-500 hover:text-ink-900">Home</Link>
             <a href="mailto:hello@coordin.io" className="text-[13px] text-ink-500 hover:text-ink-900">Contact</a>
           </div>
         </div>
