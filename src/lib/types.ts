@@ -596,18 +596,29 @@ export interface FeeRecommendation {
 }
 
 // ── Phase 3 Wave 3: Fee Quote Types ─────────────────────────
-export type FeeQuoteStatus = 'draft' | 'sent' | 'viewed' | 'revised' | 'accepted' | 'declined' | 'expired' | 'superseded'
+export type FeeQuoteStatus = 'draft' | 'internal_review' | 'ready_to_send' | 'sent' | 'viewed' | 'revised' | 'accepted' | 'declined' | 'expired' | 'superseded' | 'converted_to_project'
+
+export type FeeQuoteOptionalStatus = 'follow_up_required' | 'awaiting_client_clarification' | 'awaiting_deposit'
+
+export type QuoteMode = 'existing_project' | 'standalone'
+
+export type QuoteTemplateType = 'planning' | 'technical' | 'full_service' | 'brpd' | 'cdm_pd'
+
+export type QuoteLineType = 'stage_service' | 'additional_service' | 'optional_service' | 'consultant_coordination' | 'travel_mileage' | 'expense_allowance' | 'cgi_render' | 'contract_admin' | 'interior_design' | 'brpd_service' | 'cdm_pd_service' | 'other_custom'
 
 export interface FeeQuoteRecord {
   id: string
   organisation_id: string
+  quote_mode: QuoteMode
   related_project_id?: string
   related_opportunity_id?: string
   quote_reference: string
   quote_title: string
+  quote_template_type: QuoteTemplateType
   status: FeeQuoteStatus
+  optional_status?: FeeQuoteOptionalStatus
   client_name: string
-  client_contact_id?: string
+  client_contact?: string
   issue_date: string
   valid_until: string
   fee_basis: string
@@ -615,20 +626,46 @@ export interface FeeQuoteRecord {
   currency: string
   prepared_by_user_id: string
   sent_at?: string
+  sent_count: number
   viewed_count: number
   last_viewed_at?: string
   accepted_at?: string
+  accepted_by?: string
   declined_at?: string
-  terms_text: string
+  // Content fields
+  project_summary?: string
+  scope_summary?: string
   exclusions_text: string
   assumptions_text: string
-  payment_schedule_text: string
+  terms_text: string
+  payment_terms_text: string
+  acceptance_note?: string
+  // Commercial assumptions
   meetings_included_count?: number
+  meeting_type_notes?: string
   mileage_rate?: number
+  travel_allowance?: number
+  travel_billing_rule?: string
+  site_visit_assumptions?: string
   expense_allowance?: number
+  reimbursable_expenses_note?: string
   design_freeze_flag: boolean
+  design_freeze_wording?: string
+  variation_fee_note?: string
   deposit_required_flag: boolean
   deposit_amount?: number
+  construction_stage_allowance?: string
+  cgi_render_flag: boolean
+  consultant_coordination_flag: boolean
+  brpd_role_flag: boolean
+  cdm_pd_role_flag: boolean
+  dutyholder_coordination_note?: string
+  design_risk_coordination_note?: string
+  // Presentation
+  logo_style_ref?: string
+  accent_colour?: string
+  cover_image_url?: string
+  // Timestamps
   created_at: string
   updated_at: string
 }
@@ -637,7 +674,7 @@ export interface FeeQuoteLineItem {
   id: string
   fee_quote_id: string
   sort_order: number
-  line_type: 'stage' | 'service' | 'expense' | 'discount' | 'optional' | 'consultant'
+  line_type: QuoteLineType
   title: string
   description: string
   related_stage?: RIBAStage
@@ -648,11 +685,8 @@ export interface FeeQuoteLineItem {
   optional_flag: boolean
   selected_by_default: boolean
   image_url?: string
-  expense_flag: boolean
-  travel_flag: boolean
-  meeting_flag: boolean
-  design_freeze_dependency_flag: boolean
 }
+
 
 // ── Phase 4: Fee Quote Sections ──────────────────────────────
 export type QuoteSectionType = 'cover' | 'project_understanding' | 'scope_of_service' | 'stage_breakdown' | 'optional_extras' | 'consultant_coordination' | 'programme_assumptions' | 'design_freeze_note' | 'meetings_and_communication' | 'expenses_and_travel' | 'exclusions' | 'terms_and_conditions' | 'payment_terms' | 'acceptance'
@@ -679,7 +713,10 @@ export interface FeeQuoteTemplate {
   id: string
   organisation_id: string
   name: string
-  template_type: 'full_quote' | 'section' | 'line_items'
+  template_type: QuoteTemplateType
+  description: string
+  suitable_for: string[]
+  default_sections: QuoteSectionType[]
   body_json: string
   active_flag: boolean
   created_at: string
@@ -1160,19 +1197,27 @@ export interface BankHoliday {
 
 export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected'
 
+export type TimesheetCategory = 'marketing_bid' | 'strategic_definition' | 'briefing' | 'concept_design' | 'planning_spatial' | 'technical_design' | 'tender' | 'construction_ca' | 'handover_use' | 'admin_cpd_office'
+
 export interface TimesheetEntry {
   id: string
   user_id: string
   project_id: string
+  task_id?: string
   date: string
   hours: number
   description?: string
+  notes?: string
   stage: RIBAStage
+  project_stage?: RIBAStage
+  task_category: TimesheetCategory
   billable: boolean
   status: TimesheetStatus
   submitted_at?: string
   approved_by?: string
   approved_at?: string
+  expected_start_date?: string
+  expected_end_date?: string
   created_at: string
 }
 

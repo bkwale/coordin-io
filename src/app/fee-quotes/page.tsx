@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { getFeeQuoteRecords, getUser, PROJECTS, getOpportunity } from '@/lib/mock-data'
 import { FeeQuoteRecord, FeeQuoteStatus } from '@/lib/types'
-import { cn, formatDate, formatCurrency, feeQuoteStatusColor, feeQuoteStatusLabel, timeAgo, quoteNeedsFollowUp } from '@/lib/utils'
+import { cn, formatDate, formatCurrency, feeQuoteStatusColor, feeQuoteStatusLabel, timeAgo, quoteNeedsFollowUp, quoteTemplateTypeColor, quoteTemplateTypeLabel, quoteModeLabel } from '@/lib/utils'
 import { Breadcrumb } from '@/components/Breadcrumb'
 import { TabBar } from '@/components/TabBar'
 
@@ -144,9 +144,20 @@ export default function FeeQuotesPage() {
                         >
                           {feeQuoteStatusLabel(quote.status)}
                         </span>
+                        <span
+                          className={cn(
+                            'status-pill',
+                            quoteTemplateTypeColor(quote.quote_template_type)
+                          )}
+                        >
+                          {quoteTemplateTypeLabel(quote.quote_template_type)}
+                        </span>
                       </div>
                       <span className="font-mono text-[12px] text-ink-400">{quote.quote_reference}</span>
                     </div>
+
+                    {/* Mode label */}
+                    <p className="text-[11px] text-ink-400 mb-2">{quoteModeLabel(quote.quote_mode)}</p>
 
                     {/* Title + Client */}
                     <div className="mb-4">

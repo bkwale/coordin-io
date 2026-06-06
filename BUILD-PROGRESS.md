@@ -230,3 +230,32 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 **Mock data:** 15 timesheet entries, 6 invoices, 13 overhead entries, 8 news items, 10 project updates, 20+ helper functions
 **Utils:** timesheetStatusColor/Label, invoiceStatusColor/Label, overheadCategoryColor/Label, newsCategoryColor/Label, updateSeverityColor/Dot
 **Components:** 11 new widget components in components/widgets/
+
+### Wave 2 — Quote Workflow + Timesheets + Landing (COMPLETE)
+| Feature | Route/Component | Status |
+|---------|----------------|--------|
+| Quote statuses expanded (11 core + 3 optional) | types.ts | Done |
+| Quote modes (linked/standalone) | types.ts + mock-data.ts | Done |
+| 5 quote templates (Planning, Technical, Full Service, BRPD, CDM PD) | mock-data.ts | Done |
+| Expanded quote data model (commercial assumptions, presentation fields) | types.ts | Done |
+| 12 line item types | types.ts | Done |
+| New quote chooser (mode + template selection) | `/fee-quotes/new` | Done |
+| 12-tab quote builder | `/fee-quotes/[id]/edit` (rewrite) | Done |
+| Quote template type badges on list page | `/fee-quotes` (upgrade) | Done |
+| Timesheet data model (task_category, task_id, notes) | types.ts | Done |
+| Weekly timesheet page | `/timesheets` | Done |
+| Manager timesheet review | `/timesheets/review` | Done |
+| Landing page with waitlist form | `/welcome` | Done |
+| Demo access redirect | `/demo-access` | Done |
+| FAQ page (8 accordion items) | `/faq` | Done |
+| Demo banner component | components/DemoBanner.tsx | Done |
+| Conditional layout (marketing vs app) | layout.tsx (upgrade) | Done |
+| Collapsible sidebar with route groups | components/Sidebar.tsx (upgrade) | Done |
+| Tabbed project workspace (6 tabs) | projects/[id]/layout.tsx | Done |
+| Command palette (⌘K) | components/CommandPalette.tsx | Done |
+| Notification bell (functional) | components/NotificationBell.tsx | Done |
+
+**Types updated:** FeeQuoteStatus (11+3), QuoteMode, QuoteTemplateType, QuoteLineType (12 types), TimesheetCategory (10 categories), expanded FeeQuoteRecord (40+ fields), expanded FeeQuoteLineItem, expanded TimesheetEntry
+**Mock data:** 5 quote templates, updated 6 quotes + 19 line items, updated 15 timesheet entries
+**New routes:** /fee-quotes/new, /timesheets, /timesheets/review, /welcome, /demo-access, /faq
+**New components:** DemoBanner, CommandPalette, NotificationBell

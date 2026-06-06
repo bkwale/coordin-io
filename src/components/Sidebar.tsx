@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, FolderOpen, Sparkles, BookOpen,
   GraduationCap, Users, ExternalLink, BarChart3, PoundSterling,
-  TrendingUp, Receipt, Target, Shield,
+  TrendingUp, Receipt, Target, Shield, Clock,
   Link as LinkIcon, Plus, Search, MoreHorizontal,
   ChevronLeft, ChevronRight,
 } from 'lucide-react'
@@ -19,6 +19,7 @@ const MAIN_ITEMS = [
   { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt },
   { href: '/staffing', label: 'Staffing', icon: Users },
+  { href: '/timesheets', label: 'Timesheets', icon: Clock },
 ]
 
 const INSIGHTS_ITEMS = [

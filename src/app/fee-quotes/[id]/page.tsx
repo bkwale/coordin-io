@@ -123,13 +123,13 @@ export default function FeeQuoteDetailPage() {
                 let typeColor = 'bg-blue-100'
                 let typeDotColor = 'bg-blue-500'
 
-                if (item.line_type === 'service') {
+                if (item.line_type === 'additional_service' || item.line_type === 'interior_design' || item.line_type === 'contract_admin') {
                   typeColor = 'bg-green-100'
                   typeDotColor = 'bg-green-500'
-                } else if (item.line_type === 'expense') {
+                } else if (item.line_type === 'expense_allowance' || item.line_type === 'travel_mileage') {
                   typeColor = 'bg-amber-100'
                   typeDotColor = 'bg-amber-500'
-                } else if (item.line_type === 'discount') {
+                } else if (item.line_type === 'other_custom') {
                   typeColor = 'bg-red-100'
                   typeDotColor = 'bg-red-500'
                 }

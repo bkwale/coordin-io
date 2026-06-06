@@ -1,4 +1,4 @@
-import { HealthStatus, TaskStatus, RiskSeverity, ApprovalStatus, IssueStatus, ChangeStatus, RiskRegisterStatus, ActionStatus, RiskProbability, RiskImpact, MeetingType, DesignRiskReviewStatus, ContractEventStatus, TenderStatus, SiteQueryStatus, BuildingRegStatus, InspectionStatus, ComplianceStatus, DocumentStatus, KnowledgeCategory, DutyholderRole, DrawingIssueType, CommercialHealthFlag, UtilisationStatus, FeeQuoteStatus, OpportunityStatus, IntegrationStatus, QuoteSectionType, FeeQuoteRecord, HealthAlertSeverity, HealthAlertCategory, ComplianceStatementStatus, BRPDRequirementStatus, BRPDChangeType, DrawingWorkflowStatus, DrawingEmailDirection, WizardStepStatus, BriefSectionStatus, AccountingSyncStatus, FeatureArea, LeaveType, LeaveStatus, TimesheetStatus, InvoiceStatus, OverheadCategory, NewsCategory } from './types'
+import { HealthStatus, TaskStatus, RiskSeverity, ApprovalStatus, IssueStatus, ChangeStatus, RiskRegisterStatus, ActionStatus, RiskProbability, RiskImpact, MeetingType, DesignRiskReviewStatus, ContractEventStatus, TenderStatus, SiteQueryStatus, BuildingRegStatus, InspectionStatus, ComplianceStatus, DocumentStatus, KnowledgeCategory, DutyholderRole, DrawingIssueType, CommercialHealthFlag, UtilisationStatus, FeeQuoteStatus, OpportunityStatus, IntegrationStatus, QuoteSectionType, FeeQuoteRecord, HealthAlertSeverity, HealthAlertCategory, ComplianceStatementStatus, BRPDRequirementStatus, BRPDChangeType, DrawingWorkflowStatus, DrawingEmailDirection, WizardStepStatus, BriefSectionStatus, AccountingSyncStatus, FeatureArea, LeaveType, LeaveStatus, TimesheetStatus, InvoiceStatus, OverheadCategory, NewsCategory, QuoteMode, QuoteTemplateType, QuoteLineType, TimesheetCategory } from './types'
 
 export function cn(...classes: (string | undefined | false | null)[]): string {
   return classes.filter(Boolean).join(' ')
@@ -391,6 +391,8 @@ export function formatPercent(value: number): string {
 export function feeQuoteStatusColor(s: FeeQuoteStatus): string {
   switch (s) {
     case 'draft': return 'bg-slate-50 text-slate-500'
+    case 'internal_review': return 'bg-purple-50 text-purple-600'
+    case 'ready_to_send': return 'bg-cyan-50 text-cyan-600'
     case 'sent': return 'bg-blue-50 text-blue-600'
     case 'viewed': return 'bg-indigo-50 text-indigo-600'
     case 'revised': return 'bg-amber-50 text-amber-600'
@@ -398,12 +400,15 @@ export function feeQuoteStatusColor(s: FeeQuoteStatus): string {
     case 'declined': return 'bg-red-50 text-red-600'
     case 'expired': return 'bg-slate-100 text-slate-400'
     case 'superseded': return 'bg-violet-50 text-violet-600'
+    case 'converted_to_project': return 'bg-green-100 text-green-700'
   }
 }
 
 export function feeQuoteStatusLabel(s: FeeQuoteStatus): string {
   switch (s) {
     case 'draft': return 'Draft'
+    case 'internal_review': return 'Internal Review'
+    case 'ready_to_send': return 'Ready to Send'
     case 'sent': return 'Sent'
     case 'viewed': return 'Viewed'
     case 'revised': return 'Revised'
@@ -411,6 +416,7 @@ export function feeQuoteStatusLabel(s: FeeQuoteStatus): string {
     case 'declined': return 'Declined'
     case 'expired': return 'Expired'
     case 'superseded': return 'Superseded'
+    case 'converted_to_project': return 'Converted'
   }
 }
 
@@ -986,6 +992,84 @@ export function updateSeverityDot(severity: 'info' | 'warning' | 'critical'): st
     case 'info': return 'bg-blue-400'
     case 'warning': return 'bg-amber-400'
     case 'critical': return 'bg-red-500'
+  }
+}
+
+// ── Quote Mode / Template / Line Type Utilities ─────────────
+
+export function quoteModeLabel(mode: QuoteMode): string {
+  switch (mode) {
+    case 'existing_project': return 'Existing Project'
+    case 'standalone': return 'Standalone'
+  }
+}
+
+export function quoteTemplateTypeLabel(type: QuoteTemplateType): string {
+  switch (type) {
+    case 'planning': return 'Planning / Pre-App'
+    case 'technical': return 'Technical / Delivery'
+    case 'full_service': return 'Full Service'
+    case 'brpd': return 'BRPD Services'
+    case 'cdm_pd': return 'CDM PD Services'
+  }
+}
+
+export function quoteTemplateTypeColor(type: QuoteTemplateType): string {
+  switch (type) {
+    case 'planning': return 'bg-sky-50 text-sky-600'
+    case 'technical': return 'bg-indigo-50 text-indigo-600'
+    case 'full_service': return 'bg-violet-50 text-violet-600'
+    case 'brpd': return 'bg-orange-50 text-orange-600'
+    case 'cdm_pd': return 'bg-rose-50 text-rose-600'
+  }
+}
+
+export function quoteLineTypeLabel(type: QuoteLineType): string {
+  switch (type) {
+    case 'stage_service': return 'Stage Service'
+    case 'additional_service': return 'Additional Service'
+    case 'optional_service': return 'Optional Service'
+    case 'consultant_coordination': return 'Consultant Coordination'
+    case 'travel_mileage': return 'Travel / Mileage'
+    case 'expense_allowance': return 'Expense Allowance'
+    case 'cgi_render': return 'CGI Render'
+    case 'contract_admin': return 'Contract Administration'
+    case 'interior_design': return 'Interior Design'
+    case 'brpd_service': return 'BRPD Service'
+    case 'cdm_pd_service': return 'CDM PD Service'
+    case 'other_custom': return 'Other / Custom'
+  }
+}
+
+// ── Timesheet Category Utilities ────────────────────────────
+
+export function timesheetCategoryLabel(cat: TimesheetCategory): string {
+  switch (cat) {
+    case 'marketing_bid': return 'Marketing / Bid'
+    case 'strategic_definition': return 'Strategic Definition'
+    case 'briefing': return 'Briefing'
+    case 'concept_design': return 'Concept Design'
+    case 'planning_spatial': return 'Planning / Spatial'
+    case 'technical_design': return 'Technical Design'
+    case 'tender': return 'Tender'
+    case 'construction_ca': return 'Construction / CA'
+    case 'handover_use': return 'Handover / Use'
+    case 'admin_cpd_office': return 'Admin / CPD / Office'
+  }
+}
+
+export function timesheetCategoryColor(cat: TimesheetCategory): string {
+  switch (cat) {
+    case 'marketing_bid': return 'bg-pink-50 text-pink-600'
+    case 'strategic_definition': return 'bg-indigo-50 text-indigo-600'
+    case 'briefing': return 'bg-violet-50 text-violet-600'
+    case 'concept_design': return 'bg-sky-50 text-sky-600'
+    case 'planning_spatial': return 'bg-cyan-50 text-cyan-600'
+    case 'technical_design': return 'bg-blue-50 text-blue-600'
+    case 'tender': return 'bg-amber-50 text-amber-600'
+    case 'construction_ca': return 'bg-orange-50 text-orange-600'
+    case 'handover_use': return 'bg-emerald-50 text-emerald-600'
+    case 'admin_cpd_office': return 'bg-slate-50 text-slate-500'
   }
 }
 

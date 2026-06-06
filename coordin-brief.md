@@ -77,14 +77,17 @@ Previously named ArchitectOps. Rebranded May 2026.
 - **Finance / Admin Lead** — needs invoice tracking, quote pipeline, overhead monitoring, Xero sync.
 - **BRPD Lead** — needs compliance tracking, dutyholder coordination, gateway readiness.
 
-### Beta tester
-Practice owner in Worcester. Small-to-medium architecture practice. Demo scheduled week commencing 2 June 2026. First real user feedback.
+### Beta partner
+Lead architect at a Worcester-based practice. She provided the original product requirements and idea for Coordin.io based on real practice pain points. Demo scheduled week commencing 2 June 2026.
+
+See `/private/beta-partner.md` for full details (not committed to git).
 
 ## Constraints
 
 - **Solo founder build.** No engineering team. Claude is the co-builder.
 - **No budget for infrastructure yet.** Vercel free tier + Supabase free tier for beta.
-- **Coordin.io must earn its time allocation through validated user interest.**
+- **Product originated from a real architect's real needs** — not speculative.
+- **Scale implication:** Beta partner's projects span local UK commissions to large international hotel programmes. Coordin.io must handle both scales.
 
 ## Tech Stack
 
