@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, AlertCircle, Info } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -32,7 +31,6 @@ function AuthNav() {
 
 /* ── Main Page ─────────────────────────────────────── */
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -54,7 +52,9 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/dashboard')
+      // Full page navigation — ensures fresh auth cookies are sent with the request.
+      // router.push() does client-side nav which doesn't re-send cookies to middleware.
+      window.location.href = '/dashboard'
     } catch (err) {
       setError('Something went wrong. Please try again.')
     } finally {
