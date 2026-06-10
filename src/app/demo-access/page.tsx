@@ -3,12 +3,19 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Clock, Play } from 'lucide-react'
+import { startDemoTimer, getDemoStart } from '@/lib/demo-timer'
 
 export default function DemoAccessPage() {
   const router = useRouter()
 
   useEffect(() => {
+    // Start the 10-minute demo timer (only if not already running)
+    if (getDemoStart() === null) {
+      startDemoTimer()
+    }
+
+    // Redirect to dashboard after a short welcome screen
     const timer = setTimeout(() => {
       router.push('/dashboard')
     }, 3000)
@@ -28,9 +35,15 @@ export default function DemoAccessPage() {
         <h1 className="font-display text-display text-ink-900 mb-3">
           Welcome to Coordin.io
         </h1>
-        <p className="text-[15px] text-ink-500 mb-8 leading-relaxed">
-          You now have access to the demo environment with sample project data, fee quotes, and team timesheets.
+        <p className="text-[15px] text-ink-500 mb-4 leading-relaxed">
+          You have <strong className="text-ink-700">10 minutes</strong> to explore the full platform with sample project data, fee quotes, and team timesheets.
         </p>
+
+        {/* Timer info */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-50 border border-accent-200 text-[13px] text-accent-700 font-medium mb-6">
+          <Clock className="w-4 h-4" />
+          10-minute demo trial starting...
+        </div>
 
         {/* Progress indicator */}
         <div className="flex justify-center mb-6">
@@ -47,8 +60,8 @@ export default function DemoAccessPage() {
           href="/dashboard"
           className="inline-flex items-center gap-2 bg-gradient-accent text-white font-semibold text-[14px] px-6 py-3 rounded-lg hover:opacity-90 transition-opacity shadow-glow-indigo"
         >
-          Go to dashboard now
-          <ArrowRight className="w-4 h-4" />
+          <Play className="w-4 h-4" />
+          Start exploring now
         </Link>
 
         {/* Inline keyframes for the progress bar */}

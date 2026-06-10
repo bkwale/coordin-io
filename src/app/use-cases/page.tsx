@@ -24,8 +24,8 @@ function MarketingNav() {
           <Link href="/book-demo" className="text-[13px] font-medium text-ink-500 hover:text-ink-900 hidden sm:block">
             Book a Demo
           </Link>
-          <Link href="/dashboard" className="text-[13px] font-medium text-accent-600 hover:text-accent-700">
-            Sign In
+          <Link href="/demo-access" className="text-[13px] font-medium text-accent-600 hover:text-accent-700">
+            Try the Demo
           </Link>
         </div>
       </div>

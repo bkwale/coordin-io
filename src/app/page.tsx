@@ -67,10 +67,10 @@ function MarketingNav() {
             Book a Demo
           </Link>
           <Link
-            href="/dashboard"
+            href="/demo-access"
             className="text-[13px] font-medium text-accent-600 hover:text-accent-700"
           >
-            Sign In
+            Try the Demo
           </Link>
         </div>
       </div>
@@ -959,7 +959,7 @@ export default function WelcomePage() {
             <div>
               <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-4">Access</h4>
               <ul className="space-y-2.5">
-                <li><Link href="/dashboard" className="text-[13px] text-ink-500 hover:text-ink-900">Sign In</Link></li>
+                <li><Link href="/demo-access" className="text-[13px] text-ink-500 hover:text-ink-900">Try the Demo</Link></li>
                 <li><a href="#" className="text-[13px] text-ink-500 hover:text-ink-900">Design Partner Programme</a></li>
               </ul>
               <Link

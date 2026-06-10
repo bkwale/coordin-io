@@ -67,10 +67,10 @@ function FAQNav() {
           Request Access
         </Link>
         <Link
-          href="/dashboard"
+          href="/demo-access"
           className="text-[13px] font-medium text-accent-600 hover:text-accent-700"
         >
-          Try Demo
+          Try the Demo
         </Link>
       </div>
     </nav>

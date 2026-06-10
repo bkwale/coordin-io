@@ -259,3 +259,44 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 **Mock data:** 5 quote templates, updated 6 quotes + 19 line items, updated 15 timesheet entries
 **New routes:** /fee-quotes/new, /timesheets, /timesheets/review, /welcome, /demo-access, /faq
 **New components:** DemoBanner, CommandPalette, NotificationBell
+
+### Wave 3 — Backend Foundation (COMPLETE)
+| Feature | Route/Component | Status |
+|---------|----------------|--------|
+| Supabase schema + migration SQL (11 tables, RLS, triggers) | `supabase/migrations/001_initial_schema.sql` | Done |
+| Supabase browser + server client | `src/lib/supabase/client.ts`, `server.ts` | Done |
+| Auth pages (login, signup, forgot-password) | `/auth/login`, `/auth/signup`, `/auth/forgot-password` | Done |
+| Auth callback route | `/auth/callback` | Done |
+| Env template + Vercel env vars (5 vars) | `.env.local`, Vercel dashboard | Done |
+| Services layer v1 (data access abstraction) | `src/lib/services/` (9 files, 8 entities) | Done |
+| Services layer v2 (Purple Team review applied) | `src/lib/services/` (11 files) | Done |
+
+**Services layer v2 architecture (Purple Team review):**
+- `ServiceResult<T>` return type: `{ data, error }` — callers can show error states
+- Dependency injection: pass server Supabase client from Server Components
+- Pagination: `limit`/`offset` on all list queries (default 100)
+- Circuit breaker: 3 failures in 30s → skip Supabase for 60s (`resilience.ts`)
+- Query timeout: 5s `AbortController` on every query (`resilience.ts`)
+- Structured logging: service/operation/mode/error code (`logger.ts`)
+- `getOrgId()` helper: auto-fetches `organisation_id` for all org-scoped inserts
+- Error ≠ mock data: Supabase errors surface to callers, never fall back to demo data
+- Explicit column selection on all queries (no `select('*')`)
+
+**Files created:**
+- `src/lib/services/config.ts` — `isSupabaseConfigured()`, `getOrgId()`, `resolveClient()`, `ServiceResult<T>`, `QueryOptions`
+- `src/lib/services/logger.ts` — `createServiceLogger()` structured logging factory
+- `src/lib/services/resilience.ts` — circuit breaker (`isCircuitOpen`, `recordFailure`, `recordSuccess`), `queryTimeout()`
+- `src/lib/services/projects.ts` — 5 functions (getProjects, getProject, getProjectsByStatus, createProject, updateProject)
+- `src/lib/services/tasks.ts` — 6 functions (getTasks, getTasksByProject, getTask, getOverdueTasks, createTask, updateTask)
+- `src/lib/services/quotes.ts` — 6 functions + 3 sub-entities (quotes, line_items, templates)
+- `src/lib/services/timesheets.ts` — 6 functions (getTimesheetEntries, getTimesheetsByUser, getTimesheetsByProject, getTimesheetsByWeek, createTimesheetEntry, updateTimesheetEntry)
+- `src/lib/services/invoices.ts` — 6 functions (getInvoices, getInvoice, getInvoicesByProject, getOverdueInvoices, createInvoice, updateInvoiceStatus)
+- `src/lib/services/leave.ts` — 5 functions (getLeaveRecords, getLeaveByUser, getPendingLeave, createLeaveRequest, updateLeaveStatus)
+- `src/lib/services/profiles.ts` — 4 functions (getProfiles, getProfile, getCurrentProfile, updateProfile)
+- `src/lib/services/waitlist.ts` — 2 functions (getWaitlistEntries, addToWaitlist)
+- `src/lib/services/index.ts` — barrel export for all services
+
+**Supabase schema (11 tables):** organisations, profiles, projects, tasks, quotes, quote_line_items, quote_templates, timesheet_entries, invoices, leave_records, waitlist
+**RLS:** Org-scoped multi-tenancy via `get_user_org_id()` helper, waitlist has public insert
+**Triggers:** `handle_new_user()` (auto-create profile on signup), `handle_updated_at()` (6 tables)
+**Vercel env vars:** NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, RESEND_API_KEY, TEAM_NOTIFICATION_EMAIL, RESEND_FROM_EMAIL

@@ -1,6 +1,6 @@
 # Coordin.io — Product Brief
 
-**Last updated:** 6 June 2026
+**Last updated:** 10 June 2026
 **Author:** Wale Koleosho
 **Status:** Post-demo, first paying practice confirmed (~£180/month). Building to Ayo's PRD.
 
@@ -26,8 +26,9 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 - Demo delivered to beta partner — well received, studio ready to onboard at ~£180/month
 - Landing page live at coordin.io with waitlist form
 - Design system fully refreshed (18-point improvement plan executed)
-- No backend yet — mock data only
-- No auth or multi-tenancy
+- Supabase schema written + applied, services layer v2 live (all 8 entities)
+- Auth pages built (login, signup, forgot-password), awaiting Supabase project creation for credentials
+- RLS policies defined (org-scoped multi-tenancy), awaiting first real data
 
 ## Current State
 
@@ -56,18 +57,20 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | **Settings** | 4 routes | Admin controls, role-based visibility, integration hub, numbering templates |
 | **News & Regulations** | Widget only | 8 items across architecture, construction, regulations, planning, company |
 | **FAQ** | `/faq` | 8 accordion items covering product, BRPD, pricing, integrations, security |
-| **Demo Access** | `/demo-access` | Post-waitlist redirect with auto-forward to dashboard |
+| **Demo Access** | `/demo-access` | Starts 10-minute timed demo trial, sets localStorage timer, auto-redirects to dashboard |
 
-**Total: 50+ routes (including 6 marketing pages), 256 unit tests, 0 type errors.**
+| **Demo Timer** | All app routes | 10-minute timed trial: countdown banner, warning at 2 min, full-screen overlay on expiry with signup/book-demo form |
+| **Demo Signup API** | `/api/demo-signup` | POST endpoint: validates payload, sends user confirmation email + team notification email via Resend, graceful fallback when Resend not configured |
+
+**Total: 50+ routes (including 6 marketing pages), 1 API route, 256 unit tests, 0 type errors.**
 
 ### What's NOT built
 
 | Gap | Impact | When Needed |
 |-----|--------|-------------|
-| Backend (Supabase) | No real data, no persistence | Next priority |
-| Authentication | No login, no user sessions | Next priority |
-| Multi-tenancy / RLS | Every user sees everything | With auth |
-| Data access layer (services/) | Mock data imported directly — Supabase migration will touch every file | Before backend |
+| Backend (Supabase) | Schema written, migration SQL ready, clients configured, services layer v2 live — needs Supabase project creation + credentials | **Create Supabase project** |
+| Authentication | Login/signup/forgot-password pages built, middleware ready — needs Supabase credentials | **Create Supabase project** |
+| Multi-tenancy / RLS | RLS policies defined in migration SQL, org-scoped with `get_user_org_id()` helper — needs Supabase auth active | With Supabase project |
 | Integration APIs (Xero, Outlook, SharePoint) | Integrations page is UI only | After backend |
 | CI pipeline (GitHub Actions) | 256 tests run manually only | This week |
 | Quote PDF generation | Builder exists but no PDF export | Ayo's PRD Package B |
@@ -75,6 +78,7 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | Timesheet exports (PDF/CSV) | Download stubs exist, no actual export | Ayo's PRD Package C |
 | Dark mode | Design system structured for it but not implemented | Later |
 | Waitlist email storage | Form captures data client-side only — no backend to store leads | Need Supabase or external form service |
+| Resend email integration | API route built, needs RESEND_API_KEY in .env.local | Create free account at resend.com |
 
 ## Users
 
@@ -113,7 +117,7 @@ See `/private/beta-partner.md` for full details (not committed to git).
 | Styling | Tailwind CSS 3, custom design system (card-premium, card-static, card-interactive, status-pill, stripe-row) |
 | Icons | Lucide React (replaced all inline SVGs) |
 | Fonts | DM Sans (body), Instrument Serif (display), JetBrains Mono (data) |
-| Backend (planned) | Supabase (PostgreSQL, Auth, RLS, Edge Functions) |
+| Backend | Supabase (PostgreSQL, Auth, RLS, Edge Functions) — schema + services layer v2 |
 | Deployment | Vercel |
 | Testing | Vitest (256 unit tests) |
 | Repo | github.com/bkwale/coordin-io |
@@ -140,7 +144,7 @@ Inspired by Stripe (clean, premium, data-dense), Monday.com (widget modularity),
 **Component patterns:**
 - Status pills standardised to `-50` background / `-600` text
 - Lucide icons throughout
-- EmptyState, NotificationBell, DemoBanner, CommandPalette (⌘K), WidgetCard with loading skeletons
+- EmptyState, NotificationBell, DemoTimerBanner (countdown), DemoExpiredOverlay (signup form), CommandPalette (⌘K), WidgetCard with loading skeletons
 - Collapsible sidebar (72 → 16 units), 14 items across 4 sections
 - Tabbed project workspace (6 tabs covering 14 sub-routes)
 - Dashboard filters dim (opacity 40%) instead of hiding
@@ -226,6 +230,8 @@ Slack, HubSpot, BreatheHR/CharlieHR, Google Drive, Dropbox, Google Maps/OS Maps
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 8 Jun 2026 | Timed demo + email notifications | 10-min demo timer (DemoTimerProvider, countdown banner, expired overlay), /api/demo-signup route (Resend), all marketing nav links updated to "Try the Demo" → /demo-access |
+| 6 Jun 2026 | Supabase integration layer built | Schema (12 tables + RLS), client/server/middleware, auth pages (login/signup/forgot-password), useUser hook, demo-mode bypass |
 | 6 Jun 2026 | Website PRD fully implemented | 8-section homepage, 4 new marketing pages (use-cases, BRPD, quotes, book-demo), architect-first positioning, 5 use case structure |
 | 6 Jun 2026 | Landing page redesigned Programa-style | Beta partner (Ayo) requested Programa-style design |
 | 6 Jun 2026 | Routing fixed: `/` = landing page, `/dashboard` = app | coordin.io should show marketing page first, not the app |
