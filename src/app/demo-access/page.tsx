@@ -15,12 +15,14 @@ export default function DemoAccessPage() {
       startDemoTimer()
     }
 
-    // Redirect to dashboard after a short welcome screen
+    // Full page navigation to dashboard after welcome screen.
+    // Must use window.location.href (not router.push) so the browser sends
+    // the freshly-set demo cookie to middleware on the very first request.
     const timer = setTimeout(() => {
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     }, 3000)
     return () => clearTimeout(timer)
-  }, [router])
+  }, [])
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-6">
