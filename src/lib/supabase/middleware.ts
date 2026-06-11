@@ -39,9 +39,12 @@ export async function updateSession(request: NextRequest) {
       // Demo still active — allow through without auth
       return NextResponse.next()
     }
-    // Demo expired — clear cookie, fall through to auth check
-    const expired = NextResponse.redirect(request.nextUrl.clone())
-    expired.cookies.set(DEMO_COOKIE, '', { path: '/', maxAge: 0 })
+    // Demo expired — clear cookie and redirect to signup
+    const url = request.nextUrl.clone()
+    url.pathname = '/signup'
+    const expiredResponse = NextResponse.redirect(url)
+    expiredResponse.cookies.set(DEMO_COOKIE, '', { path: '/', maxAge: 0 })
+    return expiredResponse
   }
 
   // 3. Skip auth entirely if Supabase isn't configured (local dev without env vars)

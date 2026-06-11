@@ -1,14 +1,10 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowRight, Clock, Play } from 'lucide-react'
+import { Clock, Play } from 'lucide-react'
 import { startDemoTimer, getDemoStart } from '@/lib/demo-timer'
 
 export default function DemoAccessPage() {
-  const router = useRouter()
-
   useEffect(() => {
     // Start the 10-minute demo timer (only if not already running)
     if (getDemoStart() === null) {
@@ -58,13 +54,13 @@ export default function DemoAccessPage() {
         </div>
         <p className="text-[11px] text-ink-400 mb-6">Redirecting to dashboard...</p>
 
-        <Link
+        <a
           href="/dashboard"
           className="inline-flex items-center gap-2 bg-gradient-accent text-white font-semibold text-[14px] px-6 py-3 rounded-lg hover:opacity-90 transition-opacity shadow-glow-indigo"
         >
           <Play className="w-4 h-4" />
           Start exploring now
-        </Link>
+        </a>
 
         {/* Inline keyframes for the progress bar */}
         <style jsx>{`
