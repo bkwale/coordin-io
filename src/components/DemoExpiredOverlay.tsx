@@ -1,15 +1,25 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useDemoTimer } from './DemoTimerProvider'
+import { clearDemoTimer } from '@/lib/demo-timer'
 import Link from 'next/link'
 import { ArrowRight, Clock, LogIn } from 'lucide-react'
 
 /**
  * Full-screen overlay that appears when the 10-minute demo expires.
  * Forces the user to create an account or sign in — no dismiss option.
+ * Clears the demo cookie so middleware stops granting access.
  */
 export function DemoExpiredOverlay() {
   const { expired } = useDemoTimer()
+
+  // Clear demo cookie + localStorage when demo expires
+  useEffect(() => {
+    if (expired) {
+      clearDemoTimer()
+    }
+  }, [expired])
 
   if (!expired) return null
 

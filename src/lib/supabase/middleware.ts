@@ -1,6 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const DEMO_COOKIE = 'coordin_demo_start'
+const DEMO_DURATION_MS = 10 * 60 * 1000 // 10 minutes
+
 const PUBLIC_ROUTES = [
   '/',
   '/welcome',
@@ -18,7 +21,7 @@ const PUBLIC_ROUTES = [
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public routes, API routes, auth callbacks, and static assets
+  // 1. Allow public routes, API routes, auth callbacks, and static assets
   if (
     PUBLIC_ROUTES.includes(pathname) ||
     pathname.startsWith('/api/') ||
@@ -28,7 +31,20 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Demo mode — skip auth entirely if Supabase isn't configured
+  // 2. Active demo — cookie-based 10-minute pass (no auth required)
+  const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
+  if (demoCookie) {
+    const demoStart = parseInt(demoCookie, 10)
+    if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+      // Demo still active — allow through without auth
+      return NextResponse.next()
+    }
+    // Demo expired — clear cookie, fall through to auth check
+    const expired = NextResponse.redirect(request.nextUrl.clone())
+    expired.cookies.set(DEMO_COOKIE, '', { path: '/', maxAge: 0 })
+  }
+
+  // 3. Skip auth entirely if Supabase isn't configured (local dev without env vars)
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL.includes('YOUR_PROJECT')
@@ -36,7 +52,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Supabase is configured — check auth
+  // 4. Supabase is configured — check auth
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

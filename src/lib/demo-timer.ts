@@ -2,16 +2,21 @@
  * Demo Timer — 10-minute timed trial for unauthenticated visitors.
  *
  * Uses localStorage to persist the timer across page navigations.
+ * Also sets a cookie so Next.js middleware can check demo status server-side.
  * Timer starts when user enters demo-access and expires after DEMO_DURATION_MS.
  */
 
 export const DEMO_DURATION_MS = 10 * 60 * 1000 // 10 minutes
 const STORAGE_KEY = 'coordin_demo_start'
+export const DEMO_COOKIE = 'coordin_demo_start'
 
-/** Start the demo timer (set current timestamp). */
+/** Start the demo timer (set current timestamp + cookie for middleware). */
 export function startDemoTimer(): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, Date.now().toString())
+  const now = Date.now().toString()
+  localStorage.setItem(STORAGE_KEY, now)
+  // Set cookie readable by middleware — 11 min max-age (slight buffer over 10 min)
+  document.cookie = `${DEMO_COOKIE}=${now}; path=/; max-age=660; SameSite=Lax`
 }
 
 /** Get the timestamp when the demo started. Returns null if not started. */
@@ -35,10 +40,11 @@ export function isDemoExpired(): boolean {
   return remaining !== null && remaining <= 0
 }
 
-/** Clear/reset the demo timer. */
+/** Clear/reset the demo timer (localStorage + cookie). */
 export function clearDemoTimer(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(STORAGE_KEY)
+  document.cookie = `${DEMO_COOKIE}=; path=/; max-age=0`
 }
 
 /** Format milliseconds as "M:SS" */
