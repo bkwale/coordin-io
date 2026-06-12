@@ -9,6 +9,7 @@ import { DemoTimerProvider } from '@/components/DemoTimerProvider'
 import { DemoTimerBanner } from '@/components/DemoTimerBanner'
 import { DemoExpiredOverlay } from '@/components/DemoExpiredOverlay'
 import { cn } from '@/lib/utils'
+import { Analytics } from '@vercel/analytics/next'
 
 const MARKETING_ROUTES = ['/', '/welcome', '/faq', '/demo-access', '/use-cases', '/features/brpd', '/features/quotes', '/book-demo', '/login', '/signup', '/forgot-password']
 
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           )}
         </DemoTimerProvider>
+        <Analytics />
       </body>
     </html>
   )
