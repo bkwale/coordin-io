@@ -28,6 +28,7 @@ interface TeamMember {
   jobTitle: string | null
   phone: string | null
   orgPermission: string
+  orgPermissionLabel?: string
   status: string
   startDate: string | null
   office: { name: string; city: string } | null

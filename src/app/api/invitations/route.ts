@@ -5,6 +5,7 @@ import { generateSecureToken } from '@/lib/tokens'
 import { success } from '@/lib/api-response'
 import { ValidationError, ConflictError } from '@/lib/errors'
 import { withAuth } from '@/lib/with-auth'
+import { sendInvitationEmail } from '@/lib/email'
 
 /**
  * POST /api/invitations — Create a new employee invitation.
@@ -53,6 +54,30 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     },
   })
 
+  // Get org name and inviter name for the email
+  const org = await prisma.organisation.findUnique({
+    where: { id: profile.organisationId },
+    select: { name: true },
+  })
+
+  // Send invitation email (non-blocking — don't fail the request if email fails)
+  const emailResult = await sendInvitationEmail({
+    to: email,
+    inviteeName: fullName,
+    organisationName: org?.name || 'your organisation',
+    inviterName: profile.fullName,
+    token: invitation.token,
+    expiresAt: invitation.expiresAt,
+  })
+
+  // Update invitation status based on email delivery
+  if (emailResult.success) {
+    await prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { status: 'SENT', sentAt: new Date() },
+    })
+  }
+
   // Audit trail
   await recordAuditEvent({
     organisationId: profile.organisationId,
@@ -60,11 +85,20 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     action: AuditActions.INVITATION_CREATED,
     entityType: 'invitation',
     entityId: invitation.id,
-    metadata: { email, fullName },
+    metadata: {
+      email,
+      fullName,
+      emailSent: emailResult.success,
+      emailError: emailResult.error || undefined,
+    },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
 
-  return success({ invitation }, 201)
+  return success({
+    invitation,
+    emailSent: emailResult.success,
+    emailError: emailResult.error || undefined,
+  }, 201)
 }, { requiredPermission: 'MANAGER' })
 
 /**
