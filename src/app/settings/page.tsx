@@ -319,10 +319,11 @@ function TeamSection() {
 
   const permissionLabel = (p: string) => {
     switch (p) {
-      case 'OWNER': return 'Owner'
-      case 'ADMIN': return 'Admin'
-      case 'MEMBER': return 'Member'
-      case 'VIEWER': return 'Viewer'
+      case 'OWNER': return 'Practice Principal'
+      case 'ADMIN': return 'Practice Manager'
+      case 'MANAGER': return 'Project Lead'
+      case 'MEMBER': return 'Team Member'
+      case 'VIEWER': return 'External'
       default: return p
     }
   }
@@ -390,9 +391,11 @@ function TeamSection() {
                       'inline-block text-[11px] font-medium px-2 py-0.5 rounded-full',
                       member.orgPermission === 'OWNER' ? 'bg-purple-50 text-purple-700' :
                       member.orgPermission === 'ADMIN' ? 'bg-blue-50 text-blue-700' :
+                      member.orgPermission === 'MANAGER' ? 'bg-amber-50 text-amber-700' :
+                      member.orgPermission === 'VIEWER' ? 'bg-surface-100 text-ink-400' :
                       'bg-surface-100 text-ink-500'
                     )}>
-                      {permissionLabel(member.orgPermission)}
+                      {member.orgPermissionLabel || permissionLabel(member.orgPermission)}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-[13px] text-ink-500">

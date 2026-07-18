@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/with-auth'
 import { prisma } from '@/lib/prisma'
-import { ValidationError } from '@/lib/errors'
+import { ValidationError, PermissionError } from '@/lib/errors'
+import { canPerform } from '@/lib/role-permissions'
 
 /** GET /api/settings/organisation — Get current user's organisation details */
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
+  if (!canPerform(profile.orgPermission, 'settings', 'view_org_settings')) {
+    throw new PermissionError('Only Practice Managers and above can view organisation settings')
+  }
   const org = await prisma.organisation.findUnique({
     where: { id: profile.organisationId },
     include: {
@@ -36,6 +40,10 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 /** PATCH /api/settings/organisation — Update organisation details */
 export const PATCH = withAuth(
   async (request: NextRequest, { profile }) => {
+    if (!canPerform(profile.orgPermission, 'settings', 'edit_org_settings')) {
+      throw new PermissionError('Only the Practice Principal can edit organisation settings')
+    }
+
     const body = await request.json()
     const { name, logoUrl, defaultCurrency, currencies } = body
 
@@ -79,5 +87,4 @@ export const PATCH = withAuth(
       currencies: updated.currencies,
     })
   },
-  { requiredPermission: 'OWNER' },
 )
