@@ -11,24 +11,30 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.47.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "next": "14.2.21",
+    "pg": "^8.22.0",
+    "prisma": "^7.8.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.20.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.21",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.6.3",
-    "vitest": "^3.0.0"
+    "vitest": "^3.2.7"
   }
 }

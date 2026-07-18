@@ -3,24 +3,23 @@
 import { usePathname, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { PROJECTS } from '@/lib/mock-data'
 import {
   LayoutDashboard, ListChecks, FileText, PoundSterling,
-  ShieldCheck, MapPin
+  ShieldCheck, MapPin, Eye, AlertCircle,
 } from 'lucide-react'
 
 const PROJECT_TABS = [
   {
     label: 'Overview',
-    href: '', // base /projects/[id]
+    href: '',
     icon: LayoutDashboard,
     subRoutes: ['', '/health', '/brief']
   },
   {
-    label: 'Tasks & Actions',
-    href: '/registers',
+    label: 'Tasks',
+    href: '/tasks',
     icon: ListChecks,
-    subRoutes: ['/registers', '/meetings']
+    subRoutes: ['/tasks', '/registers', '/meetings']
   },
   {
     label: 'Documents',
@@ -41,6 +40,18 @@ const PROJECT_TABS = [
     subRoutes: ['/brpd', '/brpd/changelog', '/building-regs', '/design-risks']
   },
   {
+    label: 'Observations',
+    href: '/observations',
+    icon: Eye,
+    subRoutes: ['/observations']
+  },
+  {
+    label: 'Snags',
+    href: '/snags',
+    icon: AlertCircle,
+    subRoutes: ['/snags']
+  },
+  {
     label: 'Planning',
     href: '/planning',
     icon: MapPin,
@@ -52,7 +63,6 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname()
   const params = useParams()
   const projectId = params.id as string
-  const project = PROJECTS.find(p => p.id === projectId)
   const basePath = `/projects/${projectId}`
 
   // Determine which tab is active
@@ -65,7 +75,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         <div className="flex items-center gap-2 text-[11px] text-ink-400 mb-2">
           <Link href="/projects" className="hover:text-accent-500 transition-colors">Projects</Link>
           <span>/</span>
-          <span className="text-ink-600">{project?.name || 'Project'}</span>
+          <span className="text-ink-600">Project</span>
         </div>
       </div>
 

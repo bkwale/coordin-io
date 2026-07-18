@@ -1,0 +1,986 @@
+// Coordin.io — CWA Homes Operating System
+// Full data model covering all sprints
+// Sprint 1: Identity, Invitation, Activation, Audit
+// Sprint 2: Onboarding, Policies, Training
+// Sprint 3: Dashboard, Projects, Documents
+// Sprint 4: Tasks, Checklists, Review Workflow
+// Sprint 5: CPD, Requests, Leave, Equipment
+// Sprint 6: Mobile Site, Snagging, Offline
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 1 — Identity, Invitation & Activation
+// ═══════════════════════════════════════════════════════════
+
+enum Currency {
+  NGN // Nigerian Naira
+  GBP // British Pounds
+  USD // US Dollars
+  EUR // Euros
+}
+
+model Organisation {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  logoUrl         String?  @map("logo_url")
+  defaultCurrency Currency @default(NGN) @map("default_currency")
+  currencies      Currency[] // All currencies this org uses
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  offices     Office[]
+  profiles    Profile[]
+  projects    Project[]
+  invitations Invitation[]
+  roles       CorporateRole[]
+  policies    PolicyDocument[]
+  assets      Asset[]
+  auditEvents AuditEvent[]
+
+  @@map("organisations")
+}
+
+model Office {
+  id             String       @id @default(cuid())
+  organisationId String       @map("organisation_id")
+  name           String
+  city           String
+  country        String       @default("NG")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  profiles     Profile[]
+  projects     Project[]
+
+  @@map("offices")
+}
+
+model CorporateRole {
+  id             String       @id @default(cuid())
+  organisationId String       @map("organisation_id")
+  name           String       // e.g. "Graduate Architectural Assistant", "Design Lead"
+  level          RoleLevel    @default(STAFF)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  profiles     Profile[]
+
+  @@unique([organisationId, name])
+  @@map("corporate_roles")
+}
+
+enum RoleLevel {
+  ADMIN
+  SENIOR_MANAGEMENT
+  MANAGEMENT
+  SENIOR_STAFF
+  STAFF
+  EXTERNAL
+}
+
+/// Profile — linked to Supabase auth.users via authUserId
+model Profile {
+  id             String       @id @default(cuid())
+  authUserId     String?      @unique @map("auth_user_id") // Supabase auth.users.id
+  organisationId String       @map("organisation_id")
+  officeId       String?      @map("office_id")
+  roleId         String?      @map("role_id")
+
+  fullName       String       @map("full_name")
+  email          String
+  jobTitle       String?      @map("job_title")
+  phone          String?
+  avatarUrl      String?      @map("avatar_url")
+
+  // Org-level permission
+  orgPermission  OrgPermission @default(MEMBER)
+
+  // Manager / line manager
+  managerId      String?      @map("manager_id")
+
+  // Employment
+  startDate      DateTime?    @map("start_date")
+  status         ProfileStatus @default(INVITED)
+  deactivatedAt  DateTime?    @map("deactivated_at")
+
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  office         Office?      @relation(fields: [officeId], references: [id])
+  corporateRole  CorporateRole? @relation(fields: [roleId], references: [id])
+  manager        Profile?     @relation("ManagerReports", fields: [managerId], references: [id])
+  reports        Profile[]    @relation("ManagerReports")
+
+  // Employee details
+  employeeProfile EmployeeProfile?
+
+  // Invitations created by this user
+  invitationsSent Invitation[] @relation("InvitationCreator")
+  invitationReceived Invitation? @relation("InvitationRecipient")
+
+  // Project memberships
+  projectMemberships ProjectMembership[]
+
+  // Tasks
+  tasksOwned     Task[]       @relation("TaskOwner")
+  tasksReviewing Task[]       @relation("TaskReviewer")
+  taskComments   TaskComment[]
+
+  // Documents
+  documentsAuthored   DocumentRevision[] @relation("DocAuthor")
+  documentsReviewed   DocumentReview[]
+
+  // Policy acknowledgements
+  policyAcks     PolicyAcknowledgement[]
+
+  // Training
+  trainingCompletions TrainingCompletion[]
+
+  // CPD
+  cpdRecords     CPDRecord[]  @relation("CPDOwner")
+  cpdVerified    CPDRecord[]  @relation("CPDVerifier")
+
+  // Supervision
+  supervisionAsEmployee SupervisionRecord[] @relation("SupervisedEmployee")
+  supervisionAsManager  SupervisionRecord[] @relation("Supervisor")
+
+  // Requests
+  requestsSubmitted ServiceRequest[] @relation("RequestSubmitter")
+  requestsApproved  ServiceRequest[] @relation("RequestApprover")
+
+  // Leave
+  leaveBalances  LeaveBalance[]
+  leaveRequests  LeaveRequest[] @relation("LeaveRequester")
+  leaveApprovals LeaveRequest[] @relation("LeaveApprover")
+
+  // Expenses
+  expenseClaims  ExpenseClaim[] @relation("ExpenseClaimant")
+  expenseApprovals ExpenseClaim[] @relation("ExpenseApprover")
+
+  // Assets
+  assetAssignments AssetAssignment[]
+
+  // Site
+  siteObservations SiteObservation[]
+  snags            Snag[]       @relation("SnagCreator")
+  snagVerifications Snag[]      @relation("SnagVerifier")
+
+  // Notifications
+  notifications  Notification[]
+
+  // Audit
+  auditEvents    AuditEvent[]
+
+  @@map("profiles")
+}
+
+enum OrgPermission {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+enum ProfileStatus {
+  INVITED
+  ACTIVE
+  ONBOARDING
+  DEACTIVATED
+}
+
+model EmployeeProfile {
+  id              String   @id @default(cuid())
+  profileId       String   @unique @map("profile_id")
+  emergencyName   String?  @map("emergency_name")
+  emergencyPhone  String?  @map("emergency_phone")
+  emergencyRelation String? @map("emergency_relation")
+
+  // Onboarding
+  onboardingComplete Boolean  @default(false) @map("onboarding_complete")
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+
+  // Equipment
+  equipmentConfirmed Boolean @default(false) @map("equipment_confirmed")
+
+  // Development
+  mentorId        String?  @map("mentor_id")
+  qualificationPathway String? @map("qualification_pathway") // Part 2, Part 3, etc.
+
+  // Leave
+  annualLeaveAllocation Float @default(25) @map("annual_leave_allocation")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  @@map("employee_profiles")
+}
+
+model Invitation {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  token           String   @unique // Generated via crypto.randomBytes — NOT cuid
+  email           String
+  fullName        String   @map("full_name")
+  jobTitle        String?  @map("job_title")
+  officeId        String?  @map("office_id")
+  roleId          String?  @map("role_id")
+  managerId       String?  @map("manager_id")
+  startDate       DateTime? @map("start_date")
+  annualLeave     Float?   @map("annual_leave")
+
+  // Invitation state
+  status          InvitationStatus @default(PENDING)
+  expiresAt       DateTime @map("expires_at")
+  sentAt          DateTime? @map("sent_at")
+  activatedAt     DateTime? @map("activated_at")
+  revokedAt       DateTime? @map("revoked_at")
+  activationIp    String?  @map("activation_ip")
+
+  // Who created / who receives
+  createdById     String   @map("created_by_id")
+  profileId       String?  @unique @map("profile_id") // created on activation
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  createdBy       Profile  @relation("InvitationCreator", fields: [createdById], references: [id])
+  profile         Profile? @relation("InvitationRecipient", fields: [profileId], references: [id])
+
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  SENT
+  ACTIVATED
+  EXPIRED
+  REVOKED
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 2 — Onboarding, Policies & Training
+// ═══════════════════════════════════════════════════════════
+
+model PolicyDocument {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  title           String
+  revision        String   @default("1.0")
+  category        PolicyCategory @default(GENERAL)
+  mandatory       Boolean  @default(true)
+  effectiveDate   DateTime @map("effective_date")
+  fileUrl         String?  @map("file_url")
+  content         String?  // Rich text content
+  requiresReack   Boolean  @default(false) @map("requires_reack") // Re-acknowledgement on revision
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  acknowledgements PolicyAcknowledgement[]
+
+  @@map("policy_documents")
+}
+
+enum PolicyCategory {
+  GENERAL
+  HR
+  IT_DATA_PROTECTION
+  HEALTH_SAFETY
+  ESMS
+  DRAWING_CONTROL
+}
+
+model PolicyAcknowledgement {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  policyId        String   @map("policy_id")
+  policyRevision  String   @map("policy_revision")
+  openedAt        DateTime? @map("opened_at")
+  acknowledgedAt  DateTime? @map("acknowledged_at")
+  acknowledged    Boolean  @default(false)
+  quizScore       Float?   @map("quiz_score")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+  policy          PolicyDocument @relation(fields: [policyId], references: [id])
+
+  @@unique([profileId, policyId, policyRevision])
+  @@map("policy_acknowledgements")
+}
+
+model TrainingItem {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  mandatory       Boolean  @default(false)
+  durationMinutes Int?     @map("duration_minutes")
+  contentUrl      String?  @map("content_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  completions     TrainingCompletion[]
+
+  @@map("training_items")
+}
+
+model TrainingCompletion {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  trainingId      String   @map("training_id")
+  completedAt     DateTime? @map("completed_at")
+  score           Float?
+  certificateUrl  String?  @map("certificate_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+  training        TrainingItem @relation(fields: [trainingId], references: [id])
+
+  @@unique([profileId, trainingId])
+  @@map("training_completions")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 3 — Projects, Documents & Drawings
+// ═══════════════════════════════════════════════════════════
+
+model Project {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  officeId        String?  @map("office_id")
+  code            String?  // e.g. "ALC" for Abuja Life Camp
+  name            String
+  description     String?
+  location        String?
+  projectType     ProjectType @default(HOTEL) @map("project_type")
+  stage           ProjectStage @default(BRIEF)
+  status          ProjectStatus @default(ACTIVE)
+  healthStatus    HealthStatus @default(GREEN) @map("health_status")
+  currency        Currency?    // Project-specific currency override (falls back to org default)
+  clientBrand     String?      @map("client_brand") // e.g. "Accor", "Ibis Styles"
+
+  // Key dates
+  startDate       DateTime? @map("start_date")
+  targetCompletion DateTime? @map("target_completion")
+
+  // Current drawing issue
+  currentIssueRef String?  @map("current_issue_ref") // e.g. "C03"
+  currentIssueDate DateTime? @map("current_issue_date")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  office          Office?  @relation(fields: [officeId], references: [id])
+
+  memberships     ProjectMembership[]
+  tasks           Task[]
+  documents       Document[]
+  siteObservations SiteObservation[]
+  snags           Snag[]
+
+  @@map("projects")
+}
+
+enum ProjectType {
+  HOTEL
+  RESIDENTIAL
+  MIXED_USE
+  RESORT
+  REFURBISHMENT
+  OFFICE_FIT_OUT
+}
+
+enum ProjectStage {
+  BRIEF
+  CONCEPT
+  SPATIAL_COORDINATION
+  WORKING_DRAWINGS
+  CONSTRUCTION
+  HANDOVER
+  OPERATIONS
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum HealthStatus {
+  GREEN
+  AMBER
+  RED
+}
+
+model ProjectMembership {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  profileId       String   @map("profile_id")
+  projectRole     ProjectRole @default(TEAM_MEMBER) @map("project_role")
+  assignedAt      DateTime @default(now()) @map("assigned_at")
+  removedAt       DateTime? @map("removed_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  @@unique([projectId, profileId])
+  @@map("project_memberships")
+}
+
+enum ProjectRole {
+  PROJECT_LEAD
+  PROJECT_ARCHITECT
+  DESIGN_LEAD
+  SENIOR_ARCHITECT
+  ARCHITECT
+  TEAM_MEMBER
+  EXTERNAL_CONSULTANT
+  CONTRACTOR
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  title           String
+  documentType    DocumentType @default(DRAWING) @map("document_type")
+  discipline      String?  // Architecture, Structural, MEP, etc.
+  documentCode    String?  @map("document_code")
+  securityLevel   SecurityLevel @default(INTERNAL) @map("security_level")
+  status          DocumentStatus @default(WORK_IN_PROGRESS)
+  currentRevision String?  @map("current_revision")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  revisions       DocumentRevision[]
+
+  @@map("documents")
+}
+
+enum DocumentType {
+  DRAWING
+  SPECIFICATION
+  SCHEDULE
+  REPORT
+  PHOTOGRAPH
+  CORRESPONDENCE
+  CERTIFICATE
+  OTHER
+}
+
+enum SecurityLevel {
+  INTERNAL
+  CONSULTANT
+  CONTRACTOR
+  CLIENT_OPERATOR
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum DocumentStatus {
+  WORK_IN_PROGRESS
+  SHARED_INTERNALLY
+  INTERNAL_REVIEW
+  APPROVED_FOR_ISSUE
+  ISSUED
+  SUPERSEDED
+}
+
+model DocumentRevision {
+  id              String   @id @default(cuid())
+  documentId      String   @map("document_id")
+  revision        String   // e.g. "P01", "C03"
+  authorId        String   @map("author_id")
+  fileUrl         String   @map("file_url")
+  fileSize        Int?     @map("file_size")
+  fileChecksum    String?  @map("file_checksum")
+  status          DocumentStatus @default(WORK_IN_PROGRESS)
+
+  issuePurpose    String?  @map("issue_purpose")
+  issueDate       DateTime? @map("issue_date")
+  supersededAt    DateTime? @map("superseded_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  document        Document @relation(fields: [documentId], references: [id])
+  author          Profile  @relation("DocAuthor", fields: [authorId], references: [id])
+  reviews         DocumentReview[]
+
+  @@map("document_revisions")
+}
+
+model DocumentReview {
+  id              String   @id @default(cuid())
+  revisionId      String   @map("revision_id")
+  reviewerId      String   @map("reviewer_id")
+  outcome         ReviewOutcome @default(PENDING)
+  comments        String?
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  revision        DocumentRevision @relation(fields: [revisionId], references: [id])
+  reviewer        Profile  @relation(fields: [reviewerId], references: [id])
+
+  @@map("document_reviews")
+}
+
+enum ReviewOutcome {
+  PENDING
+  APPROVED
+  CHANGES_REQUIRED
+  REJECTED
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 4 — Tasks, Checklists & Review Workflow
+// ═══════════════════════════════════════════════════════════
+
+model Task {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  title           String
+  description     String?
+  instructions    String?  // Rich text task brief
+
+  // Assignment
+  ownerId         String?  @map("owner_id")
+  reviewerId      String?  @map("reviewer_id")
+
+  // Classification
+  stage           ProjectStage?
+  discipline      String?
+  block           String?  // Building block
+  floor           String?
+  priority        TaskPriority @default(MEDIUM)
+  status          TaskStatus @default(NOT_STARTED)
+
+  // Dates
+  dueDate         DateTime? @map("due_date")
+  estimatedHours  Float?   @map("estimated_hours")
+  completedAt     DateTime? @map("completed_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  owner           Profile? @relation("TaskOwner", fields: [ownerId], references: [id])
+  reviewer        Profile? @relation("TaskReviewer", fields: [reviewerId], references: [id])
+
+  checklistItems  TaskChecklistItem[]
+  comments        TaskComment[]
+
+  @@map("tasks")
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  READY_FOR_REVIEW
+  CHANGES_REQUIRED
+  COMPLETED
+}
+
+model TaskChecklistItem {
+  id              String   @id @default(cuid())
+  taskId          String   @map("task_id")
+  label           String
+  mandatory       Boolean  @default(true)
+  completed       Boolean  @default(false)
+  completedAt     DateTime? @map("completed_at")
+  sortOrder       Int      @default(0) @map("sort_order")
+
+  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_checklist_items")
+}
+
+model TaskComment {
+  id              String   @id @default(cuid())
+  taskId          String   @map("task_id")
+  authorId        String   @map("author_id")
+  content         String
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author          Profile  @relation(fields: [authorId], references: [id])
+
+  @@map("task_comments")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 5 — CPD, Requests, Leave & Equipment
+// ═══════════════════════════════════════════════════════════
+
+model CPDRecord {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  title           String
+  provider        String?
+  date            DateTime
+  durationHours   Float    @map("duration_hours")
+  topic           String?
+  learningOutcome String?  @map("learning_outcome")
+  evidenceUrl     String?  @map("evidence_url")
+  status          CPDStatus @default(DRAFT)
+
+  verifiedById    String?  @map("verified_by_id")
+  verifiedAt      DateTime? @map("verified_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation("CPDOwner", fields: [profileId], references: [id])
+  verifiedBy      Profile? @relation("CPDVerifier", fields: [verifiedById], references: [id])
+
+  @@map("cpd_records")
+}
+
+enum CPDStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  RETURNED
+}
+
+model CompetencyRecord {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  area            String   // e.g. "Revit", "AutoCAD", "Site Inspection"
+  level           CompetencyLevel @default(BEGINNER)
+  assessedAt      DateTime? @map("assessed_at")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("competency_records")
+}
+
+enum CompetencyLevel {
+  BEGINNER
+  DEVELOPING
+  COMPETENT
+  PROFICIENT
+  EXPERT
+}
+
+model SupervisionRecord {
+  id              String   @id @default(cuid())
+  employeeId      String   @map("employee_id")
+  supervisorId    String   @map("supervisor_id")
+  date            DateTime
+  notes           String?
+  objectives      String?
+  feedback        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  employee        Profile  @relation("SupervisedEmployee", fields: [employeeId], references: [id])
+  supervisor      Profile  @relation("Supervisor", fields: [supervisorId], references: [id])
+
+  @@map("supervision_records")
+}
+
+model LeaveBalance {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  year            Int
+  allocation      Float
+  used            Float    @default(0)
+  carriedForward  Float    @default(0) @map("carried_forward")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  @@unique([profileId, year])
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  leaveType       LeaveType @default(ANNUAL) @map("leave_type")
+  startDate       DateTime @map("start_date")
+  endDate         DateTime @map("end_date")
+  days            Float
+  reason          String?
+  status          RequestStatus @default(DRAFT)
+  approverId      String?  @map("approver_id")
+  approvedAt      DateTime? @map("approved_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile         Profile  @relation("LeaveRequester", fields: [profileId], references: [id])
+  approver        Profile? @relation("LeaveApprover", fields: [approverId], references: [id])
+
+  @@map("leave_requests")
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  COMPASSIONATE
+  UNPAID
+  PUBLIC_HOLIDAY
+}
+
+model ServiceRequest {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  requestType     ServiceRequestType @map("request_type")
+  title           String
+  description     String?
+  status          RequestStatus @default(DRAFT)
+  approverId      String?  @map("approver_id")
+  approvedAt      DateTime? @map("approved_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation("RequestSubmitter", fields: [profileId], references: [id])
+  approver        Profile? @relation("RequestApprover", fields: [approverId], references: [id])
+
+  @@map("service_requests")
+}
+
+enum ServiceRequestType {
+  IT_SUPPORT
+  EQUIPMENT
+  PPE
+  SOFTWARE_LICENCE
+  TRAINING
+  BOOKS_STANDARDS
+  TRAVEL
+  FLIGHTS_ACCOMMODATION
+  OFFICE_SUPPLIES
+}
+
+enum RequestStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  FULFILMENT_IN_PROGRESS
+  COMPLETED
+  WITHDRAWN
+}
+
+model ExpenseClaim {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  projectId       String?  @map("project_id")
+  category        String
+  description     String
+  amount          Float
+  currency        Currency @default(NGN)
+  receiptUrl      String?  @map("receipt_url")
+  status          RequestStatus @default(DRAFT)
+  approverId      String?  @map("approver_id")
+  approvedAt      DateTime? @map("approved_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile         Profile  @relation("ExpenseClaimant", fields: [profileId], references: [id])
+  approver        Profile? @relation("ExpenseApprover", fields: [approverId], references: [id])
+
+  @@map("expense_claims")
+}
+
+model Asset {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  assetTag        String   @unique @map("asset_tag") // e.g. "CWA-LAG-024"
+  name            String
+  category        AssetCategory
+  serialNumber    String?  @map("serial_number")
+  condition       AssetCondition @default(NEW)
+  purchaseDate    DateTime? @map("purchase_date")
+  warrantyExpiry  DateTime? @map("warranty_expiry")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  assignments     AssetAssignment[]
+
+  @@map("assets")
+}
+
+enum AssetCategory {
+  LAPTOP
+  MONITOR
+  PHONE
+  TABLET
+  HELMET
+  HI_VIS
+  PPE_OTHER
+  FURNITURE
+  SOFTWARE
+  OTHER
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  REPAIR_REQUIRED
+  DAMAGED
+  LOST
+  RETIRED
+}
+
+model AssetAssignment {
+  id              String   @id @default(cuid())
+  assetId         String   @map("asset_id")
+  profileId       String   @map("profile_id")
+  assignedAt      DateTime @default(now()) @map("assigned_at")
+  returnedAt      DateTime? @map("returned_at")
+  notes           String?
+
+  asset           Asset    @relation(fields: [assetId], references: [id])
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  @@map("asset_assignments")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 6 — Site, Snagging & Observations
+// ═══════════════════════════════════════════════════════════
+
+model SiteObservation {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  createdById     String   @map("created_by_id")
+  block           String?
+  floor           String?
+  room            String?
+  description     String
+  photoUrls       String[] @map("photo_urls")
+  latitude        Float?
+  longitude       Float?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  createdBy       Profile  @relation(fields: [createdById], references: [id])
+
+  @@map("site_observations")
+}
+
+model Snag {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  createdById     String   @map("created_by_id")
+  block           String?
+  floor           String?
+  room            String?
+  element         String?
+  category        SnagCategory @default(ARCHITECTURAL)
+  description     String
+  photoUrls       String[] @map("photo_urls")
+  drawingRef      String?  @map("drawing_ref")
+  specRef         String?  @map("spec_ref")
+
+  // Responsibility
+  responsibleOrg  String?  @map("responsible_org")
+  severity        SnagSeverity @default(MINOR)
+  status          SnagStatus @default(OPEN)
+  targetDate      DateTime? @map("target_date")
+
+  // Close-out
+  rectificationPhotoUrls String[] @map("rectification_photo_urls")
+  verifiedById    String?  @map("verified_by_id")
+  verifiedAt      DateTime? @map("verified_at")
+  closedAt        DateTime? @map("closed_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  createdBy       Profile  @relation("SnagCreator", fields: [createdById], references: [id])
+  verifiedBy      Profile? @relation("SnagVerifier", fields: [verifiedById], references: [id])
+
+  @@map("snags")
+}
+
+enum SnagCategory {
+  ARCHITECTURAL
+  MEP
+  STRUCTURAL
+  FIRE
+  HEALTH_SAFETY
+  FINISH
+  FF_AND_E
+  EXTERNAL_WORKS
+}
+
+enum SnagSeverity {
+  MINOR
+  MODERATE
+  MAJOR
+  SAFETY_CRITICAL
+}
+
+enum SnagStatus {
+  OPEN
+  ASSIGNED
+  RECTIFICATION_SUBMITTED
+  VERIFICATION
+  CLOSED
+  REOPENED
+}
+
+// ═══════════════════════════════════════════════════════════
+// CROSS-CUTTING — Notifications & Audit
+// ═══════════════════════════════════════════════════════════
+
+model Notification {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  type            String   // e.g. "task.assigned", "document.review", "invitation.sent"
+  title           String
+  body            String?
+  linkUrl         String?  @map("link_url")
+  read            Boolean  @default(false)
+  readAt          DateTime? @map("read_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  @@index([profileId, read])
+  @@map("notifications")
+}
+
+model AuditEvent {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  actorId         String?  @map("actor_id") // null for system events
+  action          String   // e.g. "invitation.created", "task.status_changed"
+  entityType      String   @map("entity_type") // e.g. "invitation", "task", "document"
+  entityId        String   @map("entity_id")
+  metadata        Json?    // additional context
+  ipAddress       String?  @map("ip_address")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  actor           Profile? @relation(fields: [actorId], references: [id])
+
+  @@index([organisationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}

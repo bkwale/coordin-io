@@ -1,248 +1,392 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { PROJECTS, getProjectTasks, getUser } from '@/lib/mock-data'
-import { calculateRisks, calculateHealth, calculateCompletion, calculateStageCompletion } from '@/lib/risk-engine'
-import { RIBA_STAGES, TaskStatus } from '@/lib/types'
-import { StageBadge } from '@/components/StageBadge'
-import { ProgressBar } from '@/components/ProgressBar'
-import { RiskAlertCard } from '@/components/RiskAlertCard'
-import { TaskList } from '@/components/TaskList'
+import {
+  ListChecks, FileText, Users, Calendar, MapPin,
+  AlertTriangle, RefreshCw, ArrowRight,
+  CheckCircle2, Clock, Eye, PauseCircle,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
+import { TaskStatusBadge } from '@/components/StatusFlow'
 
-import { Phase2Warnings } from '@/components/Phase2Warnings'
-import { cn, isOverdue, statusLabel, formatDate, healthColor } from '@/lib/utils'
+/* ── Types mirroring GET /api/projects/[id] ────────────── */
 
-export function generateStaticParams() {
-  return PROJECTS.map(p => ({ id: p.id }))
+interface ProjectMember {
+  assignedAt: string
+  projectRole: string
+  profile: {
+    id: string
+    fullName: string
+    email: string
+    avatarUrl: string | null
+    orgPermission: string
+  }
 }
 
-export default function ProjectDashboard({ params }: { params: { id: string } }) {
-  const project = PROJECTS.find(p => p.id === params.id)
-  if (!project) notFound()
+interface ProjectDetail {
+  id: string
+  name: string
+  code: string
+  description: string | null
+  projectType: string
+  stage: string
+  status: string
+  healthStatus: string
+  currency: string
+  clientBrand: string | null
+  location: string | null
+  startDate: string | null
+  targetCompletion: string | null
+  currentIssueRef: string | null
+  currentIssueDate: string | null
+  createdAt: string
+  office: { id: string; name: string; city: string } | null
+  memberships: ProjectMember[]
+  taskSummary: Record<string, number>
+}
 
-  const tasks = getProjectTasks(project.id)
-  const risks = calculateRisks(project, tasks)
-  const overdueTasks = tasks.filter(t => isOverdue(t.due_date) && t.status !== 'done')
-  const health = calculateHealth(risks, overdueTasks)
-  const completion = calculateCompletion(tasks)
-  const stageCompletion = calculateStageCompletion(tasks, project.current_stage)
-  const lead = project.project_lead_user_id ? getUser(project.project_lead_user_id) : null
+/* ── Helpers ───────────────────────────────────────────── */
 
-  const tasksByStatus: Record<TaskStatus, number> = {
-    not_started: tasks.filter(t => t.status === 'not_started').length,
-    in_progress: tasks.filter(t => t.status === 'in_progress').length,
-    done: tasks.filter(t => t.status === 'done').length,
-    blocked: tasks.filter(t => t.status === 'blocked').length,
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const HEALTH_META: Record<string, { label: string; color: string; bgColor: string; dotColor: string }> = {
+  GREEN: { label: 'On track', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+  AMBER: { label: 'At risk', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  RED: { label: 'Off track', color: 'text-red-700', bgColor: 'bg-red-50', dotColor: 'bg-red-500' },
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  BRIEF: 'Brief',
+  CONCEPT: 'Concept',
+  SPATIAL_COORDINATION: 'Spatial Coordination',
+  WORKING_DRAWINGS: 'Working Drawings',
+  CONSTRUCTION: 'Construction',
+  HANDOVER: 'Handover',
+  OPERATIONS: 'Operations',
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  GRADUATE: 'Graduate',
+  PROJECT_ARCHITECT: 'Architect',
+  PROJECT_LEAD: 'Project Lead',
+  SENIOR_ARCHITECT: 'Senior Architect',
+}
+
+/* ── Page ──────────────────────────────────────────────── */
+
+export default function ProjectDashboard() {
+  const params = useParams()
+  const projectId = params.id as string
+
+  const [project, setProject] = useState<ProjectDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchProject = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || `Failed to load (${res.status})`)
+      }
+      const json = await res.json()
+      setProject(json.data.project)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchProject()
+  }, [fetchProject])
+
+  /* ── Loading ─────────────────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <div className="h-7 w-64 bg-ink-100 animate-pulse rounded" />
+          <div className="h-4 w-40 bg-ink-100 animate-pulse rounded" />
+        </div>
+        <SkeletonStats count={4} />
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <SkeletonCard />
+          </div>
+          <SkeletonCard />
+        </div>
+      </div>
+    )
   }
 
-  const requiredOutstanding = tasks.filter(t =>
-    t.required_flag && t.status !== 'done' && t.stage === project.current_stage
-  )
+  /* ── Error ───────────────────────────────────────────── */
 
-  const nextActions = tasks
-    .filter(t => t.status !== 'done' && t.stage === project.current_stage)
-    .sort((a, b) => {
-      if (a.required_flag !== b.required_flag) return a.required_flag ? -1 : 1
-      if (a.due_date && b.due_date) return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-      if (a.due_date) return -1
-      return 1
-    })
-    .slice(0, 5)
+  if (error || !project) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <AlertTriangle className="w-8 h-8 text-red-500" />
+        <p className="text-[13px] text-ink-600">{error || 'Project not found'}</p>
+        <button onClick={fetchProject} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors">
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+      </div>
+    )
+  }
+
+  /* ── Computed ─────────────────────────────────────────── */
+
+  const health = HEALTH_META[project.healthStatus] ?? HEALTH_META.GREEN
+  const totalTasks = Object.values(project.taskSummary).reduce((a, b) => a + b, 0)
+  const completedTasks = project.taskSummary['COMPLETED'] || 0
+  const inProgressTasks = project.taskSummary['IN_PROGRESS'] || 0
+  const blockedTasks = project.taskSummary['BLOCKED'] || 0
+  const reviewTasks = project.taskSummary['READY_FOR_REVIEW'] || 0
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fade-in">
-      {/* Project Header */}
-      <div className="card-premium p-5 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-[2rem] sm:text-[2.5rem] font-display font-bold text-ink-900">{project.name}</h1>
-              <span className={cn('px-2 py-0.5 rounded text-[11px] font-bold uppercase', healthColor(health))}>
-                {health}
-              </span>
-            </div>
-            <p className="text-sm text-slate-500">{project.client}</p>
-            {project.description && (
-              <p className="text-sm text-slate-400 mt-1 max-w-xl">{project.description}</p>
-            )}
-            <div className="flex flex-wrap items-center gap-3 mt-3">
-              <StageBadge stage={project.current_stage} />
-              <span className={cn(
-                'inline-block px-2 py-0.5 rounded text-[11px] font-medium capitalize',
-                project.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                project.status === 'paused' ? 'bg-amber-100 text-amber-700' :
-                'bg-slate-100 text-slate-600'
-              )}>
-                {project.status}
-              </span>
-              {lead && (
-                <span className="text-xs text-slate-400">Lead: <span className="text-slate-600 font-medium">{lead.name}</span></span>
-              )}
-            </div>
+    <div className="space-y-6">
+      {/* ── Project header ────────────────────────────── */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-[20px] font-semibold text-ink-900">{project.name}</h1>
+            <span className={cn(
+              'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium',
+              health.bgColor, health.color,
+            )}>
+              <span className={cn('w-1.5 h-1.5 rounded-full', health.dotColor)} />
+              {health.label}
+            </span>
           </div>
-
-          <div className="text-xs text-slate-400 space-y-1 sm:text-right shrink-0">
-            <p>Started: <span className="text-slate-600">{formatDate(project.start_date)}</span></p>
-            {project.target_completion_date && (
-              <p>Target: <span className="text-slate-600">{formatDate(project.target_completion_date)}</span></p>
-            )}
-            <p>Updated: <span className="text-slate-600">{formatDate(project.last_activity_at)}</span></p>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress + Task Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="card-premium p-5">
-          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-4">Progress</h3>
-          <div className="space-y-4">
-            <ProgressBar value={completion} label="Overall Completion" />
-            <ProgressBar value={stageCompletion} label={`Stage ${project.current_stage}: ${RIBA_STAGES[project.current_stage]}`} />
-          </div>
-        </div>
-
-        <div className="card-premium p-5">
-          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-4">Task Summary</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {(['not_started', 'in_progress', 'done', 'blocked'] as TaskStatus[]).map(status => (
-              <div key={status} className="text-center p-2 rounded-lg bg-slate-50">
-                <p className="text-lg font-bold text-slate-900">{tasksByStatus[status]}</p>
-                <p className="text-[11px] text-slate-500 font-medium">{statusLabel(status)}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Total: {tasks.length} tasks</span>
-            {overdueTasks.length > 0 && (
-              <span className="text-red-600 font-medium">{overdueTasks.length} overdue</span>
+          <div className="flex items-center gap-3 text-[12px] text-ink-400 flex-wrap">
+            <span className="font-medium text-ink-600">{project.code}</span>
+            <span>·</span>
+            <span>{project.projectType.replace(/_/g, ' ')}</span>
+            <span>·</span>
+            <span>{STAGE_LABELS[project.stage] || project.stage}</span>
+            {project.location && (
+              <>
+                <span>·</span>
+                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {project.location}</span>
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {/* Risks + Required Outstanding + Next Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Risks */}
-        <div className="card-premium p-5">
-          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Risk Alerts</h3>
-          {risks.length === 0 ? (
-            <div className="text-center py-4">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-sm font-bold leading-8 mb-1">✓</span>
-              <p className="text-xs text-slate-400">No risks detected</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {risks.slice(0, 5).map(risk => (
-                <RiskAlertCard key={risk.id} risk={risk} compact />
-              ))}
-              {risks.length > 5 && (
-                <p className="text-xs text-slate-400 text-center pt-1">+ {risks.length - 5} more</p>
-              )}
+      {/* ── Task stat cards ───────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total tasks" value={totalTasks} icon={ListChecks} accent="bg-blue-50 text-blue-600" />
+        <StatCard label="In progress" value={inProgressTasks} icon={Clock} accent="bg-blue-50 text-blue-600" />
+        <StatCard label="In review" value={reviewTasks} icon={Eye} accent="bg-amber-50 text-amber-600" />
+        <StatCard label="Completed" value={completedTasks} icon={CheckCircle2} accent="bg-emerald-50 text-emerald-600" />
+      </div>
+
+      {/* ── Blocked alert ─────────────────────────────── */}
+      {blockedTasks > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3.5 flex items-center gap-3">
+          <PauseCircle className="w-5 h-5 text-red-500 shrink-0" />
+          <p className="text-[13px] text-red-700">
+            <span className="font-semibold">{blockedTasks} task{blockedTasks > 1 ? 's' : ''} blocked</span> — these need attention before work can continue.
+          </p>
+          <Link
+            href={`/projects/${projectId}/tasks`}
+            className="ml-auto text-[12px] text-red-600 font-medium hover:text-red-700 flex items-center gap-1 shrink-0"
+          >
+            View <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
+
+      {/* ── Main layout ───────────────────────────────── */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Left column */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Description */}
+          {project.description && (
+            <div className="bg-white rounded-xl border border-ink-100 p-5">
+              <h3 className="text-[13px] font-semibold text-ink-700 mb-2">About this project</h3>
+              <p className="text-[13px] text-ink-600 whitespace-pre-wrap leading-relaxed">{project.description}</p>
             </div>
           )}
+
+          {/* Task breakdown */}
+          <div className="bg-white rounded-xl border border-ink-100">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-50">
+              <div className="flex items-center gap-2">
+                <ListChecks className="w-4 h-4 text-ink-400" />
+                <h3 className="text-[13px] font-semibold text-ink-700">Task breakdown</h3>
+              </div>
+              <Link
+                href={`/projects/${projectId}/tasks`}
+                className="text-[12px] text-accent-600 font-medium hover:text-accent-700 flex items-center gap-1"
+              >
+                View all tasks <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            {totalTasks === 0 ? (
+              <div className="px-5 py-8 text-center">
+                <p className="text-[13px] text-ink-500">No tasks yet</p>
+              </div>
+            ) : (
+              <div className="p-5">
+                {/* Progress bar */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[12px] text-ink-500">Overall progress</span>
+                    <span className="text-[12px] font-medium text-ink-700">
+                      {totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-ink-100 rounded-full overflow-hidden flex">
+                    {completedTasks > 0 && (
+                      <div className="h-full bg-emerald-500" style={{ width: `${(completedTasks / totalTasks) * 100}%` }} />
+                    )}
+                    {inProgressTasks > 0 && (
+                      <div className="h-full bg-blue-400" style={{ width: `${(inProgressTasks / totalTasks) * 100}%` }} />
+                    )}
+                    {reviewTasks > 0 && (
+                      <div className="h-full bg-amber-400" style={{ width: `${(reviewTasks / totalTasks) * 100}%` }} />
+                    )}
+                    {blockedTasks > 0 && (
+                      <div className="h-full bg-red-400" style={{ width: `${(blockedTasks / totalTasks) * 100}%` }} />
+                    )}
+                  </div>
+                </div>
+
+                {/* Status breakdown rows */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.entries(project.taskSummary)
+                    .filter(([, count]) => count > 0)
+                    .sort(([a], [b]) => {
+                      const order: Record<string, number> = {
+                        BLOCKED: 0, CHANGES_REQUIRED: 1, IN_PROGRESS: 2,
+                        READY_FOR_REVIEW: 3, NOT_STARTED: 4, COMPLETED: 5,
+                      }
+                      return (order[a] ?? 99) - (order[b] ?? 99)
+                    })
+                    .map(([status, count]) => (
+                      <div key={status} className="flex items-center gap-2">
+                        <TaskStatusBadge status={status} />
+                        <span className="text-[13px] font-semibold text-ink-700">{count}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Quick links */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Link
+              href={`/projects/${projectId}/tasks`}
+              className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group"
+            >
+              <ListChecks className="w-5 h-5 text-ink-400 mb-3 group-hover:text-accent-600 transition-colors" />
+              <p className="text-[14px] font-semibold text-ink-900">Tasks</p>
+              <p className="text-[12px] text-ink-400 mt-1">View and manage all project tasks</p>
+            </Link>
+            <Link
+              href={`/projects/${projectId}/documents`}
+              className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group"
+            >
+              <FileText className="w-5 h-5 text-ink-400 mb-3 group-hover:text-accent-600 transition-colors" />
+              <p className="text-[14px] font-semibold text-ink-900">Documents</p>
+              <p className="text-[12px] text-ink-400 mt-1">Drawing register and revision control</p>
+            </Link>
+          </div>
         </div>
 
-        {/* Required Outstanding */}
-        <div className="card-premium p-5">
-          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Required Tasks Outstanding</h3>
-          {requiredOutstanding.length === 0 ? (
-            <div className="text-center py-4">
-              <span className="inline-block w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-sm font-bold leading-8 mb-1">✓</span>
-              <p className="text-xs text-slate-400">All required tasks complete</p>
+        {/* ── Right column — sidebar ───────────────────── */}
+        <div className="space-y-4">
+          {/* Project details */}
+          <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+            <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">Details</h3>
+            <div className="space-y-3 text-[12px]">
+              {project.clientBrand && (
+                <Row label="Client" value={project.clientBrand} />
+              )}
+              <Row label="Type" value={project.projectType.replace(/_/g, ' ')} />
+              <Row label="Stage" value={STAGE_LABELS[project.stage] || project.stage} />
+              <Row label="Currency" value={project.currency} />
+              {project.office && (
+                <Row label="Office" value={`${project.office.name}, ${project.office.city}`} />
+              )}
+              <Row label="Start" value={formatDate(project.startDate)} />
+              <Row label="Target" value={formatDate(project.targetCompletion)} />
+              {project.currentIssueRef && (
+                <Row label="Issue" value={`${project.currentIssueRef} (${formatDate(project.currentIssueDate)})`} />
+              )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              {requiredOutstanding.map(task => (
-                <div key={task.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                  <span className="text-xs font-medium text-amber-900 truncate">{task.title}</span>
+          </div>
+
+          {/* Team */}
+          <div className="bg-white rounded-xl border border-ink-100 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-4 h-4 text-ink-400" />
+              <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">
+                Team
+                <span className="ml-1.5 text-ink-400 font-normal lowercase">
+                  ({project.memberships.length})
+                </span>
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {project.memberships.map((m) => (
+                <div key={m.profile.id} className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-full bg-accent-100 flex items-center justify-center shrink-0">
+                    <span className="text-[10px] font-semibold text-accent-700">
+                      {m.profile.fullName.split(' ').map(n => n[0]).join('')}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-medium text-ink-700 truncate">{m.profile.fullName}</p>
+                    <p className="text-[10px] text-ink-400">{ROLE_LABELS[m.projectRole] || m.projectRole}</p>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Next Actions */}
-        <div className="card-premium p-5">
-          <h3 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Next Actions</h3>
-          {nextActions.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-4">No pending actions.</p>
-          ) : (
-            <div className="space-y-2">
-              {nextActions.map((task, i) => {
-                const owner = task.owner_user_id ? getUser(task.owner_user_id) : null
-                return (
-                  <div key={task.id} className="flex items-start gap-2.5 py-1.5">
-                    <span className="text-xs font-bold text-slate-300 mt-0.5">{i + 1}</span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
-                      {owner && <p className="text-[11px] text-slate-400">{owner.name}</p>}
-                    </div>
-                    {task.required_flag && (
-                      <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded shrink-0">REQ</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Phase 2: Warning Chips */}
-      <Phase2Warnings projectId={project.id} />
-
-      {/* Project Workspaces Grid */}
-      <div>
-        <h2 className="text-[11px] font-semibold text-ink-400 uppercase tracking-[0.1em] mb-3">Workspaces</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { href: `/projects/${project.id}/health`, label: 'Health', sub: 'Scorecards & Alerts' },
-            { href: `/projects/${project.id}/registers`, label: 'Registers', sub: 'Issues, Changes & Risks' },
-            { href: `/projects/${project.id}/meetings`, label: 'Meetings', sub: 'Meetings & Actions' },
-            { href: `/projects/${project.id}/design-risks`, label: 'Design Risk', sub: 'Risk Workspace' },
-            { href: `/projects/${project.id}/contract-admin`, label: 'Contract', sub: 'Administration' },
-            { href: `/projects/${project.id}/planning`, label: 'Planning', sub: 'Site Context' },
-            { href: `/projects/${project.id}/tender`, label: 'Tender', sub: 'ITT & Evaluation' },
-            { href: `/projects/${project.id}/site-queries`, label: 'Site Queries', sub: 'Site-to-Office' },
-            { href: `/projects/${project.id}/building-regs`, label: 'Building Regs', sub: 'Submissions & Inspections' },
-            { href: `/projects/${project.id}/brpd`, label: 'BRPD', sub: 'Compliance & Dutyholders' },
-            { href: `/projects/${project.id}/brpd/changelog`, label: 'BRPD Changelog', sub: 'Document Control' },
-            { href: `/projects/${project.id}/drawing-issues`, label: 'Drawing Issues', sub: 'Email Workflow' },
-            { href: `/projects/${project.id}/brief`, label: 'Brief', sub: 'Project Brief Builder' },
-            { href: `/projects/${project.id}/documents`, label: 'Documents', sub: 'Register & Transmittals' },
-            { href: `/projects/${project.id}/ai`, label: 'AI Teammate', sub: 'Ask About This Project' },
-            { href: '/approvals', label: 'Approvals', sub: 'Review Queue' },
-          ].map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="card-premium p-3.5 hover:border-brand-200 hover:bg-brand-50/30 transition-all group"
-            >
-              <p className="text-sm font-semibold text-slate-900 group-hover:text-brand-700 transition-colors">{link.label}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{link.sub}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Task List */}
-      <TaskList tasks={tasks} currentStage={project.current_stage} groupByStage />
-
-      {/* Stage Progression Warning */}
-      {requiredOutstanding.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-          <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-          </svg>
-          <div>
-            <p className="text-sm font-semibold text-amber-900">Stage progression blocked</p>
-            <p className="text-xs text-amber-700 mt-0.5">
-              {requiredOutstanding.length} required task{requiredOutstanding.length > 1 ? 's' : ''} must be completed before moving to Stage {project.current_stage + 1}.
-            </p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
 
+/* ── Helpers ───────────────────────────────────────────── */
+
+function StatCard({ label, value, icon: Icon, accent }: {
+  label: string; value: number; icon: React.FC<{ className?: string }>; accent: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-ink-100 p-5 flex items-start gap-4">
+      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center shrink-0', accent)}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <p className="text-[28px] font-semibold text-ink-900 leading-tight">{value}</p>
+        <p className="text-[12px] text-ink-400 mt-0.5">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-ink-400">{label}</span>
+      <span className="text-ink-700 text-right">{value}</span>
+    </div>
+  )
+}

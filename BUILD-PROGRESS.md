@@ -140,6 +140,7 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 ## Current Route Map
 
 ### Top-level routes
+- `/my-work` — Employee landing page (real data via /api/dashboard)
 - `/` — Practice Overview Dashboard
 - `/projects` — Projects listing
 - `/projects/new` — New project form
@@ -169,7 +170,11 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 - `/settings/integrations` — Integrations Hub (Xero, Outlook, SharePoint, Quote Sync) (Phase 4 upgrade)
 - `/settings/numbering` — Numbering & Templates Admin (Phase 4)
 
+### Task routes
+- `/tasks/[id]` — Task detail (status flow, checklist, comments, reviewer UI)
+
 ### Project sub-routes (`/projects/[id]/...`)
+- `/tasks` — Task list (filter by status, sort by priority/date/name)
 - `/registers` — Issues, Changes & Risk Register
 - `/meetings` — Meetings & Actions
 - `/design-risks` — Design Risk workspace
@@ -182,7 +187,10 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 - `/brpd/changelog` — BRPD Changelog & Document Control (Phase 4)
 - `/drawing-issues` — Drawing Issue & Email Workflow (Phase 4)
 - `/brief` — Project Brief Document Builder (Phase 4)
-- `/documents` — Documents & Transmittals
+- `/documents` — Drawing Register (real data, type filters)
+
+### Document routes
+- `/documents/[id]` — Document detail (revision history, review submission)
 - `/health` — Project Health Scorecard (Phase 4)
 
 ## Data Model Summary
@@ -300,3 +308,269 @@ Core RIBA stage tracking, project dashboards, task management, risk detection en
 **RLS:** Org-scoped multi-tenancy via `get_user_org_id()` helper, waitlist has public insert
 **Triggers:** `handle_new_user()` (auto-create profile on signup), `handle_updated_at()` (6 tables)
 **Vercel env vars:** NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, RESEND_API_KEY, TEAM_NOTIFICATION_EMAIL, RESEND_FROM_EMAIL
+
+## Phase 6 — CWA Homes Operating System (Prisma + Real Data)
+
+### Sprint 1 — Identity & Invitation (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Prisma v7 + PrismaPg adapter | `src/lib/prisma.ts` | Done |
+| Full data model (30+ entities, 6 sprints) | `prisma/schema.prisma` (986 lines) | Done |
+| Multi-currency support (NGN, GBP, USD, EUR) | `src/lib/currency.ts` | Done |
+| Secure token generation (crypto.randomBytes) | `src/lib/tokens.ts` | Done |
+| Server-side auth verification | `src/app/api/invitations/[token]/activate/route.ts` | Done |
+| withAuth() middleware wrapper | `src/lib/with-auth.ts` | Done |
+| Centralised error infrastructure | `src/lib/errors.ts` (8 error classes) | Done |
+| Standard API response helpers | `src/lib/api-response.ts` | Done |
+| Audit event recording | `src/lib/audit.ts` | Done |
+| Invitation API (create, list, validate, activate) | `src/app/api/invitations/` | Done |
+| Invitation activation UI | `src/app/activate/[token]/page.tsx` | Done |
+| Health check endpoint | `src/app/api/health/route.ts` | Done |
+| Orphaned account detection | Activation route (ORPHAN_RISK logging) | Done |
+| Mock data cleared | `src/lib/mock-data.ts` (empty stubs) | Done |
+| Seed data (gitignored) | `private/seed.ts` (11 sections) | Done |
+| Unit tests | 7 test files, 176 tests | Done |
+
+**Security:** Invitation tokens are 64-char hex (crypto.randomBytes), NOT predictable CUIDs. Server verifies Supabase session — never trusts client-supplied authUserId. Email match validation prevents invitation hijacking.
+
+**Infrastructure:** PgBouncer compatibility via DIRECT_URL (port 5432) for interactive transactions. Error classes with Prisma error wrapping. Structured audit trail for all mutations.
+
+### Sprint 2 — Onboarding Wizard (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Onboarding progress API | `src/app/api/onboarding/route.ts` (GET) | Done |
+| Policies API (list + acknowledge + open) | `src/app/api/onboarding/policies/` (3 routes) | Done |
+| Training API (list + complete) | `src/app/api/onboarding/training/` (2 routes) | Done |
+| Onboarding completion API | `src/app/api/onboarding/complete/route.ts` (POST) | Done |
+| Onboarding wizard UI (5-step wizard) | `src/app/onboarding/page.tsx` | Done |
+| Training seed data (4 modules) | `private/seed.ts` (section 10) | Done |
+| Onboarding unit tests | `src/lib/__tests__/onboarding.test.ts` (26 tests) | Done |
+| Layout update (no sidebar for /onboarding) | `src/app/layout.tsx` | Done |
+
+**Wizard flow:** Welcome → Policies (read & acknowledge 4 mandatory docs) → Training (complete 4 modules: 60/120/45/90 min) → Profile (phone, emergency contact) → Complete (status: ONBOARDING → ACTIVE)
+
+**API design:** All routes use withAuth() wrapper. Policies/training use upsert for idempotent acknowledgements. Completion endpoint validates all mandatory items before allowing status change. Full audit trail on every mutation.
+
+**Verification:** 0 type errors (tsc --noEmit). 202/202 tests passing across 8 test files.
+
+### Sprint 3 — Task Management & Drawing Register (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| withProjectAccess() middleware | `src/lib/with-project-access.ts` | Done |
+| Task status state machine | `src/lib/task-transitions.ts` | Done |
+| Document revision auto-numbering | `src/lib/revision-numbering.ts` | Done |
+| Projects API (list, create, detail, update) | `src/app/api/projects/` (2 routes) | Done |
+| Project members API (list, add) | `src/app/api/projects/[id]/members/route.ts` | Done |
+| Tasks API (list, create, detail, update) | `src/app/api/projects/[id]/tasks/` + `src/app/api/tasks/[id]/` | Done |
+| Task comments API | `src/app/api/tasks/[id]/comments/route.ts` | Done |
+| Task checklist API | `src/app/api/tasks/[id]/checklist/route.ts` | Done |
+| Documents/Drawing Register API | `src/app/api/projects/[id]/documents/route.ts` | Done |
+| Document detail + revisions API | `src/app/api/documents/[id]/` (2 routes) | Done |
+| Document revision review API | `src/app/api/document-revisions/[id]/review/route.ts` | Done |
+| Dashboard API (aggregated "what do I need today") | `src/app/api/dashboard/route.ts` | Done |
+| My Work UI (employee landing page) | `src/app/my-work/page.tsx` | Done |
+| Sidebar update (My Work nav item) | `src/components/Sidebar.tsx` | Done |
+| Sprint 3 seed data (documents, revisions, checklist, comments) | `private/seed.ts` (sections 12-15) | Done |
+| Task transition tests (25 tests) | `src/lib/__tests__/task-transitions.test.ts` | Done |
+| Revision numbering tests (19 tests) | `src/lib/__tests__/revision-numbering.test.ts` | Done |
+
+**Architecture:** withProjectAccess() higher-order wrapper extends withAuth() with project membership verification. Admins/Owners bypass membership check. Optional minProjectRole parameter enforces role hierarchy (GRADUATE < PROJECT_ARCHITECT < PROJECT_LEAD).
+
+**Task state machine:** NOT_STARTED → IN_PROGRESS → READY_FOR_REVIEW → COMPLETED. Branch paths: IN_PROGRESS → BLOCKED → IN_PROGRESS, READY_FOR_REVIEW → CHANGES_REQUIRED → IN_PROGRESS. COMPLETED is terminal. Reviewer-only transitions: COMPLETED, CHANGES_REQUIRED.
+
+**Document revisions:** Auto-numbered P01, P02... (preliminary) and C01, C02... (construction). Pure functions for formatting/parsing + DB query for next code. C revisions always sort after P revisions.
+
+**Dashboard API:** Single GET returns profile summary, projects with task counts (my tasks, overdue, in review), urgent tasks (overdue + due today + high/critical priority), and weekly stats — all in one response.
+
+**My Work UI:** Post-onboarding employee landing page. Time-of-day greeting, 4 stat cards (active tasks, overdue, awaiting review, completed this week), urgent tasks list with priority dots and due date badges, project grid with health status indicators and task counts. Full loading/error states with retry.
+
+**API routes (12 total):** 5 project routes (list, create, detail, update, members), 4 task routes (list/create per project, detail/update per task, comments, checklist), 3 document routes (drawing register, document detail, revision review), 1 dashboard route.
+
+**Seed data:** 5 drawing register documents, 5 document revisions, 5 task checklist items, 2 task comments. Total seed script now has 15 sections.
+
+**Verification:** 0 type errors (tsc --noEmit). 246/246 tests passing across 10 test files.
+
+### Sprint 3 Hardening — PT Review Fixes (COMPLETE)
+| Fix | File(s) | Status |
+|-----|---------|--------|
+| Input validation module | `src/lib/validation.ts` (170 lines) | Done |
+| Validation applied to all 10 mutation routes | 10 API route files | Done |
+| withTaskAccess() middleware | `src/lib/with-task-access.ts` (95 lines) | Done |
+| withDocumentAccess() + withRevisionAccess() middleware | `src/lib/with-document-access.ts` (170 lines) | Done |
+| 5 routes refactored to use new middleware | tasks/[id]/, comments, checklist, revisions, review | Done |
+| Transaction wrapping for multi-step writes | revisions + document review routes | Done |
+| canReviewWork() enforcement | document-revisions/[id]/review route | Done |
+| Rate limiting (in-memory sliding window) | `src/lib/rate-limit.ts` (100 lines) | Done |
+| Rate limiting wired into withAuth() | `src/lib/with-auth.ts` | Done |
+| Request timing (>2s warnings) | `src/lib/with-auth.ts` | Done |
+| Health endpoint latency reporting | `src/app/api/health/route.ts` | Done |
+
+**Verification:** 0 type errors (tsc --noEmit). 246/246 tests passing across 10 test files.
+
+**Validation module:** requireString, optionalString, requireId, optionalId, isValidId, requireEnum, optionalEnum, optionalNumber, optionalDate, parseBody (64KB body size guard).
+
+**Rate limiting:** Per-user sliding window. Presets: standard (100/min), strict (20/min), auth (10/min). Stale entry cleanup every 5 minutes.
+
+**Middleware stack:** withAuth → withProjectAccess → withTaskAccess / withDocumentAccess / withRevisionAccess. Each layer adds context (profile, project, task/document/revision) and verifies org boundary + membership.
+
+### UI Work Loop Sprint (COMPLETE — PT-recommended)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| useApiFetch + useApiMutation hooks | `src/hooks/use-api.ts` | Done |
+| Toast notification system | `src/components/Toast.tsx` + layout wiring | Done |
+| Loading skeletons (card, row, stats, task detail) | `src/components/Skeleton.tsx` | Done |
+| StatusFlow visual state machine | `src/components/StatusFlow.tsx` | Done |
+| StatusTransitionDropdown (valid-states only) | `src/components/StatusFlow.tsx` | Done |
+| TaskStatusBadge + PriorityBadge | `src/components/StatusFlow.tsx` | Done |
+| Task detail page (full work loop) | `src/app/tasks/[id]/page.tsx` | Done |
+| Task list page (filter, sort, status counts) | `src/app/projects/[id]/tasks/page.tsx` | Done |
+| Project dashboard (real data, task breakdown) | `src/app/projects/[id]/page.tsx` (rewrite) | Done |
+| Drawing register (real data, type filters) | `src/app/projects/[id]/documents/page.tsx` (rewrite) | Done |
+| Document detail + revision review | `src/app/documents/[id]/page.tsx` | Done |
+| Project layout — Tasks tab added | `src/app/projects/[id]/layout.tsx` (updated) | Done |
+| My Work urgent tasks — now clickable | `src/app/my-work/page.tsx` (updated) | Done |
+| StatusFlow component tests (14 tests) | `src/components/__tests__/StatusFlow.test.ts` | Done |
+
+**Complete employee work loop:** My Work → Task detail → status transition → comment → checklist → project overview → task list → drawing register → document detail → revision review.
+
+**StatusFlow state machine:** Visual 4-step flow (Not started → In progress → In review → Completed) with branch states (Blocked, Changes needed) shown below. Ring highlight on current status, dashed ring on valid next steps. StatusTransitionDropdown shows only valid transitions and filters reviewer-only transitions (COMPLETED, CHANGES_REQUIRED) to the actual reviewer.
+
+**Task detail page:** Status flow visualization, transition buttons, description/instructions, checklist with optimistic toggles + add item, comments with add form, sidebar with people (reviewer alert when awaiting review), details, and "What to do" contextual guidance per state.
+
+**Project dashboard (real data):** Health badge, stat cards (total/in-progress/review/completed), blocked tasks alert, stacked progress bar, task status breakdown, team members with roles, project details sidebar, quick links to tasks and documents.
+
+**Document review UI:** Drawing register with type filters + table layout, document detail with full revision history (revision badges, author, date, reviews with outcome styling), inline review form (approve/changes required/reject with comments).
+
+**Frontend patterns established:** useApiFetch/useApiMutation hooks, ToastProvider context, Skeleton loading components, error toast on mutation failure, optimistic updates with rollback.
+
+**Verification:** 0 type errors (tsc --noEmit). 260/260 tests passing across 11 test files.
+
+### UI Work Loop — PT Round 2 Fixes (COMPLETE)
+| Fix | File | Status |
+|-----|------|--------|
+| "New task" button + inline create form (title, priority, due date) | `src/app/projects/[id]/tasks/page.tsx` | Done |
+| useApiFetch refactored: useRef → useEffect with AbortController cleanup | `src/hooks/use-api.ts` | Done |
+| Verification — 0 type errors, 260/260 tests | — | Done |
+
+**Create task form:** Inline form in task list header with title (required, maxLength 500), priority dropdown (Low/Medium/High/Critical), optional due date picker. POSTs to existing `POST /api/projects/[id]/tasks`. Success toast, auto-refresh list, error display. Cancel resets form.
+
+**useApiFetch lifecycle fix:** Replaced `useRef` + conditional first-render pattern with proper `useEffect`. Now correctly re-fetches when URL changes, cleans up in-flight requests on unmount via `AbortController`, and avoids state updates after unmount. Abort errors silently swallowed.
+
+### Sprint 4 — Leave & Expenses (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Request status state machine | `src/lib/request-transitions.ts` | Done |
+| Leave calculation utilities | `src/lib/leave-utils.ts` | Done |
+| Leave balance API | `src/app/api/leave/balance/route.ts` (GET) | Done |
+| Leave requests API (list + create) | `src/app/api/leave/requests/route.ts` (GET, POST) | Done |
+| Leave request detail API (get + status update) | `src/app/api/leave/requests/[id]/route.ts` (GET, PATCH) | Done |
+| Expense claims API (list + create) | `src/app/api/expenses/route.ts` (GET, POST) | Done |
+| Expense claim detail API (get + status update) | `src/app/api/expenses/[id]/route.ts` (GET, PATCH) | Done |
+| Leave management UI | `src/app/leave/page.tsx` | Done |
+| Expenses management UI | `src/app/expenses/page.tsx` | Done |
+| Sidebar update (Leave + Expenses nav) | `src/components/Sidebar.tsx` (updated) | Done |
+| Audit actions update | `src/lib/audit.ts` (updated) | Done |
+| Sprint 4 seed data | `private/seed.ts` (sections 16-18) | Done |
+| Request transitions tests (28 tests) | `src/lib/__tests__/request-transitions.test.ts` | Done |
+| Leave utils tests (34 tests) | `src/lib/__tests__/leave-utils.test.ts` | Done |
+
+**Request state machine:** DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → FULFILMENT_IN_PROGRESS → COMPLETED. Branch paths: DRAFT/SUBMITTED → WITHDRAWN, UNDER_REVIEW → REJECTED. Role-based guards: requester (SUBMITTED, WITHDRAWN), approver (UNDER_REVIEW, APPROVED, REJECTED), admin (FULFILMENT_IN_PROGRESS, COMPLETED). Shared across leave, expenses, and future service requests.
+
+**Leave calculations:** Working days (Mon-Fri only), balance checks (allocation + carried forward - used - pending), overlap detection (blocks overlapping requests except WITHDRAWN/REJECTED), max 25 working days per request. Balance auto-updates on annual leave approval via $transaction.
+
+**Multi-currency expenses:** NGN, GBP, USD, EUR with Intl.NumberFormat formatting. Per-currency totals in header (not misleading cross-currency aggregation). Categories: Travel, Accommodation, Meals, Equipment, Software, Printing, Postage, Training, PPE, Site expenses, Other. Amount validation: >0, <1M.
+
+**Auto-approver assignment:** Both leave requests and expense claims auto-assign the user's managerId as approver on creation. Approver can be overridden by admin.
+
+**API routes (8 endpoints):** 2 leave routes (balance, requests list/create), 2 leave detail routes (get, status update), 2 expense routes (list, create), 2 expense detail routes (get, status update).
+
+**Seed data:** 3 leave balance records, 4 leave requests (approved/submitted/draft across types), 5 expense claims (multi-currency: NGN, GBP, EUR).
+
+### Sprint 4 Hardening — PT Review Fixes (COMPLETE)
+| Fix | File(s) | Status |
+|-----|---------|--------|
+| Admin transition authorization (isAdminTransition enforcement) | `leave/requests/[id]/route.ts`, `expenses/[id]/route.ts` | Done |
+| Dead code removal (unused employeeProfile fetch) | `leave/requests/route.ts` | Done |
+| Multi-currency totals (per-currency breakdown, not hardcoded NGN) | `expenses/page.tsx` | Done |
+| Eliminate redundant re-fetch (return update result directly) | `leave/requests/[id]/route.ts`, `expenses/[id]/route.ts` | Done |
+| Safe ID extraction (regex instead of pathname.split().pop()) | `leave/requests/[id]/route.ts`, `expenses/[id]/route.ts` | Done |
+
+**Security fix:** Admin transitions (FULFILMENT_IN_PROGRESS, COMPLETED) now require ADMIN or OWNER orgPermission. Previously, any authenticated user who knew the request ID could escalate status — a privilege escalation vulnerability.
+
+**Verification:** 0 type errors (tsc --noEmit). 322/322 tests passing across 13 test files.
+
+### Sprint 5 — CPD, Service Requests & Assets (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| CPD Records API (list + create) | `src/app/api/cpd/route.ts` (GET, POST) | Done |
+| CPD Record detail (get + status transitions) | `src/app/api/cpd/[id]/route.ts` (GET, PATCH) | Done |
+| Competency Records API (list + create) | `src/app/api/competency/route.ts` (GET, POST) | Done |
+| Competency Record detail (get + update) | `src/app/api/competency/[id]/route.ts` (GET, PATCH) | Done |
+| Supervision Records API (list + create) | `src/app/api/supervision/route.ts` (GET, POST) | Done |
+| Supervision Record detail (get + update) | `src/app/api/supervision/[id]/route.ts` (GET, PATCH) | Done |
+| Service Requests API (list + create) | `src/app/api/service-requests/route.ts` (GET, POST) | Done |
+| Service Request detail (get + status transitions) | `src/app/api/service-requests/[id]/route.ts` (GET, PATCH) | Done |
+| Assets API (list + create) | `src/app/api/assets/route.ts` (GET, POST) | Done |
+| Asset detail (get + update) | `src/app/api/assets/[id]/route.ts` (GET, PATCH) | Done |
+| Asset assignment (assign + return) | `src/app/api/assets/[id]/assign/route.ts` (POST, PATCH) | Done |
+| CPD records UI | `src/app/cpd/records/page.tsx` | Done |
+| Service requests UI | `src/app/service-requests/page.tsx` | Done |
+| Assets register UI | `src/app/assets/page.tsx` | Done |
+| Sidebar update (Requests + Assets nav) | `src/components/Sidebar.tsx` (updated) | Done |
+| Audit actions update (CPD, competency, supervision, request, asset) | `src/lib/audit.ts` (updated) | Done |
+| Sprint 5 seed data (sections 19-23) | `private/seed.ts` (updated) | Done |
+| CPD status tests (26 tests) | `src/lib/__tests__/cpd.test.ts` | Done |
+| Service request tests (19 tests) | `src/lib/__tests__/service-requests.test.ts` | Done |
+
+**CPD state machine:** DRAFT → SUBMITTED → VERIFIED (terminal) or RETURNED → SUBMITTED (resubmit). Owner submits, manager/admin verifies or returns. Separate from the RequestStatus state machine — CPDStatus is its own 4-state enum.
+
+**Service requests:** Uses the shared RequestStatus state machine from Sprint 4. 9 request types: IT_SUPPORT, EQUIPMENT, PPE, SOFTWARE_LICENCE, TRAINING, BOOKS_STANDARDS, TRAVEL, FLIGHTS_ACCOMMODATION, OFFICE_SUPPLIES. Full role-based enforcement (requester/approver/admin transitions).
+
+**Asset management:** Admin-only create/update. Assignment workflow with assign/return tracking. 10 categories (LAPTOP, MONITOR, PHONE, TABLET, HELMET, HI_VIS, PPE_OTHER, FURNITURE, SOFTWARE, OTHER). 6 condition states (NEW, GOOD, REPAIR_REQUIRED, DAMAGED, LOST, RETIRED).
+
+**API routes (11 files, 22 endpoints):** 2 CPD routes, 2 competency routes, 2 supervision routes, 2 service request routes, 3 asset routes (including assign).
+
+**Verification:** 0 type errors. 412/412 tests passing across 16 test files.
+
+### Sprint 6 — Site Observations & Snag Management (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Snag status state machine | `src/lib/snag-transitions.ts` | Done |
+| Site Observations API (project-scoped) | `src/app/api/projects/[id]/observations/route.ts` (GET, POST) | Done |
+| Observation detail | `src/app/api/observations/[id]/route.ts` (GET, PATCH) | Done |
+| Snags API (project-scoped) | `src/app/api/projects/[id]/snags/route.ts` (GET, POST) | Done |
+| Snag detail (get + status transitions) | `src/app/api/snags/[id]/route.ts` (GET, PATCH) | Done |
+| Site observations UI | `src/app/projects/[id]/observations/page.tsx` | Done |
+| Snags UI | `src/app/projects/[id]/snags/page.tsx` | Done |
+| Project layout update (Observations + Snags tabs) | `src/app/projects/[id]/layout.tsx` (updated) | Done |
+| Snag transition tests (45 tests) | `src/lib/__tests__/snag-transitions.test.ts` | Done |
+| Sprint 6 seed data (sections 24-25) | `private/seed.ts` (updated) | Done |
+
+**Snag state machine:** OPEN → ASSIGNED → RECTIFICATION_SUBMITTED → VERIFICATION → CLOSED (terminal). Branch: VERIFICATION → REOPENED → ASSIGNED (loop). ASSIGNED requires setting responsibleOrg. CLOSED sets verifiedBy/verifiedAt/closedAt. REOPENED clears verification data. Field updates only allowed in OPEN/ASSIGNED status.
+
+**Site observations:** Project-scoped via withProjectAccess. Block/floor/room location data. Photo URL arrays. Optional GPS coordinates (lat/lng). Block/floor filters on list view.
+
+**Snags:** Full defect tracking with 8 categories (ARCHITECTURAL, MEP, STRUCTURAL, FIRE, HEALTH_SAFETY, FINISH, FF_AND_E, EXTERNAL_WORKS), 4 severity levels (MINOR, MODERATE, MAJOR, SAFETY_CRITICAL), and the 6-state rectification workflow. Drawing/spec reference linking. Rectification photo evidence. Quick-action buttons for valid transitions.
+
+**Verification:** 0 type errors. 412/412 tests passing across 16 test files.
+
+### Sprint 5+6 PT Hardening (COMPLETE)
+
+Purple Team review surfaced 2 fixes, both applied:
+
+1. **Competency GET silent fallback** — `competency/route.ts` silently fell back to returning the requester's own records when they lacked access to another employee's records. Fixed: now throws `PermissionError`. Schneier flagged this as information leakage through behaviour.
+2. **Missing audit on observation PATCH** — `observations/[id]/route.ts` had no audit event on update, unlike every other PATCH route in the system. Fixed: added `site.observation_updated` audit event.
+
+**Verification:** 0 type errors. 412/412 tests passing across 16 test files.
+
+## All 6 Sprints Complete
+
+| Sprint | Scope | Tests | Status |
+|--------|-------|-------|--------|
+| 1 | Identity & Invitation | 176 | COMPLETE |
+| 2 | Onboarding Wizard | 26 | COMPLETE |
+| 3 | Tasks & Drawing Register | 64 | COMPLETE |
+| 4 | Leave & Expenses | 62 | COMPLETE |
+| 5 | CPD, Requests & Assets | 45 | COMPLETE |
+| 6 | Site & Snags | 45 | COMPLETE |
+| **Total** | **Full Graduate Assistant vertical slice** | **412** | **COMPLETE** |

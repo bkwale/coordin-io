@@ -1,291 +1,259 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { getProject, getProjectDocuments, getProjectTransmittals, USERS } from '@/lib/mock-data'
-import { DocumentRecord, DocumentTransmittal, RIBA_STAGES } from '@/lib/types'
-import { cn, formatDate, documentStatusColor, transmittalStatusColor } from '@/lib/utils'
+import Link from 'next/link'
+import {
+  FileText, Filter,
+  AlertTriangle, RefreshCw,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { SkeletonRow } from '@/components/Skeleton'
 
-import { SummaryCard } from '@/components/SummaryCard'
-import { StatusBadge } from '@/components/StatusBadge'
-import { EmptyState } from '@/components/EmptyState'
-import { TabBar } from '@/components/TabBar'
+/* ── Types mirroring GET /api/projects/[id]/documents ──── */
 
-type MainTab = 'documents' | 'transmittals'
-type DocumentCategory = 'all' | 'drawing' | 'report' | 'specification' | 'correspondence' | 'other'
+interface LatestRevision {
+  id: string
+  revision: string
+  status: string
+  authorId: string
+  issuePurpose: string | null
+  issueDate: string | null
+  supersededAt: string | null
+  createdAt: string
+}
 
-export default function ProjectDocumentsPage() {
+interface DocumentItem {
+  id: string
+  title: string
+  documentType: string
+  discipline: string | null
+  documentCode: string | null
+  securityLevel: string
+  currentRevision: string | null
+  status: string
+  createdAt: string
+  latestRevision: LatestRevision | null
+}
+
+type FilterType = 'ALL' | 'DRAWING' | 'SPECIFICATION' | 'SCHEDULE' | 'REPORT' | 'PHOTOGRAPH' | 'CORRESPONDENCE' | 'CERTIFICATE' | 'OTHER'
+
+/* ── Helpers ───────────────────────────────────────────── */
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  DRAWING: 'Drawing',
+  SPECIFICATION: 'Specification',
+  SCHEDULE: 'Schedule',
+  REPORT: 'Report',
+  PHOTOGRAPH: 'Photograph',
+  CORRESPONDENCE: 'Correspondence',
+  CERTIFICATE: 'Certificate',
+  OTHER: 'Other',
+}
+
+const DOC_STATUS_META: Record<string, { label: string; color: string; bgColor: string }> = {
+  DRAFT: { label: 'Draft', color: 'text-ink-600', bgColor: 'bg-ink-50' },
+  IN_REVIEW: { label: 'In review', color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  APPROVED_FOR_ISSUE: { label: 'Approved', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  ISSUED: { label: 'Issued', color: 'text-blue-700', bgColor: 'bg-blue-50' },
+  SUPERSEDED: { label: 'Superseded', color: 'text-ink-500', bgColor: 'bg-ink-50' },
+}
+
+const SECURITY_META: Record<string, { label: string; color: string }> = {
+  INTERNAL: { label: 'Internal', color: 'text-ink-500' },
+  CONSULTANT: { label: 'Consultant', color: 'text-blue-600' },
+  CONTRACTOR: { label: 'Contractor', color: 'text-amber-600' },
+  CLIENT_OPERATOR: { label: 'Client', color: 'text-purple-600' },
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/* ── Page ──────────────────────────────────────────────── */
+
+export default function DrawingRegisterPage() {
   const params = useParams()
-  const project = getProject(params.id as string)
-  const [mainTab, setMainTab] = useState<MainTab>('documents')
-  const [categoryFilter, setCategoryFilter] = useState<DocumentCategory>('all')
+  const projectId = params.id as string
 
-  if (!project) {
-    return <EmptyState message="Project not found." />
+  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState<FilterType>('ALL')
+
+  const fetchDocuments = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/documents`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || `Failed to load (${res.status})`)
+      }
+      const json = await res.json()
+      setDocuments(json.data.documents)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [fetchDocuments])
+
+  /* ── Filter ──────────────────────────────────────────── */
+
+  const filtered = typeFilter === 'ALL'
+    ? documents
+    : documents.filter((d) => d.documentType === typeFilter)
+
+  const typeCounts = documents.reduce<Record<string, number>>((acc, d) => {
+    acc[d.documentType] = (acc[d.documentType] || 0) + 1
+    return acc
+  }, {})
+
+  /* ── Loading ─────────────────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-6 w-40 bg-ink-100 animate-pulse rounded" />
+        <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
+          {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
+        </div>
+      </div>
+    )
   }
 
-  const documents = getProjectDocuments(project.id)
-  const transmittals = getProjectTransmittals(project.id)
-
-  // ── Category Filter Logic ──────────────────────────────────
-  const filteredDocuments = categoryFilter === 'all'
-    ? documents
-    : categoryFilter === 'other'
-      ? documents.filter(d => !['drawing', 'report', 'specification', 'correspondence'].includes(d.category))
-      : documents.filter(d => d.category === categoryFilter)
-
-  // ── Summary Card Counts ────────────────────────────────────
-  const approvedCount = documents.filter(d => d.status === 'approved').length
-  const forReviewCount = documents.filter(d => d.status === 'for_review').length
-
-  const docsByStage = (Object.entries(RIBA_STAGES) as [string, string][]).map(([stageKey, label]) => {
-    const stage = parseInt(stageKey) as unknown as import('@/lib/types').RIBAStage
-    const count = documents.filter(d => d.stage === stage).length
-    return { stage, label, count }
-  }).filter(s => s.count > 0)
-
-  // ── Category Tab Options ───────────────────────────────────
-  const categoryTabs: { key: DocumentCategory; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: documents.length },
-    { key: 'drawing', label: 'Drawings', count: documents.filter(d => d.category === 'drawing').length },
-    { key: 'report', label: 'Reports', count: documents.filter(d => d.category === 'report').length },
-    { key: 'specification', label: 'Specifications', count: documents.filter(d => d.category === 'specification').length },
-    { key: 'correspondence', label: 'Correspondence', count: documents.filter(d => d.category === 'correspondence').length },
-    { key: 'other', label: 'Other', count: documents.filter(d => !['drawing', 'report', 'specification', 'correspondence'].includes(d.category)).length },
-  ]
-
-  // ── Transmittal Summary ────────────────────────────────────
-  const issuedCount = transmittals.filter(t => t.status === 'issued').length
-  const draftCount = transmittals.filter(t => t.status === 'draft').length
-  const acknowledgedCount = transmittals.filter(t => t.status === 'acknowledged').length
-
-  // ── Main Tabs ──────────────────────────────────────────────
-  const mainTabs: { key: MainTab; label: string; count: number }[] = [
-    { key: 'documents', label: 'Document Register', count: documents.length },
-    { key: 'transmittals', label: 'Transmittals', count: transmittals.length },
-  ]
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+        <AlertTriangle className="w-8 h-8 text-red-500" />
+        <p className="text-[13px] text-ink-600">{error}</p>
+        <button onClick={fetchDocuments} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors">
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fade-in">
+    <div className="space-y-5">
+      {/* Header */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-display font-bold text-ink-900">Documents & Transmittals</h1>
-        <p className="text-sm text-ink-400 mt-1">{project.name} — {project.client}</p>
+        <h2 className="text-[18px] font-semibold text-ink-900">Drawing Register</h2>
+        <p className="text-[12px] text-ink-400 mt-0.5">
+          {documents.length} document{documents.length !== 1 ? 's' : ''}
+        </p>
       </div>
 
-      {/* ── Main Tab Bar ────────────────────────────────────── */}
-      <TabBar tabs={mainTabs} activeKey={mainTab} onSelect={(key) => setMainTab(key as MainTab)} />
-
-      {/* ── DOCUMENTS TAB ─────────────────────────────────────── */}
-      {mainTab === 'documents' && (
-        <div className="space-y-6">
-          {/* ── Summary Cards ────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <SummaryCard value={documents.length} label="Total Documents" />
-            <SummaryCard value={approvedCount} label="Approved" />
-            <SummaryCard value={forReviewCount} label="For Review" />
-            <SummaryCard
-              value={docsByStage.length}
-              label="By Stage"
-              bgColor="bg-surface-50"
-              textColor="text-accent-700"
-              labelColor="text-ink-400"
-            />
-          </div>
-
-          {/* ── Category Filter Tabs ─────────────────────── */}
-          <TabBar
-            tabs={categoryTabs}
-            activeKey={categoryFilter}
-            onSelect={(key) => setCategoryFilter(key as DocumentCategory)}
-          />
-
-          {/* ── Document Table ───────────────────────────── */}
-          {filteredDocuments.length === 0 ? (
-            <EmptyState message={categoryFilter === 'all' ? 'No documents uploaded.' : `No ${categoryFilter} documents.`} />
-          ) : (
-            <div className="card-premium overflow-hidden">
-              {/* Mobile: Cards */}
-              <div className="sm:hidden divide-y divide-surface-200/60">
-                {filteredDocuments.map(doc => {
-                  const uploader = USERS.find(u => u.id === doc.uploaded_by_user_id)
-                  return (
-                    <div key={doc.id} className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold text-ink-300 uppercase tracking-[0.08em]">
-                            {doc.document_ref}
-                          </p>
-                          <h3 className="text-sm font-semibold text-ink-900 mt-1">{doc.title}</h3>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] font-medium px-2 py-1 rounded-md bg-surface-100 text-ink-600 uppercase">
-                          {doc.category}
-                        </span>
-                        <span className="text-[11px] text-ink-400">Rev {doc.revision}</span>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs text-ink-400">
-                          <span>Stage: <span className="text-ink-600 font-medium">{RIBA_STAGES[doc.stage]}</span></span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <StatusBadge label={doc.status.replace('_', ' ')} colorClass={documentStatusColor(doc.status)} />
-                        </div>
-                        {uploader && <p className="text-xs text-ink-400">Updated {formatDate(doc.updated_at)}</p>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Desktop: Table */}
-              <table className="hidden sm:w-full text-sm">
-                <thead>
-                  <tr className="border-b border-surface-200/60 bg-surface-50">
-                    <th className="text-left px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Ref</th>
-                    <th className="text-left px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Title</th>
-                    <th className="text-center px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Category</th>
-                    <th className="text-center px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Rev</th>
-                    <th className="text-left px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Stage</th>
-                    <th className="text-center px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Status</th>
-                    <th className="text-left px-5 py-3 text-[11px] text-ink-300 uppercase tracking-[0.08em] font-semibold">Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDocuments.map((doc) => (
-                    <tr key={doc.id} className="stripe-row border-b border-surface-200/60 last:border-0 hover:bg-surface-50 transition-colors">
-                      <td className="px-5 py-3">
-                        <span className="text-[11px] font-medium text-ink-600 font-mono">{doc.document_ref}</span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <p className="text-sm font-medium text-ink-900">{doc.title}</p>
-                        {doc.description && <p className="text-xs text-ink-400 mt-0.5">{doc.description}</p>}
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        <span className="text-[11px] font-medium px-2 py-1 rounded-md bg-surface-100 text-ink-600 uppercase">
-                          {doc.category === 'drawing' && 'Draw'}
-                          {doc.category === 'specification' && 'Spec'}
-                          {doc.category === 'report' && 'Report'}
-                          {doc.category === 'correspondence' && 'Corr'}
-                          {doc.category === 'certificate' && 'Cert'}
-                          {doc.category === 'schedule' && 'Sched'}
-                          {doc.category === 'other' && 'Other'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        <span className="text-[11px] font-semibold text-ink-600">{doc.revision}</span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-[11px] text-ink-600 font-medium">{RIBA_STAGES[doc.stage]}</span>
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        <StatusBadge label={doc.status.replace('_', ' ')} colorClass={documentStatusColor(doc.status)} />
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs text-ink-400">{formatDate(doc.updated_at)}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* Type filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Filter className="w-4 h-4 text-ink-300" />
+        <button
+          onClick={() => setTypeFilter('ALL')}
+          className={cn(
+            'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+            typeFilter === 'ALL' ? 'bg-ink-900 text-white' : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
           )}
+        >
+          All {documents.length}
+        </button>
+        {Object.entries(typeCounts).map(([type, count]) => (
+          <button
+            key={type}
+            onClick={() => setTypeFilter(type as FilterType)}
+            className={cn(
+              'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+              typeFilter === type ? 'bg-ink-900 text-white' : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
+            )}
+          >
+            {DOC_TYPE_LABELS[type] || type} {count}
+          </button>
+        ))}
+      </div>
+
+      {/* Document list */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-ink-100 p-10 text-center">
+          <FileText className="w-10 h-10 text-ink-300 mx-auto mb-3" />
+          <p className="text-[14px] font-medium text-ink-600">No documents found</p>
         </div>
-      )}
-
-      {/* ── TRANSMITTALS TAB ────────────────────────────────── */}
-      {mainTab === 'transmittals' && (
-        <div className="space-y-6">
-          {/* ── Summary Cards ────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <SummaryCard value={transmittals.length} label="Total Transmittals" />
-            <SummaryCard value={issuedCount} label="Issued" />
-            <SummaryCard value={draftCount} label="Draft" />
-            <SummaryCard value={acknowledgedCount} label="Acknowledged" />
+      ) : (
+        <div className="bg-white rounded-xl border border-ink-100 overflow-hidden">
+          {/* Table header */}
+          <div className="hidden sm:grid grid-cols-12 gap-4 px-5 py-3 bg-surface-50 border-b border-ink-100 text-[11px] font-semibold text-ink-400 uppercase tracking-wide">
+            <div className="col-span-4">Document</div>
+            <div className="col-span-2">Type</div>
+            <div className="col-span-1">Rev</div>
+            <div className="col-span-2">Status</div>
+            <div className="col-span-1">Security</div>
+            <div className="col-span-2">Updated</div>
           </div>
 
-          {/* ── Transmittal Cards ────────────────────────── */}
-          {transmittals.length === 0 ? (
-            <EmptyState message="No transmittals recorded." />
-          ) : (
-            <div className="space-y-3">
-              {transmittals.map(transmittal => {
-                const docCount = transmittal.document_ids.length
-                const purposeColorMap: Record<string, string> = {
-                  'for_information': 'bg-slate-100 text-slate-700',
-                  'for_approval': 'bg-amber-100 text-amber-700',
-                  'for_construction': 'bg-blue-100 text-blue-700',
-                  'for_comment': 'bg-violet-100 text-violet-700',
-                  'as_built': 'bg-emerald-100 text-emerald-700',
-                }
+          {/* Rows */}
+          <div className="divide-y divide-ink-50">
+            {filtered.map((doc) => {
+              const statusMeta = DOC_STATUS_META[doc.status] ?? DOC_STATUS_META.DRAFT
+              const secMeta = SECURITY_META[doc.securityLevel] ?? SECURITY_META.INTERNAL
 
-                const purposeLabel: Record<string, string> = {
-                  'for_information': 'For Information',
-                  'for_approval': 'For Approval',
-                  'for_construction': 'For Construction',
-                  'for_comment': 'For Comment',
-                  'as_built': 'As Built',
-                }
-
-                return (
-                  <div key={transmittal.id} className="card-premium p-5">
-                    <div className="space-y-4">
-                      {/* Header Row */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <span className="text-[10px] font-mono font-semibold text-ink-600 uppercase tracking-wide">
-                              {transmittal.transmittal_ref}
-                            </span>
-                            <StatusBadge
-                              label={transmittal.status}
-                              colorClass={transmittalStatusColor(transmittal.status as any)}
-                            />
-                          </div>
-                          <h3 className="text-sm font-semibold text-ink-900">
-                            {transmittal.recipient}
-                          </h3>
-                        </div>
-                      </div>
-
-                      {/* Info Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div className="p-2.5 bg-surface-50 rounded-lg">
-                          <p className="text-[10px] font-bold text-ink-300 uppercase mb-0.5">Date Issued</p>
-                          <p className="text-xs text-ink-700 font-medium">{formatDate(transmittal.issued_date)}</p>
-                        </div>
-                        <div className="p-2.5 bg-surface-50 rounded-lg">
-                          <p className="text-[10px] font-bold text-ink-300 uppercase mb-0.5">Purpose</p>
-                          <span className={cn(
-                            'inline-block text-[10px] font-semibold px-2 py-1 rounded-md uppercase tracking-wide',
-                            purposeColorMap[transmittal.purpose] || 'bg-slate-100 text-slate-700'
-                          )}>
-                            {purposeLabel[transmittal.purpose]}
-                          </span>
-                        </div>
-                        <div className="p-2.5 bg-surface-50 rounded-lg">
-                          <p className="text-[10px] font-bold text-ink-300 uppercase mb-0.5">Documents</p>
-                          <p className="text-xs text-ink-700 font-semibold">{docCount} attached</p>
-                        </div>
-                        <div className="p-2.5 bg-surface-50 rounded-lg sm:hidden md:block">
-                          <p className="text-[10px] font-bold text-ink-300 uppercase mb-0.5">Status</p>
-                          <p className="text-xs text-ink-700 font-medium capitalize">{transmittal.status}</p>
-                        </div>
-                      </div>
-
-                      {/* Notes */}
-                      {transmittal.notes && (
-                        <div className="p-3 bg-surface-50 rounded-lg border border-surface-200/60">
-                          <p className="text-[10px] font-bold text-ink-300 uppercase mb-1">Notes</p>
-                          <p className="text-xs text-ink-700">{transmittal.notes}</p>
-                        </div>
-                      )}
-                    </div>
+              return (
+                <Link
+                  key={doc.id}
+                  href={`/documents/${doc.id}`}
+                  className="grid sm:grid-cols-12 gap-2 sm:gap-4 px-5 py-3.5 hover:bg-surface-50 transition-colors group items-center"
+                >
+                  {/* Document title */}
+                  <div className="sm:col-span-4 min-w-0">
+                    <p className="text-[13px] font-medium text-ink-900 truncate group-hover:text-accent-700 transition-colors">
+                      {doc.title}
+                    </p>
+                    {doc.documentCode && (
+                      <p className="text-[11px] text-ink-400 mt-0.5">{doc.documentCode}</p>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-          )}
+
+                  {/* Type */}
+                  <div className="sm:col-span-2">
+                    <span className="text-[11px] text-ink-500">{DOC_TYPE_LABELS[doc.documentType] || doc.documentType}</span>
+                  </div>
+
+                  {/* Revision */}
+                  <div className="sm:col-span-1">
+                    <span className="text-[12px] font-mono font-medium text-ink-700">
+                      {doc.currentRevision || '—'}
+                    </span>
+                  </div>
+
+                  {/* Status */}
+                  <div className="sm:col-span-2">
+                    <span className={cn(
+                      'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium',
+                      statusMeta.bgColor, statusMeta.color,
+                    )}>
+                      {statusMeta.label}
+                    </span>
+                  </div>
+
+                  {/* Security */}
+                  <div className="sm:col-span-1">
+                    <span className={cn('text-[11px] font-medium', secMeta.color)}>
+                      {secMeta.label}
+                    </span>
+                  </div>
+
+                  {/* Updated */}
+                  <div className="sm:col-span-2">
+                    <span className="text-[11px] text-ink-400">
+                      {doc.latestRevision ? formatDate(doc.latestRevision.createdAt) : formatDate(doc.createdAt)}
+                    </span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

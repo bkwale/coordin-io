@@ -21,12 +21,13 @@ const PUBLIC_ROUTES = [
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // 1. Allow public routes, API routes, auth callbacks, and static assets
+  // 1. Allow public routes, API routes, auth callbacks, activation links, and static assets
   if (
     PUBLIC_ROUTES.includes(pathname) ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/auth/') ||
-    pathname.startsWith('/_next/')
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/activate/')
   ) {
     return NextResponse.next()
   }

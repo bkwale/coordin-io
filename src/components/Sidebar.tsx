@@ -7,16 +7,22 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, FolderOpen, Sparkles, BookOpen,
   GraduationCap, Users, ExternalLink, BarChart3, PoundSterling,
-  TrendingUp, Receipt, Target, Shield, Clock,
+  TrendingUp, Receipt, Target, Shield, Clock, ClipboardList,
   Link as LinkIcon, Plus, Search, MoreHorizontal,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, CalendarDays, Wallet,
+  Wrench, Package,
 } from 'lucide-react'
 
 /* ── Navigation structure ──────────────────────────────── */
 
 const MAIN_ITEMS = [
+  { href: '/my-work', label: 'My Work', icon: ClipboardList },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
+  { href: '/leave', label: 'Leave', icon: CalendarDays },
+  { href: '/expenses', label: 'Expenses', icon: Wallet },
+  { href: '/service-requests', label: 'Requests', icon: Wrench },
+  { href: '/assets', label: 'Assets', icon: Package },
   { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt },
   { href: '/staffing', label: 'Staffing', icon: Users },
   { href: '/timesheets', label: 'Timesheets', icon: Clock },
