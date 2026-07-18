@@ -23,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <title>Coordin.io — Project Control for the Built Environment</title>
         <meta name="description" content="RIBA stage tracking, risk detection and executive dashboards for multidisciplinary practices." />
       </head>
@@ -42,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   'flex-1 ml-0 transition-[margin-left] duration-200',
                   sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-72'
                 )}>
-                  <div className="p-5 sm:p-8 lg:p-10 max-w-7xl mx-auto">
+                  <div className="pt-16 px-4 pb-6 sm:p-8 lg:p-10 max-w-7xl mx-auto">
                     <DemoTimerBanner />
                     {children}
                   </div>

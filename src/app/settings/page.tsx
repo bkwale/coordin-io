@@ -78,9 +78,9 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="flex gap-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Left Rail Navigation */}
-          <nav className="w-64 shrink-0 hidden lg:block">
+          <nav className="w-full lg:w-64 shrink-0 hidden lg:block">
             <div className="sticky top-8 space-y-1">
               {SETTINGS_TABS.map((tab) => {
                 const Icon = tab.icon
@@ -364,8 +364,8 @@ function TeamSection() {
 
       {/* Team List */}
       {team?.members && team.members.length > 0 ? (
-        <div className="border border-surface-200 rounded-lg overflow-hidden">
-          <table className="w-full">
+        <div className="border border-surface-200 rounded-lg overflow-x-auto -mx-4 sm:mx-0">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="bg-surface-50 border-b border-surface-200">
                 <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Name</th>
