@@ -189,6 +189,29 @@ a, button, [role="button"] {
   box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px rgba(99, 102, 241, 0.2);
 }
 
+/* ─── Settings form inputs ───────────────────── */
+.settings-input {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 0.5rem;
+  font-size: 13px;
+  color: #1a1a1a;
+  background-color: white;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.settings-input::placeholder {
+  color: #b0b0b0;
+}
+
 /* ─── Sidebar gradient mesh ───────────────────── */
 .sidebar-mesh {
   background:

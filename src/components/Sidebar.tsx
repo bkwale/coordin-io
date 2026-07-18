@@ -44,8 +44,7 @@ const MORE_ITEMS = [
 ]
 
 const SETTINGS_ITEMS = [
-  { href: '/settings/admin', label: 'Settings', icon: Shield },
-  { href: '/settings/integrations', label: 'Integrations', icon: LinkIcon },
+  { href: '/settings', label: 'Settings', icon: Shield },
 ]
 
 type NavItemDef = { href: string; label: string; icon: React.FC<{ className?: string }> }
