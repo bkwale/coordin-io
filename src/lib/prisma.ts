@@ -23,6 +23,18 @@ function createPrismaClient() {
   const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL
 
   if (!connectionString) {
+    // During Vercel build (static analysis), DB isn't available.
+    // Return a proxy that throws on actual use at runtime.
+    if (process.env.VERCEL_ENV || process.env.CI) {
+      return new Proxy({} as PrismaClient, {
+        get(_target, prop) {
+          if (prop === 'then' || prop === Symbol.toPrimitive) return undefined
+          throw new Error(
+            `Prisma client accessed without DATABASE_URL (property: ${String(prop)})`,
+          )
+        },
+      })
+    }
     throw new Error(
       'Neither DIRECT_URL nor DATABASE_URL is set. ' +
         'Add your Supabase database connection string to .env.local',

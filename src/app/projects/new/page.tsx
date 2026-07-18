@@ -46,8 +46,19 @@ export default function NewProjectPage() {
 
   const step = steps[currentStep - 1]
   const isLastStep = currentStep === steps.length
-  const canSkip = !step.required
+  const canSkip = step ? !step.required : false
   const isStepComplete = stepStatuses[currentStep] === 'complete'
+
+  // Guard: wizard steps not yet loaded from database
+  if (!steps.length || !step) {
+    return (
+      <div className="max-w-lg mx-auto mt-20 text-center">
+        <h2 className="text-xl font-display text-slate-900 mb-2">Project Wizard</h2>
+        <p className="text-sm text-slate-500">Project creation wizard is being migrated to the new system. Coming soon.</p>
+        <Link href="/" className="text-sm text-brand-600 hover:text-brand-700 mt-4 inline-block">← Back to Dashboard</Link>
+      </div>
+    )
+  }
 
   // Update form field
   const updateField = (key: string, value: any) => {
