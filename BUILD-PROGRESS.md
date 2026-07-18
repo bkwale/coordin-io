@@ -574,3 +574,50 @@ Purple Team review surfaced 2 fixes, both applied:
 | 5 | CPD, Requests & Assets | 45 | COMPLETE |
 | 6 | Site & Snags | 45 | COMPLETE |
 | **Total** | **Full Graduate Assistant vertical slice** | **412** | **COMPLETE** |
+
+## Post-Sprint — Platform Hardening
+
+### Admin Backoffice (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Platform admin table | Supabase `platform_admins` table | Done |
+| withSuperAdmin middleware | `src/lib/with-super-admin.ts` | Done |
+| Admin API routes (orgs, users, invitations) | `src/app/api/admin/` (6 routes) | Done |
+| Admin UI (org management, user management) | `src/app/admin/` (3 pages) | Done |
+| Admin layout (sidebar, auth gate) | `src/app/admin/layout.tsx` | Done |
+
+### Unified Settings Page (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Unified settings page (7 sections, left-rail nav) | `src/app/settings/page.tsx` | Done |
+| Organisation Profile section (live data) | `/api/settings/organisation` (GET, PATCH) | Done |
+| Team & Roles section (live data, role badges) | `/api/settings/team` (GET) | Done |
+| Billing & Currency section | Settings page inline | Done |
+| Integrations, AI Governance, Security, Notifications sections | Settings page inline | Done |
+| Sidebar update (single Settings item) | `src/components/Sidebar.tsx` | Done |
+
+### Role-Based Permission Matrix (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| canPerform() permission matrix (45+ combos, 12 features) | `src/lib/role-permissions.ts` | Done |
+| Practice-friendly role labels (5 roles) | `src/lib/role-permissions.ts` | Done |
+| Consequence tiers for audit logging | `src/lib/role-permissions.ts` | Done |
+| Permissions API endpoint | `src/app/api/settings/permissions/route.ts` | Done |
+| canPerform wired into Organisation + Team APIs | `src/app/api/settings/organisation/route.ts`, `team/route.ts` | Done |
+| Role labels rendered in Team UI | `src/app/settings/page.tsx` | Done |
+
+**Permission matrix design (Purple Team):** Hard-coded per PT recommendation — no DB lookups, no custom permission builder. Five roles (OWNER/ADMIN/MANAGER/MEMBER/VIEWER), 12 feature areas, 45+ permission combinations. Financial data (fees/margins/invoices) restricted to ADMIN+OWNER. External-facing actions (issue docs, send invoices) OWNER-only for sending. AI respects role visibility. VIEWER = client portal only, not junior staff.
+
+**Role labels:** OWNER→Practice Principal, ADMIN→Practice Manager, MANAGER→Project Lead, MEMBER→Team Member, VIEWER→External.
+
+### Email Delivery for Invitations (COMPLETE)
+| Feature | Route/File | Status |
+|---------|-----------|--------|
+| Resend email wrapper + HTML/text templates | `src/lib/email.ts` | Done |
+| Email auto-sent on invitation creation | `src/app/api/invitations/route.ts` (updated) | Done |
+| Resend invitation endpoint | `src/app/api/invitations/resend/route.ts` | Done |
+| Invitation status auto-updated to SENT on delivery | Invitation route | Done |
+| Email delivery result in API response + audit trail | Invitation route | Done |
+| Vercel env vars (RESEND_API_KEY, RESEND_FROM_EMAIL, NEXT_PUBLIC_APP_URL) | Vercel dashboard | Done |
+
+**Email template:** Branded HTML email with activation button, plain text fallback, expiry date. Non-blocking — invitation creation succeeds even if email fails (status stays PENDING vs SENT). Resend endpoint extends expired invitations automatically.
