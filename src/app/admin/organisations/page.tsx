@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Building2, Plus, Users, FolderKanban, X, CheckCircle } from 'lucide-react'
@@ -15,7 +15,16 @@ interface Org {
   project_count: number
 }
 
-export default function AdminOrganisationsPage() {
+/** Wrap the page in Suspense so useSearchParams works on Vercel */
+export default function AdminOrganisationsPageWrapper() {
+  return (
+    <Suspense fallback={<div className="animate-pulse"><div className="h-8 bg-slate-200 rounded w-48 mb-6" /></div>}>
+      <AdminOrganisationsPage />
+    </Suspense>
+  )
+}
+
+function AdminOrganisationsPage() {
   const searchParams = useSearchParams()
   const [orgs, setOrgs] = useState<Org[]>([])
   const [loading, setLoading] = useState(true)
