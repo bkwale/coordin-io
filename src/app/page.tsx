@@ -72,6 +72,12 @@ function MarketingNav() {
           >
             Try the Demo
           </Link>
+          <Link
+            href="/login"
+            className="text-[13px] font-medium text-white bg-ink-900 hover:bg-ink-800 px-4 py-2 rounded-lg"
+          >
+            Sign In
+          </Link>
         </div>
       </div>
     </nav>
@@ -959,6 +965,7 @@ export default function WelcomePage() {
             <div>
               <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-4">Access</h4>
               <ul className="space-y-2.5">
+                <li><Link href="/login" className="text-[13px] text-ink-500 hover:text-ink-900">Sign In</Link></li>
                 <li><Link href="/demo-access" className="text-[13px] text-ink-500 hover:text-ink-900">Try the Demo</Link></li>
                 <li><a href="#" className="text-[13px] text-ink-500 hover:text-ink-900">Design Partner Programme</a></li>
               </ul>
