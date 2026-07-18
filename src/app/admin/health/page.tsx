@@ -6,8 +6,14 @@ import { Activity, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 interface HealthData {
   status: string
   timestamp: string
-  uptime: number
-  db?: { connected: boolean; latencyMs?: number }
+  version?: string
+  checks?: {
+    database?: {
+      status: string
+      latencyMs?: number
+      error?: string
+    }
+  }
 }
 
 export default function AdminHealthPage() {
@@ -31,7 +37,9 @@ export default function AdminHealthPage() {
   useEffect(() => { checkHealth() }, [])
 
   const isHealthy = health?.status === 'ok' || health?.status === 'healthy'
-  const dbConnected = health?.db?.connected ?? false
+  const dbStatus = health?.checks?.database?.status
+  const dbConnected = dbStatus === 'ok' || dbStatus === 'healthy'
+  const dbLatency = health?.checks?.database?.latencyMs
 
   return (
     <div>
@@ -99,9 +107,9 @@ export default function AdminHealthPage() {
               {dbConnected ? 'Connected' : 'Disconnected'}
             </span>
           </p>
-          {health?.db?.latencyMs !== undefined && (
+          {dbLatency !== undefined && (
             <p className="text-xs text-slate-400 mt-1">
-              Latency: {health.db.latencyMs}ms
+              Latency: {dbLatency}ms
             </p>
           )}
         </div>
