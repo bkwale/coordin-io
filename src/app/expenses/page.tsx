@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Wallet, Plus, Loader2, AlertTriangle, RefreshCw,
-  X, ArrowRight, Ban,
+  X, ArrowRight, Ban, Upload, Paperclip, FileCheck, ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -103,6 +103,9 @@ export default function ExpensesPage() {
   const [formDescription, setFormDescription] = useState('')
   const [formAmount, setFormAmount] = useState('')
   const [formCurrency, setFormCurrency] = useState('NGN')
+  const [formReceiptUrl, setFormReceiptUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadedFileName, setUploadedFileName] = useState('')
   const { mutate: createExpense, loading: creating } = useApiMutation<ExpenseClaim>('/api/expenses', 'POST')
 
   const fetchData = useCallback(async () => {
@@ -127,6 +130,41 @@ export default function ExpensesPage() {
     fetchData()
   }, [fetchData])
 
+  /* ── Receipt upload handler ───────────────────── */
+
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Reset input so the same file can be re-selected
+    e.target.value = ''
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/upload/receipt', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || body.error || 'Upload failed')
+      }
+
+      const json = await res.json()
+      setFormReceiptUrl(json.data.url)
+      setUploadedFileName(file.name)
+      toast('Receipt uploaded', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to upload receipt', 'error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   /* ── Create handler ──────────────────────────────── */
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -139,6 +177,7 @@ export default function ExpensesPage() {
       description: formDescription.trim(),
       amount: amt,
       currency: formCurrency,
+      ...(formReceiptUrl ? { receiptUrl: formReceiptUrl } : {}),
     })
 
     if (result) {
@@ -148,6 +187,8 @@ export default function ExpensesPage() {
       setFormDescription('')
       setFormAmount('')
       setFormCurrency('NGN')
+      setFormReceiptUrl('')
+      setUploadedFileName('')
       fetchData()
     } else {
       toast('Failed to create expense claim', 'error')
@@ -160,6 +201,8 @@ export default function ExpensesPage() {
     setFormDescription('')
     setFormAmount('')
     setFormCurrency('NGN')
+    setFormReceiptUrl('')
+    setUploadedFileName('')
   }
 
   /* ── Quick actions ───────────────────────────────── */
@@ -327,6 +370,57 @@ export default function ExpensesPage() {
             />
           </div>
 
+          {/* Receipt upload */}
+          <div>
+            <label className="block text-[11px] font-medium text-ink-500 mb-1 uppercase">Receipt</label>
+            <input
+              id="receipt-upload"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={handleReceiptUpload}
+              className="hidden"
+              disabled={uploading}
+            />
+            {formReceiptUrl ? (
+              <div className="flex items-center gap-2 px-3 py-2 border border-surface-200 rounded-lg bg-emerald-50/50">
+                <FileCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span className="text-[12px] text-ink-600 truncate flex-1">{uploadedFileName}</span>
+                <button
+                  type="button"
+                  onClick={() => { setFormReceiptUrl(''); setUploadedFileName('') }}
+                  className="text-ink-400 hover:text-ink-600 transition-colors shrink-0"
+                  title="Remove receipt"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => document.getElementById('receipt-upload')?.click()}
+                disabled={uploading}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-2 w-full border border-dashed border-surface-200 rounded-lg text-[12px] transition-colors',
+                  uploading
+                    ? 'text-ink-400 cursor-wait bg-ink-50'
+                    : 'text-ink-500 hover:border-ink-300 hover:text-ink-600',
+                )}
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Attach receipt (JPEG, PNG, WebP, PDF)
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center justify-end gap-2 pt-1">
             <button type="button" onClick={cancelForm} className="px-3.5 py-2 text-[12px] font-medium text-ink-500 hover:text-ink-700 transition-colors" disabled={creating}>
               Cancel
@@ -391,10 +485,29 @@ export default function ExpensesPage() {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-ink-900 truncate">{claim.description}</p>
-                  <p className="text-[11px] text-ink-400 mt-0.5">
-                    {catLabel} · {new Date(claim.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[13px] font-medium text-ink-900 truncate">{claim.description}</p>
+                    {claim.receiptUrl && (
+                      <Paperclip className="w-3.5 h-3.5 text-ink-300 shrink-0" title="Receipt attached" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[11px] text-ink-400">
+                      {catLabel} · {new Date(claim.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    </p>
+                    {claim.receiptUrl && (
+                      <a
+                        href={claim.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-[11px] text-accent-500 hover:text-accent-600 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        View receipt
+                      </a>
+                    )}
+                  </div>
                 </div>
 
                 {/* Amount */}
