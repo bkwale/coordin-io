@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useUser } from '@/lib/hooks/useUser'
 import { PROJECTS, ALL_TASKS, APPROVALS, getDashboardKPIs, getOpenInvoiceValue, getMissingTimesheetUsers, USERS } from '@/lib/mock-data'
 import { isOverdue, cn } from '@/lib/utils'
 import { KPICard } from '@/components/KPICard'
@@ -35,8 +36,10 @@ const FILTERS: { value: FilterView; label: string }[] = [
 
 export default function ExecutiveDashboard() {
   const [activeFilter, setActiveFilter] = useState<FilterView>('all')
+  const { user } = useUser()
   const kpis = getDashboardKPIs()
 
+  const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'there'
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
   const missingTs = getMissingTimesheetUsers()
@@ -60,7 +63,7 @@ export default function ExecutiveDashboard() {
       <section className="pb-6">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <p className="text-[13px] text-ink-400 mb-1">{greeting}, Sarah</p>
+            <p className="text-[13px] text-ink-400 mb-1">{greeting}, {firstName}</p>
             <h1 className="font-display text-[2rem] sm:text-[2.5rem] leading-[1.1] text-ink-900 tracking-tight">
               Executive Dashboard
             </h1>

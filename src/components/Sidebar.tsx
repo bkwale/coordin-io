@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useUser } from '@/lib/hooks/useUser'
 import {
   LayoutDashboard, FolderOpen, Sparkles, BookOpen,
   GraduationCap, Users, ExternalLink, BarChart3, PoundSterling,
@@ -115,6 +116,15 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
+  const { user } = useUser()
+
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
+  const initials = displayName
+    .split(' ')
+    .map((w: string) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 
   return (
     <>
@@ -227,14 +237,14 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         <div className={cn('py-4', collapsed ? 'px-3' : 'px-5')}>
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
             <div className="relative shrink-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-accent flex items-center justify-center text-[12px] font-semibold text-white">SM</div>
+              <div className="w-9 h-9 rounded-full bg-gradient-accent flex items-center justify-center text-[12px] font-semibold text-white">{initials}</div>
               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#16162a]" />
             </div>
             {!collapsed && (
               <>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-white/80 truncate">Sarah Mitchell</p>
-                  <p className="text-[10px] text-white/30">Practice Owner</p>
+                  <p className="text-[13px] font-medium text-white/80 truncate">{displayName}</p>
+                  <p className="text-[10px] text-white/30">{user?.email || ''}</p>
                 </div>
                 <button className="text-white/20 hover:text-white/50 transition-colors">
                   <MoreHorizontal className="w-4 h-4" />
