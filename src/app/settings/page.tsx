@@ -296,7 +296,17 @@ function TeamSection() {
   const [team, setTeam] = useState<TeamData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  // Invite form state
+  const [showInvite, setShowInvite] = useState(false)
+  const [invEmail, setInvEmail] = useState('')
+  const [invName, setInvName] = useState('')
+  const [invJob, setInvJob] = useState('')
+  const [invSending, setInvSending] = useState(false)
+  const [invError, setInvError] = useState<string | null>(null)
+  const [invSuccess, setInvSuccess] = useState(false)
+
+  const fetchTeam = useCallback(() => {
+    setLoading(true)
     fetch('/api/settings/team')
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load team')
@@ -306,6 +316,45 @@ function TeamSection() {
       .catch(() => setTeam({ members: [], total: 0, active: 0 }))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    fetchTeam()
+  }, [fetchTeam])
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!invEmail.trim() || !invName.trim()) return
+    setInvSending(true)
+    setInvError(null)
+    try {
+      const res = await fetch('/api/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: invEmail.trim(),
+          fullName: invName.trim(),
+          jobTitle: invJob.trim() || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `Failed to send invitation (${res.status})`)
+      }
+      setInvSuccess(true)
+      setInvEmail('')
+      setInvName('')
+      setInvJob('')
+      fetchTeam()
+      setTimeout(() => {
+        setInvSuccess(false)
+        setShowInvite(false)
+      }, 2000)
+    } catch (err) {
+      setInvError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setInvSending(false)
+    }
+  }
 
   if (loading) return <LoadingState />
 
@@ -354,12 +403,75 @@ function TeamSection() {
         </div>
       </div>
 
-      {/* Invite Button */}
-      <div className="flex justify-end mb-4">
-        <button className="flex items-center gap-2 px-4 py-2 bg-ink-900 text-white text-[13px] font-medium rounded-lg hover:bg-ink-800 transition-colors">
-          <UserPlus className="w-4 h-4" />
-          Invite Team Member
-        </button>
+      {/* Invite Button + Form */}
+      <div className="mb-4">
+        <div className="flex justify-end">
+          <button
+            onClick={() => { setShowInvite(!showInvite); setInvError(null); setInvSuccess(false) }}
+            className="flex items-center gap-2 px-4 py-2 bg-ink-900 text-white text-[13px] font-medium rounded-lg hover:bg-ink-800 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" />
+            {showInvite ? 'Cancel' : 'Invite Team Member'}
+          </button>
+        </div>
+
+        {showInvite && (
+          <form onSubmit={handleInvite} className="mt-4 p-4 bg-surface-50 rounded-lg border border-surface-200 space-y-3">
+            <p className="text-[13px] font-medium text-ink-900">Send Invitation</p>
+            {invError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">{invError}</div>
+            )}
+            {invSuccess && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[12px] text-emerald-700 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" /> Invitation sent successfully
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold block mb-1.5">Full Name *</label>
+                <input
+                  type="text"
+                  value={invName}
+                  onChange={(e) => setInvName(e.target.value)}
+                  placeholder="e.g. Jane Doe"
+                  required
+                  className="w-full px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold block mb-1.5">Email *</label>
+                <input
+                  type="email"
+                  value={invEmail}
+                  onChange={(e) => setInvEmail(e.target.value)}
+                  placeholder="e.g. jane@company.com"
+                  required
+                  className="w-full px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold block mb-1.5">Job Title</label>
+              <input
+                type="text"
+                value={invJob}
+                onChange={(e) => setInvJob(e.target.value)}
+                placeholder="e.g. Project Architect"
+                className="w-full px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={invSending || !invEmail.trim() || !invName.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-accent-600 text-white text-[13px] font-medium rounded-lg hover:bg-accent-700 disabled:opacity-60 transition-colors"
+              >
+                {invSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                {invSending ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Team List */}

@@ -38,6 +38,19 @@ const config: Config = {
           800: '#3730a3',
           900: '#312e81',
         },
+        // Brand alias — maps to accent for convenience
+        brand: {
+          50: '#f0f1ff',
+          100: '#e0e3ff',
+          200: '#c7cbfe',
+          300: '#a5a9fc',
+          400: '#8185f7',
+          500: '#6366f1',
+          600: '#4f46e5',
+          700: '#4338ca',
+          800: '#3730a3',
+          900: '#312e81',
+        },
         slate: {
           925: '#0c1222',
         }
