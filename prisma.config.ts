@@ -1,7 +1,11 @@
 // Coordin.io — Prisma Configuration
 // Uses Supabase PostgreSQL with connection pooling
-import "dotenv/config";
+import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
+
+// Next.js uses .env.local — load that first, then fall back to .env
+config({ path: ".env.local" });
+config(); // .env fallback
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -9,6 +13,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Use DIRECT_URL for migrations (PgBouncer breaks interactive transactions).
+    // Falls back to DATABASE_URL if DIRECT_URL is not set.
+    url: process.env["DIRECT_URL"] || process.env["DATABASE_URL"],
   },
 });
