@@ -148,7 +148,10 @@ function OrganisationSection() {
 
   useEffect(() => {
     fetch('/api/settings/organisation')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load organisation')
+        return r.json()
+      })
       .then((data) => {
         setOrg(data)
         setForm({
@@ -294,9 +297,12 @@ function TeamSection() {
 
   useEffect(() => {
     fetch('/api/settings/team')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load team')
+        return r.json()
+      })
       .then(setTeam)
-      .catch(() => {})
+      .catch(() => setTeam({ members: [], total: 0, active: 0 }))
       .finally(() => setLoading(false))
   }, [])
 
@@ -340,7 +346,7 @@ function TeamSection() {
         </div>
         <div className="bg-surface-50 rounded-lg p-4 text-center">
           <p className="text-2xl font-semibold text-amber-600">
-            {team?.members.filter((m) => m.status === 'INVITED').length || 0}
+            {team?.members?.filter((m) => m.status === 'INVITED').length || 0}
           </p>
           <p className="text-[11px] text-ink-400 mt-1">Pending Invites</p>
         </div>
@@ -425,7 +431,10 @@ function BillingSection() {
 
   useEffect(() => {
     fetch('/api/settings/organisation')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to load organisation')
+        return r.json()
+      })
       .then((data) => {
         setOrg(data)
         setSelectedCurrencies(data.currencies || [])
