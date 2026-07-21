@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 /**
  * POST /api/demo-signup
@@ -14,6 +15,16 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
+
+/** HTML-escape user input to prevent injection in email templates. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 interface SignupPayload {
   name: string
@@ -54,7 +65,7 @@ function buildUserEmail(data: SignupPayload): string {
   </div>
   <h1 style="font-size: 24px; font-weight: 600; text-align: center; margin-bottom: 8px;">Thanks for trying Coordin.io</h1>
   <p style="font-size: 15px; color: #64748b; text-align: center; margin-bottom: 32px;">
-    Hi ${data.name.split(' ')[0]}, thanks for exploring the demo. We&rsquo;re excited to show you how Coordin.io can streamline your practice.
+    Hi ${escapeHtml(data.name.split(' ')[0])}, thanks for exploring the demo. We&rsquo;re excited to show you how Coordin.io can streamline your practice.
   </p>
   <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 32px;">
     <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0;">What happens next?</h3>
@@ -88,21 +99,21 @@ function buildTeamEmail(data: SignupPayload): string {
   <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
     <tr style="border-bottom: 1px solid #e2e8f0;">
       <td style="padding: 10px 0; font-weight: 600; width: 140px;">Name</td>
-      <td style="padding: 10px 0;">${data.name}</td>
+      <td style="padding: 10px 0;">${escapeHtml(data.name)}</td>
     </tr>
     <tr style="border-bottom: 1px solid #e2e8f0;">
       <td style="padding: 10px 0; font-weight: 600;">Email</td>
-      <td style="padding: 10px 0;"><a href="mailto:${data.email}" style="color: #6366f1;">${data.email}</a></td>
+      <td style="padding: 10px 0;"><a href="mailto:${escapeHtml(data.email)}" style="color: #6366f1;">${escapeHtml(data.email)}</a></td>
     </tr>
     ${data.practice_name ? `
     <tr style="border-bottom: 1px solid #e2e8f0;">
       <td style="padding: 10px 0; font-weight: 600;">Practice</td>
-      <td style="padding: 10px 0;">${data.practice_name}</td>
+      <td style="padding: 10px 0;">${escapeHtml(data.practice_name)}</td>
     </tr>` : ''}
     ${data.practice_size ? `
     <tr style="border-bottom: 1px solid #e2e8f0;">
       <td style="padding: 10px 0; font-weight: 600;">Team Size</td>
-      <td style="padding: 10px 0;">${data.practice_size}</td>
+      <td style="padding: 10px 0;">${escapeHtml(data.practice_size)}</td>
     </tr>` : ''}
     <tr>
       <td style="padding: 10px 0; font-weight: 600;">Source</td>
@@ -136,6 +147,11 @@ async function sendEmail(to: string, subject: string, html: string, apiKey: stri
 
 export async function POST(request: NextRequest) {
   try {
+    // IP-based rate limit: 5 signups per minute per IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const rateLimited = checkRateLimit(`demo-signup:${ip}`, { maxRequests: 5, windowMs: 60_000 })
+    if (rateLimited) return rateLimited
+
     const body = await request.json()
     const result = validatePayload(body)
 

@@ -2,16 +2,23 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { success, error as apiError } from '@/lib/api-response'
 import { NotFoundError } from '@/lib/errors'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 /**
  * GET /api/invitations/:token — Validate an invitation token.
  * Public endpoint — no auth required (this is the link the employee clicks).
+ * Rate-limited by IP to prevent token enumeration.
  */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
+    // IP-based rate limit: 10 lookups per minute per IP
+    const ip = _request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const rateLimited = checkRateLimit(`invite-lookup:${ip}`, { maxRequests: 10, windowMs: 60_000 })
+    if (rateLimited) return rateLimited
+
     const { token } = await params
 
     const invitation = await prisma.invitation.findUnique({
