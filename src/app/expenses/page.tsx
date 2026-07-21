@@ -488,7 +488,7 @@ export default function ExpensesPage() {
                   <div className="flex items-center gap-1.5">
                     <p className="text-[13px] font-medium text-ink-900 truncate">{claim.description}</p>
                     {claim.receiptUrl && (
-                      <Paperclip className="w-3.5 h-3.5 text-ink-300 shrink-0" title="Receipt attached" />
+                      <span title="Receipt attached"><Paperclip className="w-3.5 h-3.5 text-ink-300 shrink-0" /></span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
