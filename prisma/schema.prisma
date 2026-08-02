@@ -43,51 +43,52 @@ enum Currency {
 }
 
 model Organisation {
-  id              String   @id @default(cuid())
+  id              String     @id @default(cuid())
   name            String
-  slug            String   @unique
-  logoUrl         String?  @map("logo_url")
-  defaultCurrency Currency @default(NGN) @map("default_currency")
+  slug            String     @unique
+  logoUrl         String?    @map("logo_url")
+  defaultCurrency Currency   @default(NGN) @map("default_currency")
   currencies      Currency[] // All currencies this org uses
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
-  offices         Office[]
-  profiles        Profile[]
-  projects        Project[]
-  invitations     Invitation[]
-  roles           CorporateRole[]
-  policies        PolicyDocument[]
-  assets          Asset[]
-  auditEvents     AuditEvent[]
-  serviceRequests ServiceRequest[]
-  hrDocuments     HRDocument[]
+  offices             Office[]
+  profiles            Profile[]
+  projects            Project[]
+  invitations         Invitation[]
+  roles               CorporateRole[]
+  policies            PolicyDocument[]
+  assets              Asset[]
+  auditEvents         AuditEvent[]
+  serviceRequests     ServiceRequest[]
+  hrDocuments         HRDocument[]
+  onboardingTemplates OnboardingTemplate[]
 
   @@map("organisations")
 }
 
 model Office {
-  id             String       @id @default(cuid())
-  organisationId String       @map("organisation_id")
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
   name           String
   city           String
-  country        String       @default("NG")
-  createdAt      DateTime     @default(now()) @map("created_at")
+  country        String   @default("NG")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  profiles     Profile[]
-  projects     Project[]
+  organisation    Organisation     @relation(fields: [organisationId], references: [id])
+  profiles        Profile[]
+  projects        Project[]
   serviceRequests ServiceRequest[] @relation("ServiceRequestOffice")
 
   @@map("offices")
 }
 
 model CorporateRole {
-  id             String       @id @default(cuid())
-  organisationId String       @map("organisation_id")
-  name           String       // e.g. "Graduate Architectural Assistant", "Design Lead"
-  level          RoleLevel    @default(STAFF)
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  organisationId String    @map("organisation_id")
+  name           String // e.g. "Graduate Architectural Assistant", "Design Lead"
+  level          RoleLevel @default(STAFF)
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
   profiles     Profile[]
@@ -107,67 +108,69 @@ enum RoleLevel {
 
 /// Profile — linked to Supabase auth.users via authUserId
 model Profile {
-  id             String       @id @default(cuid())
-  authUserId     String?      @unique @map("auth_user_id") // Supabase auth.users.id
-  organisationId String       @map("organisation_id")
-  officeId       String?      @map("office_id")
-  roleId         String?      @map("role_id")
+  id             String  @id @default(cuid())
+  authUserId     String? @unique @map("auth_user_id") // Supabase auth.users.id
+  organisationId String  @map("organisation_id")
+  officeId       String? @map("office_id")
+  roleId         String? @map("role_id")
 
-  fullName       String       @map("full_name")
-  email          String
-  jobTitle       String?      @map("job_title")
-  phone          String?
-  avatarUrl      String?      @map("avatar_url")
+  fullName  String  @map("full_name")
+  email     String
+  jobTitle  String? @map("job_title")
+  phone     String?
+  avatarUrl String? @map("avatar_url")
 
   // Org-level permission
-  orgPermission  OrgPermission @default(MEMBER)
+  orgPermission OrgPermission @default(MEMBER)
 
   // Manager / line manager
-  managerId      String?      @map("manager_id")
+  managerId String? @map("manager_id")
+
+  department String? // Direct department field for profile
 
   // Employment
-  startDate      DateTime?    @map("start_date")
-  status         ProfileStatus @default(INVITED)
-  deactivatedAt  DateTime?    @map("deactivated_at")
+  startDate     DateTime?     @map("start_date")
+  status        ProfileStatus @default(INVITED)
+  deactivatedAt DateTime?     @map("deactivated_at")
 
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  organisation   Organisation @relation(fields: [organisationId], references: [id])
-  office         Office?      @relation(fields: [officeId], references: [id])
-  corporateRole  CorporateRole? @relation(fields: [roleId], references: [id])
-  manager        Profile?     @relation("ManagerReports", fields: [managerId], references: [id])
-  reports        Profile[]    @relation("ManagerReports")
+  organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  office        Office?        @relation(fields: [officeId], references: [id])
+  corporateRole CorporateRole? @relation(fields: [roleId], references: [id])
+  manager       Profile?       @relation("ManagerReports", fields: [managerId], references: [id])
+  reports       Profile[]      @relation("ManagerReports")
 
   // Employee details
   employeeProfile EmployeeProfile?
 
   // Invitations created by this user
-  invitationsSent Invitation[] @relation("InvitationCreator")
-  invitationReceived Invitation? @relation("InvitationRecipient")
+  invitationsSent    Invitation[] @relation("InvitationCreator")
+  invitationReceived Invitation?  @relation("InvitationRecipient")
 
   // Project memberships
   projectMemberships ProjectMembership[]
 
   // Tasks
-  tasksOwned     Task[]       @relation("TaskOwner")
-  tasksReviewing Task[]       @relation("TaskReviewer")
+  tasksOwned     Task[]        @relation("TaskOwner")
+  tasksReviewing Task[]        @relation("TaskReviewer")
   taskComments   TaskComment[]
 
   // Documents
-  documentsAuthored   DocumentRevision[] @relation("DocAuthor")
-  documentsReviewed   DocumentReview[]
+  documentsAuthored DocumentRevision[] @relation("DocAuthor")
+  documentsReviewed DocumentReview[]
 
   // Policy acknowledgements
-  policyAcks     PolicyAcknowledgement[]
+  policyAcks PolicyAcknowledgement[]
 
   // Training
   trainingCompletions TrainingCompletion[]
 
   // CPD
-  cpdRecords     CPDRecord[]  @relation("CPDOwner")
-  cpdVerified    CPDRecord[]  @relation("CPDVerifier")
+  cpdRecords  CPDRecord[] @relation("CPDOwner")
+  cpdVerified CPDRecord[] @relation("CPDVerifier")
 
   // Supervision
   supervisionAsEmployee SupervisionRecord[] @relation("SupervisedEmployee")
@@ -184,32 +187,32 @@ model Profile {
   leaveApprovals LeaveRequest[] @relation("LeaveApprover")
 
   // Expenses
-  expenseClaims  ExpenseClaim[] @relation("ExpenseClaimant")
+  expenseClaims    ExpenseClaim[] @relation("ExpenseClaimant")
   expenseApprovals ExpenseClaim[] @relation("ExpenseApprover")
 
   // Assets
   assetAssignments AssetAssignment[]
 
   // Site
-  siteObservations SiteObservation[]
+  siteObservations     SiteObservation[]
   observationsAssigned SiteObservation[] @relation("ObservationAssignee")
-  snags            Snag[]       @relation("SnagCreator")
-  snagVerifications Snag[]      @relation("SnagVerifier")
-  snagsAssigned    Snag[]       @relation("SnagAssignee")
+  snags                Snag[]            @relation("SnagCreator")
+  snagVerifications    Snag[]            @relation("SnagVerifier")
+  snagsAssigned        Snag[]            @relation("SnagAssignee")
 
   // Notifications
-  notifications  Notification[]
+  notifications Notification[]
 
   // Audit
-  auditEvents    AuditEvent[]
+  auditEvents AuditEvent[]
 
   // S21 — Staffing
   resourceAllocations ResourceAllocation[]
-  hrDocuments     HRDocument[]
-  probationReviews ProbationReview[]
+  hrDocuments         HRDocument[]
+  probationReviews    ProbationReview[]
 
   // S27 — Timesheets
-  timesheetWeeks  TimesheetWeek[]
+  timesheetWeeks TimesheetWeek[]
 
   @@map("profiles")
 }
@@ -230,64 +233,83 @@ enum ProfileStatus {
 }
 
 model EmployeeProfile {
-  id              String   @id @default(cuid())
-  profileId       String   @unique @map("profile_id")
-  emergencyName   String?  @map("emergency_name")
-  emergencyPhone  String?  @map("emergency_phone")
+  id                String  @id @default(cuid())
+  profileId         String  @unique @map("profile_id")
+  emergencyName     String? @map("emergency_name")
+  emergencyPhone    String? @map("emergency_phone")
   emergencyRelation String? @map("emergency_relation")
 
   // Onboarding
-  onboardingComplete Boolean  @default(false) @map("onboarding_complete")
+  onboardingComplete    Boolean   @default(false) @map("onboarding_complete")
   onboardingCompletedAt DateTime? @map("onboarding_completed_at")
 
   // Equipment
   equipmentConfirmed Boolean @default(false) @map("equipment_confirmed")
 
   // Development
-  mentorId        String?  @map("mentor_id")
+  mentorId             String? @map("mentor_id")
   qualificationPathway String? @map("qualification_pathway") // Part 2, Part 3, etc.
 
   // Leave
   annualLeaveAllocation Float @default(25) @map("annual_leave_allocation")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  // Employment details — PDR S3
+  department          String?   @map("department")
+  employmentType      String?   @map("employment_type") // FULL_TIME, PART_TIME, FIXED_TERM, CONTRACTOR, INTERN
+  contractType        String?   @map("contract_type") // PERMANENT, TEMPORARY, AGENCY, SECONDMENT
+  salary              Float?
+  salaryFrequency     String?   @map("salary_frequency") // ANNUAL, MONTHLY, DAILY, HOURLY
+  salaryCurrency      String?   @map("salary_currency")
+  benefits            String? // JSON text of benefits list
+  hmoProvider         String?   @map("hmo_provider")
+  hmoPlan             String?   @map("hmo_plan")
+  dependants          Int?      @default(0)
+  pensionProvider     String?   @map("pension_provider")
+  pensionContribution Float?    @map("pension_contribution") // percentage
+  workingPattern      String?   @map("working_pattern") // FULL_WEEK, PART_WEEK, COMPRESSED, FLEXIBLE
+  workingHours        Float?    @map("working_hours") // hours per week
+  noticePeriod        String?   @map("notice_period") // e.g. "1 month", "3 months"
+  probationEndDate    DateTime? @map("probation_end_date")
+  availabilityStatus  String?   @map("availability_status") // AVAILABLE, ON_LEAVE, ON_SITE, UNAVAILABLE
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  profile Profile @relation(fields: [profileId], references: [id])
 
   @@map("employee_profiles")
 }
 
 model Invitation {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  token           String   @unique // Generated via crypto.randomBytes — NOT cuid
-  email           String
-  fullName        String   @map("full_name")
-  jobTitle        String?  @map("job_title")
-  officeId        String?  @map("office_id")
-  roleId          String?  @map("role_id")
-  managerId       String?  @map("manager_id")
-  startDate       DateTime? @map("start_date")
-  annualLeave     Float?   @map("annual_leave")
+  id             String    @id @default(cuid())
+  organisationId String    @map("organisation_id")
+  token          String    @unique // Generated via crypto.randomBytes — NOT cuid
+  email          String
+  fullName       String    @map("full_name")
+  jobTitle       String?   @map("job_title")
+  officeId       String?   @map("office_id")
+  roleId         String?   @map("role_id")
+  managerId      String?   @map("manager_id")
+  startDate      DateTime? @map("start_date")
+  annualLeave    Float?    @map("annual_leave")
 
   // Invitation state
-  status          InvitationStatus @default(PENDING)
-  expiresAt       DateTime @map("expires_at")
-  sentAt          DateTime? @map("sent_at")
-  activatedAt     DateTime? @map("activated_at")
-  revokedAt       DateTime? @map("revoked_at")
-  activationIp    String?  @map("activation_ip")
+  status       InvitationStatus @default(PENDING)
+  expiresAt    DateTime         @map("expires_at")
+  sentAt       DateTime?        @map("sent_at")
+  activatedAt  DateTime?        @map("activated_at")
+  revokedAt    DateTime?        @map("revoked_at")
+  activationIp String?          @map("activation_ip")
 
   // Who created / who receives
-  createdById     String   @map("created_by_id")
-  profileId       String?  @unique @map("profile_id") // created on activation
+  createdById String  @map("created_by_id")
+  profileId   String? @unique @map("profile_id") // created on activation
 
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  createdBy       Profile  @relation("InvitationCreator", fields: [createdById], references: [id])
-  profile         Profile? @relation("InvitationRecipient", fields: [profileId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  createdBy    Profile      @relation("InvitationCreator", fields: [createdById], references: [id])
+  profile      Profile?     @relation("InvitationRecipient", fields: [profileId], references: [id])
 
   @@map("invitations")
 }
@@ -305,20 +327,20 @@ enum InvitationStatus {
 // ═══════════════════════════════════════════════════════════
 
 model PolicyDocument {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  title           String
-  revision        String   @default("1.0")
-  category        PolicyCategory @default(GENERAL)
-  mandatory       Boolean  @default(true)
-  effectiveDate   DateTime @map("effective_date")
-  fileUrl         String?  @map("file_url")
-  content         String?  // Rich text content
-  requiresReack   Boolean  @default(false) @map("requires_reack") // Re-acknowledgement on revision
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String         @id @default(cuid())
+  organisationId String         @map("organisation_id")
+  title          String
+  revision       String         @default("1.0")
+  category       PolicyCategory @default(GENERAL)
+  mandatory      Boolean        @default(true)
+  effectiveDate  DateTime       @map("effective_date")
+  fileUrl        String?        @map("file_url")
+  content        String? // Rich text content
+  requiresReack  Boolean        @default(false) @map("requires_reack") // Re-acknowledgement on revision
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  organisation     Organisation            @relation(fields: [organisationId], references: [id])
   acknowledgements PolicyAcknowledgement[]
 
   @@map("policy_documents")
@@ -334,18 +356,18 @@ enum PolicyCategory {
 }
 
 model PolicyAcknowledgement {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  policyId        String   @map("policy_id")
-  policyRevision  String   @map("policy_revision")
-  openedAt        DateTime? @map("opened_at")
-  acknowledgedAt  DateTime? @map("acknowledged_at")
-  acknowledged    Boolean  @default(false)
-  quizScore       Float?   @map("quiz_score")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  profileId      String    @map("profile_id")
+  policyId       String    @map("policy_id")
+  policyRevision String    @map("policy_revision")
+  openedAt       DateTime? @map("opened_at")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  acknowledged   Boolean   @default(false)
+  quizScore      Float?    @map("quiz_score")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
-  policy          PolicyDocument @relation(fields: [policyId], references: [id])
+  profile Profile        @relation(fields: [profileId], references: [id])
+  policy  PolicyDocument @relation(fields: [policyId], references: [id])
 
   @@unique([profileId, policyId, policyRevision])
   @@map("policy_acknowledgements")
@@ -360,22 +382,22 @@ model TrainingItem {
   contentUrl      String?  @map("content_url")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  completions     TrainingCompletion[]
+  completions TrainingCompletion[]
 
   @@map("training_items")
 }
 
 model TrainingCompletion {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  trainingId      String   @map("training_id")
-  completedAt     DateTime? @map("completed_at")
-  score           Float?
-  certificateUrl  String?  @map("certificate_url")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  profileId      String    @map("profile_id")
+  trainingId     String    @map("training_id")
+  completedAt    DateTime? @map("completed_at")
+  score          Float?
+  certificateUrl String?   @map("certificate_url")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
-  training        TrainingItem @relation(fields: [trainingId], references: [id])
+  profile  Profile      @relation(fields: [profileId], references: [id])
+  training TrainingItem @relation(fields: [trainingId], references: [id])
 
   @@unique([profileId, trainingId])
   @@map("training_completions")
@@ -386,65 +408,102 @@ model TrainingCompletion {
 // ═══════════════════════════════════════════════════════════
 
 model Project {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  officeId        String?  @map("office_id")
-  code            String?  // e.g. "ALC" for Abuja Life Camp
-  name            String
-  description     String?
-  location        String?
-  projectType     ProjectType @default(HOTEL) @map("project_type")
-  stage           ProjectStage @default(BRIEF)
-  status          ProjectStatus @default(ACTIVE)
-  healthStatus    HealthStatus @default(GREEN) @map("health_status")
-  currency        Currency?    // Project-specific currency override (falls back to org default)
-  clientBrand     String?      @map("client_brand") // e.g. "Accor", "Ibis Styles"
+  id             String        @id @default(cuid())
+  organisationId String        @map("organisation_id")
+  officeId       String?       @map("office_id")
+  code           String? // e.g. "ALC" for Abuja Life Camp
+  name           String
+  description    String?
+  location       String?
+  projectType    ProjectType   @default(HOTEL) @map("project_type")
+  stage          ProjectStage  @default(BRIEF)
+  status         ProjectStatus @default(ACTIVE)
+  healthStatus   HealthStatus  @default(GREEN) @map("health_status")
+  currency       Currency? // Project-specific currency override (falls back to org default)
+  clientBrand    String?       @map("client_brand") // e.g. "Accor", "Ibis Styles"
 
   // Key dates
-  startDate       DateTime? @map("start_date")
+  startDate        DateTime? @map("start_date")
   targetCompletion DateTime? @map("target_completion")
 
   // Current drawing issue
-  currentIssueRef String?  @map("current_issue_ref") // e.g. "C03"
+  currentIssueRef  String?   @map("current_issue_ref") // e.g. "C03"
   currentIssueDate DateTime? @map("current_issue_date")
 
   // PRD S5 — additional project fields
-  siteAddress     String?  @map("site_address")
-  siteCity        String?  @map("site_city")
-  siteCountry     String?  @map("site_country")
-  buildingType    String?  @map("building_type") // Hotel, Residential, Office, etc.
-  jurisdiction    String?  // England, Nigeria-Lagos, Nigeria-FCT, etc.
-  feeBasis        String?  @map("fee_basis") // Percentage, Lump Sum, Time Charge
-  appointmentType String?  @map("appointment_type") // Full Service, Partial, Novated
-  contractValue   Float?   @map("contract_value")
-  feeValue        Float?   @map("fee_value")
-  grossFloorArea  Float?   @map("gross_floor_area") // m²
-  numberOfUnits   Int?     @map("number_of_units")
+  siteAddress     String? @map("site_address")
+  siteCity        String? @map("site_city")
+  siteCountry     String? @map("site_country")
+  buildingType    String? @map("building_type") // Hotel, Residential, Office, etc.
+  jurisdiction    String? // England, Nigeria-Lagos, Nigeria-FCT, etc.
+  feeBasis        String? @map("fee_basis") // Percentage, Lump Sum, Time Charge
+  appointmentType String? @map("appointment_type") // Full Service, Partial, Novated
+  contractValue   Float?  @map("contract_value")
+  feeValue        Float?  @map("fee_value")
+  grossFloorArea  Float?  @map("gross_floor_area") // m²
+  numberOfUnits   Int?    @map("number_of_units")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  // PDR S5 — extended project setup fields
+  siteRegion               String?   @map("site_region") // State/region
+  sitePostcode             String?   @map("site_postcode")
+  mapLatitude              Float?    @map("map_latitude")
+  mapLongitude             Float?    @map("map_longitude")
+  planningAuthority        String?   @map("planning_authority")
+  buildingControlAuthority String?   @map("building_control_authority")
+  developmentType          String?   @map("development_type") // NEW_BUILD, CONVERSION, REFURBISHMENT, EXTENSION, COMPLETION, FIT_OUT, MIXED
+  clientType               String?   @map("client_type") // PRIVATE, DEVELOPER, CORPORATE, HOTEL_OWNER, HOTEL_OPERATOR, GOVERNMENT, INTERNAL
+  operatorName             String?   @map("operator_name")
+  operatorBrand            String?   @map("operator_brand")
+  managementType           String?   @map("management_type") // FRANCHISE, MANAGEMENT_CONTRACT, OWNER_OPERATED, LEASE
+  targetKeys               Int?      @map("target_keys")
+  currentKeys              Int?      @map("current_keys")
+  modelRoomRequired        Boolean?  @map("model_room_required")
+  operatorContact          String?   @map("operator_contact")
+  operatorStandardVersion  String?   @map("operator_standard_version")
+  workStageFramework       String?   @map("work_stage_framework") // RIBA, NIGERIAN_CWA, INTERNATIONAL, DESIGN_BUILD, CUSTOM
+  siteArea                 Float?    @map("site_area") // m²
+  netInternalArea          Float?    @map("net_internal_area") // m²
+  numberOfBlocks           Int?      @map("number_of_blocks")
+  numberOfFloors           Int?      @map("number_of_floors")
+  parkingSpaces            Int?      @map("parking_spaces")
+  accessibleParking        Int?      @map("accessible_parking")
+  fohArea                  Float?    @map("foh_area") // m²
+  bohArea                  Float?    @map("boh_area") // m²
+  budget                   Float?
+  developmentStatus        String?   @map("development_status") // PRE_PLANNING, PLANNING, DESIGN, CONSTRUCTION, COMPLETED
+  targetOpeningDate        DateTime? @map("target_opening_date")
+  isBRPD                   Boolean   @default(false) @map("is_brpd")
+  isCDM                    Boolean   @default(false) @map("is_cdm")
+  complianceFrameworks     String?   @map("compliance_frameworks") // Comma-separated: BUILDING_REGS, PLANNING, FIRE_SAFETY, EDGE, BREEAM, LEED, OPERATOR_REQS
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  office          Office?  @relation(fields: [officeId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  memberships     ProjectMembership[]
-  tasks           Task[]
-  documents       Document[]
-  siteObservations SiteObservation[]
-  snags           Snag[]
-  budgets         Budget[]
-  variations      Variation[]
-  purchaseOrders  PurchaseOrder[]
-  tenders         Tender[]
-  valuations      Valuation[]
-  invoices        Invoice[]
-  commercialRisks CommercialRisk[]
-  drawings        Drawing[]
-  serviceRequests ServiceRequest[]
-  designReviews      DesignReview[]
-  complianceRegisters ComplianceRegister[]
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  office       Office?      @relation(fields: [officeId], references: [id])
+
+  memberships          ProjectMembership[]
+  tasks                Task[]
+  documents            Document[]
+  siteObservations     SiteObservation[]
+  snags                Snag[]
+  budgets              Budget[]
+  variations           Variation[]
+  purchaseOrders       PurchaseOrder[]
+  tenders              Tender[]
+  valuations           Valuation[]
+  invoices             Invoice[]
+  commercialRisks      CommercialRisk[]
+  drawings             Drawing[]
+  serviceRequests      ServiceRequest[]
+  designReviews        DesignReview[]
+  complianceRegisters  ComplianceRegister[]
   planningApplications PlanningApplication[]
-  resourceAllocations ResourceAllocation[]
+  resourceAllocations  ResourceAllocation[]
+  projectMilestones    ProjectMilestone[]
+  projectUpdates       ProjectUpdate[]
+  soaVersions          SOAVersion[]
+  keyMetrics           KeyMetric[]
 
   @@map("projects")
 }
@@ -479,18 +538,19 @@ enum HealthStatus {
   GREEN
   AMBER
   RED
+  GREY
 }
 
 model ProjectMembership {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  profileId       String   @map("profile_id")
-  projectRole     ProjectRole @default(TEAM_MEMBER) @map("project_role")
-  assignedAt      DateTime @default(now()) @map("assigned_at")
-  removedAt       DateTime? @map("removed_at")
+  id          String      @id @default(cuid())
+  projectId   String      @map("project_id")
+  profileId   String      @map("profile_id")
+  projectRole ProjectRole @default(TEAM_MEMBER) @map("project_role")
+  assignedAt  DateTime    @default(now()) @map("assigned_at")
+  removedAt   DateTime?   @map("removed_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
 
   @@unique([projectId, profileId])
   @@map("project_memberships")
@@ -508,21 +568,21 @@ enum ProjectRole {
 }
 
 model Document {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
+  id              String         @id @default(cuid())
+  projectId       String         @map("project_id")
   title           String
-  documentType    DocumentType @default(DRAWING) @map("document_type")
-  discipline      String?  // Architecture, Structural, MEP, etc.
-  documentCode    String?  @map("document_code")
-  securityLevel   SecurityLevel @default(INTERNAL) @map("security_level")
+  documentType    DocumentType   @default(DRAWING) @map("document_type")
+  discipline      String? // Architecture, Structural, MEP, etc.
+  documentCode    String?        @map("document_code")
+  securityLevel   SecurityLevel  @default(INTERNAL) @map("security_level")
   status          DocumentStatus @default(WORK_IN_PROGRESS)
-  currentRevision String?  @map("current_revision")
+  currentRevision String?        @map("current_revision")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  revisions       DocumentRevision[]
+  project   Project            @relation(fields: [projectId], references: [id])
+  revisions DocumentRevision[]
 
   @@map("documents")
 }
@@ -557,39 +617,39 @@ enum DocumentStatus {
 }
 
 model DocumentRevision {
-  id              String   @id @default(cuid())
-  documentId      String   @map("document_id")
-  revision        String   // e.g. "P01", "C03"
-  authorId        String   @map("author_id")
-  fileUrl         String   @map("file_url")
-  fileSize        Int?     @map("file_size")
-  fileChecksum    String?  @map("file_checksum")
-  status          DocumentStatus @default(WORK_IN_PROGRESS)
+  id           String         @id @default(cuid())
+  documentId   String         @map("document_id")
+  revision     String // e.g. "P01", "C03"
+  authorId     String         @map("author_id")
+  fileUrl      String         @map("file_url")
+  fileSize     Int?           @map("file_size")
+  fileChecksum String?        @map("file_checksum")
+  status       DocumentStatus @default(WORK_IN_PROGRESS)
 
-  issuePurpose    String?  @map("issue_purpose")
-  issueDate       DateTime? @map("issue_date")
-  supersededAt    DateTime? @map("superseded_at")
+  issuePurpose String?   @map("issue_purpose")
+  issueDate    DateTime? @map("issue_date")
+  supersededAt DateTime? @map("superseded_at")
 
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  document        Document @relation(fields: [documentId], references: [id])
-  author          Profile  @relation("DocAuthor", fields: [authorId], references: [id])
-  reviews         DocumentReview[]
+  document Document         @relation(fields: [documentId], references: [id])
+  author   Profile          @relation("DocAuthor", fields: [authorId], references: [id])
+  reviews  DocumentReview[]
 
   @@map("document_revisions")
 }
 
 model DocumentReview {
-  id              String   @id @default(cuid())
-  revisionId      String   @map("revision_id")
-  reviewerId      String   @map("reviewer_id")
-  outcome         ReviewOutcome @default(PENDING)
-  comments        String?
-  reviewedAt      DateTime? @map("reviewed_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id         String        @id @default(cuid())
+  revisionId String        @map("revision_id")
+  reviewerId String        @map("reviewer_id")
+  outcome    ReviewOutcome @default(PENDING)
+  comments   String?
+  reviewedAt DateTime?     @map("reviewed_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
 
-  revision        DocumentRevision @relation(fields: [revisionId], references: [id])
-  reviewer        Profile  @relation(fields: [reviewerId], references: [id])
+  revision DocumentRevision @relation(fields: [revisionId], references: [id])
+  reviewer Profile          @relation(fields: [reviewerId], references: [id])
 
   @@map("document_reviews")
 }
@@ -606,38 +666,38 @@ enum ReviewOutcome {
 // ═══════════════════════════════════════════════════════════
 
 model Task {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  title           String
-  description     String?
-  instructions    String?  // Rich text task brief
+  id           String  @id @default(cuid())
+  projectId    String  @map("project_id")
+  title        String
+  description  String?
+  instructions String? // Rich text task brief
 
   // Assignment
-  ownerId         String?  @map("owner_id")
-  reviewerId      String?  @map("reviewer_id")
+  ownerId    String? @map("owner_id")
+  reviewerId String? @map("reviewer_id")
 
   // Classification
-  stage           ProjectStage?
-  discipline      String?
-  block           String?  // Building block
-  floor           String?
-  priority        TaskPriority @default(MEDIUM)
-  status          TaskStatus @default(NOT_STARTED)
+  stage      ProjectStage?
+  discipline String?
+  block      String? // Building block
+  floor      String?
+  priority   TaskPriority  @default(MEDIUM)
+  status     TaskStatus    @default(NOT_STARTED)
 
   // Dates
-  dueDate         DateTime? @map("due_date")
-  estimatedHours  Float?   @map("estimated_hours")
-  completedAt     DateTime? @map("completed_at")
+  dueDate        DateTime? @map("due_date")
+  estimatedHours Float?    @map("estimated_hours")
+  completedAt    DateTime? @map("completed_at")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  owner           Profile? @relation("TaskOwner", fields: [ownerId], references: [id])
-  reviewer        Profile? @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  project  Project  @relation(fields: [projectId], references: [id])
+  owner    Profile? @relation("TaskOwner", fields: [ownerId], references: [id])
+  reviewer Profile? @relation("TaskReviewer", fields: [reviewerId], references: [id])
 
-  checklistItems  TaskChecklistItem[]
-  comments        TaskComment[]
+  checklistItems TaskChecklistItem[]
+  comments       TaskComment[]
 
   @@map("tasks")
 }
@@ -659,28 +719,28 @@ enum TaskStatus {
 }
 
 model TaskChecklistItem {
-  id              String   @id @default(cuid())
-  taskId          String   @map("task_id")
-  label           String
-  mandatory       Boolean  @default(true)
-  completed       Boolean  @default(false)
-  completedAt     DateTime? @map("completed_at")
-  sortOrder       Int      @default(0) @map("sort_order")
+  id          String    @id @default(cuid())
+  taskId      String    @map("task_id")
+  label       String
+  mandatory   Boolean   @default(true)
+  completed   Boolean   @default(false)
+  completedAt DateTime? @map("completed_at")
+  sortOrder   Int       @default(0) @map("sort_order")
 
-  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@map("task_checklist_items")
 }
 
 model TaskComment {
-  id              String   @id @default(cuid())
-  taskId          String   @map("task_id")
-  authorId        String   @map("author_id")
-  content         String
-  createdAt       DateTime @default(now()) @map("created_at")
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  authorId  String   @map("author_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
 
-  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author          Profile  @relation(fields: [authorId], references: [id])
+  task   Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author Profile @relation(fields: [authorId], references: [id])
 
   @@map("task_comments")
 }
@@ -690,25 +750,25 @@ model TaskComment {
 // ═══════════════════════════════════════════════════════════
 
 model CPDRecord {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
+  id              String    @id @default(cuid())
+  profileId       String    @map("profile_id")
   title           String
   provider        String?
   date            DateTime
-  durationHours   Float    @map("duration_hours")
+  durationHours   Float     @map("duration_hours")
   topic           String?
-  learningOutcome String?  @map("learning_outcome")
-  evidenceUrl     String?  @map("evidence_url")
+  learningOutcome String?   @map("learning_outcome")
+  evidenceUrl     String?   @map("evidence_url")
   status          CPDStatus @default(DRAFT)
 
-  verifiedById    String?  @map("verified_by_id")
-  verifiedAt      DateTime? @map("verified_at")
+  verifiedById String?   @map("verified_by_id")
+  verifiedAt   DateTime? @map("verified_at")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  profile         Profile  @relation("CPDOwner", fields: [profileId], references: [id])
-  verifiedBy      Profile? @relation("CPDVerifier", fields: [verifiedById], references: [id])
+  profile    Profile  @relation("CPDOwner", fields: [profileId], references: [id])
+  verifiedBy Profile? @relation("CPDVerifier", fields: [verifiedById], references: [id])
 
   @@map("cpd_records")
 }
@@ -721,13 +781,13 @@ enum CPDStatus {
 }
 
 model CompetencyRecord {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  area            String   // e.g. "Revit", "AutoCAD", "Site Inspection"
-  level           CompetencyLevel @default(BEGINNER)
-  assessedAt      DateTime? @map("assessed_at")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  id         String          @id @default(cuid())
+  profileId  String          @map("profile_id")
+  area       String // e.g. "Revit", "AutoCAD", "Site Inspection"
+  level      CompetencyLevel @default(BEGINNER)
+  assessedAt DateTime?       @map("assessed_at")
+  notes      String?
+  createdAt  DateTime        @default(now()) @map("created_at")
 
   @@map("competency_records")
 }
@@ -741,54 +801,54 @@ enum CompetencyLevel {
 }
 
 model SupervisionRecord {
-  id              String   @id @default(cuid())
-  employeeId      String   @map("employee_id")
-  supervisorId    String   @map("supervisor_id")
-  date            DateTime
-  notes           String?
-  objectives      String?
-  feedback        String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  employeeId   String   @map("employee_id")
+  supervisorId String   @map("supervisor_id")
+  date         DateTime
+  notes        String?
+  objectives   String?
+  feedback     String?
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  employee        Profile  @relation("SupervisedEmployee", fields: [employeeId], references: [id])
-  supervisor      Profile  @relation("Supervisor", fields: [supervisorId], references: [id])
+  employee   Profile @relation("SupervisedEmployee", fields: [employeeId], references: [id])
+  supervisor Profile @relation("Supervisor", fields: [supervisorId], references: [id])
 
   @@map("supervision_records")
 }
 
 model LeaveBalance {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  year            Int
-  allocation      Float
-  used            Float    @default(0)
-  carriedForward  Float    @default(0) @map("carried_forward")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  profileId      String   @map("profile_id")
+  year           Int
+  allocation     Float
+  used           Float    @default(0)
+  carriedForward Float    @default(0) @map("carried_forward")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
 
   @@unique([profileId, year])
   @@map("leave_balances")
 }
 
 model LeaveRequest {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  leaveType       LeaveType @default(ANNUAL) @map("leave_type")
-  startDate       DateTime @map("start_date")
-  endDate         DateTime @map("end_date")
+  id              String        @id @default(cuid())
+  profileId       String        @map("profile_id")
+  leaveType       LeaveType     @default(ANNUAL) @map("leave_type")
+  startDate       DateTime      @map("start_date")
+  endDate         DateTime      @map("end_date")
   days            Float
-  halfDay         Boolean  @default(false) @map("half_day")
-  halfDayPeriod   String?  @map("half_day_period") // "AM" or "PM"
+  halfDay         Boolean       @default(false) @map("half_day")
+  halfDayPeriod   String?       @map("half_day_period") // "AM" or "PM"
   reason          String?
   status          RequestStatus @default(DRAFT)
-  approverId      String?  @map("approver_id")
-  approvedAt      DateTime? @map("approved_at")
-  approvalComment String?  @map("approval_comment")
-  createdAt       DateTime @default(now()) @map("created_at")
+  approverId      String?       @map("approver_id")
+  approvedAt      DateTime?     @map("approved_at")
+  approvalComment String?       @map("approval_comment")
+  createdAt       DateTime      @default(now()) @map("created_at")
 
-  profile         Profile  @relation("LeaveRequester", fields: [profileId], references: [id])
-  approver        Profile? @relation("LeaveApprover", fields: [approverId], references: [id])
+  profile  Profile  @relation("LeaveRequester", fields: [profileId], references: [id])
+  approver Profile? @relation("LeaveApprover", fields: [approverId], references: [id])
 
   @@map("leave_requests")
 }
@@ -810,54 +870,54 @@ enum LeaveType {
 }
 
 model ServiceRequest {
-  id              String   @id @default(cuid())
-  requestNumber   String?  @unique @map("request_number") // Auto-generated SR-001
-  profileId       String   @map("profile_id")
-  organisationId  String   @map("organisation_id")
-  projectId       String?  @map("project_id")
-  officeId        String?  @map("office_id")
+  id             String  @id @default(cuid())
+  requestNumber  String? @unique @map("request_number") // Auto-generated SR-001
+  profileId      String  @map("profile_id")
+  organisationId String  @map("organisation_id")
+  projectId      String? @map("project_id")
+  officeId       String? @map("office_id")
 
-  requestType     ServiceRequestType @map("request_type")
-  category        String?  // Sub-category within the type
-  title           String
-  description     String?
-  status          RequestStatus @default(DRAFT)
-  priority        RequestPriority @default(MEDIUM)
+  requestType ServiceRequestType @map("request_type")
+  category    String? // Sub-category within the type
+  title       String
+  description String?
+  status      RequestStatus      @default(DRAFT)
+  priority    RequestPriority    @default(MEDIUM)
 
   // Dates
-  requiredByDate  DateTime? @map("required_by_date")
-  approvedAt      DateTime? @map("approved_at")
-  completedAt     DateTime? @map("completed_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  requiredByDate DateTime? @map("required_by_date")
+  approvedAt     DateTime? @map("approved_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Location & cost
-  location        String?
-  estimatedCost   Float?   @map("estimated_cost")
-  currency        String?  @default("GBP")
-  budgetCode      String?  @map("budget_code")
+  location      String?
+  estimatedCost Float?  @map("estimated_cost")
+  currency      String? @default("GBP")
+  budgetCode    String? @map("budget_code")
 
   // Assignment
-  approverId      String?  @map("approver_id")
-  assignedTeamId  String?  @map("assigned_team_id")
-  assignedToId    String?  @map("assigned_to_id")
+  approverId     String? @map("approver_id")
+  assignedTeamId String? @map("assigned_team_id")
+  assignedToId   String? @map("assigned_to_id")
 
   // SLA & fulfilment
-  serviceTarget   Int?     @map("service_target") // SLA in business days
-  fulfilmentNotes String?  @map("fulfilment_notes")
-  rejectionReason String?  @map("rejection_reason")
+  serviceTarget   Int?    @map("service_target") // SLA in business days
+  fulfilmentNotes String? @map("fulfilment_notes")
+  rejectionReason String? @map("rejection_reason")
 
   // Attachments & dynamic fields
-  attachmentUrls  String[] @map("attachment_urls")
-  dynamicFields   Json?    @map("dynamic_fields") // Type-specific extra fields
+  attachmentUrls String[] @map("attachment_urls")
+  dynamicFields  Json?    @map("dynamic_fields") // Type-specific extra fields
 
   // Relations
-  profile         Profile  @relation("RequestSubmitter", fields: [profileId], references: [id])
-  approver        Profile? @relation("RequestApprover", fields: [approverId], references: [id])
-  assignedTo      Profile? @relation("RequestAssignee", fields: [assignedToId], references: [id])
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  project         Project? @relation(fields: [projectId], references: [id])
-  office          Office?  @relation("ServiceRequestOffice", fields: [officeId], references: [id])
+  profile      Profile      @relation("RequestSubmitter", fields: [profileId], references: [id])
+  approver     Profile?     @relation("RequestApprover", fields: [approverId], references: [id])
+  assignedTo   Profile?     @relation("RequestAssignee", fields: [assignedToId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  office       Office?      @relation("ServiceRequestOffice", fields: [officeId], references: [id])
 
   @@map("service_requests")
 }
@@ -903,39 +963,39 @@ enum RequestStatus {
 }
 
 model ExpenseClaim {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  projectId       String?  @map("project_id")
-  category        String
-  description     String
-  amount          Float
-  currency        Currency @default(NGN)
-  receiptUrl      String?  @map("receipt_url")
-  status          RequestStatus @default(DRAFT)
-  approverId      String?  @map("approver_id")
-  approvedAt      DateTime? @map("approved_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id          String        @id @default(cuid())
+  profileId   String        @map("profile_id")
+  projectId   String?       @map("project_id")
+  category    String
+  description String
+  amount      Float
+  currency    Currency      @default(NGN)
+  receiptUrl  String?       @map("receipt_url")
+  status      RequestStatus @default(DRAFT)
+  approverId  String?       @map("approver_id")
+  approvedAt  DateTime?     @map("approved_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
 
-  profile         Profile  @relation("ExpenseClaimant", fields: [profileId], references: [id])
-  approver        Profile? @relation("ExpenseApprover", fields: [approverId], references: [id])
+  profile  Profile  @relation("ExpenseClaimant", fields: [profileId], references: [id])
+  approver Profile? @relation("ExpenseApprover", fields: [approverId], references: [id])
 
   @@map("expense_claims")
 }
 
 model Asset {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  assetTag        String   @unique @map("asset_tag") // e.g. "CWA-LAG-024"
-  name            String
-  category        AssetCategory
-  serialNumber    String?  @map("serial_number")
-  condition       AssetCondition @default(NEW)
-  purchaseDate    DateTime? @map("purchase_date")
-  warrantyExpiry  DateTime? @map("warranty_expiry")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String         @id @default(cuid())
+  organisationId String         @map("organisation_id")
+  assetTag       String         @unique @map("asset_tag") // e.g. "CWA-LAG-024"
+  name           String
+  category       AssetCategory
+  serialNumber   String?        @map("serial_number")
+  condition      AssetCondition @default(NEW)
+  purchaseDate   DateTime?      @map("purchase_date")
+  warrantyExpiry DateTime?      @map("warranty_expiry")
+  createdAt      DateTime       @default(now()) @map("created_at")
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  assignments     AssetAssignment[]
+  organisation Organisation      @relation(fields: [organisationId], references: [id])
+  assignments  AssetAssignment[]
 
   @@map("assets")
 }
@@ -963,15 +1023,15 @@ enum AssetCondition {
 }
 
 model AssetAssignment {
-  id              String   @id @default(cuid())
-  assetId         String   @map("asset_id")
-  profileId       String   @map("profile_id")
-  assignedAt      DateTime @default(now()) @map("assigned_at")
-  returnedAt      DateTime? @map("returned_at")
-  notes           String?
+  id         String    @id @default(cuid())
+  assetId    String    @map("asset_id")
+  profileId  String    @map("profile_id")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  returnedAt DateTime? @map("returned_at")
+  notes      String?
 
-  asset           Asset    @relation(fields: [assetId], references: [id])
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  asset   Asset   @relation(fields: [assetId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
 
   @@map("asset_assignments")
 }
@@ -981,51 +1041,51 @@ model AssetAssignment {
 // ═══════════════════════════════════════════════════════════
 
 model SiteObservation {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  createdById     String   @map("created_by_id")
+  id          String @id @default(cuid())
+  projectId   String @map("project_id")
+  createdById String @map("created_by_id")
 
   // Auto-generated reference number
   observationNumber String @map("observation_number") // OBS-001, OBS-002, etc.
 
   // Location
-  block           String?
-  floor           String?
-  room            String?
+  block String?
+  floor String?
+  room  String?
 
   // Details
-  description     String
-  category        String?  // Structural, Services, Finishes, External, Safety, Quality
-  discipline      String?
-  severity        ObservationSeverity @default(LOW)
-  actionRequired  String?  @map("action_required")
-  drawingRef      String?  @map("drawing_ref")
-  specRef         String?  @map("spec_ref")
+  description    String
+  category       String? // Structural, Services, Finishes, External, Safety, Quality
+  discipline     String?
+  severity       ObservationSeverity @default(LOW)
+  actionRequired String?             @map("action_required")
+  drawingRef     String?             @map("drawing_ref")
+  specRef        String?             @map("spec_ref")
 
   // Media + geo
-  photoUrls       String[] @map("photo_urls")
-  latitude        Float?
-  longitude       Float?
+  photoUrls String[] @map("photo_urls")
+  latitude  Float?
+  longitude Float?
 
   // Assignment + workflow
-  assignedToId    String?  @map("assigned_to_id")
-  dueDate         DateTime? @map("due_date")
-  status          ObservationStatus @default(OPEN)
-  response        String?
+  assignedToId String?           @map("assigned_to_id")
+  dueDate      DateTime?         @map("due_date")
+  status       ObservationStatus @default(OPEN)
+  response     String?
 
   // Close-out
-  closedAt        DateTime? @map("closed_at")
+  closedAt DateTime? @map("closed_at")
 
   // Site context
-  weather         String?
-  labourOnSite    Int?     @map("labour_on_site")
+  weather      String?
+  labourOnSite Int?    @map("labour_on_site")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  createdBy       Profile  @relation(fields: [createdById], references: [id])
-  assignedTo      Profile? @relation("ObservationAssignee", fields: [assignedToId], references: [id])
+  project    Project  @relation(fields: [projectId], references: [id])
+  createdBy  Profile  @relation(fields: [createdById], references: [id])
+  assignedTo Profile? @relation("ObservationAssignee", fields: [assignedToId], references: [id])
 
   @@map("site_observations")
 }
@@ -1047,46 +1107,46 @@ enum ObservationStatus {
 }
 
 model Snag {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  createdById     String   @map("created_by_id")
+  id          String @id @default(cuid())
+  projectId   String @map("project_id")
+  createdById String @map("created_by_id")
 
   // Auto-generated reference number
-  snagNumber      String   @map("snag_number") // SNG-001, SNG-002, etc.
+  snagNumber String @map("snag_number") // SNG-001, SNG-002, etc.
 
-  block           String?
-  floor           String?
-  room            String?
-  element         String?
-  category        SnagCategory @default(ARCHITECTURAL)
-  description     String
-  photoUrls       String[] @map("photo_urls")
-  drawingRef      String?  @map("drawing_ref")
-  specRef         String?  @map("spec_ref")
+  block       String?
+  floor       String?
+  room        String?
+  element     String?
+  category    SnagCategory @default(ARCHITECTURAL)
+  description String
+  photoUrls   String[]     @map("photo_urls")
+  drawingRef  String?      @map("drawing_ref")
+  specRef     String?      @map("spec_ref")
 
   // Responsibility
-  responsibleOrg  String?  @map("responsible_org")
-  assignedToId    String?  @map("assigned_to_id")
-  severity        SnagSeverity @default(MINOR)
-  status          SnagStatus @default(OPEN)
-  targetDate      DateTime? @map("target_date")
+  responsibleOrg String?      @map("responsible_org")
+  assignedToId   String?      @map("assigned_to_id")
+  severity       SnagSeverity @default(MINOR)
+  status         SnagStatus   @default(OPEN)
+  targetDate     DateTime?    @map("target_date")
 
   // Close-out
-  rectificationPhotoUrls String[] @map("rectification_photo_urls")
-  verifiedById    String?  @map("verified_by_id")
-  verifiedAt      DateTime? @map("verified_at")
-  closedAt        DateTime? @map("closed_at")
+  rectificationPhotoUrls String[]  @map("rectification_photo_urls")
+  verifiedById           String?   @map("verified_by_id")
+  verifiedAt             DateTime? @map("verified_at")
+  closedAt               DateTime? @map("closed_at")
 
   // Reopen
-  reopenReason    String?  @map("reopen_reason")
+  reopenReason String? @map("reopen_reason")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  createdBy       Profile  @relation("SnagCreator", fields: [createdById], references: [id])
-  verifiedBy      Profile? @relation("SnagVerifier", fields: [verifiedById], references: [id])
-  assignedTo      Profile? @relation("SnagAssignee", fields: [assignedToId], references: [id])
+  project    Project  @relation(fields: [projectId], references: [id])
+  createdBy  Profile  @relation("SnagCreator", fields: [createdById], references: [id])
+  verifiedBy Profile? @relation("SnagVerifier", fields: [verifiedById], references: [id])
+  assignedTo Profile? @relation("SnagAssignee", fields: [assignedToId], references: [id])
 
   @@map("snags")
 }
@@ -1123,35 +1183,35 @@ enum SnagStatus {
 // ═══════════════════════════════════════════════════════════
 
 model Notification {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  type            String   // e.g. "task.assigned", "document.review", "invitation.sent"
-  title           String
-  body            String?
-  linkUrl         String?  @map("link_url")
-  read            Boolean  @default(false)
-  readAt          DateTime? @map("read_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id        String    @id @default(cuid())
+  profileId String    @map("profile_id")
+  type      String // e.g. "task.assigned", "document.review", "invitation.sent"
+  title     String
+  body      String?
+  linkUrl   String?   @map("link_url")
+  read      Boolean   @default(false)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
 
   @@index([profileId, read])
   @@map("notifications")
 }
 
 model AuditEvent {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  actorId         String?  @map("actor_id") // null for system events
-  action          String   // e.g. "invitation.created", "task.status_changed"
-  entityType      String   @map("entity_type") // e.g. "invitation", "task", "document"
-  entityId        String   @map("entity_id")
-  metadata        Json?    // additional context
-  ipAddress       String?  @map("ip_address")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  actorId        String?  @map("actor_id") // null for system events
+  action         String // e.g. "invitation.created", "task.status_changed"
+  entityType     String   @map("entity_type") // e.g. "invitation", "task", "document"
+  entityId       String   @map("entity_id")
+  metadata       Json? // additional context
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  actor           Profile? @relation(fields: [actorId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  actor        Profile?     @relation(fields: [actorId], references: [id])
 
   @@index([organisationId, createdAt])
   @@index([entityType, entityId])
@@ -1163,21 +1223,21 @@ model AuditEvent {
 // ═══════════════════════════════════════════════════════════
 
 model Budget {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  version         Int      @default(1)
-  name            String   // e.g. "Initial Budget", "Revised Budget v2"
-  totalAmount     Float    @map("total_amount")
-  currency        Currency @default(NGN)
-  approvedBy      String?  @map("approved_by")
-  approvedAt      DateTime? @map("approved_at")
-  status          BudgetStatus @default(DRAFT)
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id          String       @id @default(cuid())
+  projectId   String       @map("project_id")
+  version     Int          @default(1)
+  name        String // e.g. "Initial Budget", "Revised Budget v2"
+  totalAmount Float        @map("total_amount")
+  currency    Currency     @default(NGN)
+  approvedBy  String?      @map("approved_by")
+  approvedAt  DateTime?    @map("approved_at")
+  status      BudgetStatus @default(DRAFT)
+  notes       String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  costPlanLines   CostPlanLine[]
+  project       Project        @relation(fields: [projectId], references: [id])
+  costPlanLines CostPlanLine[]
 
   @@map("budgets")
 }
@@ -1190,42 +1250,42 @@ enum BudgetStatus {
 }
 
 model CostPlanLine {
-  id              String   @id @default(cuid())
-  budgetId        String   @map("budget_id")
-  elementCode     String   @map("element_code") // e.g. "1A", "2B.3"
-  elementName     String   @map("element_name") // e.g. "Substructure", "Frame"
-  quantity        Float?
-  unit            String?  // m², m³, nr, etc.
-  rate            Float?
-  amount          Float
-  sortOrder       Int      @default(0) @map("sort_order")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  id          String   @id @default(cuid())
+  budgetId    String   @map("budget_id")
+  elementCode String   @map("element_code") // e.g. "1A", "2B.3"
+  elementName String   @map("element_name") // e.g. "Substructure", "Frame"
+  quantity    Float?
+  unit        String? // m², m³, nr, etc.
+  rate        Float?
+  amount      Float
+  sortOrder   Int      @default(0) @map("sort_order")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  budget          Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
 
   @@map("cost_plan_lines")
 }
 
 model PurchaseOrder {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  poNumber        String   @map("po_number")
-  supplier        String
-  description     String
-  amount          Float
-  currency        Currency @default(NGN)
-  taxAmount       Float?   @map("tax_amount")
-  status          POStatus @default(DRAFT)
-  issueDate       DateTime? @map("issue_date")
-  deliveryDate    DateTime? @map("delivery_date")
-  approvedBy      String?  @map("approved_by")
-  approvedAt      DateTime? @map("approved_at")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id           String    @id @default(cuid())
+  projectId    String    @map("project_id")
+  poNumber     String    @map("po_number")
+  supplier     String
+  description  String
+  amount       Float
+  currency     Currency  @default(NGN)
+  taxAmount    Float?    @map("tax_amount")
+  status       POStatus  @default(DRAFT)
+  issueDate    DateTime? @map("issue_date")
+  deliveryDate DateTime? @map("delivery_date")
+  approvedBy   String?   @map("approved_by")
+  approvedAt   DateTime? @map("approved_at")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 
   @@map("purchase_orders")
 }
@@ -1241,21 +1301,21 @@ enum POStatus {
 }
 
 model Tender {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  packageName     String   @map("package_name") // e.g. "MEP", "Structural", "FF&E"
-  description     String?
-  estimatedValue  Float?   @map("estimated_value")
-  currency        Currency @default(NGN)
-  issueDate       DateTime? @map("issue_date")
-  returnDate      DateTime? @map("return_date")
-  status          TenderStatus @default(DRAFT)
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String       @id @default(cuid())
+  projectId      String       @map("project_id")
+  packageName    String       @map("package_name") // e.g. "MEP", "Structural", "FF&E"
+  description    String?
+  estimatedValue Float?       @map("estimated_value")
+  currency       Currency     @default(NGN)
+  issueDate      DateTime?    @map("issue_date")
+  returnDate     DateTime?    @map("return_date")
+  status         TenderStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  returns         TenderReturn[]
+  project Project        @relation(fields: [projectId], references: [id])
+  returns TenderReturn[]
 
   @@map("tenders")
 }
@@ -1270,44 +1330,44 @@ enum TenderStatus {
 }
 
 model TenderReturn {
-  id              String   @id @default(cuid())
-  tenderId        String   @map("tender_id")
-  contractorName  String   @map("contractor_name")
-  amount          Float
-  currency        Currency @default(NGN)
-  returnDate      DateTime? @map("return_date")
-  compliant       Boolean  @default(true)
-  qualifications  String?  // Exclusions, conditions, caveats
-  score           Float?   // Evaluation score
-  recommended     Boolean  @default(false)
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String    @id @default(cuid())
+  tenderId       String    @map("tender_id")
+  contractorName String    @map("contractor_name")
+  amount         Float
+  currency       Currency  @default(NGN)
+  returnDate     DateTime? @map("return_date")
+  compliant      Boolean   @default(true)
+  qualifications String? // Exclusions, conditions, caveats
+  score          Float? // Evaluation score
+  recommended    Boolean   @default(false)
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
 
-  tender          Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
 
   @@map("tender_returns")
 }
 
 model Valuation {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  valuationNumber Int      @map("valuation_number")
-  period          String   // e.g. "June 2026"
-  grossValuation  Float    @map("gross_valuation")
-  previousCumulative Float @default(0) @map("previous_cumulative")
-  thisValuation   Float    @map("this_valuation")
-  retentionPct    Float    @default(5) @map("retention_pct")
-  retentionAmount Float    @default(0) @map("retention_amount")
-  netPayable      Float    @map("net_payable")
-  currency        Currency @default(NGN)
-  status          ValuationStatus @default(DRAFT)
-  certifiedBy     String?  @map("certified_by")
-  certifiedAt     DateTime? @map("certified_at")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                 String          @id @default(cuid())
+  projectId          String          @map("project_id")
+  valuationNumber    Int             @map("valuation_number")
+  period             String // e.g. "June 2026"
+  grossValuation     Float           @map("gross_valuation")
+  previousCumulative Float           @default(0) @map("previous_cumulative")
+  thisValuation      Float           @map("this_valuation")
+  retentionPct       Float           @default(5) @map("retention_pct")
+  retentionAmount    Float           @default(0) @map("retention_amount")
+  netPayable         Float           @map("net_payable")
+  currency           Currency        @default(NGN)
+  status             ValuationStatus @default(DRAFT)
+  certifiedBy        String?         @map("certified_by")
+  certifiedAt        DateTime?       @map("certified_at")
+  notes              String?
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 
   @@map("valuations")
 }
@@ -1321,26 +1381,26 @@ enum ValuationStatus {
 }
 
 model Variation {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  variationNumber String   @map("variation_number") // e.g. "VO-001"
-  title           String
-  description     String
-  reason          VariationReason @default(DESIGN_CHANGE)
-  initiatedBy     String?  @map("initiated_by") // Client, Architect, Contractor, etc.
-  amount          Float?
-  currency        Currency @default(NGN)
-  timeImpactDays  Int?     @map("time_impact_days")
-  status          VariationStatus @default(DRAFT)
-  approvedBy      String?  @map("approved_by")
-  approvedAt      DateTime? @map("approved_at")
-  linkedDocumentId String? @map("linked_document_id") // Drawing revision, RFI, etc.
-  linkedTaskId    String?  @map("linked_task_id")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id               String          @id @default(cuid())
+  projectId        String          @map("project_id")
+  variationNumber  String          @map("variation_number") // e.g. "VO-001"
+  title            String
+  description      String
+  reason           VariationReason @default(DESIGN_CHANGE)
+  initiatedBy      String?         @map("initiated_by") // Client, Architect, Contractor, etc.
+  amount           Float?
+  currency         Currency        @default(NGN)
+  timeImpactDays   Int?            @map("time_impact_days")
+  status           VariationStatus @default(DRAFT)
+  approvedBy       String?         @map("approved_by")
+  approvedAt       DateTime?       @map("approved_at")
+  linkedDocumentId String?         @map("linked_document_id") // Drawing revision, RFI, etc.
+  linkedTaskId     String?         @map("linked_task_id")
+  notes            String?
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 
   @@map("variations")
 }
@@ -1366,27 +1426,27 @@ enum VariationStatus {
 }
 
 model Invoice {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  invoiceNumber   String   @map("invoice_number")
-  invoiceType     InvoiceType @default(FEE_INVOICE) @map("invoice_type")
-  recipient       String   // Client name or contractor
-  description     String
-  netAmount       Float    @map("net_amount")
-  taxRate         Float    @default(0) @map("tax_rate")
-  taxAmount       Float    @default(0) @map("tax_amount")
-  grossAmount     Float    @map("gross_amount")
-  currency        Currency @default(NGN)
-  issueDate       DateTime @map("issue_date")
-  dueDate         DateTime? @map("due_date")
-  status          InvoiceStatus @default(DRAFT)
-  paidDate        DateTime? @map("paid_date")
-  paidAmount      Float?   @map("paid_amount")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id            String        @id @default(cuid())
+  projectId     String        @map("project_id")
+  invoiceNumber String        @map("invoice_number")
+  invoiceType   InvoiceType   @default(FEE_INVOICE) @map("invoice_type")
+  recipient     String // Client name or contractor
+  description   String
+  netAmount     Float         @map("net_amount")
+  taxRate       Float         @default(0) @map("tax_rate")
+  taxAmount     Float         @default(0) @map("tax_amount")
+  grossAmount   Float         @map("gross_amount")
+  currency      Currency      @default(NGN)
+  issueDate     DateTime      @map("issue_date")
+  dueDate       DateTime?     @map("due_date")
+  status        InvoiceStatus @default(DRAFT)
+  paidDate      DateTime?     @map("paid_date")
+  paidAmount    Float?        @map("paid_amount")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 
   @@map("invoices")
 }
@@ -1410,23 +1470,23 @@ enum InvoiceStatus {
 }
 
 model CommercialRisk {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  title           String
-  description     String
-  category        CommercialRiskCategory @default(COST)
-  likelihood      RiskLevel @default(MEDIUM)
-  impact          RiskLevel @default(MEDIUM)
-  owner           String?
-  mitigationPlan  String?  @map("mitigation_plan")
-  status          RiskStatus @default(OPEN)
-  amount          Float?   // Estimated financial impact
-  currency        Currency @default(NGN)
-  resolvedAt      DateTime? @map("resolved_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String                 @id @default(cuid())
+  projectId      String                 @map("project_id")
+  title          String
+  description    String
+  category       CommercialRiskCategory @default(COST)
+  likelihood     RiskLevel              @default(MEDIUM)
+  impact         RiskLevel              @default(MEDIUM)
+  owner          String?
+  mitigationPlan String?                @map("mitigation_plan")
+  status         RiskStatus             @default(OPEN)
+  amount         Float? // Estimated financial impact
+  currency       Currency               @default(NGN)
+  resolvedAt     DateTime?              @map("resolved_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 
   @@map("commercial_risks")
 }
@@ -1460,51 +1520,51 @@ enum RiskStatus {
 // ═══════════════════════════════════════════════════════════
 
 model Drawing {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  drawingNumber   String   @map("drawing_number")
-  title           String
-  discipline      String?  // Architecture, Structure, MEP, etc.
-  originator      String?  // Company/person who created it
-  building        String?
-  block           String?
-  level           String?
-  zone            String?
-  drawingType     String?  @map("drawing_type") // Plan, Section, Elevation, Detail
-  role            String?  // A=Architecture, S=Structure, etc.
-  sequence        String?
-  externalLink    String?  @map("external_link") // Link to BIM/external file
-  isCurrent       Boolean  @default(true) @map("is_current")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  projectId     String   @map("project_id")
+  drawingNumber String   @map("drawing_number")
+  title         String
+  discipline    String? // Architecture, Structure, MEP, etc.
+  originator    String? // Company/person who created it
+  building      String?
+  block         String?
+  level         String?
+  zone          String?
+  drawingType   String?  @map("drawing_type") // Plan, Section, Elevation, Detail
+  role          String? // A=Architecture, S=Structure, etc.
+  sequence      String?
+  externalLink  String?  @map("external_link") // Link to BIM/external file
+  isCurrent     Boolean  @default(true) @map("is_current")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  revisions       DrawingRevision[]
+  project   Project           @relation(fields: [projectId], references: [id])
+  revisions DrawingRevision[]
 
   @@unique([projectId, drawingNumber])
   @@map("drawings")
 }
 
 model DrawingRevision {
-  id              String   @id @default(cuid())
-  drawingId       String   @map("drawing_id")
-  revision        String   // P01, P02, C01, etc.
-  description     String?
-  status          DrawingStatus @default(WORK_IN_PROGRESS)
-  suitability     String?  // S0-S7 per BS EN ISO 19650
-  purposeOfIssue  String?  @map("purpose_of_issue") // For Information, For Comment, For Construction
-  author          String?
-  checker         String?
-  approver        String?
-  issueDate       DateTime? @map("issue_date")
-  fileUrl         String?  @map("file_url")
-  fileSize        Int?     @map("file_size")
-  superseded      Boolean  @default(false)
-  comments        String?
-  transmittalRef  String?  @map("transmittal_ref")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id             String        @id @default(cuid())
+  drawingId      String        @map("drawing_id")
+  revision       String // P01, P02, C01, etc.
+  description    String?
+  status         DrawingStatus @default(WORK_IN_PROGRESS)
+  suitability    String? // S0-S7 per BS EN ISO 19650
+  purposeOfIssue String?       @map("purpose_of_issue") // For Information, For Comment, For Construction
+  author         String?
+  checker        String?
+  approver       String?
+  issueDate      DateTime?     @map("issue_date")
+  fileUrl        String?       @map("file_url")
+  fileSize       Int?          @map("file_size")
+  superseded     Boolean       @default(false)
+  comments       String?
+  transmittalRef String?       @map("transmittal_ref")
+  createdAt      DateTime      @default(now()) @map("created_at")
 
-  drawing         Drawing  @relation(fields: [drawingId], references: [id])
+  drawing Drawing @relation(fields: [drawingId], references: [id])
 
   @@map("drawing_revisions")
 }
@@ -1522,47 +1582,47 @@ enum DrawingStatus {
 // ═══════════════════════════════════════════════════════════
 
 model DesignReview {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  reviewNumber    String   @map("review_number") // DR-001
-  title           String
-  reviewType      ReviewType @default(INTERNAL) @map("review_type")
-  discipline      String?  // Architecture, Interiors, MEP, Structure, etc.
-  stage           String?  // RIBA stage
-  status          ReviewStatus @default(DRAFT)
-  scheduledDate   DateTime? @map("scheduled_date")
-  completedDate   DateTime? @map("completed_date")
-  leadReviewerId  String?  @map("lead_reviewer_id")
-  summary         String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String       @id @default(cuid())
+  projectId      String       @map("project_id")
+  reviewNumber   String       @map("review_number") // DR-001
+  title          String
+  reviewType     ReviewType   @default(INTERNAL) @map("review_type")
+  discipline     String? // Architecture, Interiors, MEP, Structure, etc.
+  stage          String? // RIBA stage
+  status         ReviewStatus @default(DRAFT)
+  scheduledDate  DateTime?    @map("scheduled_date")
+  completedDate  DateTime?    @map("completed_date")
+  leadReviewerId String?      @map("lead_reviewer_id")
+  summary        String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  comments        ReviewComment[]
+  project  Project         @relation(fields: [projectId], references: [id])
+  comments ReviewComment[]
 
   @@map("design_reviews")
 }
 
 model ReviewComment {
-  id              String   @id @default(cuid())
-  reviewId        String   @map("review_id")
-  commentNumber   Int      @map("comment_number")
-  discipline      String?
-  drawingRef      String?  @map("drawing_ref")
-  description     String
-  classification  CommentClassification @default(COMMENT)
-  severity        CommentSeverity @default(MINOR)
-  ownerId         String?  @map("owner_id")
-  dueDate         DateTime? @map("due_date")
-  response        String?
-  evidence        String?  // URL to evidence file
-  status          CommentStatus @default(OPEN)
-  reviewerDecision String? @map("reviewer_decision") // Accept, Reject, Reopen
-  closedAt        DateTime? @map("closed_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id               String                @id @default(cuid())
+  reviewId         String                @map("review_id")
+  commentNumber    Int                   @map("comment_number")
+  discipline       String?
+  drawingRef       String?               @map("drawing_ref")
+  description      String
+  classification   CommentClassification @default(COMMENT)
+  severity         CommentSeverity       @default(MINOR)
+  ownerId          String?               @map("owner_id")
+  dueDate          DateTime?             @map("due_date")
+  response         String?
+  evidence         String? // URL to evidence file
+  status           CommentStatus         @default(OPEN)
+  reviewerDecision String?               @map("reviewer_decision") // Accept, Reject, Reopen
+  closedAt         DateTime?             @map("closed_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
 
-  review          DesignReview @relation(fields: [reviewId], references: [id])
+  review DesignReview @relation(fields: [reviewId], references: [id])
 
   @@map("review_comments")
 }
@@ -1621,54 +1681,54 @@ enum CommentStatus {
 // ═══════════════════════════════════════════════════════════
 
 model ComplianceRegister {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
+  id              String                 @id @default(cuid())
+  projectId       String                 @map("project_id")
   registerType    ComplianceRegisterType @map("register_type")
   name            String
   description     String?
-  templateVersion String?  @map("template_version")
-  overallStatus   ComplianceItemStatus @default(NOT_STARTED) @map("overall_status")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  templateVersion String?                @map("template_version")
+  overallStatus   ComplianceItemStatus   @default(NOT_STARTED) @map("overall_status")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  items           ComplianceItem[]
+  project Project          @relation(fields: [projectId], references: [id])
+  items   ComplianceItem[]
 
   @@map("compliance_registers")
 }
 
 model ComplianceItem {
-  id              String   @id @default(cuid())
-  registerId      String   @map("register_id")
-  section         String?  // Group/category within the register
-  requirement     String
-  source          String?  // Regulation/standard reference
-  version         String?  // Standard version
-  ownerId         String?  @map("owner_id")
-  dueDate         DateTime? @map("due_date")
-  status          ComplianceItemStatus @default(NOT_STARTED)
-  evidence        String?  // URL to evidence file
-  evidenceDate    DateTime? @map("evidence_date")
-  reviewerId      String?  @map("reviewer_id")
-  reviewDate      DateTime? @map("review_date")
-  comments        String?
-  sortOrder       Int      @default(0) @map("sort_order")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id           String               @id @default(cuid())
+  registerId   String               @map("register_id")
+  section      String? // Group/category within the register
+  requirement  String
+  source       String? // Regulation/standard reference
+  version      String? // Standard version
+  ownerId      String?              @map("owner_id")
+  dueDate      DateTime?            @map("due_date")
+  status       ComplianceItemStatus @default(NOT_STARTED)
+  evidence     String? // URL to evidence file
+  evidenceDate DateTime?            @map("evidence_date")
+  reviewerId   String?              @map("reviewer_id")
+  reviewDate   DateTime?            @map("review_date")
+  comments     String?
+  sortOrder    Int                  @default(0) @map("sort_order")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
 
-  register        ComplianceRegister @relation(fields: [registerId], references: [id])
+  register ComplianceRegister @relation(fields: [registerId], references: [id])
 
   @@map("compliance_items")
 }
 
 enum ComplianceRegisterType {
-  BRPD           // Building Regulations Principal Designer
-  CDM            // Construction Design Management
-  BUILDING_REGS  // Building regulations/technical requirements
-  FIRE_SAFETY    // Fire and life safety
-  EDGE           // EDGE sustainability
-  BREEAM         // BREEAM sustainability
-  LEED           // LEED sustainability
+  BRPD // Building Regulations Principal Designer
+  CDM // Construction Design Management
+  BUILDING_REGS // Building regulations/technical requirements
+  FIRE_SAFETY // Fire and life safety
+  EDGE // EDGE sustainability
+  BREEAM // BREEAM sustainability
+  LEED // LEED sustainability
   CUSTOM
 }
 
@@ -1690,56 +1750,56 @@ enum ComplianceItemStatus {
 // ═══════════════════════════════════════════════════════════
 
 model PlanningApplication {
-  id              String   @id @default(cuid())
-  projectId       String   @map("project_id")
-  reference       String?  // Planning authority reference number
-  authority       String   // Local planning authority name
-  applicationType String   @map("application_type") // Full, Outline, Reserved Matters, etc.
+  id              String         @id @default(cuid())
+  projectId       String         @map("project_id")
+  reference       String? // Planning authority reference number
+  authority       String // Local planning authority name
+  applicationType String         @map("application_type") // Full, Outline, Reserved Matters, etc.
   description     String
   status          PlanningStatus @default(FEASIBILITY)
-  consultant      String?  // Planning consultant name
-  caseOfficer     String?  @map("case_officer")
-  portalLink      String?  @map("portal_link")
+  consultant      String? // Planning consultant name
+  caseOfficer     String?        @map("case_officer")
+  portalLink      String?        @map("portal_link")
   fee             Float?
-  currency        String   @default("GBP")
-  submissionDate  DateTime? @map("submission_date")
-  validationDate  DateTime? @map("validation_date")
-  targetDecision  DateTime? @map("target_decision")
-  decisionDate    DateTime? @map("decision_date")
-  decision        String?  // Approved, Refused, Withdrawn
-  appealDate      DateTime? @map("appeal_date")
-  expiryDate      DateTime? @map("expiry_date")
+  currency        String         @default("GBP")
+  submissionDate  DateTime?      @map("submission_date")
+  validationDate  DateTime?      @map("validation_date")
+  targetDecision  DateTime?      @map("target_decision")
+  decisionDate    DateTime?      @map("decision_date")
+  decision        String? // Approved, Refused, Withdrawn
+  appealDate      DateTime?      @map("appeal_date")
+  expiryDate      DateTime?      @map("expiry_date")
   comments        String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  project         Project  @relation(fields: [projectId], references: [id])
-  conditions      PlanningCondition[]
+  project    Project             @relation(fields: [projectId], references: [id])
+  conditions PlanningCondition[]
 
   @@map("planning_applications")
 }
 
 model PlanningCondition {
-  id              String   @id @default(cuid())
-  applicationId   String   @map("application_id")
-  conditionNumber Int      @map("condition_number")
-  conditionType   String?  @map("condition_type") // Pre-commencement, Pre-occupation, Ongoing
-  triggerStage    String?  @map("trigger_stage")
-  description     String
-  submissionRequired String? @map("submission_required")
-  ownerId         String?  @map("owner_id")
-  dueDate         DateTime? @map("due_date")
-  submissionRef   String?  @map("submission_ref")
-  submissionDate  DateTime? @map("submission_date")
-  status          PlanningConditionStatus @default(OUTSTANDING)
-  decision        String?
-  decisionDate    DateTime? @map("decision_date")
-  evidence        String?
-  comments        String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                 String                  @id @default(cuid())
+  applicationId      String                  @map("application_id")
+  conditionNumber    Int                     @map("condition_number")
+  conditionType      String?                 @map("condition_type") // Pre-commencement, Pre-occupation, Ongoing
+  triggerStage       String?                 @map("trigger_stage")
+  description        String
+  submissionRequired String?                 @map("submission_required")
+  ownerId            String?                 @map("owner_id")
+  dueDate            DateTime?               @map("due_date")
+  submissionRef      String?                 @map("submission_ref")
+  submissionDate     DateTime?               @map("submission_date")
+  status             PlanningConditionStatus @default(OUTSTANDING)
+  decision           String?
+  decisionDate       DateTime?               @map("decision_date")
+  evidence           String?
+  comments           String?
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
 
-  application     PlanningApplication @relation(fields: [applicationId], references: [id])
+  application PlanningApplication @relation(fields: [applicationId], references: [id])
 
   @@map("planning_conditions")
 }
@@ -1778,43 +1838,43 @@ enum PlanningConditionStatus {
 // ═══════════════════════════════════════════════════════════
 
 model ResourceAllocation {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  projectId       String   @map("project_id")
-  weekStarting    DateTime @map("week_starting")
-  hoursAllocated  Float    @map("hours_allocated")
-  role            String?  // Project role for this allocation
-  stage           String?  // RIBA stage
-  isBillable      Boolean  @default(true) @map("is_billable")
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  profileId      String   @map("profile_id")
+  projectId      String   @map("project_id")
+  weekStarting   DateTime @map("week_starting")
+  hoursAllocated Float    @map("hours_allocated")
+  role           String? // Project role for this allocation
+  stage          String? // RIBA stage
+  isBillable     Boolean  @default(true) @map("is_billable")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
-  project         Project  @relation(fields: [projectId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 
   @@unique([profileId, projectId, weekStarting])
   @@map("resource_allocations")
 }
 
 model HRDocument {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  organisationId  String   @map("organisation_id")
-  documentType    HRDocumentType @map("document_type")
-  title           String
-  description     String?
-  fileUrl         String?  @map("file_url")
-  expiryDate      DateTime? @map("expiry_date")
-  acknowledged    Boolean  @default(false)
-  acknowledgedAt  DateTime? @map("acknowledged_at")
-  uploadedById    String?  @map("uploaded_by_id")
-  isConfidential  Boolean  @default(false) @map("is_confidential")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String         @id @default(cuid())
+  profileId      String         @map("profile_id")
+  organisationId String         @map("organisation_id")
+  documentType   HRDocumentType @map("document_type")
+  title          String
+  description    String?
+  fileUrl        String?        @map("file_url")
+  expiryDate     DateTime?      @map("expiry_date")
+  acknowledged   Boolean        @default(false)
+  acknowledgedAt DateTime?      @map("acknowledged_at")
+  uploadedById   String?        @map("uploaded_by_id")
+  isConfidential Boolean        @default(false) @map("is_confidential")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  profile      Profile      @relation(fields: [profileId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
 
   @@map("hr_documents")
 }
@@ -1836,20 +1896,20 @@ enum HRDocumentType {
 }
 
 model ProbationReview {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  reviewType      String   @map("review_type") // 30-day, 60-day, 90-day, final
-  scheduledDate   DateTime @map("scheduled_date")
-  completedDate   DateTime? @map("completed_date")
-  reviewerId      String?  @map("reviewer_id")
-  objectives      String?
-  feedback        String?
-  outcome         String?  // Pass, Extend, Fail
-  nextReviewDate  DateTime? @map("next_review_date")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String    @id @default(cuid())
+  profileId      String    @map("profile_id")
+  reviewType     String    @map("review_type") // 30-day, 60-day, 90-day, final
+  scheduledDate  DateTime  @map("scheduled_date")
+  completedDate  DateTime? @map("completed_date")
+  reviewerId     String?   @map("reviewer_id")
+  objectives     String?
+  feedback       String?
+  outcome        String? // Pass, Extend, Fail
+  nextReviewDate DateTime? @map("next_review_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
 
   @@map("probation_reviews")
 }
@@ -1859,48 +1919,48 @@ model ProbationReview {
 // ═══════════════════════════════════════════════════════════
 
 model TimesheetWeek {
-  id              String   @id @default(cuid())
-  profileId       String   @map("profile_id")
-  organisationId  String   @map("organisation_id")
-  weekStarting    DateTime @map("week_starting") // Monday of the week
+  id              String          @id @default(cuid())
+  profileId       String          @map("profile_id")
+  organisationId  String          @map("organisation_id")
+  weekStarting    DateTime        @map("week_starting") // Monday of the week
   status          TimesheetStatus @default(DRAFT)
-  totalHours      Float    @default(0) @map("total_hours")
-  billableHours   Float    @default(0) @map("billable_hours")
-  submittedAt     DateTime? @map("submitted_at")
-  approvedById    String?  @map("approved_by_id")
-  approvedAt      DateTime? @map("approved_at")
-  rejectionReason String?  @map("rejection_reason")
+  totalHours      Float           @default(0) @map("total_hours")
+  billableHours   Float           @default(0) @map("billable_hours")
+  submittedAt     DateTime?       @map("submitted_at")
+  approvedById    String?         @map("approved_by_id")
+  approvedAt      DateTime?       @map("approved_at")
+  rejectionReason String?         @map("rejection_reason")
   comments        String?
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
-  profile         Profile  @relation(fields: [profileId], references: [id])
+  profile Profile @relation(fields: [profileId], references: [id])
 
-  entries         TimesheetEntry[]
+  entries TimesheetEntry[]
 
   @@unique([profileId, weekStarting])
   @@map("timesheet_weeks")
 }
 
 model TimesheetEntry {
-  id              String   @id @default(cuid())
-  weekId          String   @map("week_id")
-  date            DateTime
-  projectId       String?  @map("project_id")
-  workStage       String?  @map("work_stage") // RIBA stage
-  taskId          String?  @map("task_id")
-  activity        String?  // Activity description
-  description     String?
-  hours           Float
-  isBillable      Boolean  @default(true) @map("is_billable")
-  overheadCode    String?  @map("overhead_code") // For non-project time
-  locationType    String?  @map("location_type") // office, site, remote, travel
-  isOvertime      Boolean  @default(false) @map("is_overtime")
-  isTOIL          Boolean  @default(false) @map("is_toil")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  weekId       String   @map("week_id")
+  date         DateTime
+  projectId    String?  @map("project_id")
+  workStage    String?  @map("work_stage") // RIBA stage
+  taskId       String?  @map("task_id")
+  activity     String? // Activity description
+  description  String?
+  hours        Float
+  isBillable   Boolean  @default(true) @map("is_billable")
+  overheadCode String?  @map("overhead_code") // For non-project time
+  locationType String?  @map("location_type") // office, site, remote, travel
+  isOvertime   Boolean  @default(false) @map("is_overtime")
+  isTOIL       Boolean  @default(false) @map("is_toil")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  week            TimesheetWeek @relation(fields: [weekId], references: [id])
+  week TimesheetWeek @relation(fields: [weekId], references: [id])
 
   @@map("timesheet_entries")
 }
@@ -1913,4 +1973,232 @@ enum TimesheetStatus {
   REJECTED
   LOCKED
   REOPENED
+}
+
+// ═══════════════════════════════════════════════════════════
+// PDR — Onboarding Templates
+// ═══════════════════════════════════════════════════════════
+
+model OnboardingTemplate {
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  name           String // e.g. "Architect Onboarding", "Intern Onboarding"
+  roleLevel      String?  @map("role_level") // Which role this template targets
+  description    String?
+  isDefault      Boolean  @default(false) @map("is_default")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organisation Organisation             @relation(fields: [organisationId], references: [id])
+  items        OnboardingTemplateItem[]
+  assignments  OnboardingAssignment[]
+
+  @@map("onboarding_templates")
+}
+
+model OnboardingTemplateItem {
+  id               String   @id @default(cuid())
+  templateId       String   @map("template_id")
+  stage            String // BEFORE_START, DAY_ONE, ROLE_SPECIFIC, PROBATION
+  category         String? // e.g. "IT Setup", "Health & Safety", "Project Orientation"
+  title            String
+  description      String?
+  responsibleRole  String?  @map("responsible_role") // HR, MANAGER, IT, EMPLOYEE
+  daysFromStart    Int      @default(0) @map("days_from_start") // Offset from employee start date
+  requiresEvidence Boolean  @default(false) @map("requires_evidence")
+  requiresApproval Boolean  @default(false) @map("requires_approval")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  template OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tasks    OnboardingTask[]
+
+  @@map("onboarding_template_items")
+}
+
+model OnboardingAssignment {
+  id             String    @id @default(cuid())
+  templateId     String    @map("template_id")
+  profileId      String    @map("profile_id")
+  organisationId String    @map("organisation_id")
+  assignedById   String    @map("assigned_by_id")
+  startDate      DateTime  @map("start_date")
+  status         String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  completedAt    DateTime? @map("completed_at")
+  progress       Float     @default(0) // 0-100 percentage
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  template OnboardingTemplate @relation(fields: [templateId], references: [id])
+
+  tasks OnboardingTask[]
+
+  @@unique([templateId, profileId])
+  @@map("onboarding_assignments")
+}
+
+model OnboardingTask {
+  id             String    @id @default(cuid())
+  assignmentId   String    @map("assignment_id")
+  templateItemId String    @map("template_item_id")
+  assigneeId     String?   @map("assignee_id") // Who should complete this task
+  title          String
+  stage          String // BEFORE_START, DAY_ONE, ROLE_SPECIFIC, PROBATION
+  category       String?
+  dueDate        DateTime? @map("due_date")
+  status         String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, OVERDUE, WAIVED
+  completedAt    DateTime? @map("completed_at")
+  completedById  String?   @map("completed_by_id")
+  evidenceUrl    String?   @map("evidence_url")
+  evidenceNote   String?   @map("evidence_note")
+  approvedById   String?   @map("approved_by_id")
+  approvedAt     DateTime? @map("approved_at")
+  comment        String?
+  sortOrder      Int       @default(0) @map("sort_order")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  assignment   OnboardingAssignment   @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  templateItem OnboardingTemplateItem @relation(fields: [templateItemId], references: [id])
+
+  @@map("onboarding_tasks")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PDR — Project Milestones and Updates
+// ═══════════════════════════════════════════════════════════
+
+model ProjectMilestone {
+  id            String    @id @default(cuid())
+  projectId     String    @map("project_id")
+  title         String
+  description   String?
+  category      String? // DESIGN_FREEZE, PLANNING, CONSTRUCTION, OPERATOR_REVIEW, STAGE_GATE, HANDOVER, CUSTOM
+  dueDate       DateTime  @map("due_date")
+  completedDate DateTime? @map("completed_date")
+  status        String    @default("UPCOMING") // UPCOMING, DUE, OVERDUE, COMPLETED, CANCELLED
+  ownerId       String?   @map("owner_id")
+  stage         String? // Which project stage this milestone belongs to
+  sortOrder     Int       @default(0) @map("sort_order")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_milestones")
+}
+
+model ProjectUpdate {
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  authorId       String   @map("author_id")
+  weekEnding     DateTime @map("week_ending")
+  progress       String? // What was done this week
+  issues         String? // Current blockers
+  decisions      String? // Decisions made or needed
+  actions        String? // Actions assigned
+  healthOverride String?  @map("health_override") // GREEN, AMBER, RED — manual override
+  healthReason   String?  @map("health_reason") // Reason for override
+  attachments    String? // JSON array of file URLs
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_updates")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PDR — Project Health History and Overrides
+// ═══════════════════════════════════════════════════════════
+
+model ProjectHealthRecord {
+  id                String    @id @default(cuid())
+  projectId         String    @map("project_id")
+  category          String // PROGRAMME, TASKS, PLANNING, COMPLIANCE, COMMERCIAL, RESOURCING, OVERALL
+  rating            String // GREEN, AMBER, RED, GREY
+  score             Float? // 0-100 numeric score
+  reason            String? // Why this rating
+  sourceRecords     String?   @map("source_records") // JSON: links to source data
+  responsibleId     String?   @map("responsible_id")
+  recommendedAction String?   @map("recommended_action")
+  isOverride        Boolean   @default(false) @map("is_override")
+  overrideById      String?   @map("override_by_id")
+  overrideExpiry    DateTime? @map("override_expiry")
+  calculatedAt      DateTime  @default(now()) @map("calculated_at")
+
+  @@index([projectId, category, calculatedAt])
+  @@map("project_health_records")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PDR — Key Metrics
+// ═══════════════════════════════════════════════════════════
+
+model KeyMetric {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  name            String // Metric name
+  category        String // GENERAL, HOSPITALITY, SUSTAINABILITY, CUSTOM
+  value           String? // Current value (stored as string for flexibility)
+  unit            String? // m², keys, %, £, etc.
+  targetValue     String?  @map("target_value")
+  status          String? // ON_TARGET, ABOVE, BELOW, NOT_SET
+  lastUpdatedById String?  @map("last_updated_by_id")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("key_metrics")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PDR — Schedule of Accommodation
+// ═══════════════════════════════════════════════════════════
+
+model SOAVersion {
+  id            String    @id @default(cuid())
+  projectId     String    @map("project_id")
+  versionNumber Int       @map("version_number")
+  name          String? // e.g. "Stage 2 Issue", "Operator Review Rev A"
+  status        String    @default("DRAFT") // DRAFT, UNDER_REVIEW, APPROVED, SUPERSEDED
+  approvedById  String?   @map("approved_by_id")
+  approvedAt    DateTime? @map("approved_at")
+  changeReason  String?   @map("change_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rows    SOARow[]
+
+  @@unique([projectId, versionNumber])
+  @@map("soa_versions")
+}
+
+model SOARow {
+  id                String    @id @default(cuid())
+  versionId         String    @map("version_id")
+  spaceCategory     String    @map("space_category") // GUEST_ACCOMMODATION, FOH, BOH, CIRCULATION, EXTERNAL
+  roomType          String    @map("room_type") // e.g. "Standard Room", "Reception", "Main Kitchen"
+  code              String? // e.g. "STD-01", "REC-01"
+  quantity          Int       @default(1)
+  targetArea        Float?    @map("target_area") // m²
+  currentArea       Float?    @map("current_area") // m²
+  requirement       String? // Source requirement: CLIENT_BRIEF, OPERATOR, STANDARD, ACCESSIBILITY, CWA, CUSTOM
+  requirementSource String?   @map("requirement_source") // Name/version of the source document
+  status            String    @default("DRAFT") // DRAFT, REVIEWED, APPROVED, QUERY
+  ownerId           String?   @map("owner_id")
+  comment           String?
+  reviewDate        DateTime? @map("review_date")
+  approvalDate      DateTime? @map("approval_date")
+  sortOrder         Int       @default(0) @map("sort_order")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  version SOAVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@map("soa_rows")
 }
