@@ -51,7 +51,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   if (body.date !== undefined) {
-    const newDate = new Date(body.date + 'T00:00:00.000Z')
+    const newDate = new Date(String(body.date) + 'T00:00:00.000Z')
     if (isNaN(newDate.getTime())) {
       throw new ValidationError('Date is not valid')
     }

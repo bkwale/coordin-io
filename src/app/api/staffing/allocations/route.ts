@@ -137,7 +137,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const weekStarting = new Date(String(body.weekStarting))
   weekStarting.setHours(0, 0, 0, 0)
 
-  const hoursAllocated = typeof body.hoursAllocated === 'number' ? body.hoursAllocated : parseFloat(body.hoursAllocated)
+  const hoursAllocated = typeof body.hoursAllocated === 'number' ? body.hoursAllocated : parseFloat(String(body.hoursAllocated))
   if (isNaN(hoursAllocated) || hoursAllocated < 0 || hoursAllocated > 168) {
     throw new ValidationError('hoursAllocated must be between 0 and 168')
   }

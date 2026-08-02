@@ -66,7 +66,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (!body.scheduledDate) {
     throw new ValidationError('scheduledDate is required')
   }
-  const scheduledDate = new Date(body.scheduledDate)
+  const scheduledDate = new Date(String(body.scheduledDate))
   if (isNaN(scheduledDate.getTime())) {
     throw new ValidationError('Invalid scheduledDate')
   }
@@ -87,13 +87,13 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   // Parse optional dates
   let completedDate: Date | null = null
   if (body.completedDate) {
-    completedDate = new Date(body.completedDate)
+    completedDate = new Date(String(body.completedDate))
     if (isNaN(completedDate.getTime())) completedDate = null
   }
 
   let nextReviewDate: Date | null = null
   if (body.nextReviewDate) {
-    nextReviewDate = new Date(body.nextReviewDate)
+    nextReviewDate = new Date(String(body.nextReviewDate))
     if (isNaN(nextReviewDate.getTime())) nextReviewDate = null
   }
 

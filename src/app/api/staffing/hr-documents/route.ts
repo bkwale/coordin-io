@@ -102,7 +102,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   // Parse optional expiry date
   let expiryDate: Date | null = null
   if (body.expiryDate) {
-    expiryDate = new Date(body.expiryDate)
+    expiryDate = new Date(String(body.expiryDate))
     if (isNaN(expiryDate.getTime())) {
       expiryDate = null
     }

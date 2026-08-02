@@ -73,7 +73,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (!body.date || typeof body.date !== 'string') {
     throw new ValidationError('Date is required (YYYY-MM-DD)')
   }
-  const entryDate = new Date(body.date + 'T00:00:00.000Z')
+  const entryDate = new Date(String(body.date) + 'T00:00:00.000Z')
   if (isNaN(entryDate.getTime())) {
     throw new ValidationError('Date is not valid')
   }
