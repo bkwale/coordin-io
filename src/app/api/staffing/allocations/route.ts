@@ -134,7 +134,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (!body.weekStarting) {
     throw new ValidationError('weekStarting is required')
   }
-  const weekStarting = new Date(body.weekStarting)
+  const weekStarting = new Date(String(body.weekStarting))
   weekStarting.setHours(0, 0, 0, 0)
 
   const hoursAllocated = typeof body.hoursAllocated === 'number' ? body.hoursAllocated : parseFloat(body.hoursAllocated)
