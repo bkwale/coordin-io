@@ -32,12 +32,12 @@ export const GET = withAuth(async (_request, { profile }) => {
   const used = balance?.used ?? 0
   const carriedForward = balance?.carriedForward ?? 0
 
-  // Count pending days (SUBMITTED or UNDER_REVIEW leave requests for ANNUAL type)
+  // Count pending days (any in-progress approval stage for ANNUAL leave)
   const pendingRequests = await prisma.leaveRequest.findMany({
     where: {
       profileId: profile.id,
       leaveType: 'ANNUAL',
-      status: { in: ['SUBMITTED', 'UNDER_REVIEW'] },
+      status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'LINE_MANAGER_APPROVED', 'HR_APPROVED'] },
       startDate: {
         gte: new Date(`${year}-01-01`),
       },

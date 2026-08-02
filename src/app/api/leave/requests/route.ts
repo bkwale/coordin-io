@@ -3,11 +3,15 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { requireEnum, optionalString, optionalDate, parseBody } from '@/lib/validation'
+import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateLeaveRequest, findOverlappingRequest } from '@/lib/leave-utils'
 import { ValidationError } from '@/lib/errors'
 
-const LEAVE_TYPES = ['ANNUAL', 'SICK', 'COMPASSIONATE', 'UNPAID', 'PUBLIC_HOLIDAY'] as const
+const LEAVE_TYPES = [
+  'ANNUAL', 'SICK', 'COMPASSIONATE', 'PARENTAL', 'MATERNITY', 'PATERNITY',
+  'STUDY', 'CPD_TRAINING', 'UNPAID', 'TOIL', 'BUSINESS_TRAVEL',
+  'PUBLIC_HOLIDAY', 'OTHER',
+] as const
 
 /**
  * GET /api/leave/requests — List leave requests.
@@ -33,9 +37,10 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     }
   } else if (role === 'approver') {
     // Manager sees requests assigned to them for approval
+    // PRD S20: includes SUBMITTED, LINE_MANAGER_APPROVED for multi-stage
     where = {
       approverId: profile.id,
-      status: { in: ['SUBMITTED', 'UNDER_REVIEW'] },
+      status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'LINE_MANAGER_APPROVED'] },
     }
   } else {
     // Default: own requests
@@ -62,6 +67,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
  *
  * Creates in DRAFT status. Requester must submit separately via PATCH.
  * For ANNUAL leave, validates against balance and checks for overlaps.
+ * PRD S20: supports all 13 leave types + half-day requests.
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const body = await parseBody(request)
@@ -85,14 +91,21 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const reason = optionalString(body.reason, 'Reason', 1000)
 
+  // Half-day support (PRD S20)
+  const halfDay = body.halfDay === true
+  const halfDayPeriod = halfDay ? (body.halfDayPeriod === 'PM' ? 'PM' : 'AM') : null
+
   // Validate dates and calculate working days
-  const { days } = validateLeaveRequest(startDate, endDate)
+  const { days: workingDays } = validateLeaveRequest(startDate, endDate)
+
+  // Half-day adjusts the count
+  const days = halfDay ? 0.5 : workingDays
 
   // Check for overlapping requests (active ones only)
   const existingRequests = await prisma.leaveRequest.findMany({
     where: {
       profileId: profile.id,
-      status: { notIn: ['WITHDRAWN', 'REJECTED'] },
+      status: { notIn: ['WITHDRAWN', 'REJECTED', 'CANCELLED'] },
     },
     select: { id: true, startDate: true, endDate: true },
   })
@@ -119,6 +132,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       startDate,
       endDate,
       days,
+      halfDay,
+      halfDayPeriod,
       reason,
       status: 'DRAFT',
       approverId: managerId,
@@ -135,7 +150,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     action: AuditActions.LEAVE_REQUESTED,
     entityType: 'leave_request',
     entityId: leaveRequest.id,
-    metadata: { leaveType, days, startDate: startDateStr, endDate: endDateStr },
+    metadata: { leaveType, days, halfDay, startDate: startDateStr, endDate: endDateStr },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
 

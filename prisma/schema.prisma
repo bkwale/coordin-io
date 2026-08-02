@@ -743,10 +743,13 @@ model LeaveRequest {
   startDate       DateTime @map("start_date")
   endDate         DateTime @map("end_date")
   days            Float
+  halfDay         Boolean  @default(false) @map("half_day")
+  halfDayPeriod   String?  @map("half_day_period") // "AM" or "PM"
   reason          String?
   status          RequestStatus @default(DRAFT)
   approverId      String?  @map("approver_id")
   approvedAt      DateTime? @map("approved_at")
+  approvalComment String?  @map("approval_comment")
   createdAt       DateTime @default(now()) @map("created_at")
 
   profile         Profile  @relation("LeaveRequester", fields: [profileId], references: [id])
@@ -806,10 +809,13 @@ enum RequestStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
+  LINE_MANAGER_APPROVED
+  HR_APPROVED
   APPROVED
   REJECTED
   FULFILMENT_IN_PROGRESS
   COMPLETED
+  CANCELLED
   WITHDRAWN
 }
 

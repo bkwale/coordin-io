@@ -4,13 +4,16 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireEnum, optionalString, parseBody } from '@/lib/validation'
-import { validateRequestTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
+import { validateLeaveTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
-  'DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED',
-  'FULFILMENT_IN_PROGRESS', 'COMPLETED', 'WITHDRAWN',
+  'DRAFT', 'SUBMITTED', 'UNDER_REVIEW',
+  'LINE_MANAGER_APPROVED', 'HR_APPROVED',
+  'APPROVED', 'REJECTED',
+  'FULFILMENT_IN_PROGRESS', 'COMPLETED',
+  'CANCELLED', 'WITHDRAWN',
 ] as const
 
 /**
@@ -36,8 +39,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const isOwner = leaveRequest.profileId === profile.id
   const isApprover = leaveRequest.approverId === profile.id
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const isManager = profile.orgPermission === 'MANAGER'
 
-  if (!isOwner && !isApprover && !isAdmin) {
+  if (!isOwner && !isApprover && !isAdmin && !isManager) {
     throw new PermissionError('You do not have access to this leave request')
   }
 
@@ -47,10 +51,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * PATCH /api/leave/requests/[id] — Update leave request status.
  *
- * Enforces the request state machine:
+ * PRD S20 multi-stage approval workflow:
  * - Requester can: SUBMIT (DRAFT→SUBMITTED), WITHDRAW (DRAFT/SUBMITTED→WITHDRAWN)
- * - Approver can: REVIEW (SUBMITTED→UNDER_REVIEW), APPROVE, REJECT
- * - Admin can: FULFILMENT_IN_PROGRESS, COMPLETED
+ * - Line Manager can: LINE_MANAGER_APPROVED (SUBMITTED→LINE_MANAGER_APPROVED), REJECT
+ * - HR/Admin can: HR_APPROVED (LINE_MANAGER_APPROVED→HR_APPROVED), APPROVE, REJECT
+ * - Admin can: CANCEL approved leave
  */
 export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const id = request.url.match(/\/leave\/requests\/([^/?]+)/)?.[1]
@@ -63,7 +68,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const leaveRequest = await prisma.leaveRequest.findUnique({
     where: { id },
     include: {
-      profile: { select: { organisationId: true } },
+      profile: { select: { organisationId: true, managerId: true } },
     },
   })
 
@@ -78,20 +83,38 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   const currentStatus = leaveRequest.status as RequestStatus
 
-  // Validate the transition
-  validateRequestTransition(currentStatus, newStatus)
+  // Validate the transition using leave-specific state machine
+  validateLeaveTransition(currentStatus, newStatus)
 
   // Role-based access control
   const isOwner = leaveRequest.profileId === profile.id
   const isApproverUser = leaveRequest.approverId === profile.id
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const isHR = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const isLineManager = leaveRequest.profile.managerId === profile.id
 
   if (isRequesterTransition(newStatus) && !isOwner) {
     throw new PermissionError('Only the requester can perform this action')
   }
 
-  if (isApproverTransition(newStatus) && !isApproverUser && !isAdmin) {
-    throw new PermissionError('Only the assigned approver or an admin can perform this action')
+  // LINE_MANAGER_APPROVED requires being the line manager or admin
+  if (newStatus === 'LINE_MANAGER_APPROVED' && !isLineManager && !isApproverUser && !isAdmin) {
+    throw new PermissionError('Only the line manager or an admin can approve at this stage')
+  }
+
+  // HR_APPROVED requires HR/admin permission
+  if (newStatus === 'HR_APPROVED' && !isHR) {
+    throw new PermissionError('Only HR or an admin can approve at this stage')
+  }
+
+  // APPROVED (final) requires HR/admin permission
+  if (newStatus === 'APPROVED' && !isHR && !isApproverUser) {
+    throw new PermissionError('Only the assigned approver, HR, or an admin can give final approval')
+  }
+
+  // REJECTED can be done by line manager, approver, or admin
+  if (newStatus === 'REJECTED' && !isLineManager && !isApproverUser && !isAdmin) {
+    throw new PermissionError('Only the line manager, approver, or an admin can reject')
   }
 
   if (isAdminTransition(newStatus) && !isAdmin) {
@@ -99,9 +122,12 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   // Build the update data
-  const updateData: Record<string, unknown> = { status: newStatus }
+  const updateData: Record<string, unknown> = {
+    status: newStatus,
+    ...(comment ? { approvalComment: comment } : {}),
+  }
 
-  if (newStatus === 'APPROVED' || newStatus === 'REJECTED') {
+  if (['APPROVED', 'REJECTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED'].includes(newStatus)) {
     updateData.approvedAt = new Date()
     if (!leaveRequest.approverId) {
       updateData.approverId = profile.id
@@ -115,7 +141,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   let updated
 
-  // If approving annual leave, update the balance in a transaction
+  // If approving annual leave (final APPROVED), update the balance in a transaction
   if (newStatus === 'APPROVED' && leaveRequest.leaveType === 'ANNUAL') {
     const year = leaveRequest.startDate.getFullYear()
 
@@ -149,6 +175,31 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
       return result
     })
+  } else if (newStatus === 'CANCELLED' && leaveRequest.leaveType === 'ANNUAL' && leaveRequest.status === 'APPROVED') {
+    // Cancelling approved annual leave — restore the balance
+    const year = leaveRequest.startDate.getFullYear()
+
+    updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.leaveRequest.update({
+        where: { id },
+        data: updateData,
+        include: includeRelations,
+      })
+
+      await tx.leaveBalance.update({
+        where: {
+          profileId_year: {
+            profileId: leaveRequest.profileId,
+            year,
+          },
+        },
+        data: {
+          used: { decrement: leaveRequest.days },
+        },
+      })
+
+      return result
+    })
   } else {
     updated = await prisma.leaveRequest.update({
       where: { id },
@@ -163,6 +214,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     APPROVED: AuditActions.LEAVE_APPROVED,
     REJECTED: AuditActions.LEAVE_REJECTED,
     WITHDRAWN: AuditActions.LEAVE_WITHDRAWN,
+    LINE_MANAGER_APPROVED: 'leave.line_manager_approved',
+    HR_APPROVED: 'leave.hr_approved',
+    CANCELLED: 'leave.cancelled',
   }
   if (actionMap[newStatus]) {
     await recordAuditEvent({

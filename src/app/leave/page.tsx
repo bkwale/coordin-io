@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   CalendarDays, Plus, Loader2, AlertTriangle, RefreshCw,
-  X, Check, Clock, Ban, ArrowRight,
+  X, Check, Clock, Ban, ArrowRight, ChevronLeft, ChevronRight,
+  Users, ShieldCheck, Settings, Eye, MessageSquare,
+  SunMedium, Moon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -27,22 +29,45 @@ interface LeaveRequest {
   startDate: string
   endDate: string
   days: number
+  halfDay: boolean
+  halfDayPeriod: string | null
   reason: string | null
   status: string
+  approvalComment: string | null
   createdAt: string
+  approvedAt: string | null
   profile: { id: string; fullName: string; jobTitle?: string }
   approver: { id: string; fullName: string } | null
 }
 
-type FilterStatus = 'ALL' | 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN'
+interface TeamMember {
+  id: string
+  fullName: string
+  jobTitle: string | null
+  avatarUrl: string | null
+}
+
+interface UserProfile {
+  id: string
+  orgPermission: string
+  managerId: string | null
+}
+
+type Tab = 'my-leave' | 'team-calendar' | 'approvals' | 'admin'
+
+type FilterStatus = 'ALL' | 'DRAFT' | 'SUBMITTED' | 'LINE_MANAGER_APPROVED' | 'HR_APPROVED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'WITHDRAWN'
+
+/* ── Constants ─────────────────────────────────────────── */
 
 const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
   { value: 'ALL', label: 'All' },
   { value: 'DRAFT', label: 'Draft' },
   { value: 'SUBMITTED', label: 'Submitted' },
-  { value: 'UNDER_REVIEW', label: 'Under review' },
+  { value: 'LINE_MANAGER_APPROVED', label: 'Manager approved' },
+  { value: 'HR_APPROVED', label: 'HR approved' },
   { value: 'APPROVED', label: 'Approved' },
   { value: 'REJECTED', label: 'Rejected' },
+  { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'WITHDRAWN', label: 'Withdrawn' },
 ]
 
@@ -50,21 +75,64 @@ const LEAVE_TYPES: { value: string; label: string }[] = [
   { value: 'ANNUAL', label: 'Annual leave' },
   { value: 'SICK', label: 'Sick leave' },
   { value: 'COMPASSIONATE', label: 'Compassionate leave' },
+  { value: 'PARENTAL', label: 'Parental leave' },
+  { value: 'MATERNITY', label: 'Maternity leave' },
+  { value: 'PATERNITY', label: 'Paternity leave' },
+  { value: 'STUDY', label: 'Study leave' },
+  { value: 'CPD_TRAINING', label: 'CPD / Training' },
   { value: 'UNPAID', label: 'Unpaid leave' },
+  { value: 'TOIL', label: 'TOIL' },
+  { value: 'BUSINESS_TRAVEL', label: 'Business travel' },
+  { value: 'PUBLIC_HOLIDAY', label: 'Public holiday' },
+  { value: 'OTHER', label: 'Other' },
 ]
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
   DRAFT: { label: 'Draft', color: 'text-ink-500', bg: 'bg-ink-100' },
   SUBMITTED: { label: 'Submitted', color: 'text-blue-600', bg: 'bg-blue-50' },
   UNDER_REVIEW: { label: 'Under review', color: 'text-amber-600', bg: 'bg-amber-50' },
+  LINE_MANAGER_APPROVED: { label: 'Manager approved', color: 'text-cyan-600', bg: 'bg-cyan-50' },
+  HR_APPROVED: { label: 'HR approved', color: 'text-violet-600', bg: 'bg-violet-50' },
   APPROVED: { label: 'Approved', color: 'text-emerald-600', bg: 'bg-emerald-50' },
   REJECTED: { label: 'Rejected', color: 'text-red-600', bg: 'bg-red-50' },
+  CANCELLED: { label: 'Cancelled', color: 'text-orange-600', bg: 'bg-orange-50' },
   FULFILMENT_IN_PROGRESS: { label: 'In progress', color: 'text-blue-600', bg: 'bg-blue-50' },
   COMPLETED: { label: 'Completed', color: 'text-emerald-600', bg: 'bg-emerald-50' },
   WITHDRAWN: { label: 'Withdrawn', color: 'text-ink-400', bg: 'bg-ink-50' },
 }
 
+const APPROVAL_CHAIN_STEPS = [
+  { key: 'SUBMITTED', label: 'Submitted' },
+  { key: 'LINE_MANAGER_APPROVED', label: 'Line Manager' },
+  { key: 'HR_APPROVED', label: 'HR Review' },
+  { key: 'APPROVED', label: 'Approved' },
+]
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
 /* ── Helpers ───────────────────────────────────────────── */
+
+function calculateWorkingDays(startStr: string, endStr: string): number {
+  const start = new Date(startStr)
+  const end = new Date(endStr)
+  if (end < start) return 0
+  let count = 0
+  const current = new Date(start)
+  current.setHours(0, 0, 0, 0)
+  const endDate = new Date(end)
+  endDate.setHours(0, 0, 0, 0)
+  while (current <= endDate) {
+    const day = current.getDay()
+    if (day !== 0 && day !== 6) count++
+    current.setDate(current.getDate() + 1)
+  }
+  return count
+}
 
 function formatDateRange(start: string, end: string): string {
   const s = new Date(start)
@@ -76,13 +144,88 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('en-GB', opts)} – ${e.toLocaleDateString('en-GB', opts)}`
 }
 
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  })
+}
+
+function getLeaveTypeLabel(type: string): string {
+  return LEAVE_TYPES.find((t) => t.value === type)?.label || type
+}
+
 function StatusBadge({ status }: { status: string }) {
   const meta = STATUS_META[status] || { label: status, color: 'text-ink-500', bg: 'bg-ink-100' }
   return (
-    <span className={cn('text-[11px] font-medium px-2.5 py-0.5 rounded-full', meta.bg, meta.color)}>
+    <span className={cn('text-[11px] font-medium px-2.5 py-0.5 rounded-full whitespace-nowrap', meta.bg, meta.color)}>
       {meta.label}
     </span>
   )
+}
+
+/** Get the approval chain step index for a given status */
+function getApprovalStepIndex(status: string): number {
+  switch (status) {
+    case 'DRAFT': return -1
+    case 'SUBMITTED': return 0
+    case 'LINE_MANAGER_APPROVED': return 1
+    case 'HR_APPROVED': return 2
+    case 'APPROVED': return 3
+    default: return -1
+  }
+}
+
+/** Get calendar grid data for a month */
+function getCalendarGrid(year: number, month: number): { date: Date; isCurrentMonth: boolean }[][] {
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+
+  // Monday-based: 0=Mon, 6=Sun
+  let startDow = firstDay.getDay() - 1
+  if (startDow < 0) startDow = 6
+
+  const weeks: { date: Date; isCurrentMonth: boolean }[][] = []
+  let currentDate = new Date(firstDay)
+  currentDate.setDate(currentDate.getDate() - startDow)
+
+  for (let w = 0; w < 6; w++) {
+    const week: { date: Date; isCurrentMonth: boolean }[] = []
+    for (let d = 0; d < 7; d++) {
+      week.push({
+        date: new Date(currentDate),
+        isCurrentMonth: currentDate.getMonth() === month,
+      })
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+    // Only add weeks that contain at least one day from the current month
+    if (week.some((d) => d.isCurrentMonth)) {
+      weeks.push(week)
+    }
+  }
+
+  return weeks
+}
+
+/** Check if a date falls within a leave request */
+function isDateInLeaveRange(date: Date, start: string, end: string): boolean {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const s = new Date(start)
+  s.setHours(0, 0, 0, 0)
+  const e = new Date(end)
+  e.setHours(0, 0, 0, 0)
+  return d >= s && d <= e
+}
+
+/** Assign stable colors to team members for the calendar */
+const MEMBER_COLORS = [
+  'bg-blue-200', 'bg-emerald-200', 'bg-amber-200', 'bg-rose-200',
+  'bg-violet-200', 'bg-cyan-200', 'bg-orange-200', 'bg-lime-200',
+  'bg-pink-200', 'bg-teal-200',
+]
+
+function getMemberColor(index: number): string {
+  return MEMBER_COLORS[index % MEMBER_COLORS.length]
 }
 
 /* ── Page ──────────────────────────────────────────────── */
@@ -90,11 +233,21 @@ function StatusBadge({ status }: { status: string }) {
 export default function LeavePage() {
   const { toast } = useToast()
 
+  // User context (fetched from session)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<Tab>('my-leave')
+
+  // My Leave data
   const [balance, setBalance] = useState<LeaveBalance | null>(null)
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL')
+
+  // Detail view
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null)
 
   // Create form state
   const [showForm, setShowForm] = useState(false)
@@ -102,9 +255,45 @@ export default function LeavePage() {
   const [formStart, setFormStart] = useState('')
   const [formEnd, setFormEnd] = useState('')
   const [formReason, setFormReason] = useState('')
+  const [formHalfDay, setFormHalfDay] = useState(false)
+  const [formHalfDayPeriod, setFormHalfDayPeriod] = useState<'AM' | 'PM'>('AM')
   const { mutate: createLeave, loading: creating } = useApiMutation<LeaveRequest>('/api/leave/requests', 'POST')
 
-  const fetchData = useCallback(async () => {
+  // Team Calendar state
+  const [calMonth, setCalMonth] = useState(new Date().getMonth())
+  const [calYear, setCalYear] = useState(new Date().getFullYear())
+  const [teamLeave, setTeamLeave] = useState<LeaveRequest[]>([])
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [teamLoading, setTeamLoading] = useState(false)
+
+  // Approvals state
+  const [approvalRequests, setApprovalRequests] = useState<LeaveRequest[]>([])
+  const [approvalsLoading, setApprovalsLoading] = useState(false)
+  const [approvalComment, setApprovalComment] = useState('')
+
+  // Computed: is manager or admin?
+  const isManager = userProfile?.orgPermission === 'MANAGER' || userProfile?.orgPermission === 'ADMIN' || userProfile?.orgPermission === 'OWNER'
+  const isAdmin = userProfile?.orgPermission === 'ADMIN' || userProfile?.orgPermission === 'OWNER'
+
+  /* ── Data fetching ──────────────────────────────────── */
+
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const res = await fetch('/api/me')
+      if (res.ok) {
+        const json = await res.json()
+        setUserProfile({
+          id: json.data.id,
+          orgPermission: json.data.orgPermission,
+          managerId: json.data.managerId,
+        })
+      }
+    } catch {
+      // Silently fail — tabs will just not show manager/admin features
+    }
+  }, [])
+
+  const fetchMyLeave = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -127,9 +316,53 @@ export default function LeavePage() {
     }
   }, [])
 
+  const fetchTeamLeave = useCallback(async () => {
+    setTeamLoading(true)
+    try {
+      const res = await fetch(`/api/leave/team?month=${calMonth + 1}&year=${calYear}`)
+      if (res.ok) {
+        const json = await res.json()
+        setTeamLeave(json.data.teamLeave || [])
+        setTeamMembers(json.data.teamMembers || [])
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setTeamLoading(false)
+    }
+  }, [calMonth, calYear])
+
+  const fetchApprovals = useCallback(async () => {
+    setApprovalsLoading(true)
+    try {
+      const res = await fetch('/api/leave/requests?role=approver')
+      if (res.ok) {
+        const json = await res.json()
+        setApprovalRequests(json.data.requests || [])
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setApprovalsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    fetchUserProfile()
+    fetchMyLeave()
+  }, [fetchUserProfile, fetchMyLeave])
+
+  useEffect(() => {
+    if (activeTab === 'team-calendar' && isManager) {
+      fetchTeamLeave()
+    }
+  }, [activeTab, isManager, fetchTeamLeave])
+
+  useEffect(() => {
+    if (activeTab === 'approvals' && isManager) {
+      fetchApprovals()
+    }
+  }, [activeTab, isManager, fetchApprovals])
 
   /* ── Create handler ──────────────────────────────── */
 
@@ -142,16 +375,14 @@ export default function LeavePage() {
       startDate: formStart,
       endDate: formEnd,
       reason: formReason || undefined,
+      halfDay: formHalfDay,
+      halfDayPeriod: formHalfDay ? formHalfDayPeriod : undefined,
     })
 
     if (result) {
       toast('Leave request created', 'success')
-      setShowForm(false)
-      setFormType('ANNUAL')
-      setFormStart('')
-      setFormEnd('')
-      setFormReason('')
-      fetchData()
+      cancelForm()
+      fetchMyLeave()
     } else {
       toast('Failed to create leave request', 'error')
     }
@@ -163,27 +394,39 @@ export default function LeavePage() {
     setFormStart('')
     setFormEnd('')
     setFormReason('')
+    setFormHalfDay(false)
+    setFormHalfDayPeriod('AM')
   }
 
-  /* ── Quick actions on requests ───────────────────── */
+  /* ── Status change handler ─────────────────────── */
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleStatusChange = async (id: string, newStatus: string, comment?: string) => {
     try {
       const res = await fetch(`/api/leave/requests/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, ...(comment ? { comment } : {}) }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error?.message || 'Failed to update')
       }
       toast(`Leave request ${newStatus.toLowerCase().replace(/_/g, ' ')}`, 'success')
-      fetchData()
+      fetchMyLeave()
+      if (activeTab === 'approvals') fetchApprovals()
+      setSelectedRequest(null)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to update', 'error')
     }
   }
+
+  /* ── Working days preview ───────────────────────── */
+
+  const workingDaysPreview = useMemo(() => {
+    if (!formStart || !formEnd) return null
+    if (formHalfDay) return 0.5
+    return calculateWorkingDays(formStart, formEnd)
+  }, [formStart, formEnd, formHalfDay])
 
   /* ── Filter ──────────────────────────────────────── */
 
@@ -193,13 +436,35 @@ export default function LeavePage() {
     return acc
   }, {})
 
+  /* ── Calendar navigation ─────────────────────────── */
+
+  const navigateMonth = (direction: -1 | 1) => {
+    let newMonth = calMonth + direction
+    let newYear = calYear
+    if (newMonth < 0) { newMonth = 11; newYear-- }
+    if (newMonth > 11) { newMonth = 0; newYear++ }
+    setCalMonth(newMonth)
+    setCalYear(newYear)
+  }
+
+  const calendarGrid = useMemo(() => getCalendarGrid(calYear, calMonth), [calYear, calMonth])
+
+  /* ── Tabs ────────────────────────────────────────── */
+
+  const tabs: { key: Tab; label: string; icon: React.FC<{ className?: string }>; visible: boolean }[] = [
+    { key: 'my-leave', label: 'My Leave', icon: CalendarDays, visible: true },
+    { key: 'team-calendar', label: 'Team Calendar', icon: Users, visible: isManager },
+    { key: 'approvals', label: 'Approvals', icon: ShieldCheck, visible: isManager },
+    { key: 'admin', label: 'Admin', icon: Settings, visible: isAdmin },
+  ]
+
   /* ── Loading ─────────────────────────────────────── */
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="h-8 w-40 bg-ink-100 animate-pulse rounded" />
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-24 bg-ink-100 animate-pulse rounded-xl" />
           ))}
@@ -216,7 +481,7 @@ export default function LeavePage() {
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
         <AlertTriangle className="w-8 h-8 text-red-500" />
         <p className="text-[13px] text-ink-600">{error}</p>
-        <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors">
+        <button onClick={fetchMyLeave} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors">
           <RefreshCw className="w-4 h-4" /> Try again
         </button>
       </div>
@@ -230,10 +495,10 @@ export default function LeavePage() {
         <div className="min-w-0">
           <h1 className="text-[20px] sm:text-[22px] font-semibold text-ink-900">Leave</h1>
           <p className="text-[12px] text-ink-400 mt-0.5">
-            {balance?.year} · {requests.length} requests
+            {balance?.year} &middot; {requests.length} requests
           </p>
         </div>
-        {!showForm && (
+        {activeTab === 'my-leave' && !showForm && (
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors self-start shrink-0"
@@ -244,14 +509,159 @@ export default function LeavePage() {
         )}
       </div>
 
+      {/* ── Tab bar ────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-ink-100 overflow-x-auto">
+        {tabs.filter((t) => t.visible).map((tab) => {
+          const Icon = tab.icon
+          const isActive = activeTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors whitespace-nowrap',
+                isActive
+                  ? 'border-ink-900 text-ink-900'
+                  : 'border-transparent text-ink-400 hover:text-ink-600',
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
+              {tab.key === 'approvals' && approvalRequests.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-semibold">
+                  {approvalRequests.length}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Tab content ─────────────────────────────── */}
+      {activeTab === 'my-leave' && (
+        <MyLeaveTab
+          balance={balance}
+          requests={requests}
+          filtered={filtered}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          statusCounts={statusCounts}
+          showForm={showForm}
+          handleCreate={handleCreate}
+          cancelForm={cancelForm}
+          creating={creating}
+          formType={formType}
+          setFormType={setFormType}
+          formStart={formStart}
+          setFormStart={setFormStart}
+          formEnd={formEnd}
+          setFormEnd={setFormEnd}
+          formReason={formReason}
+          setFormReason={setFormReason}
+          formHalfDay={formHalfDay}
+          setFormHalfDay={setFormHalfDay}
+          formHalfDayPeriod={formHalfDayPeriod}
+          setFormHalfDayPeriod={setFormHalfDayPeriod}
+          workingDaysPreview={workingDaysPreview}
+          handleStatusChange={handleStatusChange}
+          selectedRequest={selectedRequest}
+          setSelectedRequest={setSelectedRequest}
+        />
+      )}
+
+      {activeTab === 'team-calendar' && isManager && (
+        <TeamCalendarTab
+          calMonth={calMonth}
+          calYear={calYear}
+          navigateMonth={navigateMonth}
+          goToToday={() => { setCalMonth(new Date().getMonth()); setCalYear(new Date().getFullYear()) }}
+          calendarGrid={calendarGrid}
+          teamLeave={teamLeave}
+          teamMembers={teamMembers}
+          teamLoading={teamLoading}
+        />
+      )}
+
+      {activeTab === 'approvals' && isManager && (
+        <ApprovalsTab
+          approvalRequests={approvalRequests}
+          approvalsLoading={approvalsLoading}
+          handleStatusChange={handleStatusChange}
+          approvalComment={approvalComment}
+          setApprovalComment={setApprovalComment}
+        />
+      )}
+
+      {activeTab === 'admin' && isAdmin && (
+        <AdminRulesPanel />
+      )}
+
+      {/* ── Request detail modal ───────────────────── */}
+      {selectedRequest && (
+        <RequestDetailModal
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          handleStatusChange={handleStatusChange}
+          userProfile={userProfile}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   MY LEAVE TAB
+   ══════════════════════════════════════════════════════════ */
+
+interface MyLeaveTabProps {
+  balance: LeaveBalance | null
+  requests: LeaveRequest[]
+  filtered: LeaveRequest[]
+  statusFilter: FilterStatus
+  setStatusFilter: (f: FilterStatus) => void
+  statusCounts: Record<string, number>
+  showForm: boolean
+  handleCreate: (e: React.FormEvent) => void
+  cancelForm: () => void
+  creating: boolean
+  formType: string
+  setFormType: (v: string) => void
+  formStart: string
+  setFormStart: (v: string) => void
+  formEnd: string
+  setFormEnd: (v: string) => void
+  formReason: string
+  setFormReason: (v: string) => void
+  formHalfDay: boolean
+  setFormHalfDay: (v: boolean) => void
+  formHalfDayPeriod: 'AM' | 'PM'
+  setFormHalfDayPeriod: (v: 'AM' | 'PM') => void
+  workingDaysPreview: number | null
+  handleStatusChange: (id: string, status: string, comment?: string) => void
+  selectedRequest: LeaveRequest | null
+  setSelectedRequest: (r: LeaveRequest | null) => void
+}
+
+function MyLeaveTab(props: MyLeaveTabProps) {
+  const {
+    balance, filtered, statusFilter, setStatusFilter, statusCounts,
+    showForm, handleCreate, cancelForm, creating,
+    formType, setFormType, formStart, setFormStart, formEnd, setFormEnd,
+    formReason, setFormReason, formHalfDay, setFormHalfDay,
+    formHalfDayPeriod, setFormHalfDayPeriod, workingDaysPreview,
+    handleStatusChange, setSelectedRequest, requests,
+  } = props
+
+  return (
+    <div className="space-y-6">
       {/* ── Balance cards ──────────────────────────── */}
       {balance && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <BalanceCard label="Allocation" value={balance.allocation} icon={CalendarDays} accent="bg-blue-50 text-blue-600" />
+          <BalanceCard label="Entitlement" value={balance.allocation} icon={CalendarDays} accent="bg-blue-50 text-blue-600" />
           <BalanceCard label="Used" value={balance.used} icon={Check} accent="bg-ink-50 text-ink-500" />
           <BalanceCard label="Pending" value={balance.pending} icon={Clock} accent="bg-amber-50 text-amber-600" />
           <BalanceCard
-            label="Available"
+            label="Remaining"
             value={balance.available}
             icon={CalendarDays}
             accent={balance.available <= 3 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}
@@ -259,7 +669,7 @@ export default function LeavePage() {
         </div>
       )}
 
-      {/* ── Create form ────────────────────────────── */}
+      {/* ── Enhanced create form ───────────────────── */}
       {showForm && (
         <form onSubmit={handleCreate} className="bg-white rounded-xl border-2 border-accent-200 p-5 space-y-4">
           <div className="flex items-center justify-between">
@@ -269,7 +679,8 @@ export default function LeavePage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Leave type */}
             <div>
               <label htmlFor="leave-type" className="block text-[11px] font-medium text-ink-500 mb-1">Type</label>
               <select
@@ -283,6 +694,8 @@ export default function LeavePage() {
                 ))}
               </select>
             </div>
+
+            {/* Start date */}
             <div>
               <label htmlFor="leave-start" className="block text-[11px] font-medium text-ink-500 mb-1">
                 Start date <span className="text-red-400">*</span>
@@ -291,11 +704,13 @@ export default function LeavePage() {
                 id="leave-start"
                 type="date"
                 value={formStart}
-                onChange={(e) => setFormStart(e.target.value)}
+                onChange={(e) => { setFormStart(e.target.value); if (!formEnd) setFormEnd(e.target.value) }}
                 className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
                 required
               />
             </div>
+
+            {/* End date */}
             <div>
               <label htmlFor="leave-end" className="block text-[11px] font-medium text-ink-500 mb-1">
                 End date <span className="text-red-400">*</span>
@@ -310,8 +725,53 @@ export default function LeavePage() {
                 required
               />
             </div>
+
+            {/* Half-day toggle */}
+            <div>
+              <label className="block text-[11px] font-medium text-ink-500 mb-1">Half day</label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormHalfDay(!formHalfDay)}
+                  className={cn(
+                    'relative w-10 h-5 rounded-full transition-colors',
+                    formHalfDay ? 'bg-accent-500' : 'bg-ink-200',
+                  )}
+                >
+                  <span className={cn(
+                    'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                    formHalfDay ? 'left-5' : 'left-0.5',
+                  )} />
+                </button>
+                {formHalfDay && (
+                  <div className="flex rounded-lg overflow-hidden border border-ink-200">
+                    <button
+                      type="button"
+                      onClick={() => setFormHalfDayPeriod('AM')}
+                      className={cn(
+                        'flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors',
+                        formHalfDayPeriod === 'AM' ? 'bg-accent-100 text-accent-700' : 'text-ink-400 hover:bg-ink-50',
+                      )}
+                    >
+                      <SunMedium className="w-3 h-3" /> AM
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormHalfDayPeriod('PM')}
+                      className={cn(
+                        'flex items-center gap-1 px-2 py-1 text-[11px] font-medium transition-colors',
+                        formHalfDayPeriod === 'PM' ? 'bg-accent-100 text-accent-700' : 'text-ink-400 hover:bg-ink-50',
+                      )}
+                    >
+                      <Moon className="w-3 h-3" /> PM
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
+          {/* Reason */}
           <div>
             <label htmlFor="leave-reason" className="block text-[11px] font-medium text-ink-500 mb-1">Reason (optional)</label>
             <input
@@ -324,6 +784,17 @@ export default function LeavePage() {
               maxLength={1000}
             />
           </div>
+
+          {/* Duration preview */}
+          {workingDaysPreview !== null && workingDaysPreview > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+              <CalendarDays className="w-4 h-4 text-blue-500" />
+              <span className="text-[12px] text-blue-700 font-medium">
+                {workingDaysPreview} working {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}
+                {formHalfDay && ` (${formHalfDayPeriod} half day)`}
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button type="button" onClick={cancelForm} className="px-3.5 py-2 text-[12px] font-medium text-ink-500 hover:text-ink-700 transition-colors" disabled={creating}>
@@ -374,12 +845,16 @@ export default function LeavePage() {
         <div className="bg-white rounded-xl border border-ink-100 p-10 text-center">
           <CalendarDays className="w-10 h-10 text-ink-200 mx-auto mb-3" />
           <p className="text-[14px] font-medium text-ink-600">No leave requests</p>
-          <p className="text-[12px] text-ink-400 mt-1">Click "Request leave" to get started.</p>
+          <p className="text-[12px] text-ink-400 mt-1">Click &ldquo;Request leave&rdquo; to get started.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
           {filtered.map((req) => (
-            <div key={req.id} className="flex items-center gap-4 px-5 py-4">
+            <div
+              key={req.id}
+              className="flex items-center gap-4 px-5 py-4 hover:bg-ink-25 cursor-pointer transition-colors"
+              onClick={() => setSelectedRequest(req)}
+            >
               {/* Type icon */}
               <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                 <CalendarDays className="w-4 h-4 text-blue-500" />
@@ -388,11 +863,16 @@ export default function LeavePage() {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-ink-900">
-                  {LEAVE_TYPES.find((t) => t.value === req.leaveType)?.label || req.leaveType}
+                  {getLeaveTypeLabel(req.leaveType)}
+                  {req.halfDay && (
+                    <span className="ml-1.5 text-[10px] text-ink-400 font-normal">
+                      ({req.halfDayPeriod} half day)
+                    </span>
+                  )}
                 </p>
                 <p className="text-[11px] text-ink-400 mt-0.5">
-                  {formatDateRange(req.startDate, req.endDate)} · {req.days} {req.days === 1 ? 'day' : 'days'}
-                  {req.reason && <span> · {req.reason}</span>}
+                  {formatDateRange(req.startDate, req.endDate)} &middot; {req.days} {req.days === 1 || req.days === 0.5 ? 'day' : 'days'}
+                  {req.reason && <span> &middot; {req.reason}</span>}
                 </p>
               </div>
 
@@ -400,7 +880,7 @@ export default function LeavePage() {
               <StatusBadge status={req.status} />
 
               {/* Quick actions */}
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                 {req.status === 'DRAFT' && (
                   <>
                     <button
@@ -428,11 +908,613 @@ export default function LeavePage() {
                     <Ban className="w-4 h-4" />
                   </button>
                 )}
+                <button
+                  onClick={() => setSelectedRequest(req)}
+                  className="p-1.5 rounded-md text-ink-300 hover:bg-ink-50 transition-colors"
+                  title="View details"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   TEAM CALENDAR TAB
+   ══════════════════════════════════════════════════════════ */
+
+interface TeamCalendarTabProps {
+  calMonth: number
+  calYear: number
+  navigateMonth: (dir: -1 | 1) => void
+  goToToday: () => void
+  calendarGrid: { date: Date; isCurrentMonth: boolean }[][]
+  teamLeave: LeaveRequest[]
+  teamMembers: TeamMember[]
+  teamLoading: boolean
+}
+
+function TeamCalendarTab(props: TeamCalendarTabProps) {
+  const { calMonth, calYear, navigateMonth, goToToday, calendarGrid, teamLeave, teamMembers, teamLoading } = props
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Build a map of member index for stable colors
+  const memberIndexMap = useMemo(() => {
+    const map = new Map<string, number>()
+    teamMembers.forEach((m, i) => map.set(m.id, i))
+    return map
+  }, [teamMembers])
+
+  // For each calendar day, find who is on leave
+  const getLeaveForDate = useCallback((date: Date): { member: TeamMember; leave: LeaveRequest }[] => {
+    const results: { member: TeamMember; leave: LeaveRequest }[] = []
+    for (const leave of teamLeave) {
+      if (isDateInLeaveRange(date, leave.startDate, leave.endDate)) {
+        const member = teamMembers.find((m) => m.id === leave.profile.id)
+        if (member) {
+          results.push({ member, leave })
+        }
+      }
+    }
+    return results
+  }, [teamLeave, teamMembers])
+
+  if (teamLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-48 bg-ink-100 animate-pulse rounded" />
+        <div className="h-96 bg-ink-100 animate-pulse rounded-xl" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-[16px] font-semibold text-ink-900">
+          {MONTH_NAMES[calMonth]} {calYear}
+        </h2>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigateMonth(-1)}
+            className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4 text-ink-500" />
+          </button>
+          <button
+            onClick={goToToday}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-ink-500 hover:bg-ink-50 transition-colors"
+          >
+            Today
+          </button>
+          <button
+            onClick={() => navigateMonth(1)}
+            className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4 text-ink-500" />
+          </button>
+        </div>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="bg-white rounded-xl border border-ink-100 overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-7 border-b border-ink-100">
+          {DAY_HEADERS.map((d) => (
+            <div key={d} className="px-2 py-2 text-[10px] font-semibold text-ink-400 text-center uppercase tracking-wider">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Weeks */}
+        {calendarGrid.map((week, wi) => (
+          <div key={wi} className="grid grid-cols-7 border-b border-ink-50 last:border-b-0">
+            {week.map((cell, di) => {
+              const isToday = cell.date.getTime() === today.getTime()
+              const isWeekend = cell.date.getDay() === 0 || cell.date.getDay() === 6
+              const leaveOnDay = cell.isCurrentMonth && !isWeekend ? getLeaveForDate(cell.date) : []
+
+              return (
+                <div
+                  key={di}
+                  className={cn(
+                    'min-h-[72px] p-1 border-r border-ink-50 last:border-r-0',
+                    !cell.isCurrentMonth && 'bg-ink-25',
+                    isWeekend && cell.isCurrentMonth && 'bg-ink-25/50',
+                  )}
+                >
+                  <div className={cn(
+                    'text-[11px] font-medium mb-0.5 w-6 h-6 flex items-center justify-center rounded-full',
+                    isToday ? 'bg-ink-900 text-white' : '',
+                    !cell.isCurrentMonth ? 'text-ink-200' : 'text-ink-600',
+                  )}>
+                    {cell.date.getDate()}
+                  </div>
+                  {/* Leave indicators */}
+                  <div className="space-y-0.5">
+                    {leaveOnDay.slice(0, 3).map(({ member, leave }, li) => (
+                      <div
+                        key={`${member.id}-${li}`}
+                        className={cn(
+                          'rounded px-1 py-0.5 text-[9px] font-medium text-ink-700 truncate',
+                          getMemberColor(memberIndexMap.get(member.id) ?? li),
+                        )}
+                        title={`${member.fullName} - ${getLeaveTypeLabel(leave.leaveType)}`}
+                      >
+                        {member.fullName.split(' ')[0]}
+                      </div>
+                    ))}
+                    {leaveOnDay.length > 3 && (
+                      <div className="text-[9px] text-ink-400 px-1">
+                        +{leaveOnDay.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      {teamMembers.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {teamMembers.map((m, i) => (
+            <div key={m.id} className="flex items-center gap-1.5">
+              <div className={cn('w-3 h-3 rounded', getMemberColor(i))} />
+              <span className="text-[11px] text-ink-500">{m.fullName}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {teamMembers.length === 0 && (
+        <div className="bg-white rounded-xl border border-ink-100 p-10 text-center">
+          <Users className="w-10 h-10 text-ink-200 mx-auto mb-3" />
+          <p className="text-[14px] font-medium text-ink-600">No team members</p>
+          <p className="text-[12px] text-ink-400 mt-1">Team members will appear here once they are assigned to you.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   APPROVALS TAB
+   ══════════════════════════════════════════════════════════ */
+
+interface ApprovalsTabProps {
+  approvalRequests: LeaveRequest[]
+  approvalsLoading: boolean
+  handleStatusChange: (id: string, status: string, comment?: string) => void
+  approvalComment: string
+  setApprovalComment: (v: string) => void
+}
+
+function ApprovalsTab(props: ApprovalsTabProps) {
+  const { approvalRequests, approvalsLoading, handleStatusChange, approvalComment, setApprovalComment } = props
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  if (approvalsLoading) {
+    return (
+      <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
+        {Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
+      </div>
+    )
+  }
+
+  if (approvalRequests.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-ink-100 p-10 text-center">
+        <ShieldCheck className="w-10 h-10 text-ink-200 mx-auto mb-3" />
+        <p className="text-[14px] font-medium text-ink-600">No pending approvals</p>
+        <p className="text-[12px] text-ink-400 mt-1">Leave requests requiring your approval will appear here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-[16px] font-semibold text-ink-900">
+        Pending approvals ({approvalRequests.length})
+      </h2>
+
+      <div className="space-y-3">
+        {approvalRequests.map((req) => {
+          const isExpanded = expandedId === req.id
+          // Determine which approval action is appropriate
+          const nextApprovalStatus = req.status === 'SUBMITTED'
+            ? 'LINE_MANAGER_APPROVED'
+            : req.status === 'LINE_MANAGER_APPROVED'
+              ? 'HR_APPROVED'
+              : 'APPROVED'
+          const nextApprovalLabel = req.status === 'SUBMITTED'
+            ? 'Approve (Line Manager)'
+            : req.status === 'LINE_MANAGER_APPROVED'
+              ? 'Approve (HR)'
+              : 'Final Approve'
+
+          return (
+            <div key={req.id} className="bg-white rounded-xl border border-ink-100 overflow-hidden">
+              {/* Summary row */}
+              <div
+                className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-ink-25 transition-colors"
+                onClick={() => setExpandedId(isExpanded ? null : req.id)}
+              >
+                <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[12px] font-semibold text-blue-600">
+                  {req.profile.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-ink-900">{req.profile.fullName}</p>
+                  <p className="text-[11px] text-ink-400 mt-0.5">
+                    {getLeaveTypeLabel(req.leaveType)} &middot; {formatDateRange(req.startDate, req.endDate)} &middot; {req.days} {req.days === 1 || req.days === 0.5 ? 'day' : 'days'}
+                  </p>
+                </div>
+
+                <StatusBadge status={req.status} />
+
+                <ChevronRight className={cn('w-4 h-4 text-ink-300 transition-transform', isExpanded && 'rotate-90')} />
+              </div>
+
+              {/* Expanded detail */}
+              {isExpanded && (
+                <div className="border-t border-ink-100 px-5 py-4 space-y-4 bg-ink-25/50">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-[12px]">
+                    <div>
+                      <p className="text-ink-400 mb-0.5">Employee</p>
+                      <p className="text-ink-900 font-medium">{req.profile.fullName}</p>
+                      {req.profile.jobTitle && (
+                        <p className="text-ink-400 text-[11px]">{req.profile.jobTitle}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-ink-400 mb-0.5">Type</p>
+                      <p className="text-ink-900 font-medium">{getLeaveTypeLabel(req.leaveType)}</p>
+                    </div>
+                    <div>
+                      <p className="text-ink-400 mb-0.5">Dates</p>
+                      <p className="text-ink-900 font-medium">{formatDateRange(req.startDate, req.endDate)}</p>
+                    </div>
+                    <div>
+                      <p className="text-ink-400 mb-0.5">Duration</p>
+                      <p className="text-ink-900 font-medium">
+                        {req.days} {req.days === 1 || req.days === 0.5 ? 'day' : 'days'}
+                        {req.halfDay && ` (${req.halfDayPeriod})`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {req.reason && (
+                    <div className="text-[12px]">
+                      <p className="text-ink-400 mb-0.5">Reason</p>
+                      <p className="text-ink-700">{req.reason}</p>
+                    </div>
+                  )}
+
+                  {/* Comment field */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-ink-500 mb-1">
+                      Comment (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={approvalComment}
+                      onChange={(e) => setApprovalComment(e.target.value)}
+                      placeholder="Add a comment..."
+                      className="w-full px-3 py-2 text-[12px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
+                      maxLength={1000}
+                    />
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        handleStatusChange(req.id, nextApprovalStatus, approvalComment || undefined)
+                        setApprovalComment('')
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 transition-colors"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      {nextApprovalLabel}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleStatusChange(req.id, 'REJECTED', approvalComment || undefined)
+                        setApprovalComment('')
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white text-[12px] font-medium hover:bg-red-700 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   ADMIN RULES PANEL
+   ══════════════════════════════════════════════════════════ */
+
+function AdminRulesPanel() {
+  const [defaultEntitlement, setDefaultEntitlement] = useState(25)
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-[16px] font-semibold text-ink-900">Leave Administration</h2>
+
+      {/* Default entitlement */}
+      <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+        <h3 className="text-[14px] font-semibold text-ink-900">Default Annual Entitlement</h3>
+        <p className="text-[12px] text-ink-400">
+          Set the default annual leave allocation for new employees. Individual allocations can be overridden on the employee profile.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            value={defaultEntitlement}
+            onChange={(e) => setDefaultEntitlement(Number(e.target.value))}
+            min={0}
+            max={50}
+            className="w-20 px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 text-center"
+          />
+          <span className="text-[12px] text-ink-500">days per year</span>
+        </div>
+      </div>
+
+      {/* Approval chain configuration */}
+      <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+        <h3 className="text-[14px] font-semibold text-ink-900">Approval Chain</h3>
+        <p className="text-[12px] text-ink-400">
+          Leave requests follow a multi-stage approval workflow. All stages must be completed before leave is formally approved.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {['Requester submits', 'Line Manager', 'HR Review', 'Approved'].map((step, i) => (
+            <div key={step} className="flex items-center gap-2">
+              <div className={cn(
+                'px-3 py-1.5 rounded-lg text-[11px] font-medium',
+                i === 3 ? 'bg-emerald-50 text-emerald-600' : 'bg-ink-100 text-ink-600',
+              )}>
+                {step}
+              </div>
+              {i < 3 && <ArrowRight className="w-3 h-3 text-ink-300" />}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Blackout dates */}
+      <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-[14px] font-semibold text-ink-900">Blackout Dates</h3>
+            <p className="text-[12px] text-ink-400 mt-0.5">
+              Periods when leave cannot be requested. Useful for project deadlines, audits, or peak periods.
+            </p>
+          </div>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[11px] font-medium hover:bg-ink-800 transition-colors">
+            <Plus className="w-3 h-3" />
+            Add blackout
+          </button>
+        </div>
+        <div className="bg-ink-25 rounded-lg p-6 text-center">
+          <Ban className="w-8 h-8 text-ink-200 mx-auto mb-2" />
+          <p className="text-[12px] text-ink-400">No blackout dates configured</p>
+        </div>
+      </div>
+
+      {/* Leave types configuration */}
+      <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+        <h3 className="text-[14px] font-semibold text-ink-900">Active Leave Types</h3>
+        <p className="text-[12px] text-ink-400">
+          All {LEAVE_TYPES.length} absence types are active. Contact support to customise which types are available.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {LEAVE_TYPES.map((t) => (
+            <div key={t.value} className="flex items-center gap-2 px-3 py-2 bg-ink-25 rounded-lg">
+              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-[11px] text-ink-600 font-medium">{t.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   REQUEST DETAIL MODAL
+   ══════════════════════════════════════════════════════════ */
+
+interface RequestDetailModalProps {
+  request: LeaveRequest
+  onClose: () => void
+  handleStatusChange: (id: string, status: string, comment?: string) => void
+  userProfile: UserProfile | null
+}
+
+function RequestDetailModal({ request, onClose, handleStatusChange, userProfile }: RequestDetailModalProps) {
+  const [comment, setComment] = useState('')
+  const stepIndex = getApprovalStepIndex(request.status)
+  const isOwner = userProfile?.id === request.profile.id
+  const isTerminal = ['REJECTED', 'CANCELLED', 'WITHDRAWN', 'APPROVED'].includes(request.status)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+          <h2 className="text-[16px] font-semibold text-ink-900">Leave Request</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-ink-50 transition-colors">
+            <X className="w-4 h-4 text-ink-400" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          {/* Status + type */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[15px] font-semibold text-ink-900">{getLeaveTypeLabel(request.leaveType)}</p>
+              {request.halfDay && (
+                <p className="text-[11px] text-ink-400 mt-0.5">{request.halfDayPeriod} half day</p>
+              )}
+            </div>
+            <StatusBadge status={request.status} />
+          </div>
+
+          {/* Detail grid */}
+          <div className="grid grid-cols-2 gap-4 text-[12px]">
+            <div>
+              <p className="text-ink-400 mb-0.5">Start date</p>
+              <p className="text-ink-900 font-medium">{formatDate(request.startDate)}</p>
+            </div>
+            <div>
+              <p className="text-ink-400 mb-0.5">End date</p>
+              <p className="text-ink-900 font-medium">{formatDate(request.endDate)}</p>
+            </div>
+            <div>
+              <p className="text-ink-400 mb-0.5">Duration</p>
+              <p className="text-ink-900 font-medium">{request.days} working {request.days === 1 || request.days === 0.5 ? 'day' : 'days'}</p>
+            </div>
+            <div>
+              <p className="text-ink-400 mb-0.5">Submitted</p>
+              <p className="text-ink-900 font-medium">{formatDate(request.createdAt)}</p>
+            </div>
+            {request.approver && (
+              <div>
+                <p className="text-ink-400 mb-0.5">Approver</p>
+                <p className="text-ink-900 font-medium">{request.approver.fullName}</p>
+              </div>
+            )}
+            {request.approvedAt && (
+              <div>
+                <p className="text-ink-400 mb-0.5">Actioned</p>
+                <p className="text-ink-900 font-medium">{formatDate(request.approvedAt)}</p>
+              </div>
+            )}
+          </div>
+
+          {request.reason && (
+            <div className="text-[12px]">
+              <p className="text-ink-400 mb-0.5">Reason</p>
+              <p className="text-ink-700 bg-ink-25 rounded-lg px-3 py-2">{request.reason}</p>
+            </div>
+          )}
+
+          {request.approvalComment && (
+            <div className="text-[12px]">
+              <p className="text-ink-400 mb-0.5 flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" /> Approver comment
+              </p>
+              <p className="text-ink-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                {request.approvalComment}
+              </p>
+            </div>
+          )}
+
+          {/* Approval chain progress */}
+          <div>
+            <p className="text-[11px] font-medium text-ink-500 mb-3">Approval chain</p>
+            <div className="flex items-center gap-0">
+              {APPROVAL_CHAIN_STEPS.map((step, i) => {
+                const isCompleted = stepIndex >= i
+                const isCurrent = stepIndex === i
+                const isRejected = request.status === 'REJECTED'
+                const isCancelled = request.status === 'CANCELLED'
+
+                return (
+                  <div key={step.key} className="flex items-center flex-1">
+                    <div className="flex flex-col items-center flex-1">
+                      <div className={cn(
+                        'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold',
+                        isCompleted && !isRejected && !isCancelled
+                          ? 'bg-emerald-500 text-white'
+                          : isRejected && isCurrent
+                            ? 'bg-red-500 text-white'
+                            : isCancelled && isCurrent
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-ink-100 text-ink-400',
+                      )}>
+                        {isCompleted && !isRejected && !isCancelled ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : isRejected && isCurrent ? (
+                          <X className="w-3.5 h-3.5" />
+                        ) : (
+                          i + 1
+                        )}
+                      </div>
+                      <p className={cn(
+                        'text-[9px] mt-1 text-center',
+                        isCompleted ? 'text-ink-600 font-medium' : 'text-ink-300',
+                      )}>
+                        {step.label}
+                      </p>
+                    </div>
+                    {i < APPROVAL_CHAIN_STEPS.length - 1 && (
+                      <div className={cn(
+                        'h-0.5 flex-1 -mx-1',
+                        stepIndex > i ? 'bg-emerald-300' : 'bg-ink-100',
+                      )} />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Actions for owner */}
+          {isOwner && !isTerminal && (
+            <div className="border-t border-ink-100 pt-4 space-y-3">
+              {request.status === 'DRAFT' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleStatusChange(request.id, 'SUBMITTED')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-[12px] font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" /> Submit for approval
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(request.id, 'WITHDRAWN')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-ink-100 text-ink-600 text-[12px] font-medium hover:bg-ink-200 transition-colors"
+                  >
+                    <Ban className="w-3.5 h-3.5" /> Withdraw
+                  </button>
+                </div>
+              )}
+              {request.status === 'SUBMITTED' && (
+                <button
+                  onClick={() => handleStatusChange(request.id, 'WITHDRAWN')}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-ink-100 text-ink-600 text-[12px] font-medium hover:bg-ink-200 transition-colors"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Withdraw request
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
