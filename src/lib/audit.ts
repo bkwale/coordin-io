@@ -110,8 +110,15 @@ export const AuditActions = {
   ASSET_LOST: 'asset.lost',
   ASSET_UPDATED: 'asset.updated',
 
-  // Site
+  // Site — Observations
   OBSERVATION_CREATED: 'site.observation_created',
+  OBSERVATION_UPDATED: 'site.observation_updated',
+  OBSERVATION_ASSIGNED: 'site.observation_assigned',
+  OBSERVATION_RESOLVED: 'site.observation_resolved',
+  OBSERVATION_CLOSED: 'site.observation_closed',
+  OBSERVATION_REOPENED: 'site.observation_reopened',
+
+  // Site — Snags
   SNAG_CREATED: 'site.snag_created',
   SNAG_ASSIGNED: 'site.snag_assigned',
   SNAG_RECTIFICATION: 'site.snag_rectification',
@@ -156,4 +163,14 @@ export const AuditActions = {
   // Commercial — Risks
   RISK_CREATED: 'commercial.risk_created',
   RISK_UPDATED: 'commercial.risk_updated',
+
+  // Drawings
+  DRAWING_CREATED: 'drawing.created',
+  DRAWING_UPDATED: 'drawing.updated',
+  DRAWING_REVISION_CREATED: 'drawing.revision_created',
+
+  // Design Reviews
+  DESIGN_REVIEW_CREATED: 'design_review.created',
+  DESIGN_REVIEW_UPDATED: 'design_review.updated',
+  DESIGN_REVIEW_COMMENT_CREATED: 'design_review.comment_created',
 } as const

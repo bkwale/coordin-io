@@ -6,11 +6,12 @@ import Link from 'next/link'
 import {
   FileText, ChevronRight, Clock, User, Shield,
   AlertTriangle, RefreshCw, CheckCircle2, XCircle,
-  MessageSquare, Send, Loader2, ExternalLink,
+  MessageSquare, Send, Loader2, ExternalLink, Plus, X, Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { SkeletonTaskDetail } from '@/components/Skeleton'
+import FileUpload, { type UploadResult } from '@/components/FileUpload'
 
 /* ── Types mirroring GET /api/documents/[id] ───────────── */
 
@@ -116,6 +117,13 @@ export default function DocumentDetailPage() {
   const [reviewComments, setReviewComments] = useState('')
   const [reviewLoading, setReviewLoading] = useState(false)
 
+  // New revision form state
+  const [showRevisionForm, setShowRevisionForm] = useState(false)
+  const [revFileResults, setRevFileResults] = useState<UploadResult[]>([])
+  const [revIssuePurpose, setRevIssuePurpose] = useState('')
+  const [revIsConstruction, setRevIsConstruction] = useState(false)
+  const [revisionLoading, setRevisionLoading] = useState(false)
+
   const fetchDocument = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -166,6 +174,42 @@ export default function DocumentDetailPage() {
       toast(err instanceof Error ? err.message : 'Failed to submit review', 'error')
     } finally {
       setReviewLoading(false)
+    }
+  }
+
+  /* ── Submit new revision ────────────────────────────── */
+
+  async function handleCreateRevision(e: React.FormEvent) {
+    e.preventDefault()
+    if (revFileResults.length === 0) return
+    setRevisionLoading(true)
+    try {
+      // Create a revision for each uploaded file
+      for (const fileResult of revFileResults) {
+        const res = await fetch(`/api/documents/${documentId}/revisions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileUrl: fileResult.url,
+            issuePurpose: revIssuePurpose.trim() || undefined,
+            isConstructionIssue: revIsConstruction,
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error?.message || 'Failed to create revision')
+        }
+      }
+      toast(`${revFileResults.length} revision${revFileResults.length > 1 ? 's' : ''} created`, 'success')
+      setShowRevisionForm(false)
+      setRevFileResults([])
+      setRevIssuePurpose('')
+      setRevIsConstruction(false)
+      fetchDocument()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create revision', 'error')
+    } finally {
+      setRevisionLoading(false)
     }
   }
 
@@ -242,7 +286,89 @@ export default function DocumentDetailPage() {
 
       {/* Revision history */}
       <div className="space-y-4">
-        <h2 className="text-[15px] font-semibold text-ink-900">Revision history</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-ink-900">Revision history</h2>
+          <button
+            onClick={() => setShowRevisionForm(!showRevisionForm)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
+          >
+            {showRevisionForm ? <X className="w-3.5 h-3.5" /> : <Upload className="w-3.5 h-3.5" />}
+            {showRevisionForm ? 'Cancel' : 'Upload Revision'}
+          </button>
+        </div>
+
+        {/* New revision form */}
+        {showRevisionForm && doc && (
+          <form onSubmit={handleCreateRevision} className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+            <h3 className="text-[14px] font-semibold text-ink-900">Upload New Revision</h3>
+
+            {/* File upload */}
+            <FileUpload
+              projectId={doc.projectId}
+              onFilesChange={(files) => setRevFileResults(files)}
+              label="Revision files *"
+              multiple
+            />
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              {/* Issue purpose */}
+              <div>
+                <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                  Issue Purpose <span className="text-ink-300 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={revIssuePurpose}
+                  onChange={(e) => setRevIssuePurpose(e.target.value)}
+                  placeholder="e.g. For Information, For Construction"
+                  className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Construction issue toggle */}
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={revIsConstruction}
+                    onChange={(e) => setRevIsConstruction(e.target.checked)}
+                    className="rounded border-ink-300 text-accent-600 focus:ring-accent-500"
+                  />
+                  <span className="text-[12px] text-ink-700 font-medium">Construction issue</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={revFileResults.length === 0 || revisionLoading}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-medium transition-colors',
+                  revFileResults.length > 0 && !revisionLoading
+                    ? 'bg-ink-900 text-white hover:bg-ink-800'
+                    : 'bg-ink-100 text-ink-400 cursor-not-allowed',
+                )}
+              >
+                {revisionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {revisionLoading ? 'Creating...' : 'Create Revision'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRevisionForm(false)
+                  setRevFileResult(null)
+                  setRevIssuePurpose('')
+                  setRevIsConstruction(false)
+                }}
+                className="px-4 py-2 rounded-lg text-[12px] text-ink-500 hover:bg-ink-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         {doc.revisions.length === 0 ? (
           <div className="bg-white rounded-xl border border-ink-100 p-8 text-center">

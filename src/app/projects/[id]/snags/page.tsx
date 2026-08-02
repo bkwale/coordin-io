@@ -4,22 +4,23 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import {
   Plus, Filter, Loader2, AlertTriangle, RefreshCw, X,
-  ChevronRight, Building2, Calendar,
+  ChevronRight, Building2, Calendar, Eye, AlertCircle,
+  CheckCircle2, RotateCcw, ClipboardCheck, UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
 import { SkeletonRow } from '@/components/Skeleton'
-import type { SnagStatus, SnagCategory, SnagSeverity } from '@/generated/prisma/client'
 
 /* ── Types ─────────────────────────────────────────────── */
 
 interface SnagListItem {
   id: string
+  snagNumber: string
   description: string
-  category: SnagCategory
-  severity: SnagSeverity
-  status: SnagStatus
+  category: string
+  severity: string
+  status: string
   block: string | null
   floor: string | null
   room: string | null
@@ -28,10 +29,13 @@ interface SnagListItem {
   specRef: string | null
   responsibleOrg: string | null
   targetDate: string | null
+  reopenReason: string | null
   createdAt: string
+  updatedAt: string
+  closedAt: string | null
   createdBy: { id: string; fullName: string }
   verifiedBy: { id: string; fullName: string } | null
-  closedAt: string | null
+  assignedTo: { id: string; fullName: string } | null
 }
 
 /* ── Labels ────────────────────────────────────────────── */
@@ -40,7 +44,7 @@ const STATUS_LABELS: Record<string, string> = {
   OPEN: 'Open',
   ASSIGNED: 'Assigned',
   RECTIFICATION_SUBMITTED: 'Rectification submitted',
-  VERIFICATION: 'Verification',
+  VERIFICATION: 'Ready for verification',
   CLOSED: 'Closed',
   REOPENED: 'Reopened',
 }
@@ -79,7 +83,17 @@ const SEVERITY_META: Record<string, { color: string; dotColor: string }> = {
   SAFETY_CRITICAL: { color: 'text-red-600', dotColor: 'bg-red-500' },
 }
 
-/* ── Valid transitions (mirrors server-side state machine) ── */
+/* ── Transition labels for workflow buttons ─────────── */
+
+const TRANSITION_LABELS: Record<string, string> = {
+  ASSIGNED: 'Assign',
+  RECTIFICATION_SUBMITTED: 'Submit rectification',
+  VERIFICATION: 'Submit for verification',
+  CLOSED: 'Verify & close',
+  REOPENED: 'Reopen',
+}
+
+/* ── Valid transitions ─────────────────────────────── */
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   OPEN: ['ASSIGNED'],
@@ -90,7 +104,14 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   CLOSED: [],
 }
 
-type FilterStatus = 'ALL' | SnagStatus
+const ALL_CATEGORIES = [
+  'ARCHITECTURAL', 'MEP', 'STRUCTURAL', 'FIRE',
+  'HEALTH_SAFETY', 'FINISH', 'FF_AND_E', 'EXTERNAL_WORKS',
+] as const
+
+const ALL_SEVERITIES = ['MINOR', 'MODERATE', 'MAJOR', 'SAFETY_CRITICAL'] as const
+
+type FilterStatus = 'ALL' | string
 
 const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
   { value: 'ALL', label: 'All' },
@@ -101,13 +122,6 @@ const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
   { value: 'CLOSED', label: 'Closed' },
   { value: 'REOPENED', label: 'Reopened' },
 ]
-
-const ALL_CATEGORIES: SnagCategory[] = [
-  'ARCHITECTURAL', 'MEP', 'STRUCTURAL', 'FIRE',
-  'HEALTH_SAFETY', 'FINISH', 'FF_AND_E', 'EXTERNAL_WORKS',
-]
-
-const ALL_SEVERITIES: SnagSeverity[] = ['MINOR', 'MODERATE', 'MAJOR', 'SAFETY_CRITICAL']
 
 /* ── Page ──────────────────────────────────────────────── */
 
@@ -122,12 +136,13 @@ export default function ProjectSnagsPage() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [severityFilter, setSeverityFilter] = useState('')
+  const [contractorFilter, setContractorFilter] = useState('')
 
   /* ── Create form ──────────────────────────────────── */
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newDescription, setNewDescription] = useState('')
-  const [newCategory, setNewCategory] = useState<SnagCategory>('ARCHITECTURAL')
-  const [newSeverity, setNewSeverity] = useState<SnagSeverity>('MINOR')
+  const [newCategory, setNewCategory] = useState('ARCHITECTURAL')
+  const [newSeverity, setNewSeverity] = useState('MINOR')
   const [newBlock, setNewBlock] = useState('')
   const [newFloor, setNewFloor] = useState('')
   const [newRoom, setNewRoom] = useState('')
@@ -139,6 +154,9 @@ export default function ProjectSnagsPage() {
   const { mutate: createSnag, loading: creating, error: createError, clearError: clearCreateError } =
     useApiMutation<SnagListItem>(`/api/projects/${projectId}/snags`, 'POST')
 
+  /* ── Expanded detail ──────────────────────────────── */
+  const [expandedSnagId, setExpandedSnagId] = useState<string | null>(null)
+
   /* ── Quick transition ─────────────────────────────── */
   const [transitioning, setTransitioning] = useState<string | null>(null)
 
@@ -146,7 +164,8 @@ export default function ProjectSnagsPage() {
     setTransitioning(snagId)
     try {
       const body: Record<string, unknown> = { status: newStatus }
-      // ASSIGNED requires a responsibleOrg — prompt with a simple default
+
+      // ASSIGNED requires a responsibleOrg
       if (newStatus === 'ASSIGNED') {
         const org = prompt('Responsible organisation:')
         if (!org?.trim()) {
@@ -155,14 +174,23 @@ export default function ProjectSnagsPage() {
         }
         body.responsibleOrg = org.trim()
       }
-      const res = await fetch(`/api/snags/${snagId}`, {
+
+      // REOPENED: ask for reason
+      if (newStatus === 'REOPENED') {
+        const reason = prompt('Reason for reopening:')
+        if (reason?.trim()) {
+          body.reopenReason = reason.trim()
+        }
+      }
+
+      const res = await fetch(`/api/projects/${projectId}/snags/${snagId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
-        throw new Error(json.error?.message || `Failed (${res.status})`)
+        throw new Error(json.error || `Failed (${res.status})`)
       }
       toast(`Snag moved to ${STATUS_LABELS[newStatus] || newStatus}`, 'success')
       fetchSnags()
@@ -222,11 +250,17 @@ export default function ProjectSnagsPage() {
     setLoading(true)
     setError(null)
     try {
-      const url = `/api/projects/${projectId}/snags`
+      const params = new URLSearchParams()
+      if (statusFilter !== 'ALL') params.set('status', statusFilter)
+      if (categoryFilter) params.set('category', categoryFilter)
+      if (severityFilter) params.set('severity', severityFilter)
+      if (contractorFilter) params.set('contractor', contractorFilter)
+      const qs = params.toString()
+      const url = `/api/projects/${projectId}/snags${qs ? `?${qs}` : ''}`
       const res = await fetch(url)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error?.message || `Failed to load (${res.status})`)
+        throw new Error(body.error || `Failed to load (${res.status})`)
       }
       const json = await res.json()
       setSnags(json.data.snags)
@@ -235,7 +269,7 @@ export default function ProjectSnagsPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, statusFilter, categoryFilter, severityFilter, contractorFilter])
 
   useEffect(() => {
     fetchSnags()
@@ -243,16 +277,8 @@ export default function ProjectSnagsPage() {
 
   /* ── Filter ─────────────────────────────────────────── */
 
-  let filtered = snags
-  if (statusFilter !== 'ALL') {
-    filtered = filtered.filter((s) => s.status === statusFilter)
-  }
-  if (categoryFilter) {
-    filtered = filtered.filter((s) => s.category === categoryFilter)
-  }
-  if (severityFilter) {
-    filtered = filtered.filter((s) => s.severity === severityFilter)
-  }
+  // Client-side filters already handled by API params
+  const filtered = snags
 
   /* ── Stats ──────────────────────────────────────────── */
 
@@ -262,6 +288,19 @@ export default function ProjectSnagsPage() {
   }, {})
 
   const openCount = (statusCounts['OPEN'] || 0) + (statusCounts['ASSIGNED'] || 0) + (statusCounts['REOPENED'] || 0)
+  const inProgressCount = (statusCounts['RECTIFICATION_SUBMITTED'] || 0)
+  const verificationCount = statusCounts['VERIFICATION'] || 0
+  const closedCount = statusCounts['CLOSED'] || 0
+
+  const summaryCards = [
+    { label: 'Open', count: openCount, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: AlertCircle },
+    { label: 'In Progress', count: inProgressCount, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', icon: Loader2 },
+    { label: 'Ready for Verification', count: verificationCount, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200', icon: Eye },
+    { label: 'Closed', count: closedCount, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: CheckCircle2 },
+  ]
+
+  /* ── Unique contractors for filter ──────────────── */
+  const contractors = [...new Set(snags.map(s => s.responsibleOrg).filter(Boolean))] as string[]
 
   /* ── Loading ─────────────────────────────────────────── */
 
@@ -273,6 +312,11 @@ export default function ProjectSnagsPage() {
             <div className="h-6 w-32 bg-ink-100 animate-pulse rounded" />
             <div className="h-4 w-48 bg-ink-100 animate-pulse rounded" />
           </div>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-20 bg-ink-50 animate-pulse rounded-xl" />
+          ))}
         </div>
         <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -304,7 +348,7 @@ export default function ProjectSnagsPage() {
         <div>
           <h2 className="text-[18px] font-semibold text-ink-900">Snags</h2>
           <p className="text-[12px] text-ink-400 mt-0.5">
-            {snags.length} total · {openCount} open · {statusCounts['CLOSED'] || 0} closed
+            {snags.length} total &middot; {openCount} open &middot; {closedCount} closed
           </p>
         </div>
         {!showCreateForm && (
@@ -316,6 +360,22 @@ export default function ProjectSnagsPage() {
             New snag
           </button>
         )}
+      </div>
+
+      {/* ── Summary cards ──────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {summaryCards.map((card) => {
+          const Icon = card.icon
+          return (
+            <div key={card.label} className={cn('rounded-xl border p-4', card.bg, card.border)}>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-medium text-ink-500 uppercase tracking-wide">{card.label}</p>
+                <Icon className={cn('w-4 h-4', card.color)} />
+              </div>
+              <p className={cn('text-[24px] font-bold mt-1', card.color)}>{card.count}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* ── Create form ───────────────────────────── */}
@@ -352,13 +412,13 @@ export default function ProjectSnagsPage() {
           <div className="flex gap-4">
             <div className="flex-1">
               <label htmlFor="snag-cat" className="block text-[11px] font-medium text-ink-500 mb-1">Category</label>
-              <select id="snag-cat" value={newCategory} onChange={(e) => setNewCategory(e.target.value as SnagCategory)} className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white">
+              <select id="snag-cat" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white">
                 {ALL_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
               </select>
             </div>
             <div className="flex-1">
               <label htmlFor="snag-sev" className="block text-[11px] font-medium text-ink-500 mb-1">Severity</label>
-              <select id="snag-sev" value={newSeverity} onChange={(e) => setNewSeverity(e.target.value as SnagSeverity)} className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white">
+              <select id="snag-sev" value={newSeverity} onChange={(e) => setNewSeverity(e.target.value)} className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white">
                 {ALL_SEVERITIES.map(s => <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>)}
               </select>
             </div>
@@ -399,7 +459,7 @@ export default function ProjectSnagsPage() {
           {/* Responsible org + target date */}
           <div className="flex gap-4">
             <div className="flex-1">
-              <label htmlFor="snag-org" className="block text-[11px] font-medium text-ink-500 mb-1">Responsible org</label>
+              <label htmlFor="snag-org" className="block text-[11px] font-medium text-ink-500 mb-1">Responsible org / contractor</label>
               <input id="snag-org" type="text" value={newResponsibleOrg} onChange={(e) => setNewResponsibleOrg(e.target.value)} placeholder="e.g. Main Contractor" className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300" maxLength={200} />
             </div>
             <div className="flex-1">
@@ -466,7 +526,7 @@ export default function ProjectSnagsPage() {
           })}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -483,12 +543,23 @@ export default function ProjectSnagsPage() {
             <option value="">All severities</option>
             {ALL_SEVERITIES.map(s => <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>)}
           </select>
+          {contractors.length > 0 && (
+            <select
+              value={contractorFilter}
+              onChange={(e) => setContractorFilter(e.target.value)}
+              className="text-[11px] text-ink-600 bg-white border border-ink-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-300"
+            >
+              <option value="">All contractors</option>
+              {contractors.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
         </div>
       </div>
 
       {/* ── Snag list ──────────────────────────────────── */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-ink-100 p-10 text-center">
+          <ClipboardCheck className="w-10 h-10 text-ink-200 mx-auto mb-3" />
           <p className="text-[14px] font-medium text-ink-600">No snags match the filter</p>
           <p className="text-[12px] text-ink-400 mt-1">Try changing the filter or create a new snag.</p>
         </div>
@@ -498,19 +569,28 @@ export default function ProjectSnagsPage() {
             const meta = STATUS_META[snag.status] || STATUS_META.OPEN
             const sevMeta = SEVERITY_META[snag.severity] || SEVERITY_META.MINOR
             const validNext = VALID_TRANSITIONS[snag.status] || []
+            const isExpanded = expandedSnagId === snag.id
 
             return (
-              <div key={snag.id} className="px-5 py-4 hover:bg-surface-50 transition-colors">
+              <div
+                key={snag.id}
+                className="px-5 py-4 hover:bg-surface-50 transition-colors cursor-pointer"
+                onClick={() => setExpandedSnagId(isExpanded ? null : snag.id)}
+              >
                 <div className="flex items-start gap-4">
                   {/* Severity dot */}
                   <span className={cn('w-2 h-2 rounded-full mt-1.5 shrink-0', sevMeta.dotColor)} />
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] font-mono text-ink-400">{snag.snagNumber}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-ink-50 text-ink-500">
+                        {CATEGORY_LABELS[snag.category] || snag.category}
+                      </span>
+                    </div>
                     <p className="text-[13px] font-medium text-ink-900">{snag.description}</p>
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
-                      {/* Category */}
-                      <span className="text-[11px] text-ink-500">{CATEGORY_LABELS[snag.category] || snag.category}</span>
                       {/* Severity */}
                       <span className={cn('text-[11px] font-medium', sevMeta.color)}>
                         {SEVERITY_LABELS[snag.severity] || snag.severity}
@@ -522,9 +602,20 @@ export default function ProjectSnagsPage() {
                           {[snag.block, snag.floor, snag.room].filter(Boolean).join(' / ')}
                         </span>
                       )}
+                      {/* Element */}
+                      {snag.element && (
+                        <span className="text-[11px] text-ink-400">{snag.element}</span>
+                      )}
                       {/* Responsible org */}
                       {snag.responsibleOrg && (
-                        <span className="text-[11px] text-ink-400">{snag.responsibleOrg}</span>
+                        <span className="text-[11px] text-ink-500 font-medium">{snag.responsibleOrg}</span>
+                      )}
+                      {/* Assignee */}
+                      {snag.assignedTo && (
+                        <span className="flex items-center gap-1 text-[11px] text-ink-400">
+                          <UserPlus className="w-3 h-3" />
+                          {snag.assignedTo.fullName}
+                        </span>
                       )}
                       {/* Target date */}
                       {snag.targetDate && (
@@ -533,7 +624,52 @@ export default function ProjectSnagsPage() {
                           {new Date(snag.targetDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </span>
                       )}
+                      {/* Author + date */}
+                      <span className="text-[11px] text-ink-400">
+                        {snag.createdBy.fullName} &middot; {new Date(snag.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
                     </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-ink-100 space-y-2">
+                        {(snag.drawingRef || snag.specRef) && (
+                          <div className="flex gap-4">
+                            {snag.drawingRef && (
+                              <div>
+                                <span className="text-[10px] font-medium text-ink-400 uppercase">Drawing</span>
+                                <p className="text-[12px] text-ink-700 mt-0.5">{snag.drawingRef}</p>
+                              </div>
+                            )}
+                            {snag.specRef && (
+                              <div>
+                                <span className="text-[10px] font-medium text-ink-400 uppercase">Spec</span>
+                                <p className="text-[12px] text-ink-700 mt-0.5">{snag.specRef}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {snag.reopenReason && (
+                          <div>
+                            <span className="text-[10px] font-medium text-red-400 uppercase">Reopen reason</span>
+                            <p className="text-[12px] text-ink-700 mt-0.5">{snag.reopenReason}</p>
+                          </div>
+                        )}
+                        {snag.verifiedBy && (
+                          <div>
+                            <span className="text-[10px] font-medium text-ink-400 uppercase">Verified by</span>
+                            <p className="text-[12px] text-ink-700 mt-0.5">
+                              {snag.verifiedBy.fullName}
+                              {snag.closedAt && ` (closed ${new Date(snag.closedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})`}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex gap-4 text-[11px] text-ink-400">
+                          <span>Created: {new Date(snag.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>Updated: {new Date(snag.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Status badge */}
@@ -547,7 +683,7 @@ export default function ProjectSnagsPage() {
 
                   {/* Quick transition buttons */}
                   {validNext.length > 0 && (
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <ChevronRight className="w-3.5 h-3.5 text-ink-200" />
                       {validNext.map((next) => {
                         const nextMeta = STATUS_META[next] || STATUS_META.OPEN
@@ -564,7 +700,7 @@ export default function ProjectSnagsPage() {
                             )}
                           >
                             <span className={cn('w-1 h-1 rounded-full', nextMeta.dotColor)} />
-                            {STATUS_LABELS[next] || next}
+                            {TRANSITION_LABELS[next] || STATUS_LABELS[next] || next}
                           </button>
                         )
                       })}

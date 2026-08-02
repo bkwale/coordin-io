@@ -52,14 +52,16 @@ model Organisation {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  offices     Office[]
-  profiles    Profile[]
-  projects    Project[]
-  invitations Invitation[]
-  roles       CorporateRole[]
-  policies    PolicyDocument[]
-  assets      Asset[]
-  auditEvents AuditEvent[]
+  offices         Office[]
+  profiles        Profile[]
+  projects        Project[]
+  invitations     Invitation[]
+  roles           CorporateRole[]
+  policies        PolicyDocument[]
+  assets          Asset[]
+  auditEvents     AuditEvent[]
+  serviceRequests ServiceRequest[]
+  hrDocuments     HRDocument[]
 
   @@map("organisations")
 }
@@ -75,6 +77,7 @@ model Office {
   organisation Organisation @relation(fields: [organisationId], references: [id])
   profiles     Profile[]
   projects     Project[]
+  serviceRequests ServiceRequest[] @relation("ServiceRequestOffice")
 
   @@map("offices")
 }
@@ -173,6 +176,7 @@ model Profile {
   // Requests
   requestsSubmitted ServiceRequest[] @relation("RequestSubmitter")
   requestsApproved  ServiceRequest[] @relation("RequestApprover")
+  requestsAssigned  ServiceRequest[] @relation("RequestAssignee")
 
   // Leave
   leaveBalances  LeaveBalance[]
@@ -188,14 +192,24 @@ model Profile {
 
   // Site
   siteObservations SiteObservation[]
+  observationsAssigned SiteObservation[] @relation("ObservationAssignee")
   snags            Snag[]       @relation("SnagCreator")
   snagVerifications Snag[]      @relation("SnagVerifier")
+  snagsAssigned    Snag[]       @relation("SnagAssignee")
 
   // Notifications
   notifications  Notification[]
 
   // Audit
   auditEvents    AuditEvent[]
+
+  // S21 — Staffing
+  resourceAllocations ResourceAllocation[]
+  hrDocuments     HRDocument[]
+  probationReviews ProbationReview[]
+
+  // S27 — Timesheets
+  timesheetWeeks  TimesheetWeek[]
 
   @@map("profiles")
 }
@@ -425,6 +439,12 @@ model Project {
   valuations      Valuation[]
   invoices        Invoice[]
   commercialRisks CommercialRisk[]
+  drawings        Drawing[]
+  serviceRequests ServiceRequest[]
+  designReviews      DesignReview[]
+  complianceRegisters ComplianceRegister[]
+  planningApplications PlanningApplication[]
+  resourceAllocations ResourceAllocation[]
 
   @@map("projects")
 }
@@ -791,21 +811,62 @@ enum LeaveType {
 
 model ServiceRequest {
   id              String   @id @default(cuid())
+  requestNumber   String?  @unique @map("request_number") // Auto-generated SR-001
   profileId       String   @map("profile_id")
+  organisationId  String   @map("organisation_id")
+  projectId       String?  @map("project_id")
+  officeId        String?  @map("office_id")
+
   requestType     ServiceRequestType @map("request_type")
+  category        String?  // Sub-category within the type
   title           String
   description     String?
   status          RequestStatus @default(DRAFT)
-  approverId      String?  @map("approver_id")
+  priority        RequestPriority @default(MEDIUM)
+
+  // Dates
+  requiredByDate  DateTime? @map("required_by_date")
   approvedAt      DateTime? @map("approved_at")
   completedAt     DateTime? @map("completed_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  // Location & cost
+  location        String?
+  estimatedCost   Float?   @map("estimated_cost")
+  currency        String?  @default("GBP")
+  budgetCode      String?  @map("budget_code")
+
+  // Assignment
+  approverId      String?  @map("approver_id")
+  assignedTeamId  String?  @map("assigned_team_id")
+  assignedToId    String?  @map("assigned_to_id")
+
+  // SLA & fulfilment
+  serviceTarget   Int?     @map("service_target") // SLA in business days
+  fulfilmentNotes String?  @map("fulfilment_notes")
+  rejectionReason String?  @map("rejection_reason")
+
+  // Attachments & dynamic fields
+  attachmentUrls  String[] @map("attachment_urls")
+  dynamicFields   Json?    @map("dynamic_fields") // Type-specific extra fields
+
+  // Relations
   profile         Profile  @relation("RequestSubmitter", fields: [profileId], references: [id])
   approver        Profile? @relation("RequestApprover", fields: [approverId], references: [id])
+  assignedTo      Profile? @relation("RequestAssignee", fields: [assignedToId], references: [id])
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  project         Project? @relation(fields: [projectId], references: [id])
+  office          Office?  @relation("ServiceRequestOffice", fields: [officeId], references: [id])
 
   @@map("service_requests")
+}
+
+enum RequestPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 enum ServiceRequestType {
@@ -818,6 +879,13 @@ enum ServiceRequestType {
   TRAVEL
   FLIGHTS_ACCOMMODATION
   OFFICE_SUPPLIES
+  ACCOUNT_PERMISSION
+  PROCUREMENT_PURCHASE
+  OFFICE_FACILITIES
+  HR_REQUEST
+  PROJECT_INFORMATION
+  VEHICLE_LOGISTICS
+  CUSTOM
 }
 
 enum RequestStatus {
@@ -916,25 +984,76 @@ model SiteObservation {
   id              String   @id @default(cuid())
   projectId       String   @map("project_id")
   createdById     String   @map("created_by_id")
+
+  // Auto-generated reference number
+  observationNumber String @map("observation_number") // OBS-001, OBS-002, etc.
+
+  // Location
   block           String?
   floor           String?
   room            String?
+
+  // Details
   description     String
+  category        String?  // Structural, Services, Finishes, External, Safety, Quality
+  discipline      String?
+  severity        ObservationSeverity @default(LOW)
+  actionRequired  String?  @map("action_required")
+  drawingRef      String?  @map("drawing_ref")
+  specRef         String?  @map("spec_ref")
+
+  // Media + geo
   photoUrls       String[] @map("photo_urls")
   latitude        Float?
   longitude       Float?
+
+  // Assignment + workflow
+  assignedToId    String?  @map("assigned_to_id")
+  dueDate         DateTime? @map("due_date")
+  status          ObservationStatus @default(OPEN)
+  response        String?
+
+  // Close-out
+  closedAt        DateTime? @map("closed_at")
+
+  // Site context
+  weather         String?
+  labourOnSite    Int?     @map("labour_on_site")
+
   createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   project         Project  @relation(fields: [projectId], references: [id])
   createdBy       Profile  @relation(fields: [createdById], references: [id])
+  assignedTo      Profile? @relation("ObservationAssignee", fields: [assignedToId], references: [id])
 
   @@map("site_observations")
+}
+
+enum ObservationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ObservationStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REOPENED
 }
 
 model Snag {
   id              String   @id @default(cuid())
   projectId       String   @map("project_id")
   createdById     String   @map("created_by_id")
+
+  // Auto-generated reference number
+  snagNumber      String   @map("snag_number") // SNG-001, SNG-002, etc.
+
   block           String?
   floor           String?
   room            String?
@@ -947,6 +1066,7 @@ model Snag {
 
   // Responsibility
   responsibleOrg  String?  @map("responsible_org")
+  assignedToId    String?  @map("assigned_to_id")
   severity        SnagSeverity @default(MINOR)
   status          SnagStatus @default(OPEN)
   targetDate      DateTime? @map("target_date")
@@ -957,12 +1077,16 @@ model Snag {
   verifiedAt      DateTime? @map("verified_at")
   closedAt        DateTime? @map("closed_at")
 
+  // Reopen
+  reopenReason    String?  @map("reopen_reason")
+
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   project         Project  @relation(fields: [projectId], references: [id])
   createdBy       Profile  @relation("SnagCreator", fields: [createdById], references: [id])
   verifiedBy      Profile? @relation("SnagVerifier", fields: [verifiedById], references: [id])
+  assignedTo      Profile? @relation("SnagAssignee", fields: [assignedToId], references: [id])
 
   @@map("snags")
 }
@@ -1329,4 +1453,464 @@ enum RiskStatus {
   MITIGATED
   ESCALATED
   CLOSED
+}
+
+// ═══════════════════════════════════════════════════════════
+// S14 — Drawing Register
+// ═══════════════════════════════════════════════════════════
+
+model Drawing {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  drawingNumber   String   @map("drawing_number")
+  title           String
+  discipline      String?  // Architecture, Structure, MEP, etc.
+  originator      String?  // Company/person who created it
+  building        String?
+  block           String?
+  level           String?
+  zone            String?
+  drawingType     String?  @map("drawing_type") // Plan, Section, Elevation, Detail
+  role            String?  // A=Architecture, S=Structure, etc.
+  sequence        String?
+  externalLink    String?  @map("external_link") // Link to BIM/external file
+  isCurrent       Boolean  @default(true) @map("is_current")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  revisions       DrawingRevision[]
+
+  @@unique([projectId, drawingNumber])
+  @@map("drawings")
+}
+
+model DrawingRevision {
+  id              String   @id @default(cuid())
+  drawingId       String   @map("drawing_id")
+  revision        String   // P01, P02, C01, etc.
+  description     String?
+  status          DrawingStatus @default(WORK_IN_PROGRESS)
+  suitability     String?  // S0-S7 per BS EN ISO 19650
+  purposeOfIssue  String?  @map("purpose_of_issue") // For Information, For Comment, For Construction
+  author          String?
+  checker         String?
+  approver        String?
+  issueDate       DateTime? @map("issue_date")
+  fileUrl         String?  @map("file_url")
+  fileSize        Int?     @map("file_size")
+  superseded      Boolean  @default(false)
+  comments        String?
+  transmittalRef  String?  @map("transmittal_ref")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  drawing         Drawing  @relation(fields: [drawingId], references: [id])
+
+  @@map("drawing_revisions")
+}
+
+enum DrawingStatus {
+  WORK_IN_PROGRESS
+  SHARED
+  PUBLISHED
+  SUPERSEDED
+  ARCHIVED
+}
+
+// ═══════════════════════════════════════════════════════════
+// S15 — Design Review and Meeting Actions
+// ═══════════════════════════════════════════════════════════
+
+model DesignReview {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  reviewNumber    String   @map("review_number") // DR-001
+  title           String
+  reviewType      ReviewType @default(INTERNAL) @map("review_type")
+  discipline      String?  // Architecture, Interiors, MEP, Structure, etc.
+  stage           String?  // RIBA stage
+  status          ReviewStatus @default(DRAFT)
+  scheduledDate   DateTime? @map("scheduled_date")
+  completedDate   DateTime? @map("completed_date")
+  leadReviewerId  String?  @map("lead_reviewer_id")
+  summary         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  comments        ReviewComment[]
+
+  @@map("design_reviews")
+}
+
+model ReviewComment {
+  id              String   @id @default(cuid())
+  reviewId        String   @map("review_id")
+  commentNumber   Int      @map("comment_number")
+  discipline      String?
+  drawingRef      String?  @map("drawing_ref")
+  description     String
+  classification  CommentClassification @default(COMMENT)
+  severity        CommentSeverity @default(MINOR)
+  ownerId         String?  @map("owner_id")
+  dueDate         DateTime? @map("due_date")
+  response        String?
+  evidence        String?  // URL to evidence file
+  status          CommentStatus @default(OPEN)
+  reviewerDecision String? @map("reviewer_decision") // Accept, Reject, Reopen
+  closedAt        DateTime? @map("closed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  review          DesignReview @relation(fields: [reviewId], references: [id])
+
+  @@map("review_comments")
+}
+
+enum ReviewType {
+  INTERNAL
+  CLIENT
+  OPERATOR
+  ARCHITECTURE
+  INTERIORS
+  STRUCTURE
+  MEP
+  FIRE
+  LANDSCAPE
+  SUSTAINABILITY
+  ACCESSIBILITY
+  COMMERCIAL
+  MODEL_ROOM
+  SHOP_DRAWING
+}
+
+enum ReviewStatus {
+  DRAFT
+  SCHEDULED
+  IN_PROGRESS
+  UNDER_REVIEW
+  COMPLETED
+  CLOSED
+}
+
+enum CommentClassification {
+  COMMENT
+  ACTION
+  DECISION
+  INFORMATION
+}
+
+enum CommentSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+  OBSERVATION
+}
+
+enum CommentStatus {
+  OPEN
+  RESPONDED
+  ACCEPTED
+  REJECTED
+  REOPENED
+  CLOSED
+}
+
+// ═══════════════════════════════════════════════════════════
+// S16 — Compliance (BRPD, CDM, Building Regs, Fire, EDGE)
+// ═══════════════════════════════════════════════════════════
+
+model ComplianceRegister {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  registerType    ComplianceRegisterType @map("register_type")
+  name            String
+  description     String?
+  templateVersion String?  @map("template_version")
+  overallStatus   ComplianceItemStatus @default(NOT_STARTED) @map("overall_status")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  items           ComplianceItem[]
+
+  @@map("compliance_registers")
+}
+
+model ComplianceItem {
+  id              String   @id @default(cuid())
+  registerId      String   @map("register_id")
+  section         String?  // Group/category within the register
+  requirement     String
+  source          String?  // Regulation/standard reference
+  version         String?  // Standard version
+  ownerId         String?  @map("owner_id")
+  dueDate         DateTime? @map("due_date")
+  status          ComplianceItemStatus @default(NOT_STARTED)
+  evidence        String?  // URL to evidence file
+  evidenceDate    DateTime? @map("evidence_date")
+  reviewerId      String?  @map("reviewer_id")
+  reviewDate      DateTime? @map("review_date")
+  comments        String?
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  register        ComplianceRegister @relation(fields: [registerId], references: [id])
+
+  @@map("compliance_items")
+}
+
+enum ComplianceRegisterType {
+  BRPD           // Building Regulations Principal Designer
+  CDM            // Construction Design Management
+  BUILDING_REGS  // Building regulations/technical requirements
+  FIRE_SAFETY    // Fire and life safety
+  EDGE           // EDGE sustainability
+  BREEAM         // BREEAM sustainability
+  LEED           // LEED sustainability
+  CUSTOM
+}
+
+enum ComplianceItemStatus {
+  NOT_APPLICABLE
+  NOT_STARTED
+  IN_PROGRESS
+  EVIDENCE_SUBMITTED
+  UNDER_REVIEW
+  COMPLIANT
+  NON_COMPLIANT
+  ACTION_REQUIRED
+  APPROVED_WITH_CONDITION
+  CLOSED
+}
+
+// ═══════════════════════════════════════════════════════════
+// S17 — Planning Applications
+// ═══════════════════════════════════════════════════════════
+
+model PlanningApplication {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  reference       String?  // Planning authority reference number
+  authority       String   // Local planning authority name
+  applicationType String   @map("application_type") // Full, Outline, Reserved Matters, etc.
+  description     String
+  status          PlanningStatus @default(FEASIBILITY)
+  consultant      String?  // Planning consultant name
+  caseOfficer     String?  @map("case_officer")
+  portalLink      String?  @map("portal_link")
+  fee             Float?
+  currency        String   @default("GBP")
+  submissionDate  DateTime? @map("submission_date")
+  validationDate  DateTime? @map("validation_date")
+  targetDecision  DateTime? @map("target_decision")
+  decisionDate    DateTime? @map("decision_date")
+  decision        String?  // Approved, Refused, Withdrawn
+  appealDate      DateTime? @map("appeal_date")
+  expiryDate      DateTime? @map("expiry_date")
+  comments        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  conditions      PlanningCondition[]
+
+  @@map("planning_applications")
+}
+
+model PlanningCondition {
+  id              String   @id @default(cuid())
+  applicationId   String   @map("application_id")
+  conditionNumber Int      @map("condition_number")
+  conditionType   String?  @map("condition_type") // Pre-commencement, Pre-occupation, Ongoing
+  triggerStage    String?  @map("trigger_stage")
+  description     String
+  submissionRequired String? @map("submission_required")
+  ownerId         String?  @map("owner_id")
+  dueDate         DateTime? @map("due_date")
+  submissionRef   String?  @map("submission_ref")
+  submissionDate  DateTime? @map("submission_date")
+  status          PlanningConditionStatus @default(OUTSTANDING)
+  decision        String?
+  decisionDate    DateTime? @map("decision_date")
+  evidence        String?
+  comments        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  application     PlanningApplication @relation(fields: [applicationId], references: [id])
+
+  @@map("planning_conditions")
+}
+
+enum PlanningStatus {
+  FEASIBILITY
+  PRE_APPLICATION
+  PREPARING
+  SUBMITTED
+  INVALID_INFORMATION_REQUIRED
+  VALIDATED
+  CONSULTATION
+  UNDER_ASSESSMENT
+  COMMITTEE
+  APPROVED
+  REFUSED
+  WITHDRAWN
+  APPEAL
+  CONDITIONS_DISCHARGE
+  CLOSED
+}
+
+enum PlanningConditionStatus {
+  OUTSTANDING
+  SUBMISSION_PREPARED
+  SUBMITTED
+  UNDER_REVIEW
+  DISCHARGED
+  PARTIALLY_DISCHARGED
+  NOT_DISCHARGED
+  APPEALED
+}
+
+// ═══════════════════════════════════════════════════════════
+// S21 — Employee Management (extended)
+// ═══════════════════════════════════════════════════════════
+
+model ResourceAllocation {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  projectId       String   @map("project_id")
+  weekStarting    DateTime @map("week_starting")
+  hoursAllocated  Float    @map("hours_allocated")
+  role            String?  // Project role for this allocation
+  stage           String?  // RIBA stage
+  isBillable      Boolean  @default(true) @map("is_billable")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@unique([profileId, projectId, weekStarting])
+  @@map("resource_allocations")
+}
+
+model HRDocument {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  organisationId  String   @map("organisation_id")
+  documentType    HRDocumentType @map("document_type")
+  title           String
+  description     String?
+  fileUrl         String?  @map("file_url")
+  expiryDate      DateTime? @map("expiry_date")
+  acknowledged    Boolean  @default(false)
+  acknowledgedAt  DateTime? @map("acknowledged_at")
+  uploadedById    String?  @map("uploaded_by_id")
+  isConfidential  Boolean  @default(false) @map("is_confidential")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+
+  @@map("hr_documents")
+}
+
+enum HRDocumentType {
+  CONTRACT
+  OFFER_LETTER
+  RIGHT_TO_WORK
+  VISA
+  DBS_CHECK
+  PROFESSIONAL_MEMBERSHIP
+  QUALIFICATION
+  TRAINING_CERTIFICATE
+  PERFORMANCE_REVIEW
+  DISCIPLINARY
+  GRIEVANCE
+  POLICY_ACKNOWLEDGEMENT
+  OTHER
+}
+
+model ProbationReview {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  reviewType      String   @map("review_type") // 30-day, 60-day, 90-day, final
+  scheduledDate   DateTime @map("scheduled_date")
+  completedDate   DateTime? @map("completed_date")
+  reviewerId      String?  @map("reviewer_id")
+  objectives      String?
+  feedback        String?
+  outcome         String?  // Pass, Extend, Fail
+  nextReviewDate  DateTime? @map("next_review_date")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  @@map("probation_reviews")
+}
+
+// ═══════════════════════════════════════════════════════════
+// S27 — Timesheets
+// ═══════════════════════════════════════════════════════════
+
+model TimesheetWeek {
+  id              String   @id @default(cuid())
+  profileId       String   @map("profile_id")
+  organisationId  String   @map("organisation_id")
+  weekStarting    DateTime @map("week_starting") // Monday of the week
+  status          TimesheetStatus @default(DRAFT)
+  totalHours      Float    @default(0) @map("total_hours")
+  billableHours   Float    @default(0) @map("billable_hours")
+  submittedAt     DateTime? @map("submitted_at")
+  approvedById    String?  @map("approved_by_id")
+  approvedAt      DateTime? @map("approved_at")
+  rejectionReason String?  @map("rejection_reason")
+  comments        String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile         Profile  @relation(fields: [profileId], references: [id])
+
+  entries         TimesheetEntry[]
+
+  @@unique([profileId, weekStarting])
+  @@map("timesheet_weeks")
+}
+
+model TimesheetEntry {
+  id              String   @id @default(cuid())
+  weekId          String   @map("week_id")
+  date            DateTime
+  projectId       String?  @map("project_id")
+  workStage       String?  @map("work_stage") // RIBA stage
+  taskId          String?  @map("task_id")
+  activity        String?  // Activity description
+  description     String?
+  hours           Float
+  isBillable      Boolean  @default(true) @map("is_billable")
+  overheadCode    String?  @map("overhead_code") // For non-project time
+  locationType    String?  @map("location_type") // office, site, remote, travel
+  isOvertime      Boolean  @default(false) @map("is_overtime")
+  isTOIL          Boolean  @default(false) @map("is_toil")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  week            TimesheetWeek @relation(fields: [weekId], references: [id])
+
+  @@map("timesheet_entries")
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  CHANGES_REQUIRED
+  APPROVED
+  REJECTED
+  LOCKED
+  REOPENED
 }

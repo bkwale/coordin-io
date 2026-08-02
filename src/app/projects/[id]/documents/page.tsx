@@ -9,10 +9,14 @@ import {
   Send, Inbox, Plus,
   ChevronDown, ChevronRight,
   Clock, CheckCircle2, Eye,
-  X,
+  X, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonRow } from '@/components/Skeleton'
+import FileUpload, { type UploadResult } from '@/components/FileUpload'
+
+// Re-export UploadResult so other files can import from here if needed
+export type { UploadResult }
 
 /* ── Types mirroring GET /api/projects/[id]/documents ──── */
 
@@ -158,6 +162,17 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<FilterType>('ALL')
 
+  /* ── Create Document state ───────────────────────────── */
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [cdTitle, setCdTitle] = useState('')
+  const [cdDocumentType, setCdDocumentType] = useState<string>('DRAWING')
+  const [cdDiscipline, setCdDiscipline] = useState('')
+  const [cdDocumentCode, setCdDocumentCode] = useState('')
+  const [cdSecurityLevel, setCdSecurityLevel] = useState<string>('INTERNAL')
+  const [cdIssuePurpose, setCdIssuePurpose] = useState('')
+  const [cdFileResults, setCdFileResults] = useState<UploadResult[]>([])
+
   /* ── Info Out (Transmittals) state ────────────────────── */
   const [transmittals, setTransmittals] = useState<Transmittal[]>([])
   const [showTransmittalForm, setShowTransmittalForm] = useState(false)
@@ -274,6 +289,71 @@ export default function DocumentsPage() {
     )
   }
 
+  /* ── Create document handler ──────────────────────────── */
+
+  async function handleCreateDocument() {
+    if (!cdTitle.trim()) return
+    setCreateLoading(true)
+    try {
+      // Step 1: Create the document entry
+      const docRes = await fetch(`/api/projects/${projectId}/documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: cdTitle.trim(),
+          documentType: cdDocumentType,
+          discipline: cdDiscipline.trim() || undefined,
+          documentCode: cdDocumentCode.trim() || undefined,
+          securityLevel: cdSecurityLevel,
+        }),
+      })
+
+      if (!docRes.ok) {
+        const body = await docRes.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to create document')
+      }
+
+      const docJson = await docRes.json()
+      const newDocId = docJson.data.document.id
+
+      // Step 2: Create a revision for each uploaded file
+      for (const fileResult of cdFileResults) {
+        const revRes = await fetch(`/api/documents/${newDocId}/revisions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileUrl: fileResult.url,
+            issuePurpose: cdIssuePurpose.trim() || undefined,
+          }),
+        })
+
+        if (!revRes.ok) {
+          const body = await revRes.json().catch(() => ({}))
+          console.error('Revision creation failed:', body)
+        }
+      }
+
+      resetCreateForm()
+      fetchDocuments()
+    } catch (err) {
+      console.error('Create document error:', err)
+      // Keep form open so user can retry
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  function resetCreateForm() {
+    setCdTitle('')
+    setCdDocumentType('DRAWING')
+    setCdDiscipline('')
+    setCdDocumentCode('')
+    setCdSecurityLevel('INTERNAL')
+    setCdIssuePurpose('')
+    setCdFileResults([])
+    setShowCreateForm(false)
+  }
+
   /* ── Register filter ──────────────────────────────────── */
 
   const filtered = typeFilter === 'ALL'
@@ -342,12 +422,154 @@ export default function DocumentsPage() {
       {activeTab === 'register' && (
         <>
           {/* Header */}
-          <div>
-            <h2 className="text-[18px] font-semibold text-ink-900">Drawing Register</h2>
-            <p className="text-[12px] text-ink-400 mt-0.5">
-              {documents.length} document{documents.length !== 1 ? 's' : ''}
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[18px] font-semibold text-ink-900">Drawing Register</h2>
+              <p className="text-[12px] text-ink-400 mt-0.5">
+                {documents.length} document{documents.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
+            >
+              {showCreateForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showCreateForm ? 'Cancel' : 'Add Document'}
+            </button>
           </div>
+
+          {/* Create Document form */}
+          {showCreateForm && (
+            <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+              <h3 className="text-[14px] font-semibold text-ink-900">New Document</h3>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={cdTitle}
+                    onChange={(e) => setCdTitle(e.target.value)}
+                    placeholder="e.g. Ground Floor Plan"
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Document type */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                    Document Type
+                  </label>
+                  <select
+                    value={cdDocumentType}
+                    onChange={(e) => setCdDocumentType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+                  >
+                    {Object.entries(DOC_TYPE_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                {/* Discipline */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                    Discipline <span className="text-ink-300 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={cdDiscipline}
+                    onChange={(e) => setCdDiscipline(e.target.value)}
+                    placeholder="e.g. Structural, Mechanical"
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Document code */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                    Document Code <span className="text-ink-300 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={cdDocumentCode}
+                    onChange={(e) => setCdDocumentCode(e.target.value)}
+                    placeholder="e.g. STR-DWG-001"
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                {/* Security level */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                    Security Level
+                  </label>
+                  <select
+                    value={cdSecurityLevel}
+                    onChange={(e) => setCdSecurityLevel(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+                  >
+                    <option value="INTERNAL">Internal</option>
+                    <option value="CONSULTANT">Consultant</option>
+                    <option value="CONTRACTOR">Contractor</option>
+                    <option value="CLIENT_OPERATOR">Client / Operator</option>
+                  </select>
+                </div>
+
+                {/* Issue purpose */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wide mb-1.5">
+                    Issue Purpose <span className="text-ink-300 font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={cdIssuePurpose}
+                    onChange={(e) => setCdIssuePurpose(e.target.value)}
+                    placeholder="e.g. For Information, For Construction"
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* File upload */}
+              <FileUpload
+                projectId={projectId}
+                onFilesChange={(files) => setCdFileResults(files)}
+                label="Attach Files (optional)"
+                multiple
+              />
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleCreateDocument}
+                  disabled={!cdTitle.trim() || createLoading}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors',
+                    cdTitle.trim() && !createLoading
+                      ? 'bg-ink-900 text-white hover:bg-ink-800'
+                      : 'bg-ink-100 text-ink-400 cursor-not-allowed',
+                  )}
+                >
+                  {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {createLoading ? 'Creating...' : 'Create Document'}
+                </button>
+                <button
+                  onClick={resetCreateForm}
+                  className="px-4 py-2 rounded-lg text-[13px] font-medium text-ink-500 hover:text-ink-700 hover:bg-ink-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Type filters */}
           <div className="flex items-center gap-3 flex-wrap">

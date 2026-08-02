@@ -1,49 +1,52 @@
 import { NextRequest } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import {
-  requireString, optionalString, optionalEnum, optionalDate, parseBody,
+  requireString, optionalString, optionalEnum, optionalDate, optionalId,
+  parseBody,
 } from '@/lib/validation'
-import type { SnagCategory, SnagSeverity, SnagStatus } from '@/generated/prisma/client'
 
-const SNAG_CATEGORIES: readonly SnagCategory[] = [
+const SNAG_CATEGORIES = [
   'ARCHITECTURAL', 'MEP', 'STRUCTURAL', 'FIRE',
   'HEALTH_SAFETY', 'FINISH', 'FF_AND_E', 'EXTERNAL_WORKS',
 ] as const
 
-const SNAG_SEVERITIES: readonly SnagSeverity[] = [
-  'MINOR', 'MODERATE', 'MAJOR', 'SAFETY_CRITICAL',
-] as const
+const SNAG_SEVERITIES = ['MINOR', 'MODERATE', 'MAJOR', 'SAFETY_CRITICAL'] as const
 
-const SNAG_STATUSES: readonly SnagStatus[] = [
+const SNAG_STATUSES = [
   'OPEN', 'ASSIGNED', 'RECTIFICATION_SUBMITTED', 'VERIFICATION', 'CLOSED', 'REOPENED',
 ] as const
 
 /**
  * GET /api/projects/[id]/snags — List snags for a project.
  *
- * Optional query params: ?status=, ?category=, ?severity=, ?block=
+ * Optional query params: ?status=, ?severity=, ?category=, ?contractor=, ?block=
  */
 export const GET = withProjectAccess(async (request: NextRequest, { projectId }) => {
   const url = new URL(request.url)
   const status = url.searchParams.get('status')
   const category = url.searchParams.get('category')
   const severity = url.searchParams.get('severity')
+  const contractor = url.searchParams.get('contractor')
   const block = url.searchParams.get('block')
+  const assignee = url.searchParams.get('assignee')
 
   const where: Record<string, unknown> = { projectId }
-  if (status && SNAG_STATUSES.includes(status as SnagStatus)) where.status = status
-  if (category && SNAG_CATEGORIES.includes(category as SnagCategory)) where.category = category
-  if (severity && SNAG_SEVERITIES.includes(severity as SnagSeverity)) where.severity = severity
+  if (status && SNAG_STATUSES.includes(status as any)) where.status = status
+  if (category && SNAG_CATEGORIES.includes(category as any)) where.category = category
+  if (severity && SNAG_SEVERITIES.includes(severity as any)) where.severity = severity
+  if (contractor) where.responsibleOrg = contractor
   if (block) where.block = block
+  if (assignee) where.assignedToId = assignee
 
-  const snags = await prisma.snag.findMany({
+  const snags = await modulesPrisma.snag.findMany({
     where,
     include: {
       createdBy: { select: { id: true, fullName: true } },
       verifiedBy: { select: { id: true, fullName: true } },
+      assignedTo: { select: { id: true, fullName: true } },
     },
     orderBy: [
       { severity: 'desc' },
@@ -57,13 +60,14 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
 /**
  * POST /api/projects/[id]/snags — Create a new snag.
  * New snags always start in OPEN status.
+ * Auto-generates snagNumber as SNG-001, SNG-002, etc.
  */
 export const POST = withProjectAccess(async (request: NextRequest, { profile, projectId }) => {
   const body = await parseBody(request)
 
   const description = requireString(body.description, 'Description', 5000)
-  const category = optionalEnum(body.category, 'Category', SNAG_CATEGORIES) as SnagCategory | undefined
-  const severity = optionalEnum(body.severity, 'Severity', SNAG_SEVERITIES) as SnagSeverity | undefined
+  const category = optionalEnum(body.category, 'Category', SNAG_CATEGORIES) || 'ARCHITECTURAL'
+  const severity = optionalEnum(body.severity, 'Severity', SNAG_SEVERITIES) || 'MINOR'
   const block = optionalString(body.block, 'Block', 100)
   const floor = optionalString(body.floor, 'Floor', 100)
   const room = optionalString(body.room, 'Room', 100)
@@ -71,6 +75,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
   const drawingRef = optionalString(body.drawingRef, 'Drawing reference', 200)
   const specRef = optionalString(body.specRef, 'Spec reference', 200)
   const responsibleOrg = optionalString(body.responsibleOrg, 'Responsible organisation', 200)
+  const assignedToId = optionalId(body.assignedToId, 'Assigned to')
   const targetDate = optionalDate(body.targetDate, 'Target date')
 
   // photoUrls: optional string array
@@ -83,13 +88,18 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     }
   }
 
-  const snag = await prisma.snag.create({
+  // Auto-generate snag number: SNG-001, SNG-002, etc.
+  const count = await modulesPrisma.snag.count({ where: { projectId } })
+  const snagNumber = `SNG-${String(count + 1).padStart(3, '0')}`
+
+  const snag = await modulesPrisma.snag.create({
     data: {
       projectId,
       createdById: profile.id,
+      snagNumber,
       description,
-      category: category || 'ARCHITECTURAL',
-      severity: severity || 'MINOR',
+      category,
+      severity,
       status: 'OPEN',
       block: block || null,
       floor: floor || null,
@@ -98,12 +108,14 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
       drawingRef: drawingRef || null,
       specRef: specRef || null,
       responsibleOrg: responsibleOrg || null,
+      assignedToId: assignedToId || null,
       targetDate,
       photoUrls,
     },
     include: {
       createdBy: { select: { id: true, fullName: true } },
       verifiedBy: { select: { id: true, fullName: true } },
+      assignedTo: { select: { id: true, fullName: true } },
     },
   })
 
@@ -113,7 +125,13 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     action: AuditActions.SNAG_CREATED,
     entityType: 'snag',
     entityId: snag.id,
-    metadata: { description: snag.description, category: snag.category, severity: snag.severity, projectId },
+    metadata: {
+      snagNumber,
+      description: snag.description,
+      category: snag.category,
+      severity: snag.severity,
+      projectId,
+    },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
 

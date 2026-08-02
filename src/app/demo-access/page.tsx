@@ -63,6 +63,7 @@ export default function DemoAccessPage() {
         </a>
 
         {/* Inline keyframes for the progress bar */}
+        {/* @ts-expect-error styled-jsx */}
         <style jsx>{`
           @keyframes fillBar {
             from { width: 0%; }

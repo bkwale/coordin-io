@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
-import { optionalString, optionalEnum, optionalDate, parseBody } from '@/lib/validation'
+import { optionalString, optionalEnum, optionalDate, optionalId, parseBody } from '@/lib/validation'
 import { validateSnagTransition } from '@/lib/snag-transitions'
 import { canViewProject } from '@/lib/permissions'
 import type { OrgPermission, SnagStatus, SnagCategory, SnagSeverity } from '@/generated/prisma/client'
@@ -29,11 +29,12 @@ async function loadSnagWithAccess(request: NextRequest, profileId: string, orgId
   const id = request.url.match(/\/snags\/([^/?]+)/)?.[1]
   if (!id) throw new NotFoundError('Snag not found')
 
-  const snag = await prisma.snag.findUnique({
+  const snag = await modulesPrisma.snag.findUnique({
     where: { id },
     include: {
       createdBy: { select: { id: true, fullName: true } },
       verifiedBy: { select: { id: true, fullName: true } },
+      assignedTo: { select: { id: true, fullName: true } },
       project: { select: { id: true, organisationId: true, name: true } },
     },
   })
@@ -68,8 +69,9 @@ export const GET = withAuth(async (request, { profile }) => {
  * Status transitions:
  * - ASSIGNED requires setting responsibleOrg
  * - RECTIFICATION_SUBMITTED can include rectificationPhotoUrls
- * - VERIFICATION → CLOSED: sets verifiedById, verifiedAt, closedAt
- * - VERIFICATION → REOPENED: clears verifiedBy, verifiedAt, closedAt
+ * - VERIFICATION: sets verifiedById, verifiedAt
+ * - CLOSED: sets verifiedById, verifiedAt, closedAt
+ * - REOPENED: clears verification data, accepts reopenReason
  * - Field updates (description, severity, targetDate etc.) only allowed when OPEN or ASSIGNED
  */
 export const PATCH = withAuth(async (request, { profile }) => {
@@ -94,10 +96,13 @@ export const PATCH = withAuth(async (request, { profile }) => {
       const responsibleOrg = body.responsibleOrg
         ? optionalString(body.responsibleOrg as string, 'Responsible organisation', 200)
         : currentSnag.responsibleOrg
-      if (!responsibleOrg) {
-        throw new ValidationError('Responsible organisation is required when assigning a snag')
+      if (!responsibleOrg && !body.assignedToId && !currentSnag.assignedToId) {
+        throw new ValidationError('Responsible organisation or assignee is required when assigning a snag')
       }
-      data.responsibleOrg = responsibleOrg
+      if (responsibleOrg) data.responsibleOrg = responsibleOrg
+      if (body.assignedToId) {
+        data.assignedToId = optionalId(body.assignedToId, 'Assigned to')
+      }
     }
 
     // RECTIFICATION_SUBMITTED: allow rectification photos
@@ -129,11 +134,13 @@ export const PATCH = withAuth(async (request, { profile }) => {
       data.verifiedById = null
       data.verifiedAt = null
       data.closedAt = null
+      if (body.reopenReason) {
+        data.reopenReason = optionalString(body.reopenReason, 'Reopen reason', 2000)
+      }
     }
   }
 
   // Field updates only allowed when OPEN or ASSIGNED
-  const currentStatus = (newStatus || currentSnag.status) as SnagStatus
   const canUpdateFields = currentSnag.status === 'OPEN' || currentSnag.status === 'ASSIGNED'
 
   if ('description' in body) {
@@ -181,13 +188,18 @@ export const PATCH = withAuth(async (request, { profile }) => {
     if (!canUpdateFields) throw new ValidationError('Responsible organisation can only be updated when snag is OPEN or ASSIGNED')
     data.responsibleOrg = optionalString(body.responsibleOrg, 'Responsible organisation', 200)
   }
+  // assignedToId updates outside of status transition
+  if ('assignedToId' in body && !('status' in body)) {
+    data.assignedToId = optionalId(body.assignedToId, 'Assigned to') || null
+  }
 
-  const snag = await prisma.snag.update({
+  const snag = await modulesPrisma.snag.update({
     where: { id: snagId },
     data,
     include: {
       createdBy: { select: { id: true, fullName: true } },
       verifiedBy: { select: { id: true, fullName: true } },
+      assignedTo: { select: { id: true, fullName: true } },
       project: { select: { id: true, organisationId: true, name: true } },
     },
   })
@@ -208,7 +220,12 @@ export const PATCH = withAuth(async (request, { profile }) => {
       action: auditActionMap[newStatus] || `site.snag_${newStatus.toLowerCase()}`,
       entityType: 'snag',
       entityId: snag.id,
-      metadata: { from: currentSnag.status, to: newStatus },
+      metadata: {
+        snagNumber: snag.snagNumber,
+        from: currentSnag.status,
+        to: newStatus,
+        ...(newStatus === 'REOPENED' && body.reopenReason ? { reopenReason: body.reopenReason } : {}),
+      },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
   }
