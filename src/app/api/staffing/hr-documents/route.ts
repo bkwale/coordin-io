@@ -3,7 +3,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
-import { requireString, requireEnum, optionalString, parseBody } from '@/lib/validation'
+import { requireString, requireEnum, optionalString, optionalDate, parseBody } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
 
 const HR_DOCUMENT_TYPES = [
@@ -99,14 +99,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Employee not found in your organisation')
   }
 
-  // Parse optional expiry date
-  let expiryDate: Date | null = null
-  if (body.expiryDate) {
-    expiryDate = new Date(String(body.expiryDate))
-    if (isNaN(expiryDate.getTime())) {
-      expiryDate = null
-    }
-  }
+  const expiryDate = optionalDate(body.expiryDate, 'expiryDate')
 
   const document = await modulesPrisma.hRDocument.create({
     data: {

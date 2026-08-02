@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
-import { parseBody, optionalString, optionalId } from '@/lib/validation'
+import { parseBody, optionalString, optionalId, requireNumber } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { NextResponse } from 'next/server'
 
@@ -44,14 +44,14 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // Only update fields that are present in the body
   if (body.hours !== undefined) {
-    if (typeof body.hours !== 'number' || isNaN(body.hours) || body.hours <= 0 || body.hours > 24) {
-      throw new ValidationError('Hours must be a number between 0 and 24')
-    }
-    updateData.hours = body.hours
+    updateData.hours = requireNumber(body.hours, 'hours', { min: 0.01, max: 24 })
   }
 
   if (body.date !== undefined) {
-    const newDate = new Date(String(body.date) + 'T00:00:00.000Z')
+    if (typeof body.date !== 'string') {
+      throw new ValidationError('Date must be a string (YYYY-MM-DD)')
+    }
+    const newDate = new Date(body.date + 'T00:00:00.000Z')
     if (isNaN(newDate.getTime())) {
       throw new ValidationError('Date is not valid')
     }

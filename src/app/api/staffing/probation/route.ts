@@ -3,8 +3,8 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
-import { requireString, optionalString, parseBody } from '@/lib/validation'
-import { PermissionError, ValidationError } from '@/lib/errors'
+import { requireString, optionalString, requireDate, optionalDate, parseBody } from '@/lib/validation'
+import { PermissionError } from '@/lib/errors'
 
 /**
  * GET /api/staffing/probation — List probation reviews.
@@ -63,13 +63,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const targetProfileId = requireString(body.profileId, 'profileId')
   const reviewType = requireString(body.reviewType, 'reviewType', 50)
 
-  if (!body.scheduledDate) {
-    throw new ValidationError('scheduledDate is required')
-  }
-  const scheduledDate = new Date(String(body.scheduledDate))
-  if (isNaN(scheduledDate.getTime())) {
-    throw new ValidationError('Invalid scheduledDate')
-  }
+  const scheduledDate = requireDate(body.scheduledDate, 'scheduledDate')
 
   const objectives = optionalString(body.objectives, 'objectives', 5000)
   const feedback = optionalString(body.feedback, 'feedback', 5000)
@@ -84,18 +78,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Employee not found in your organisation')
   }
 
-  // Parse optional dates
-  let completedDate: Date | null = null
-  if (body.completedDate) {
-    completedDate = new Date(String(body.completedDate))
-    if (isNaN(completedDate.getTime())) completedDate = null
-  }
-
-  let nextReviewDate: Date | null = null
-  if (body.nextReviewDate) {
-    nextReviewDate = new Date(String(body.nextReviewDate))
-    if (isNaN(nextReviewDate.getTime())) nextReviewDate = null
-  }
+  const completedDate = optionalDate(body.completedDate, 'completedDate')
+  const nextReviewDate = optionalDate(body.nextReviewDate, 'nextReviewDate')
 
   const review = await modulesPrisma.probationReview.create({
     data: {
