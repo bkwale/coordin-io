@@ -358,7 +358,7 @@ export default function DocumentDetailPage() {
                 type="button"
                 onClick={() => {
                   setShowRevisionForm(false)
-                  setRevFileResult(null)
+                  setRevFileResults([])
                   setRevIssuePurpose('')
                   setRevIsConstruction(false)
                 }}
