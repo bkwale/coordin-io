@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
@@ -65,6 +66,17 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const projectId = params.id as string
   const basePath = `/projects/${projectId}`
 
+  const [projectName, setProjectName] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.data?.name) setProjectName(data.data.name)
+      })
+      .catch(() => {})
+  }, [projectId])
+
   // Determine which tab is active
   const currentSubRoute = pathname.replace(basePath, '') || ''
 
@@ -75,13 +87,13 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         <div className="flex items-center gap-2 text-[11px] text-ink-400 mb-2">
           <Link href="/projects" className="hover:text-accent-500 transition-colors">Projects</Link>
           <span>/</span>
-          <span className="text-ink-600">Project</span>
+          <span className="text-ink-600 truncate max-w-[200px]">{projectName || 'Loading…'}</span>
         </div>
       </div>
 
       {/* Tab navigation */}
       <div className="mb-6 border-b border-surface-200">
-        <nav className="flex gap-0 overflow-x-auto -mb-px">
+        <nav className="flex gap-0 overflow-x-auto scrollbar-hide -mb-px" style={{ WebkitOverflowScrolling: 'touch' }}>
           {PROJECT_TABS.map(tab => {
             const isActive = tab.subRoutes.some(sr => currentSubRoute === sr)
             const tabHref = `${basePath}${tab.href}`
@@ -91,7 +103,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
                 key={tab.label}
                 href={tabHref}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-3 text-[12px] font-medium border-b-2 whitespace-nowrap transition-colors min-h-[44px]',
+                  'flex items-center gap-1.5 px-3 py-3 text-[11px] sm:text-[12px] sm:px-4 sm:gap-2 font-medium border-b-2 whitespace-nowrap transition-colors min-h-[44px] shrink-0',
                   isActive
                     ? 'border-accent-500 text-accent-600'
                     : 'border-transparent text-ink-400 hover:text-ink-600 hover:border-surface-300'

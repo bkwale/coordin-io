@@ -146,12 +146,31 @@ export default function ProjectDashboard() {
 
   /* ── Computed ─────────────────────────────────────────── */
 
-  const health = HEALTH_META[project.healthStatus] ?? HEALTH_META.GREEN
   const totalTasks = Object.values(project.taskSummary).reduce((a, b) => a + b, 0)
   const completedTasks = project.taskSummary['COMPLETED'] || 0
   const inProgressTasks = project.taskSummary['IN_PROGRESS'] || 0
   const blockedTasks = project.taskSummary['BLOCKED'] || 0
   const reviewTasks = project.taskSummary['READY_FOR_REVIEW'] || 0
+  const changesRequiredTasks = project.taskSummary['CHANGES_REQUIRED'] || 0
+
+  // Weighted progress: NOT_STARTED=0, IN_PROGRESS=50, CHANGES_REQUIRED=25,
+  // READY_FOR_REVIEW=75, COMPLETED=100, BLOCKED=0
+  const weightedProgress = totalTasks > 0
+    ? Math.round(
+        ((completedTasks * 100) + (inProgressTasks * 50) + (reviewTasks * 75) + (changesRequiredTasks * 25))
+        / totalTasks
+      )
+    : 0
+
+  // Compute health from task data: overdue or blocked tasks degrade health
+  const computedHealth = (() => {
+    if (totalTasks === 0) return project.healthStatus || 'GREEN'
+    const overdueRatio = blockedTasks / totalTasks
+    if (overdueRatio > 0.2 || blockedTasks >= 3) return 'RED'
+    if (blockedTasks > 0 || weightedProgress < 25) return 'AMBER'
+    return project.healthStatus || 'GREEN'
+  })()
+  const health = HEALTH_META[computedHealth] ?? HEALTH_META.GREEN
 
   return (
     <div className="space-y-6">
@@ -246,7 +265,7 @@ export default function ProjectDashboard() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[12px] text-ink-500">Overall progress</span>
                     <span className="text-[12px] font-medium text-ink-700">
-                      {totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%
+                      {weightedProgress}%
                     </span>
                   </div>
                   <div className="w-full h-2 bg-ink-100 rounded-full overflow-hidden flex">

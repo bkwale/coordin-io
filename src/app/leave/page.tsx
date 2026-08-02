@@ -226,9 +226,9 @@ export default function LeavePage() {
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-[22px] font-semibold text-ink-900">Leave</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[20px] sm:text-[22px] font-semibold text-ink-900">Leave</h1>
           <p className="text-[12px] text-ink-400 mt-0.5">
             {balance?.year} · {requests.length} requests
           </p>
@@ -236,7 +236,7 @@ export default function LeavePage() {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors self-start shrink-0"
           >
             <Plus className="w-4 h-4" />
             Request leave

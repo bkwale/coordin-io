@@ -212,6 +212,15 @@ a, button, [role="button"] {
   color: #b0b0b0;
 }
 
+/* ─── Hide scrollbar utility ─────────────────── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* ─── Sidebar gradient mesh ───────────────────── */
 .sidebar-mesh {
   background:

@@ -55,7 +55,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 
   const projectSummaries = projects.map((project) => {
     const myTaskCount = project.tasks.filter(
-      (t) => t.ownerId === profile.id,
+      (t) => t.ownerId === profile.id && t.status !== 'COMPLETED',
     ).length
 
     const overdueTaskCount = project.tasks.filter(

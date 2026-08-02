@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
-import { PermissionError } from '@/lib/errors'
+import { PermissionError, ValidationError } from '@/lib/errors'
 import { validateTaskTransition, isReviewerTransition } from '@/lib/task-transitions'
 import { withTaskAccess } from '@/lib/with-task-access'
 import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
@@ -59,6 +59,14 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
   // Validate status transition if changing status
   if (status && status !== currentTask.status) {
     validateTaskTransition(currentTask.status as TaskStatus, status as TaskStatus)
+
+    // Moving to READY_FOR_REVIEW requires a reviewer to be assigned
+    if (status === 'READY_FOR_REVIEW') {
+      const effectiveReviewerId = reviewerId !== undefined ? reviewerId : currentTask.reviewerId
+      if (!effectiveReviewerId) {
+        throw new ValidationError('A reviewer must be assigned before submitting for review')
+      }
+    }
 
     // Reviewer transitions require the current user to be the task's reviewer
     if (isReviewerTransition(status as TaskStatus)) {

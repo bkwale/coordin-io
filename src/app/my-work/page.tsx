@@ -111,9 +111,9 @@ const PRIORITY_COLORS: Record<string, string> = {
 }
 
 const HEALTH_COLORS: Record<string, string> = {
-  ON_TRACK: 'bg-emerald-400',
-  AT_RISK: 'bg-amber-400',
-  OFF_TRACK: 'bg-red-400',
+  GREEN: 'bg-emerald-400',
+  AMBER: 'bg-amber-400',
+  RED: 'bg-red-400',
 }
 
 /* ── StatCard ────────────────────────────────────────── */
