@@ -1,136 +1,144 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PROJECTS, getProjectTasks, getUser } from '@/lib/mock-data'
-import { calculateRisks, calculateHealth, calculateCompletion } from '@/lib/risk-engine'
-import { RIBA_STAGES, RIBAStage, ProjectStatus, ProjectSummary } from '@/lib/types'
-import { StageBadge } from '@/components/StageBadge'
-import { ProgressBar } from '@/components/ProgressBar'
-import { cn, isOverdue, healthDot } from '@/lib/utils'
+import { FolderOpen, Plus, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+interface Project {
+  id: string
+  name: string
+  code: string
+  stage: string
+  healthStatus: string
+  status: string
+  client: string | null
+  createdAt: string
+}
+
+const HEALTH_COLORS: Record<string, string> = {
+  GREEN: 'bg-emerald-400',
+  AMBER: 'bg-amber-400',
+  RED: 'bg-red-400',
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  STRATEGIC_DEFINITION: 'Strategic Definition',
+  PREPARATION_AND_BRIEFING: 'Preparation & Briefing',
+  CONCEPT_DESIGN: 'Concept Design',
+  SPATIAL_COORDINATION: 'Spatial Coordination',
+  TECHNICAL_DESIGN: 'Technical Design',
+  MANUFACTURING_AND_CONSTRUCTION: 'Manufacturing & Construction',
+  HANDOVER: 'Handover',
+  USE: 'Use',
+}
 
 export default function ProjectsPage() {
-  const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState<RIBAStage | 'all'>('all')
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const summaries: ProjectSummary[] = PROJECTS.map(project => {
-    const tasks = getProjectTasks(project.id)
-    const risks = calculateRisks(project, tasks)
-    const overdueTasks = tasks.filter(t => isOverdue(t.due_date) && t.status !== 'done')
-    const completion = calculateCompletion(tasks)
-    const health = calculateHealth(risks, overdueTasks)
-    return {
-      project,
-      lead: project.project_lead_user_id ? getUser(project.project_lead_user_id) : undefined,
-      completion,
-      stage_completion: 0,
-      open_risks: risks.filter(r => !r.resolved_flag).length,
-      overdue_tasks: overdueTasks.length,
-      health,
+  async function fetchProjects() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/projects')
+      if (!res.ok) throw new Error('Failed to load projects')
+      const json = await res.json()
+      setProjects(json.data?.projects || json.data || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setLoading(false)
     }
-  })
+  }
 
-  const filtered = summaries.filter(s => {
-    const matchesSearch = search === '' ||
-      s.project.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.project.client.toLowerCase().includes(search.toLowerCase())
-    const matchesStage = stageFilter === 'all' || s.project.current_stage === stageFilter
-    const matchesStatus = statusFilter === 'all' || s.project.status === statusFilter
-    return matchesSearch && matchesStage && matchesStatus
-  })
+  useEffect(() => { fetchProjects() }, [])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <Loader2 className="w-8 h-8 text-accent-500 animate-spin" />
+        <p className="text-[13px] text-ink-400">Loading projects...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <AlertTriangle className="w-10 h-10 text-red-400" />
+        <p className="text-[15px] font-medium text-ink-900">Unable to load projects</p>
+        <p className="text-[13px] text-ink-400">{error}</p>
+        <button onClick={fetchProjects} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800">
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="font-display text-[2rem] sm:text-[2.5rem] text-ink-900">Projects</h1>
-          <p className="text-[13px] text-ink-400 mt-1">{filtered.length} of {PROJECTS.length} projects shown</p>
+          <h1 className="text-[22px] font-semibold text-ink-900">Projects</h1>
+          <p className="text-[13px] text-ink-400 mt-1">{projects.length} {projects.length === 1 ? 'project' : 'projects'}</p>
         </div>
         <Link
           href="/projects/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors self-start shrink-0"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" d="M12 5v14M5 12h14" />
-          </svg>
+          <Plus className="w-4 h-4" />
           New Project
         </Link>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="text"
-          placeholder="Search by name or client..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-white placeholder:text-slate-300"
-        />
-        <select
-          value={stageFilter}
-          onChange={e => setStageFilter(e.target.value === 'all' ? 'all' : Number(e.target.value) as RIBAStage)}
-          className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-        >
-          <option value="all">All Stages</option>
-          {(Object.entries(RIBA_STAGES) as [string, string][]).map(([s, label]) => (
-            <option key={s} value={s}>Stage {s}: {label}</option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as ProjectStatus | 'all')}
-          className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="completed">Completed</option>
-          <option value="archived">Archived</option>
-        </select>
-      </div>
-
-      {/* Project Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filtered.map(s => (
+      {projects.length === 0 ? (
+        <div className="bg-white rounded-xl border border-ink-100 p-12 text-center">
+          <FolderOpen className="w-12 h-12 text-ink-200 mx-auto mb-4" />
+          <p className="text-[15px] font-medium text-ink-700">No projects yet</p>
+          <p className="text-[12px] text-ink-400 mt-2 max-w-md mx-auto">
+            Create your first project to start tracking tasks, documents, and progress.
+          </p>
           <Link
-            key={s.project.id}
-            href={`/projects/${s.project.id}`}
-            className="card-premium p-5 hover:shadow-md hover:border-slate-300 transition-all group"
+            href="/projects/new"
+            className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={cn('w-2 h-2 rounded-full', healthDot(s.health))} />
-                  <h3 className="text-sm font-semibold text-slate-900 group-hover:text-brand-600 transition-colors">{s.project.name}</h3>
-                </div>
-                <p className="text-xs text-slate-500">{s.project.client}</p>
-              </div>
-              <StageBadge stage={s.project.current_stage} size="sm" />
-            </div>
-
-            <ProgressBar value={s.completion} size="sm" />
-
-            <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
-              {s.lead && <span>Lead: {s.lead.name}</span>}
-              {s.open_risks > 0 && <span className="text-red-600 font-medium">{s.open_risks} risks</span>}
-              {s.overdue_tasks > 0 && <span className="text-amber-600 font-medium">{s.overdue_tasks} overdue</span>}
-              <span className={cn(
-                'ml-auto status-pill capitalize',
-                s.project.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                s.project.status === 'paused' ? 'bg-amber-100 text-amber-700' :
-                'bg-slate-100 text-slate-600'
-              )}>
-                {s.project.status}
-              </span>
-            </div>
+            <Plus className="w-4 h-4" /> Create Project
           </Link>
-        ))}
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-sm text-slate-400">No projects match your filters.</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {projects.map(project => (
+            <Link
+              key={project.id}
+              href={`/projects/${project.id}`}
+              className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="min-w-0">
+                  <p className="text-[14px] font-semibold text-ink-900 truncate group-hover:text-accent-700 transition-colors">
+                    {project.name}
+                  </p>
+                  <p className="text-[11px] text-ink-400 mt-0.5">{project.code}</p>
+                </div>
+                <span className={cn(
+                  'w-2.5 h-2.5 rounded-full shrink-0 mt-1',
+                  HEALTH_COLORS[project.healthStatus] || 'bg-ink-200',
+                )} />
+              </div>
+              <p className="text-[11px] text-ink-400 mb-2">
+                Stage: <span className="text-ink-600 font-medium">
+                  {STAGE_LABELS[project.stage] || project.stage.replace(/_/g, ' ')}
+                </span>
+              </p>
+              {project.client && (
+                <p className="text-[11px] text-ink-400">
+                  Client: <span className="text-ink-600">{project.client}</span>
+                </p>
+              )}
+            </Link>
+          ))}
         </div>
       )}
     </div>

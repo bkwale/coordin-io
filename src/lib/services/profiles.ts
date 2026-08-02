@@ -6,7 +6,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { USERS } from '@/lib/mock-data'
 import type { User } from '@/lib/types'
 
 const log = createServiceLogger('profiles')
@@ -23,7 +22,7 @@ const PROFILE_COLUMNS = [
 export async function getProfiles(
   opts?: QueryOptions
 ): Promise<ServiceResult<User[]>> {
-  if (!isSupabaseConfigured()) return { data: USERS, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getProfiles', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -62,7 +61,7 @@ export async function getProfile(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<User | null>> {
   if (!isSupabaseConfigured()) {
-    return { data: USERS.find(u => u.id === id) ?? null, error: null }
+    return { data: null, error: null }
   }
   if (isCircuitOpen()) {
     return { data: null, error: 'Service temporarily unavailable' }
@@ -100,7 +99,7 @@ export async function getCurrentProfile(
 ): Promise<ServiceResult<User | null>> {
   if (!isSupabaseConfigured()) {
     // In demo mode, return the practice owner
-    return { data: USERS[0] ?? null, error: null }
+    return { data: null, error: null }
   }
 
   try {

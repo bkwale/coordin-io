@@ -7,7 +7,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { FEE_QUOTE_RECORDS, FEE_QUOTE_LINE_ITEMS, FEE_QUOTE_TEMPLATES } from '@/lib/mock-data'
 import type { FeeQuoteRecord, FeeQuoteLineItem, FeeQuoteTemplate } from '@/lib/types'
 
 const log = createServiceLogger('quotes')
@@ -39,7 +38,7 @@ const TEMPLATE_COLUMNS = [
 export async function getQuotes(
   opts?: QueryOptions
 ): Promise<ServiceResult<FeeQuoteRecord[]>> {
-  if (!isSupabaseConfigured()) return { data: FEE_QUOTE_RECORDS, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getQuotes', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -77,7 +76,7 @@ export async function getQuote(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<FeeQuoteRecord | null>> {
   if (!isSupabaseConfigured()) {
-    return { data: FEE_QUOTE_RECORDS.find(q => q.id === id) ?? null, error: null }
+    return { data: null, error: null }
   }
   if (isCircuitOpen()) {
     return { data: null, error: 'Service temporarily unavailable' }
@@ -115,7 +114,7 @@ export async function getQuoteLineItems(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<FeeQuoteLineItem[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: FEE_QUOTE_LINE_ITEMS.filter(li => li.fee_quote_id === quoteId), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
@@ -151,7 +150,7 @@ export async function getQuoteLineItems(
 export async function getQuoteTemplates(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<FeeQuoteTemplate[]>> {
-  if (!isSupabaseConfigured()) return { data: FEE_QUOTE_TEMPLATES, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
   }

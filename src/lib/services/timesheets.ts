@@ -7,7 +7,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { TIMESHEET_ENTRIES } from '@/lib/mock-data'
 import type { TimesheetEntry } from '@/lib/types'
 
 const log = createServiceLogger('timesheets')
@@ -26,7 +25,7 @@ const TIMESHEET_COLUMNS = [
 export async function getTimesheetEntries(
   opts?: QueryOptions
 ): Promise<ServiceResult<TimesheetEntry[]>> {
-  if (!isSupabaseConfigured()) return { data: TIMESHEET_ENTRIES, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getTimesheetEntries', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -64,7 +63,7 @@ export async function getTimesheetsByUser(
   opts?: QueryOptions
 ): Promise<ServiceResult<TimesheetEntry[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: TIMESHEET_ENTRIES.filter(t => t.user_id === userId), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
@@ -103,7 +102,7 @@ export async function getTimesheetsByProject(
   opts?: QueryOptions
 ): Promise<ServiceResult<TimesheetEntry[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: TIMESHEET_ENTRIES.filter(t => t.project_id === projectId), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
@@ -143,18 +142,7 @@ export async function getTimesheetsByWeek(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<TimesheetEntry[]>> {
   if (!isSupabaseConfigured()) {
-    const start = new Date(weekStart)
-    const end = new Date(start)
-    end.setDate(end.getDate() + 7)
-    return {
-      data: TIMESHEET_ENTRIES.filter(
-        t =>
-          t.user_id === userId &&
-          t.date >= weekStart &&
-          t.date < end.toISOString().split('T')[0]
-      ),
-      error: null,
-    }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }

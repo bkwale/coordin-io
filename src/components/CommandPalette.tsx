@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, FolderOpen, Users, Receipt, BarChart3, Settings, FileText, Sparkles } from 'lucide-react'
-import { PROJECTS, USERS, FEE_QUOTE_RECORDS } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 
 interface CommandItem {
@@ -30,30 +29,7 @@ export function CommandPalette() {
     { label: 'Analytics', sublabel: 'Portfolio health', href: '/analytics/portfolio', icon: <BarChart3 className="w-4 h-4" />, category: 'Pages' },
     { label: 'Settings', sublabel: 'Admin controls', href: '/settings/admin', icon: <Settings className="w-4 h-4" />, category: 'Pages' },
     { label: 'AI Teammate', sublabel: 'Ask anything', href: '/ai', icon: <Sparkles className="w-4 h-4" />, category: 'Pages' },
-    // Projects
-    ...PROJECTS.map(p => ({
-      label: p.name,
-      sublabel: `${p.client} · Stage ${p.current_stage}`,
-      href: `/projects/${p.id}`,
-      icon: <FolderOpen className="w-4 h-4" />,
-      category: 'Projects',
-    })),
-    // People
-    ...USERS.map(u => ({
-      label: u.name,
-      sublabel: u.role.replace('_', ' '),
-      href: '/staffing',
-      icon: <Users className="w-4 h-4" />,
-      category: 'People',
-    })),
-    // Quotes
-    ...FEE_QUOTE_RECORDS.map(q => ({
-      label: q.quote_reference,
-      sublabel: `${q.quote_title} · ${q.status}`,
-      href: `/fee-quotes/${q.id}`,
-      icon: <FileText className="w-4 h-4" />,
-      category: 'Quotes',
-    })),
+    // Dynamic items will be fetched from APIs when search is available
   ]
 
   const filtered = query === '' ? items.slice(0, 10) : items.filter(i =>

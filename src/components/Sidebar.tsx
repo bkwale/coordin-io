@@ -130,7 +130,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       {/* Mobile hamburger */}
       <button
         onClick={() => setOpen(!open)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 rounded-xl bg-ink-900 shadow-elevated"
+        className="md:hidden fixed top-4 left-4 z-50 p-2.5 rounded-xl bg-ink-900 shadow-elevated"
         aria-label="Toggle menu"
       >
         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -144,14 +144,14 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {/* Overlay */}
       {open && (
-        <div className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-30" onClick={close} />
+        <div className="md:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-30" onClick={close} />
       )}
 
       {/* Sidebar */}
       <aside className={cn(
         'fixed top-0 left-0 h-full sidebar-mesh z-40 transition-all duration-200 flex flex-col shadow-sidebar',
         collapsed ? 'w-16' : 'w-72',
-        open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       )}>
         {/* Logo */}
         <div className={cn('pt-7 pb-6', collapsed ? 'px-3' : 'px-6')}>
@@ -256,7 +256,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {/* Collapse toggle — desktop only */}
         <button
           onClick={onToggle}
-          className="hidden lg:flex items-center justify-center py-3 border-t border-white/[0.06] text-white/20 hover:text-white/50 transition-colors"
+          className="hidden md:flex items-center justify-center py-3 border-t border-white/[0.06] text-white/20 hover:text-white/50 transition-colors"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}

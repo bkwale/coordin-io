@@ -7,7 +7,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { PROJECTS } from '@/lib/mock-data'
 import type { Project } from '@/lib/types'
 
 const log = createServiceLogger('projects')
@@ -25,7 +24,7 @@ const PROJECT_COLUMNS = [
 export async function getProjects(
   opts?: QueryOptions
 ): Promise<ServiceResult<Project[]>> {
-  if (!isSupabaseConfigured()) return { data: PROJECTS, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getProjects', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -63,7 +62,7 @@ export async function getProject(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<Project | null>> {
   if (!isSupabaseConfigured()) {
-    return { data: PROJECTS.find(p => p.id === id) ?? null, error: null }
+    return { data: null, error: null }
   }
   if (isCircuitOpen()) {
     return { data: null, error: 'Service temporarily unavailable' }
@@ -101,7 +100,7 @@ export async function getProjectsByStatus(
   opts?: QueryOptions
 ): Promise<ServiceResult<Project[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: PROJECTS.filter(p => p.status === status), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }

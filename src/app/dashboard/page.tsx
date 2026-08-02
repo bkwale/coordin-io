@@ -1,175 +1,171 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useUser } from '@/lib/hooks/useUser'
-import { PROJECTS, ALL_TASKS, APPROVALS, getDashboardKPIs, getOpenInvoiceValue, getMissingTimesheetUsers, USERS } from '@/lib/mock-data'
-import { isOverdue, cn } from '@/lib/utils'
-import { KPICard } from '@/components/KPICard'
-import { NotificationBell } from '@/components/NotificationBell'
-import { FolderOpen, AlertTriangle, Clock, PoundSterling, FileText, ShieldCheck, CheckCircle, Settings, Plus } from 'lucide-react'
 import {
-  PracticeSummaryWidget,
-  StaffResourcingWidget,
-  FinancialHealthWidget,
-  QuoteInvoiceWidget,
-  JobsAtRiskWidget,
-  CalendarDeadlinesWidget,
-  ProjectUpdatesWidget,
-  BRPDWidget,
-  NewsWidget,
-  RecentActivityWidget,
-} from '@/components/widgets'
+  LayoutDashboard, FolderOpen, CheckCircle2, AlertTriangle,
+  Clock, Eye, ArrowRight, Loader2, RefreshCw,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-type FilterView = 'all' | 'today' | 'week' | 'practice' | 'commercial' | 'staff' | 'brpd' | 'portfolio'
+interface DashboardData {
+  profile: { fullName: string; jobTitle: string | null; status: string; organisationName: string }
+  projects: {
+    id: string; name: string; code: string; stage: string;
+    healthStatus: string; myTaskCount: number; overdueTaskCount: number; inReviewTaskCount: number
+  }[]
+  urgentTasks: {
+    id: string; title: string; projectId: string; projectName: string;
+    projectCode: string; status: string; priority: string; dueDate: string | null
+  }[]
+  stats: { totalTasks: number; overdueTasks: number; inReviewTasks: number; completedThisWeek: number }
+}
 
-const FILTERS: { value: FilterView; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'practice', label: 'Practice' },
-  { value: 'commercial', label: 'Commercial' },
-  { value: 'staff', label: 'Staff' },
-  { value: 'brpd', label: 'BRPD' },
-  { value: 'portfolio', label: 'Portfolio' },
-]
+const HEALTH_COLORS: Record<string, string> = {
+  GREEN: 'bg-emerald-400',
+  AMBER: 'bg-amber-400',
+  RED: 'bg-red-400',
+}
 
-export default function ExecutiveDashboard() {
-  const [activeFilter, setActiveFilter] = useState<FilterView>('all')
-  const { user } = useUser()
-  const kpis = getDashboardKPIs()
+export default function DashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'there'
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const missingTs = getMissingTimesheetUsers()
-  const openInvoice = getOpenInvoiceValue()
-
-  // Determine which widgets to show based on filter
-  const showWidget = (category: 'practice' | 'staff' | 'commercial' | 'brpd' | 'project' | 'calendar' | 'news' | 'activity') => {
-    if (activeFilter === 'all' || activeFilter === 'today' || activeFilter === 'week') return true
-    if (activeFilter === 'practice') return ['practice', 'project', 'calendar', 'activity'].includes(category)
-    if (activeFilter === 'commercial') return ['commercial', 'practice'].includes(category)
-    if (activeFilter === 'staff') return ['staff', 'calendar'].includes(category)
-    if (activeFilter === 'brpd') return ['brpd', 'project'].includes(category)
-    if (activeFilter === 'portfolio') return ['practice', 'project', 'commercial'].includes(category)
-    return true
+  async function fetchData() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/dashboard')
+      if (!res.ok) throw new Error('Failed to load dashboard')
+      const json = await res.json()
+      setData(json.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
   }
 
+  useEffect(() => { fetchData() }, [])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <Loader2 className="w-8 h-8 text-accent-500 animate-spin" />
+        <p className="text-[13px] text-ink-400">Loading dashboard...</p>
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <AlertTriangle className="w-10 h-10 text-red-400" />
+        <p className="text-[15px] font-medium text-ink-900">Unable to load dashboard</p>
+        <p className="text-[13px] text-ink-400">{error}</p>
+        <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800">
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+      </div>
+    )
+  }
+
+  const { profile, projects, stats } = data
+  const atRiskProjects = projects.filter(p => p.healthStatus === 'RED' || p.healthStatus === 'AMBER')
+
   return (
-    <div className="max-w-[1400px] animate-fade-in">
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-[24px] font-semibold text-ink-900">Practice Dashboard</h1>
+        <p className="text-[13px] text-ink-400 mt-1">{profile.organisationName}</p>
+      </div>
 
-      {/* ━━━ HEADER ROW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section className="pb-6">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <p className="text-[13px] text-ink-400 mb-1">{greeting}, {firstName}</p>
-            <h1 className="font-display text-[2rem] sm:text-[2.5rem] leading-[1.1] text-ink-900 tracking-tight">
-              Executive Dashboard
-            </h1>
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Active projects', value: projects.length, icon: FolderOpen, accent: 'bg-blue-50 text-blue-600' },
+          { label: 'Open tasks', value: stats.totalTasks, icon: Clock, accent: 'bg-ink-50 text-ink-600' },
+          { label: 'Overdue', value: stats.overdueTasks, icon: AlertTriangle, accent: stats.overdueTasks > 0 ? 'bg-red-50 text-red-600' : 'bg-ink-50 text-ink-400' },
+          { label: 'Awaiting review', value: stats.inReviewTasks, icon: Eye, accent: 'bg-amber-50 text-amber-600' },
+        ].map(({ label, value, icon: Icon, accent }) => (
+          <div key={label} className="bg-white rounded-xl border border-ink-100 p-5 flex items-start gap-4">
+            <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center shrink-0', accent)}>
+              <Icon className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[28px] font-semibold text-ink-900 leading-tight">{value}</p>
+              <p className="text-[12px] text-ink-400 mt-0.5">{label}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {/* Notifications */}
-            <NotificationBell />
+        ))}
+      </div>
 
-            {/* Settings */}
-            <Link href="/settings/admin" className="p-2.5 rounded-xl bg-white border border-surface-200 hover:border-surface-300 transition-colors shadow-card">
-              <Settings className="w-4 h-4 text-ink-500" />
-            </Link>
-
-            {/* Quick action */}
-            <Link
-              href="/projects/new"
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-[12px] font-semibold text-white bg-gradient-accent rounded-xl hover:opacity-90 transition-all shadow-md hover:shadow-lg"
-            >
-              <Plus className="w-4 h-4" />
-              New Project
-            </Link>
+      {/* Projects at risk */}
+      <section>
+        <h2 className="text-[15px] font-semibold text-ink-900 mb-3">
+          Projects at risk
+          <span className="ml-2 text-[12px] font-medium text-ink-400">{atRiskProjects.length}</span>
+        </h2>
+        {atRiskProjects.length === 0 ? (
+          <div className="bg-white rounded-xl border border-ink-100 p-8 text-center">
+            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+            <p className="text-[14px] font-medium text-ink-700">All projects healthy</p>
+            <p className="text-[12px] text-ink-400 mt-1">No projects flagged as at risk.</p>
           </div>
-        </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
+            {atRiskProjects.map(p => (
+              <Link key={p.id} href={`/projects/${p.id}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-surface-50 transition-colors">
+                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', HEALTH_COLORS[p.healthStatus] || 'bg-ink-200')} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-ink-900 truncate">{p.name}</p>
+                  <p className="text-[11px] text-ink-400">{p.code} · {p.overdueTaskCount} overdue</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* ━━━ FILTER BAR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section className="pb-6">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-          {FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setActiveFilter(f.value)}
-              className={cn(
-                'px-3.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap',
-                activeFilter === f.value
-                  ? 'bg-ink-900 text-white shadow-sm'
-                  : 'bg-white text-ink-500 border border-surface-200 hover:border-surface-300 hover:text-ink-700'
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+      {/* All projects overview */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[15px] font-semibold text-ink-900">
+            All projects <span className="ml-2 text-[12px] font-medium text-ink-400">{projects.length}</span>
+          </h2>
+          <Link href="/projects" className="text-[12px] text-accent-600 hover:text-accent-700 font-medium flex items-center gap-1">
+            View all <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
+        {projects.length === 0 ? (
+          <div className="bg-white rounded-xl border border-ink-100 p-8 text-center">
+            <FolderOpen className="w-10 h-10 text-ink-300 mx-auto mb-3" />
+            <p className="text-[14px] font-medium text-ink-700">No projects yet</p>
+            <p className="text-[12px] text-ink-400 mt-1">Create your first project to get started.</p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map(p => (
+              <Link key={p.id} href={`/projects/${p.id}`} className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-semibold text-ink-900 truncate">{p.name}</p>
+                    <p className="text-[11px] text-ink-400 mt-0.5">{p.code}</p>
+                  </div>
+                  <span className={cn('w-2.5 h-2.5 rounded-full shrink-0 mt-1', HEALTH_COLORS[p.healthStatus] || 'bg-ink-200')} />
+                </div>
+                <p className="text-[11px] text-ink-400 mb-4">Stage: <span className="text-ink-600 font-medium">{p.stage.replace(/_/g, ' ')}</span></p>
+                <div className="flex items-center gap-4 text-[11px]">
+                  <span className="text-ink-500"><span className="font-semibold text-ink-700">{p.myTaskCount}</span> tasks</span>
+                  {p.overdueTaskCount > 0 && <span className="text-red-600 font-medium">{p.overdueTaskCount} overdue</span>}
+                  {p.inReviewTaskCount > 0 && <span className="text-amber-600 font-medium">{p.inReviewTaskCount} to review</span>}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
-
-      {/* ━━━ KPI ROW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section className="pb-8">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <KPICard label="Active Projects" value={kpis.active_projects} accent="blue" icon={<FolderOpen className="w-4 h-4" />} />
-          <KPICard label="At Risk" value={kpis.projects_at_risk} accent={kpis.projects_at_risk > 0 ? 'red' : 'green'} icon={<AlertTriangle className="w-4 h-4" />} />
-          <KPICard label="Missing Timesheets" value={missingTs.length} accent={missingTs.length > 0 ? 'amber' : 'green'} icon={<Clock className="w-4 h-4" />} />
-          <KPICard label="Open Invoices" value={`£${(openInvoice / 1000).toFixed(0)}k`} accent="blue" icon={<PoundSterling className="w-4 h-4" />} />
-          <KPICard label="Quotes Expiring" value={kpis.quotes_expiring} accent={kpis.quotes_expiring > 0 ? 'amber' : 'green'} icon={<FileText className="w-4 h-4" />} />
-          <KPICard label="BRPD Deadlines" value={kpis.brpd_deadlines} accent={kpis.brpd_deadlines > 0 ? 'amber' : 'green'} icon={<ShieldCheck className="w-4 h-4" />} />
-          <KPICard label="Approvals" value={kpis.approvals_waiting} accent={kpis.approvals_waiting > 0 ? 'blue' : 'green'} icon={<CheckCircle className="w-4 h-4" />} />
-        </div>
-      </section>
-
-      {/* ━━━ WIDGET GRID — ROW 3 ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section className="pb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div className={cn(!showWidget('practice') && 'opacity-40 pointer-events-none')}>
-            <PracticeSummaryWidget />
-          </div>
-          <div className={cn(!showWidget('staff') && 'opacity-40 pointer-events-none')}>
-            <StaffResourcingWidget />
-          </div>
-          <div className={cn(!showWidget('commercial') && 'opacity-40 pointer-events-none')}>
-            <FinancialHealthWidget />
-          </div>
-          <div className={cn(!showWidget('calendar') && 'opacity-40 pointer-events-none')}>
-            <CalendarDeadlinesWidget />
-          </div>
-        </div>
-      </section>
-
-      {/* ━━━ WIDGET GRID — ROW 4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section className="pb-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-5">
-          <div className={cn(!showWidget('project') && 'opacity-40 pointer-events-none')}>
-            <JobsAtRiskWidget />
-          </div>
-          <div className={cn(!showWidget('commercial') && 'opacity-40 pointer-events-none')}>
-            <QuoteInvoiceWidget />
-          </div>
-          <div className={cn(!showWidget('project') && 'opacity-40 pointer-events-none')}>
-            <ProjectUpdatesWidget />
-          </div>
-          <div className={cn(!showWidget('brpd') && 'opacity-40 pointer-events-none')}>
-            <BRPDWidget />
-          </div>
-        </div>
-      </section>
-
-      {/* ━━━ WIDGET GRID — ROW 5 ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section className="pb-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-          <div className={cn(!showWidget('news') && 'opacity-40 pointer-events-none')}>
-            <NewsWidget />
-          </div>
-          <div className={cn(!showWidget('activity') && 'opacity-40 pointer-events-none')}>
-            <RecentActivityWidget />
-          </div>
-        </div>
-      </section>
-
     </div>
   )
 }

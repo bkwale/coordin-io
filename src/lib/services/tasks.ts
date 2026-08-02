@@ -7,7 +7,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { ALL_TASKS } from '@/lib/mock-data'
 import type { Task } from '@/lib/types'
 
 const log = createServiceLogger('tasks')
@@ -25,7 +24,7 @@ const TASK_COLUMNS = [
 export async function getTasks(
   opts?: QueryOptions
 ): Promise<ServiceResult<Task[]>> {
-  if (!isSupabaseConfigured()) return { data: ALL_TASKS, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getTasks', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -63,7 +62,7 @@ export async function getTasksByProject(
   opts?: QueryOptions
 ): Promise<ServiceResult<Task[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: ALL_TASKS.filter(t => t.project_id === projectId), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
@@ -103,7 +102,7 @@ export async function getTask(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<Task | null>> {
   if (!isSupabaseConfigured()) {
-    return { data: ALL_TASKS.find(t => t.id === id) ?? null, error: null }
+    return { data: null, error: null }
   }
   if (isCircuitOpen()) {
     return { data: null, error: 'Service temporarily unavailable' }
@@ -140,11 +139,7 @@ export async function getOverdueTasks(
   opts?: QueryOptions
 ): Promise<ServiceResult<Task[]>> {
   if (!isSupabaseConfigured()) {
-    const now = new Date().toISOString().split('T')[0]
-    return {
-      data: ALL_TASKS.filter(t => t.due_date && t.due_date < now && t.status !== 'done'),
-      error: null,
-    }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }

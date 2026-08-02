@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import './globals.css'
 import { Sidebar } from '@/components/Sidebar'
@@ -19,6 +19,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const isMarketing = MARKETING_ROUTES.includes(pathname)
   const isFullscreen = FULLSCREEN_PREFIXES.some(prefix => pathname.startsWith(prefix))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  // Auto-collapse sidebar on tablet (md) breakpoints
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px) and (max-width: 1279px)')
+    const handler = (e: MediaQueryListEvent | MediaQueryList) => {
+      setSidebarCollapsed(e.matches)
+    }
+    handler(mq)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   return (
     <html lang="en">
@@ -41,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <CommandPalette />
                 <main className={cn(
                   'flex-1 ml-0 transition-[margin-left] duration-200',
-                  sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-72'
+                  sidebarCollapsed ? 'md:ml-16' : 'md:ml-72'
                 )}>
                   <div className="pt-16 px-4 pb-6 sm:p-8 lg:p-10 max-w-7xl mx-auto">
                     <DemoTimerBanner />

@@ -7,7 +7,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { INVOICES } from '@/lib/mock-data'
 import type { Invoice } from '@/lib/types'
 
 const log = createServiceLogger('invoices')
@@ -26,7 +25,7 @@ const INVOICE_COLUMNS = [
 export async function getInvoices(
   opts?: QueryOptions
 ): Promise<ServiceResult<Invoice[]>> {
-  if (!isSupabaseConfigured()) return { data: INVOICES, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getInvoices', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -64,7 +63,7 @@ export async function getInvoice(
   opts?: { client?: QueryOptions['client'] }
 ): Promise<ServiceResult<Invoice | null>> {
   if (!isSupabaseConfigured()) {
-    return { data: INVOICES.find(inv => inv.id === id) ?? null, error: null }
+    return { data: null, error: null }
   }
   if (isCircuitOpen()) {
     return { data: null, error: 'Service temporarily unavailable' }
@@ -102,7 +101,7 @@ export async function getInvoicesByProject(
   opts?: QueryOptions
 ): Promise<ServiceResult<Invoice[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: INVOICES.filter(inv => inv.project_id === projectId), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
@@ -140,7 +139,7 @@ export async function getOverdueInvoices(
   opts?: QueryOptions
 ): Promise<ServiceResult<Invoice[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: INVOICES.filter(inv => inv.status === 'overdue'), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }

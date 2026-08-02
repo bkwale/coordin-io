@@ -7,7 +7,6 @@ import {
 } from './config'
 import { createServiceLogger } from './logger'
 import { isCircuitOpen, recordFailure, recordSuccess, queryTimeout } from './resilience'
-import { LEAVE_RECORDS } from '@/lib/mock-data'
 import type { LeaveRecord } from '@/lib/types'
 
 const log = createServiceLogger('leave')
@@ -25,7 +24,7 @@ const LEAVE_COLUMNS = [
 export async function getLeaveRecords(
   opts?: QueryOptions
 ): Promise<ServiceResult<LeaveRecord[]>> {
-  if (!isSupabaseConfigured()) return { data: LEAVE_RECORDS, error: null }
+  if (!isSupabaseConfigured()) return { data: [], error: null }
   if (isCircuitOpen()) {
     log.warn('getLeaveRecords', 'Circuit open — returning empty')
     return { data: [], error: 'Service temporarily unavailable' }
@@ -63,7 +62,7 @@ export async function getLeaveByUser(
   opts?: QueryOptions
 ): Promise<ServiceResult<LeaveRecord[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: LEAVE_RECORDS.filter(lr => lr.user_id === userId), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
@@ -101,7 +100,7 @@ export async function getPendingLeave(
   opts?: QueryOptions
 ): Promise<ServiceResult<LeaveRecord[]>> {
   if (!isSupabaseConfigured()) {
-    return { data: LEAVE_RECORDS.filter(lr => lr.status === 'pending'), error: null }
+    return { data: [], error: null }
   }
   if (isCircuitOpen()) {
     return { data: [], error: 'Service temporarily unavailable' }
