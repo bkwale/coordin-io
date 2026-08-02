@@ -17,6 +17,21 @@ datasource db {
 }
 
 // ═══════════════════════════════════════════════════════════
+// PLATFORM — Super Admin
+// ═══════════════════════════════════════════════════════════
+
+model PlatformAdmin {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  authUserId String   @map("auth_user_id")
+  email      String
+  name       String
+  grantedAt  DateTime @default(now()) @map("granted_at") @db.Timestamp(6)
+  grantedBy  String?  @map("granted_by")
+
+  @@map("platform_admins")
+}
+
+// ═══════════════════════════════════════════════════════════
 // SPRINT 1 — Identity, Invitation & Activation
 // ═══════════════════════════════════════════════════════════
 
