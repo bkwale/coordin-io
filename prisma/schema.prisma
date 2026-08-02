@@ -379,6 +379,19 @@ model Project {
   currentIssueRef String?  @map("current_issue_ref") // e.g. "C03"
   currentIssueDate DateTime? @map("current_issue_date")
 
+  // PRD S5 — additional project fields
+  siteAddress     String?  @map("site_address")
+  siteCity        String?  @map("site_city")
+  siteCountry     String?  @map("site_country")
+  buildingType    String?  @map("building_type") // Hotel, Residential, Office, etc.
+  jurisdiction    String?  // England, Nigeria-Lagos, Nigeria-FCT, etc.
+  feeBasis        String?  @map("fee_basis") // Percentage, Lump Sum, Time Charge
+  appointmentType String?  @map("appointment_type") // Full Service, Partial, Novated
+  contractValue   Float?   @map("contract_value")
+  feeValue        Float?   @map("fee_value")
+  grossFloorArea  Float?   @map("gross_floor_area") // m²
+  numberOfUnits   Int?     @map("number_of_units")
+
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -390,6 +403,13 @@ model Project {
   documents       Document[]
   siteObservations SiteObservation[]
   snags           Snag[]
+  budgets         Budget[]
+  variations      Variation[]
+  purchaseOrders  PurchaseOrder[]
+  tenders         Tender[]
+  valuations      Valuation[]
+  invoices        Invoice[]
+  commercialRisks CommercialRisk[]
 
   @@map("projects")
 }
@@ -739,8 +759,16 @@ enum LeaveType {
   ANNUAL
   SICK
   COMPASSIONATE
+  PARENTAL
+  MATERNITY
+  PATERNITY
+  STUDY
+  CPD_TRAINING
   UNPAID
+  TOIL
+  BUSINESS_TRAVEL
   PUBLIC_HOLIDAY
+  OTHER
 }
 
 model ServiceRequest {
@@ -983,4 +1011,301 @@ model AuditEvent {
   @@index([organisationId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_events")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPRINT 7 — Commercial Module
+// ═══════════════════════════════════════════════════════════
+
+model Budget {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  version         Int      @default(1)
+  name            String   // e.g. "Initial Budget", "Revised Budget v2"
+  totalAmount     Float    @map("total_amount")
+  currency        Currency @default(NGN)
+  approvedBy      String?  @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  status          BudgetStatus @default(DRAFT)
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  costPlanLines   CostPlanLine[]
+
+  @@map("budgets")
+}
+
+enum BudgetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  SUPERSEDED
+}
+
+model CostPlanLine {
+  id              String   @id @default(cuid())
+  budgetId        String   @map("budget_id")
+  elementCode     String   @map("element_code") // e.g. "1A", "2B.3"
+  elementName     String   @map("element_name") // e.g. "Substructure", "Frame"
+  quantity        Float?
+  unit            String?  // m², m³, nr, etc.
+  rate            Float?
+  amount          Float
+  sortOrder       Int      @default(0) @map("sort_order")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  budget          Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@map("cost_plan_lines")
+}
+
+model PurchaseOrder {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  poNumber        String   @map("po_number")
+  supplier        String
+  description     String
+  amount          Float
+  currency        Currency @default(NGN)
+  taxAmount       Float?   @map("tax_amount")
+  status          POStatus @default(DRAFT)
+  issueDate       DateTime? @map("issue_date")
+  deliveryDate    DateTime? @map("delivery_date")
+  approvedBy      String?  @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@map("purchase_orders")
+}
+
+enum POStatus {
+  DRAFT
+  ISSUED
+  ACKNOWLEDGED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+model Tender {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  packageName     String   @map("package_name") // e.g. "MEP", "Structural", "FF&E"
+  description     String?
+  estimatedValue  Float?   @map("estimated_value")
+  currency        Currency @default(NGN)
+  issueDate       DateTime? @map("issue_date")
+  returnDate      DateTime? @map("return_date")
+  status          TenderStatus @default(DRAFT)
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+  returns         TenderReturn[]
+
+  @@map("tenders")
+}
+
+enum TenderStatus {
+  DRAFT
+  ISSUED
+  RETURNS_RECEIVED
+  UNDER_EVALUATION
+  AWARDED
+  CANCELLED
+}
+
+model TenderReturn {
+  id              String   @id @default(cuid())
+  tenderId        String   @map("tender_id")
+  contractorName  String   @map("contractor_name")
+  amount          Float
+  currency        Currency @default(NGN)
+  returnDate      DateTime? @map("return_date")
+  compliant       Boolean  @default(true)
+  qualifications  String?  // Exclusions, conditions, caveats
+  score           Float?   // Evaluation score
+  recommended     Boolean  @default(false)
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tender          Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@map("tender_returns")
+}
+
+model Valuation {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  valuationNumber Int      @map("valuation_number")
+  period          String   // e.g. "June 2026"
+  grossValuation  Float    @map("gross_valuation")
+  previousCumulative Float @default(0) @map("previous_cumulative")
+  thisValuation   Float    @map("this_valuation")
+  retentionPct    Float    @default(5) @map("retention_pct")
+  retentionAmount Float    @default(0) @map("retention_amount")
+  netPayable      Float    @map("net_payable")
+  currency        Currency @default(NGN)
+  status          ValuationStatus @default(DRAFT)
+  certifiedBy     String?  @map("certified_by")
+  certifiedAt     DateTime? @map("certified_at")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@map("valuations")
+}
+
+enum ValuationStatus {
+  DRAFT
+  SUBMITTED
+  CERTIFIED
+  PAID
+  DISPUTED
+}
+
+model Variation {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  variationNumber String   @map("variation_number") // e.g. "VO-001"
+  title           String
+  description     String
+  reason          VariationReason @default(DESIGN_CHANGE)
+  initiatedBy     String?  @map("initiated_by") // Client, Architect, Contractor, etc.
+  amount          Float?
+  currency        Currency @default(NGN)
+  timeImpactDays  Int?     @map("time_impact_days")
+  status          VariationStatus @default(DRAFT)
+  approvedBy      String?  @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  linkedDocumentId String? @map("linked_document_id") // Drawing revision, RFI, etc.
+  linkedTaskId    String?  @map("linked_task_id")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@map("variations")
+}
+
+enum VariationReason {
+  DESIGN_CHANGE
+  CLIENT_INSTRUCTION
+  SITE_CONDITION
+  REGULATORY
+  VALUE_ENGINEERING
+  OMISSION
+  OTHER
+}
+
+enum VariationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+  CLOSED
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  invoiceNumber   String   @map("invoice_number")
+  invoiceType     InvoiceType @default(FEE_INVOICE) @map("invoice_type")
+  recipient       String   // Client name or contractor
+  description     String
+  netAmount       Float    @map("net_amount")
+  taxRate         Float    @default(0) @map("tax_rate")
+  taxAmount       Float    @default(0) @map("tax_amount")
+  grossAmount     Float    @map("gross_amount")
+  currency        Currency @default(NGN)
+  issueDate       DateTime @map("issue_date")
+  dueDate         DateTime? @map("due_date")
+  status          InvoiceStatus @default(DRAFT)
+  paidDate        DateTime? @map("paid_date")
+  paidAmount      Float?   @map("paid_amount")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@map("invoices")
+}
+
+enum InvoiceType {
+  FEE_INVOICE
+  REIMBURSABLE
+  VARIATION
+  RETENTION_RELEASE
+  CREDIT_NOTE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  OVERDUE
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  WRITTEN_OFF
+}
+
+model CommercialRisk {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  title           String
+  description     String
+  category        CommercialRiskCategory @default(COST)
+  likelihood      RiskLevel @default(MEDIUM)
+  impact          RiskLevel @default(MEDIUM)
+  owner           String?
+  mitigationPlan  String?  @map("mitigation_plan")
+  status          RiskStatus @default(OPEN)
+  amount          Float?   // Estimated financial impact
+  currency        Currency @default(NGN)
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project         Project  @relation(fields: [projectId], references: [id])
+
+  @@map("commercial_risks")
+}
+
+enum CommercialRiskCategory {
+  COST
+  PROGRAMME
+  CONTRACT
+  PROCUREMENT
+  PAYMENT
+  SCOPE
+  REGULATORY
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskStatus {
+  OPEN
+  MITIGATED
+  ESCALATED
+  CLOSED
 }

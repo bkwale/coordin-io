@@ -124,4 +124,36 @@ export const AuditActions = {
 
   // Profile
   PROFILE_DEACTIVATED: 'profile.deactivated',
+
+  // Commercial — Budgets
+  BUDGET_CREATED: 'commercial.budget_created',
+  BUDGET_UPDATED: 'commercial.budget_updated',
+  BUDGET_APPROVED: 'commercial.budget_approved',
+  BUDGET_DELETED: 'commercial.budget_deleted',
+
+  // Commercial — Variations
+  VARIATION_CREATED: 'commercial.variation_created',
+  VARIATION_UPDATED: 'commercial.variation_updated',
+  VARIATION_APPROVED: 'commercial.variation_approved',
+
+  // Commercial — Purchase Orders
+  PO_CREATED: 'commercial.po_created',
+  PO_UPDATED: 'commercial.po_updated',
+
+  // Commercial — Tenders
+  TENDER_CREATED: 'commercial.tender_created',
+  TENDER_UPDATED: 'commercial.tender_updated',
+  TENDER_RETURN_ADDED: 'commercial.tender_return_added',
+
+  // Commercial — Valuations
+  VALUATION_CREATED: 'commercial.valuation_created',
+  VALUATION_UPDATED: 'commercial.valuation_updated',
+
+  // Commercial — Invoices
+  INVOICE_CREATED: 'commercial.invoice_created',
+  INVOICE_UPDATED: 'commercial.invoice_updated',
+
+  // Commercial — Risks
+  RISK_CREATED: 'commercial.risk_created',
+  RISK_UPDATED: 'commercial.risk_updated',
 } as const
