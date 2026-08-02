@@ -100,7 +100,7 @@ export default function DesignRisksPage() {
   /* ── Form state ───────────────────────────────────────── */
 
   const [fHazard, setFHazard] = useState('')
-  const [fCategory, setFCategory] = useState(CDM_CATEGORIES[0])
+  const [fCategory, setFCategory] = useState<string>(CDM_CATEGORIES[0])
   const [fLikelihood, setFLikelihood] = useState(3)
   const [fSeverity, setFSeverity] = useState(3)
   const [fMitigation, setFMitigation] = useState('')

@@ -161,7 +161,7 @@ function weekLabel(weekStarting: Date): string {
 /* ── Component ─────────────────────────────────────────── */
 
 export default function TimesheetsPage() {
-  const { addToast } = useToast()
+  const { toast } = useToast()
 
   // Navigation
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()))
@@ -268,11 +268,11 @@ export default function TimesheetsPage() {
       })
       setPreviousWeekId(prevMatch?.id || null)
     } catch (err) {
-      addToast('Failed to load timesheet data', 'error')
+      toast('Failed to load timesheet data', 'error')
     } finally {
       setLoading(false)
     }
-  }, [weekKey, currentMonday, addToast])
+  }, [weekKey, currentMonday, toast])
 
   const loadTeamWeeks = useCallback(async () => {
     if (!isManager) return
@@ -314,10 +314,10 @@ export default function TimesheetsPage() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Failed to create timesheet')
       }
-      addToast('Timesheet created', 'success')
+      toast('Timesheet created', 'success')
       await loadWeek()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to create timesheet', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to create timesheet', 'error')
     } finally {
       setCreating(false)
     }
@@ -327,7 +327,7 @@ export default function TimesheetsPage() {
     if (!week) return
     const hours = parseFloat(entryHours)
     if (isNaN(hours) || hours <= 0) {
-      addToast('Please enter valid hours', 'error')
+      toast('Please enter valid hours', 'error')
       return
     }
 
@@ -362,11 +362,11 @@ export default function TimesheetsPage() {
         throw new Error(err.error || 'Failed to add entry')
       }
 
-      addToast('Entry added', 'success')
+      toast('Entry added', 'success')
       resetEntryForm()
       await loadWeek()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to add entry', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to add entry', 'error')
     } finally {
       setSubmittingEntry(false)
     }
@@ -379,10 +379,10 @@ export default function TimesheetsPage() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Failed to delete entry')
       }
-      addToast('Entry removed', 'success')
+      toast('Entry removed', 'success')
       await loadWeek()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to delete entry', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to delete entry', 'error')
     }
   }
 
@@ -403,13 +403,13 @@ export default function TimesheetsPage() {
         throw new Error(err.error || 'Failed to update status')
       }
 
-      addToast(`Timesheet ${status.toLowerCase().replace('_', ' ')}`, 'success')
+      toast(`Timesheet ${status.toLowerCase().replace('_', ' ')}`, 'success')
       setActionWeekId(null)
       setActionReason('')
       await loadWeek()
       if (activeTab === 'manager') await loadTeamWeeks()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to update status', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to update status', 'error')
     } finally {
       setActionLoading(false)
     }
@@ -427,10 +427,10 @@ export default function TimesheetsPage() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Failed to copy entries')
       }
-      addToast('Previous week entries copied', 'success')
+      toast('Previous week entries copied', 'success')
       await loadWeek()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to copy entries', 'error')
+      toast(err instanceof Error ? err.message : 'Failed to copy entries', 'error')
     }
   }
 
@@ -730,7 +730,7 @@ export default function TimesheetsPage() {
           {/* Loading skeleton */}
           {loading && (
             <div className="bg-white rounded-xl border border-ink-100 p-6">
-              <SkeletonRow count={7} />
+              { Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />) }
             </div>
           )}
 
@@ -1429,7 +1429,7 @@ export default function TimesheetsPage() {
           {/* Team timesheets list */}
           {teamLoading && (
             <div className="bg-white rounded-xl border border-ink-100 p-6">
-              <SkeletonRow count={5} />
+              { Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />) }
             </div>
           )}
 
@@ -1552,7 +1552,7 @@ export default function TimesheetsPage() {
                 <button
                   onClick={() => {
                     if (!actionReason.trim()) {
-                      addToast('Please provide a reason', 'error')
+                      toast('Please provide a reason', 'error')
                       return
                     }
                     const isReject = actionWeekId.startsWith('reject-')

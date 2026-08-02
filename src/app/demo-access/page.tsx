@@ -63,12 +63,12 @@ export default function DemoAccessPage() {
         </a>
 
         {/* Inline keyframes for the progress bar */}
-        <style jsx>{`
+        <style dangerouslySetInnerHTML={{ __html: `
           @keyframes fillBar {
             from { width: 0%; }
             to { width: 100%; }
           }
-        `}</style>
+        ` }} />
       </div>
     </div>
   )
