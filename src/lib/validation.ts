@@ -129,6 +129,31 @@ export function optionalEnum<T extends string>(
 // ── Number validation ──────────────────────────────────────
 
 /**
+ * Validate a required number. Accepts number or numeric string.
+ * Throws ValidationError if missing, not a number, or out of range.
+ */
+export function requireNumber(
+  value: unknown,
+  fieldName: string,
+  opts: { min?: number; max?: number } = {},
+): number {
+  if (value === null || value === undefined) {
+    throw new ValidationError(`${fieldName} is required`)
+  }
+  const num = typeof value === 'number' ? value : parseFloat(String(value))
+  if (isNaN(num)) {
+    throw new ValidationError(`${fieldName} must be a number`)
+  }
+  if (opts.min !== undefined && num < opts.min) {
+    throw new ValidationError(`${fieldName} must be at least ${opts.min}`)
+  }
+  if (opts.max !== undefined && num > opts.max) {
+    throw new ValidationError(`${fieldName} must be at most ${opts.max}`)
+  }
+  return num
+}
+
+/**
  * Validate an optional number. Returns the value or null.
  */
 export function optionalNumber(
@@ -150,6 +175,24 @@ export function optionalNumber(
 }
 
 // ── Date validation ────────────────────────────────────────
+
+/**
+ * Validate a required date string. Returns a Date.
+ * Throws ValidationError if missing or invalid.
+ */
+export function requireDate(
+  value: unknown,
+  fieldName: string,
+): Date {
+  if (value === null || value === undefined) {
+    throw new ValidationError(`${fieldName} is required`)
+  }
+  const d = new Date(String(value))
+  if (isNaN(d.getTime())) {
+    throw new ValidationError(`${fieldName} is not a valid date`)
+  }
+  return d
+}
 
 /**
  * Validate an optional date string. Returns a Date or null.
