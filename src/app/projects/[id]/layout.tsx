@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ListChecks, FileText, PoundSterling,
-  ShieldCheck, MapPin, Eye, AlertCircle,
+  ShieldCheck, MapPin, Eye, AlertCircle, BarChart3, Table2,
 } from 'lucide-react'
 
 const PROJECT_TABS = [
@@ -39,6 +39,18 @@ const PROJECT_TABS = [
     href: '/brpd',
     icon: ShieldCheck,
     subRoutes: ['/brpd', '/brpd/changelog', '/building-regs', '/design-risks']
+  },
+  {
+    label: 'Metrics',
+    href: '/metrics',
+    icon: BarChart3,
+    subRoutes: ['/metrics']
+  },
+  {
+    label: 'SOA',
+    href: '/soa',
+    icon: Table2,
+    subRoutes: ['/soa']
   },
   {
     label: 'Observations',

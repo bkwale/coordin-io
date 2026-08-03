@@ -7,12 +7,16 @@ import {
   ListChecks, FileText, Users, Calendar, MapPin,
   AlertTriangle, RefreshCw, ArrowRight,
   CheckCircle2, Clock, Eye, PauseCircle,
+  Plus, X, Loader2, Building2, Shield,
+  Milestone, MessageSquare, Target, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
 import { TaskStatusBadge } from '@/components/StatusFlow'
+import { useToast } from '@/components/Toast'
+import { useApiMutation } from '@/hooks/use-api'
 
-/* ── Types mirroring GET /api/projects/[id] ────────────── */
+/* ── Types ────────────────────────────────────────────── */
 
 interface ProjectMember {
   assignedAt: string
@@ -22,37 +26,116 @@ interface ProjectMember {
     fullName: string
     email: string
     avatarUrl: string | null
+    jobTitle: string | null
     orgPermission: string
   }
 }
 
-interface ProjectDetail {
+interface MilestoneItem {
   id: string
-  name: string
-  code: string
+  title: string
   description: string | null
-  projectType: string
-  stage: string
+  category: string | null
+  dueDate: string
+  completedDate: string | null
   status: string
-  healthStatus: string
-  currency: string
-  clientBrand: string | null
-  location: string | null
-  startDate: string | null
-  targetCompletion: string | null
-  currentIssueRef: string | null
-  currentIssueDate: string | null
-  createdAt: string
-  office: { id: string; name: string; city: string } | null
-  memberships: ProjectMember[]
-  taskSummary: Record<string, number>
+  stage: string | null
+  sortOrder: number
 }
 
-/* ── Helpers ───────────────────────────────────────────── */
+interface ProjectUpdateItem {
+  id: string
+  authorId: string
+  weekEnding: string
+  progress: string | null
+  issues: string | null
+  decisions: string | null
+  actions: string | null
+  healthOverride: string | null
+  healthReason: string | null
+  createdAt: string
+}
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
+interface OverviewData {
+  project: {
+    id: string
+    name: string
+    code: string | null
+    description: string | null
+    projectType: string
+    stage: string
+    status: string
+    healthStatus: string
+    currency: string | null
+    clientBrand: string | null
+    location: string | null
+    startDate: string | null
+    targetCompletion: string | null
+    currentIssueRef: string | null
+    currentIssueDate: string | null
+    siteAddress: string | null
+    siteCity: string | null
+    siteCountry: string | null
+    siteRegion: string | null
+    sitePostcode: string | null
+    buildingType: string | null
+    developmentType: string | null
+    clientType: string | null
+    operatorName: string | null
+    operatorBrand: string | null
+    workStageFramework: string | null
+    budget: number | null
+    grossFloorArea: number | null
+    numberOfUnits: number | null
+    targetKeys: number | null
+    isBRPD: boolean
+    isCDM: boolean
+    complianceFrameworks: string | null
+    contractValue: number | null
+    feeValue: number | null
+    jurisdiction: string | null
+    feeBasis: string | null
+    appointmentType: string | null
+    office: { id: string; name: string; city: string } | null
+    memberships: ProjectMember[]
+  }
+  team: { count: number; members: ProjectMember[] }
+  milestones: {
+    total: number
+    active: number
+    completed: number
+    next: MilestoneItem | null
+    items: MilestoneItem[]
+  }
+  recentUpdates: ProjectUpdateItem[]
+  taskStats: {
+    total: number
+    completed: number
+    overdue: number
+    byStatus: Record<string, number>
+  }
+  documentStats: {
+    total: number
+    byType: Record<string, number>
+  }
+  metrics: {
+    daysToTarget: number | null
+    teamSize: number
+    completionRate: number
+  }
+}
+
+/* ── Helpers ──────────────────────────────────────────── */
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return 'Not provided'
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatCurrency(value: number | null | undefined, currency?: string | null): string {
+  if (value === null || value === undefined) return 'Not provided'
+  const sym = currency === 'NGN' ? '₦' : currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : '$'
+  return `${sym}${value.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
 const HEALTH_META: Record<string, { label: string; color: string; bgColor: string; dotColor: string }> = {
@@ -78,27 +161,75 @@ const ROLE_LABELS: Record<string, string> = {
   SENIOR_ARCHITECT: 'Senior Architect',
 }
 
-/* ── Page ──────────────────────────────────────────────── */
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Active',
+  PAUSED: 'Paused',
+  COMPLETED: 'Completed',
+  ARCHIVED: 'Archived',
+}
+
+const MILESTONE_STATUS_META: Record<string, { label: string; color: string; bgColor: string; dotColor: string }> = {
+  UPCOMING: { label: 'Upcoming', color: 'text-ink-600', bgColor: 'bg-ink-50', dotColor: 'bg-ink-400' },
+  DUE: { label: 'Due', color: 'text-amber-700', bgColor: 'bg-amber-50', dotColor: 'bg-amber-500' },
+  OVERDUE: { label: 'Overdue', color: 'text-red-700', bgColor: 'bg-red-50', dotColor: 'bg-red-500' },
+  COMPLETED: { label: 'Completed', color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500' },
+  CANCELLED: { label: 'Cancelled', color: 'text-ink-400', bgColor: 'bg-ink-50', dotColor: 'bg-ink-300' },
+}
+
+const DEV_TYPE_LABELS: Record<string, string> = {
+  NEW_BUILD: 'New Build',
+  CONVERSION: 'Conversion',
+  REFURBISHMENT: 'Refurbishment',
+  EXTENSION: 'Extension',
+  COMPLETION: 'Completion',
+  FIT_OUT: 'Fit-Out',
+  MIXED: 'Mixed',
+}
+
+const CLIENT_TYPE_LABELS: Record<string, string> = {
+  PRIVATE: 'Private',
+  DEVELOPER: 'Developer',
+  CORPORATE: 'Corporate',
+  HOTEL_OWNER: 'Hotel Owner',
+  HOTEL_OPERATOR: 'Hotel Operator',
+  GOVERNMENT: 'Government',
+  INTERNAL: 'Internal',
+}
+
+const FRAMEWORK_LABELS: Record<string, string> = {
+  RIBA: 'RIBA',
+  NIGERIAN_CWA: 'Nigerian CWA',
+  INTERNATIONAL: 'International',
+  DESIGN_BUILD: 'Design & Build',
+  CUSTOM: 'Custom',
+}
+
+/* ── Page ─────────────────────────────────────────────── */
 
 export default function ProjectDashboard() {
   const params = useParams()
   const projectId = params.id as string
+  const { toast } = useToast()
 
-  const [project, setProject] = useState<ProjectDetail | null>(null)
+  const [data, setData] = useState<OverviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchProject = useCallback(async () => {
+  // Modal state
+  const [showMilestoneForm, setShowMilestoneForm] = useState(false)
+  const [showUpdateForm, setShowUpdateForm] = useState(false)
+
+  const fetchOverview = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/projects/${projectId}`)
+      const res = await fetch(`/api/projects/${projectId}/overview`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error?.message || `Failed to load (${res.status})`)
       }
       const json = await res.json()
-      setProject(json.data.project)
+      setData(json.data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -107,10 +238,10 @@ export default function ProjectDashboard() {
   }, [projectId])
 
   useEffect(() => {
-    fetchProject()
-  }, [fetchProject])
+    fetchOverview()
+  }, [fetchOverview])
 
-  /* ── Loading ─────────────────────────────────────────── */
+  /* ── Loading ────────────────────────────────────────── */
 
   if (loading) {
     return (
@@ -130,31 +261,31 @@ export default function ProjectDashboard() {
     )
   }
 
-  /* ── Error ───────────────────────────────────────────── */
+  /* ── Error ──────────────────────────────────────────── */
 
-  if (error || !project) {
+  if (error || !data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
         <AlertTriangle className="w-8 h-8 text-red-500" />
         <p className="text-[13px] text-ink-600">{error || 'Project not found'}</p>
-        <button onClick={fetchProject} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors">
+        <button onClick={fetchOverview} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors">
           <RefreshCw className="w-4 h-4" /> Try again
         </button>
       </div>
     )
   }
 
-  /* ── Computed ─────────────────────────────────────────── */
+  const { project, milestones, recentUpdates, taskStats, documentStats, metrics } = data
 
-  const totalTasks = Object.values(project.taskSummary).reduce((a, b) => a + b, 0)
-  const completedTasks = project.taskSummary['COMPLETED'] || 0
-  const inProgressTasks = project.taskSummary['IN_PROGRESS'] || 0
-  const blockedTasks = project.taskSummary['BLOCKED'] || 0
-  const reviewTasks = project.taskSummary['READY_FOR_REVIEW'] || 0
-  const changesRequiredTasks = project.taskSummary['CHANGES_REQUIRED'] || 0
+  /* ── Computed ────────────────────────────────────────── */
 
-  // Weighted progress: NOT_STARTED=0, IN_PROGRESS=50, CHANGES_REQUIRED=25,
-  // READY_FOR_REVIEW=75, COMPLETED=100, BLOCKED=0
+  const totalTasks = taskStats.total
+  const completedTasks = taskStats.completed
+  const inProgressTasks = taskStats.byStatus['IN_PROGRESS'] || 0
+  const blockedTasks = taskStats.byStatus['BLOCKED'] || 0
+  const reviewTasks = taskStats.byStatus['READY_FOR_REVIEW'] || 0
+  const changesRequiredTasks = taskStats.byStatus['CHANGES_REQUIRED'] || 0
+
   const weightedProgress = totalTasks > 0
     ? Math.round(
         ((completedTasks * 100) + (inProgressTasks * 50) + (reviewTasks * 75) + (changesRequiredTasks * 25))
@@ -162,7 +293,6 @@ export default function ProjectDashboard() {
       )
     : 0
 
-  // Compute health from task data: overdue or blocked tasks degrade health
   const computedHealth = (() => {
     if (totalTasks === 0) return project.healthStatus || 'GREEN'
     const overdueRatio = blockedTasks / totalTasks
@@ -172,12 +302,27 @@ export default function ProjectDashboard() {
   })()
   const health = HEALTH_META[computedHealth] ?? HEALTH_META.GREEN
 
+  // Location string
+  const locationParts = [project.siteCity, project.siteRegion, project.siteCountry].filter(Boolean)
+  const locationStr = locationParts.length > 0 ? locationParts.join(', ') : project.location || 'Not provided'
+
+  // Compliance badges
+  const complianceBadges: string[] = []
+  if (project.isBRPD) complianceBadges.push('BRPD')
+  if (project.isCDM) complianceBadges.push('CDM')
+  if (project.complianceFrameworks) {
+    project.complianceFrameworks.split(',').forEach(f => {
+      const trimmed = f.trim()
+      if (trimmed && !complianceBadges.includes(trimmed)) complianceBadges.push(trimmed)
+    })
+  }
+
   return (
     <div className="space-y-6">
-      {/* ── Project header ────────────────────────────── */}
+      {/* ── Project header ──────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-[20px] font-semibold text-ink-900">{project.name}</h1>
             <span className={cn(
               'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium',
@@ -186,29 +331,84 @@ export default function ProjectDashboard() {
               <span className={cn('w-1.5 h-1.5 rounded-full', health.dotColor)} />
               {health.label}
             </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-ink-100 text-ink-600 uppercase tracking-wide">
+              {STATUS_LABELS[project.status] || project.status}
+            </span>
           </div>
           <div className="flex items-center gap-3 text-[12px] text-ink-400 flex-wrap">
-            <span className="font-medium text-ink-600">{project.code}</span>
-            <span>·</span>
+            {project.code && <span className="font-medium text-ink-600">{project.code}</span>}
+            {project.code && <span>·</span>}
             <span>{project.projectType.replace(/_/g, ' ')}</span>
             <span>·</span>
             <span>{STAGE_LABELS[project.stage] || project.stage}</span>
-            {project.location && (
-              <>
-                <span>·</span>
-                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {project.location}</span>
-              </>
-            )}
+            <span>·</span>
+            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {locationStr}</span>
           </div>
         </div>
       </div>
 
-      {/* ── Task stat cards ───────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Project Summary Card ────────────────────────── */}
+      <div className="bg-white rounded-xl border border-ink-100 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Building2 className="w-4 h-4 text-ink-400" />
+          <h3 className="text-[13px] font-semibold text-ink-700">Project Summary</h3>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3 text-[12px]">
+          <Row label="Client" value={project.clientBrand || 'Not provided'} />
+          <Row label="Client type" value={CLIENT_TYPE_LABELS[project.clientType || ''] || project.clientType || 'Not provided'} />
+          <Row label="Development type" value={DEV_TYPE_LABELS[project.developmentType || ''] || project.developmentType || 'Not provided'} />
+          <Row label="Sector" value={project.projectType.replace(/_/g, ' ')} />
+          <Row label="Work stage" value={FRAMEWORK_LABELS[project.workStageFramework || ''] || project.workStageFramework || 'Not provided'} />
+          <Row label="Jurisdiction" value={project.jurisdiction || 'Not provided'} />
+          <Row label="Location" value={locationStr} />
+          {project.sitePostcode && <Row label="Postcode" value={project.sitePostcode} />}
+          <Row label="Start date" value={formatDate(project.startDate)} />
+          <Row label="Target completion" value={formatDate(project.targetCompletion)} />
+          <Row label="Budget" value={formatCurrency(project.budget, project.currency)} />
+          <Row label="Contract value" value={formatCurrency(project.contractValue, project.currency)} />
+          {project.operatorName && <Row label="Operator" value={`${project.operatorName}${project.operatorBrand ? ` (${project.operatorBrand})` : ''}`} />}
+          {project.grossFloorArea !== null && project.grossFloorArea !== undefined && (
+            <Row label="GFA" value={`${project.grossFloorArea.toLocaleString()} m²`} />
+          )}
+          {project.numberOfUnits !== null && project.numberOfUnits !== undefined && (
+            <Row label="Units" value={String(project.numberOfUnits)} />
+          )}
+          {project.targetKeys !== null && project.targetKeys !== undefined && (
+            <Row label="Target keys" value={String(project.targetKeys)} />
+          )}
+        </div>
+
+        {/* Compliance badges */}
+        {complianceBadges.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-ink-50">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="w-3.5 h-3.5 text-ink-400" />
+              <span className="text-[11px] font-medium text-ink-500">Compliance</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {complianceBadges.map(badge => (
+                <span key={badge} className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-700 uppercase tracking-wide">
+                  {badge.replace(/_/g, ' ')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Quick Stats Row ─────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Total tasks" value={totalTasks} icon={ListChecks} accent="bg-blue-50 text-blue-600" />
-        <StatCard label="In progress" value={inProgressTasks} icon={Clock} accent="bg-blue-50 text-blue-600" />
-        <StatCard label="In review" value={reviewTasks} icon={Eye} accent="bg-amber-50 text-amber-600" />
         <StatCard label="Completed" value={completedTasks} icon={CheckCircle2} accent="bg-emerald-50 text-emerald-600" />
+        <StatCard label="Overdue" value={taskStats.overdue} icon={AlertTriangle} accent="bg-red-50 text-red-600" />
+        <StatCard label="Documents" value={documentStats.total} icon={FileText} accent="bg-purple-50 text-purple-600" />
+        <StatCard
+          label={metrics.daysToTarget !== null ? (metrics.daysToTarget >= 0 ? 'Days to target' : 'Days overdue') : 'Days to target'}
+          value={metrics.daysToTarget !== null ? Math.abs(metrics.daysToTarget) : 0}
+          icon={CalendarDays}
+          accent={metrics.daysToTarget !== null && metrics.daysToTarget < 0 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}
+          suffix={metrics.daysToTarget === null ? 'N/A' : undefined}
+        />
       </div>
 
       {/* ── Blocked alert ─────────────────────────────── */}
@@ -227,7 +427,7 @@ export default function ProjectDashboard() {
         </div>
       )}
 
-      {/* ── Main layout ───────────────────────────────── */}
+      {/* ── Main layout ──────────────────────────────── */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
@@ -239,7 +439,78 @@ export default function ProjectDashboard() {
             </div>
           )}
 
-          {/* Task breakdown */}
+          {/* ── Milestones Section ──────────────────────── */}
+          <div className="bg-white rounded-xl border border-ink-100">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-50">
+              <div className="flex items-center gap-2">
+                <Milestone className="w-4 h-4 text-ink-400" />
+                <h3 className="text-[13px] font-semibold text-ink-700">
+                  Milestones
+                  <span className="ml-1.5 text-ink-400 font-normal text-[12px]">
+                    ({milestones.active} active)
+                  </span>
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowMilestoneForm(true)}
+                className="flex items-center gap-1 text-[12px] text-accent-600 font-medium hover:text-accent-700"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add
+              </button>
+            </div>
+
+            {milestones.items.length === 0 ? (
+              <div className="px-5 py-8 text-center">
+                <Target className="w-6 h-6 text-ink-300 mx-auto mb-2" />
+                <p className="text-[13px] text-ink-500">No milestones yet</p>
+                <p className="text-[11px] text-ink-400 mt-1">Add milestones to track key project dates</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-ink-50">
+                {milestones.items.map(ms => {
+                  const meta = MILESTONE_STATUS_META[ms.status] || MILESTONE_STATUS_META.UPCOMING
+                  const isNext = milestones.next?.id === ms.id
+                  return (
+                    <div
+                      key={ms.id}
+                      className={cn(
+                        'px-5 py-3.5 flex items-center gap-3',
+                        isNext && 'bg-accent-50/50',
+                      )}
+                    >
+                      <span className={cn('w-2 h-2 rounded-full shrink-0', meta.dotColor)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[13px] font-medium text-ink-800 truncate">{ms.title}</p>
+                          {isNext && (
+                            <span className="text-[9px] font-semibold text-accent-600 bg-accent-100 px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">
+                              Next
+                            </span>
+                          )}
+                        </div>
+                        {ms.description && (
+                          <p className="text-[11px] text-ink-400 truncate mt-0.5">{ms.description}</p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium',
+                          meta.bgColor, meta.color,
+                        )}>
+                          {meta.label}
+                        </span>
+                        <p className="text-[10px] text-ink-400 mt-0.5">
+                          {ms.status === 'COMPLETED' ? formatDate(ms.completedDate) : formatDate(ms.dueDate)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Task breakdown ──────────────────────────── */}
           <div className="bg-white rounded-xl border border-ink-100">
             <div className="flex items-center justify-between px-5 py-4 border-b border-ink-50">
               <div className="flex items-center gap-2">
@@ -264,9 +535,7 @@ export default function ProjectDashboard() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[12px] text-ink-500">Overall progress</span>
-                    <span className="text-[12px] font-medium text-ink-700">
-                      {weightedProgress}%
-                    </span>
+                    <span className="text-[12px] font-medium text-ink-700">{weightedProgress}%</span>
                   </div>
                   <div className="w-full h-2 bg-ink-100 rounded-full overflow-hidden flex">
                     {completedTasks > 0 && (
@@ -286,7 +555,7 @@ export default function ProjectDashboard() {
 
                 {/* Status breakdown rows */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {Object.entries(project.taskSummary)
+                  {Object.entries(taskStats.byStatus)
                     .filter(([, count]) => count > 0)
                     .sort(([a], [b]) => {
                       const order: Record<string, number> = {
@@ -302,6 +571,68 @@ export default function ProjectDashboard() {
                       </div>
                     ))}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Recent Updates Section ──────────────────── */}
+          <div className="bg-white rounded-xl border border-ink-100">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-50">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-ink-400" />
+                <h3 className="text-[13px] font-semibold text-ink-700">
+                  Recent Updates
+                  <span className="ml-1.5 text-ink-400 font-normal text-[12px]">
+                    ({recentUpdates.length})
+                  </span>
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowUpdateForm(true)}
+                className="flex items-center gap-1 text-[12px] text-accent-600 font-medium hover:text-accent-700"
+              >
+                <Plus className="w-3.5 h-3.5" /> Post update
+              </button>
+            </div>
+
+            {recentUpdates.length === 0 ? (
+              <div className="px-5 py-8 text-center">
+                <MessageSquare className="w-6 h-6 text-ink-300 mx-auto mb-2" />
+                <p className="text-[13px] text-ink-500">No updates yet</p>
+                <p className="text-[11px] text-ink-400 mt-1">Post project updates to keep the team informed</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-ink-50">
+                {recentUpdates.map(upd => {
+                  const healthMeta = upd.healthOverride ? HEALTH_META[upd.healthOverride] : null
+                  return (
+                    <div key={upd.id} className="px-5 py-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[11px] text-ink-400">
+                          Week ending {formatDate(upd.weekEnding)}
+                        </span>
+                        {healthMeta && (
+                          <span className={cn(
+                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium',
+                            healthMeta.bgColor, healthMeta.color,
+                          )}>
+                            <span className={cn('w-1.5 h-1.5 rounded-full', healthMeta.dotColor)} />
+                            {healthMeta.label}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-ink-300 ml-auto">{formatDate(upd.createdAt)}</span>
+                      </div>
+                      {upd.progress && (
+                        <p className="text-[12px] text-ink-700 leading-relaxed whitespace-pre-wrap line-clamp-3">{upd.progress}</p>
+                      )}
+                      {upd.issues && (
+                        <p className="text-[11px] text-red-600 mt-1.5">
+                          <span className="font-medium">Issues:</span> {upd.issues}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -327,23 +658,23 @@ export default function ProjectDashboard() {
           </div>
         </div>
 
-        {/* ── Right column — sidebar ───────────────────── */}
+        {/* ── Right column — sidebar ──────────────────── */}
         <div className="space-y-4">
           {/* Project details */}
           <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
             <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">Details</h3>
             <div className="space-y-3 text-[12px]">
-              {project.clientBrand && (
-                <Row label="Client" value={project.clientBrand} />
-              )}
+              <Row label="Client" value={project.clientBrand || 'Not provided'} />
               <Row label="Type" value={project.projectType.replace(/_/g, ' ')} />
               <Row label="Stage" value={STAGE_LABELS[project.stage] || project.stage} />
-              <Row label="Currency" value={project.currency} />
+              <Row label="Currency" value={project.currency || 'Not provided'} />
               {project.office && (
                 <Row label="Office" value={`${project.office.name}, ${project.office.city}`} />
               )}
               <Row label="Start" value={formatDate(project.startDate)} />
               <Row label="Target" value={formatDate(project.targetCompletion)} />
+              {project.feeBasis && <Row label="Fee basis" value={project.feeBasis.replace(/_/g, ' ')} />}
+              {project.appointmentType && <Row label="Appointment" value={project.appointmentType.replace(/_/g, ' ')} />}
               {project.currentIssueRef && (
                 <Row label="Issue" value={`${project.currentIssueRef} (${formatDate(project.currentIssueDate)})`} />
               )}
@@ -357,12 +688,12 @@ export default function ProjectDashboard() {
               <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">
                 Team
                 <span className="ml-1.5 text-ink-400 font-normal lowercase">
-                  ({project.memberships.length})
+                  ({data.team.count})
                 </span>
               </h3>
             </div>
             <div className="space-y-3">
-              {project.memberships.map((m) => (
+              {data.team.members.map((m) => (
                 <div key={m.profile.id} className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-full bg-accent-100 flex items-center justify-center shrink-0">
                     <span className="text-[10px] font-semibold text-accent-700">
@@ -377,16 +708,61 @@ export default function ProjectDashboard() {
               ))}
             </div>
           </div>
+
+          {/* Key metrics */}
+          <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-3">
+            <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">Key Metrics</h3>
+            <div className="space-y-2 text-[12px]">
+              <Row label="Team size" value={String(metrics.teamSize)} />
+              <Row label="Completion rate" value={`${metrics.completionRate}%`} />
+              <Row label="Tasks overdue" value={String(taskStats.overdue)} />
+              <Row label="Active milestones" value={String(milestones.active)} />
+              <Row
+                label="Days to target"
+                value={metrics.daysToTarget !== null ? String(metrics.daysToTarget) : 'Not provided'}
+              />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ── Add Milestone Modal ─────────────────────── */}
+      {showMilestoneForm && (
+        <MilestoneFormModal
+          projectId={projectId}
+          onClose={() => setShowMilestoneForm(false)}
+          onSuccess={() => {
+            setShowMilestoneForm(false)
+            toast('Milestone added', 'success')
+            fetchOverview()
+          }}
+        />
+      )}
+
+      {/* ── Post Update Modal ───────────────────────── */}
+      {showUpdateForm && (
+        <UpdateFormModal
+          projectId={projectId}
+          onClose={() => setShowUpdateForm(false)}
+          onSuccess={() => {
+            setShowUpdateForm(false)
+            toast('Update posted', 'success')
+            fetchOverview()
+          }}
+        />
+      )}
     </div>
   )
 }
 
-/* ── Helpers ───────────────────────────────────────────── */
+/* ── Sub-components ───────────────────────────────────── */
 
-function StatCard({ label, value, icon: Icon, accent }: {
-  label: string; value: number; icon: React.FC<{ className?: string }>; accent: string
+function StatCard({ label, value, icon: Icon, accent, suffix }: {
+  label: string
+  value: number
+  icon: React.FC<{ className?: string }>
+  accent: string
+  suffix?: string
 }) {
   return (
     <div className="bg-white rounded-xl border border-ink-100 p-5 flex items-start gap-4">
@@ -394,7 +770,9 @@ function StatCard({ label, value, icon: Icon, accent }: {
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[28px] font-semibold text-ink-900 leading-tight">{value}</p>
+        <p className="text-[28px] font-semibold text-ink-900 leading-tight">
+          {suffix || value}
+        </p>
         <p className="text-[12px] text-ink-400 mt-0.5">{label}</p>
       </div>
     </div>
@@ -406,6 +784,228 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between">
       <span className="text-ink-400">{label}</span>
       <span className="text-ink-700 text-right">{value}</span>
+    </div>
+  )
+}
+
+/* ── Milestone Form Modal ─────────────────────────────── */
+
+function MilestoneFormModal({ projectId, onClose, onSuccess }: {
+  projectId: string
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [category, setCategory] = useState('')
+  const { mutate, loading } = useApiMutation(`/api/projects/${projectId}/milestones`, 'POST')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const result = await mutate({
+      title,
+      description: description || undefined,
+      dueDate,
+      category: category || undefined,
+    })
+    if (result) onSuccess()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
+          <h3 className="text-[14px] font-semibold text-ink-900">Add Milestone</h3>
+          <button onClick={onClose} className="text-ink-400 hover:text-ink-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Title *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+              placeholder="e.g. Design freeze"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Due date *</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Category</label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+            >
+              <option value="">Select category</option>
+              <option value="DESIGN_FREEZE">Design Freeze</option>
+              <option value="PLANNING">Planning</option>
+              <option value="CONSTRUCTION">Construction</option>
+              <option value="OPERATOR_REVIEW">Operator Review</option>
+              <option value="STAGE_GATE">Stage Gate</option>
+              <option value="HANDOVER">Handover</option>
+              <option value="CUSTOM">Custom</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Notes</label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+              placeholder="Optional notes about this milestone"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-ink-600 hover:text-ink-800">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !title || !dueDate}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Add milestone
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/* ── Update Form Modal ────────────────────────────────── */
+
+function UpdateFormModal({ projectId, onClose, onSuccess }: {
+  projectId: string
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [progress, setProgress] = useState('')
+  const [issues, setIssues] = useState('')
+  const [decisions, setDecisions] = useState('')
+  const [actions, setActions] = useState('')
+  const [healthOverride, setHealthOverride] = useState('')
+  const [healthReason, setHealthReason] = useState('')
+  const { mutate, loading } = useApiMutation(`/api/projects/${projectId}/updates`, 'POST')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const result = await mutate({
+      progress,
+      issues: issues || undefined,
+      decisions: decisions || undefined,
+      actions: actions || undefined,
+      healthOverride: healthOverride || undefined,
+      healthReason: healthReason || undefined,
+    })
+    if (result) onSuccess()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
+          <h3 className="text-[14px] font-semibold text-ink-900">Post Project Update</h3>
+          <button onClick={onClose} className="text-ink-400 hover:text-ink-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Progress *</label>
+            <textarea
+              value={progress}
+              onChange={e => setProgress(e.target.value)}
+              required
+              rows={3}
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+              placeholder="What was done this week?"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Issues / Blockers</label>
+            <textarea
+              value={issues}
+              onChange={e => setIssues(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+              placeholder="Current blockers or concerns"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Decisions</label>
+            <textarea
+              value={decisions}
+              onChange={e => setDecisions(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+              placeholder="Decisions made or needed"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Actions</label>
+            <textarea
+              value={actions}
+              onChange={e => setActions(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 resize-none"
+              placeholder="Actions assigned"
+            />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Health override</label>
+              <select
+                value={healthOverride}
+                onChange={e => setHealthOverride(e.target.value)}
+                className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+              >
+                <option value="">No override</option>
+                <option value="GREEN">Green - On track</option>
+                <option value="AMBER">Amber - At risk</option>
+                <option value="RED">Red - Off track</option>
+              </select>
+            </div>
+            {healthOverride && (
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Reason</label>
+                <input
+                  type="text"
+                  value={healthReason}
+                  onChange={e => setHealthReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+                  placeholder="Reason for health override"
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-ink-600 hover:text-ink-800">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !progress}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Post update
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
