@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { parseBody, optionalString } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   DRAFT: ['SUBMITTED'],
@@ -161,6 +162,27 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       entries: { orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] },
     },
   })
+
+  // ── Notifications ──
+  const ownerName = updated.profile?.fullName ?? 'Someone'
+  if (newStatus === 'SUBMITTED' && week.profile.managerId) {
+    await createNotification({
+      profileId: week.profile.managerId,
+      type: NOTIFICATION_EVENTS.TIMESHEET_SUBMITTED,
+      title: `${ownerName} submitted a timesheet for review`,
+      body: `${updated.totalHours ?? 0} hours`,
+      linkUrl: `/timesheets`,
+    }).catch(() => {})
+  }
+  if (['APPROVED', 'REJECTED', 'CHANGES_REQUIRED'].includes(newStatus)) {
+    await createNotification({
+      profileId: week.profileId,
+      type: NOTIFICATION_EVENTS.TIMESHEET_DECISION,
+      title: `Your timesheet was ${newStatus.toLowerCase().replace(/_/g, ' ')}`,
+      body: rejectionReason ?? undefined,
+      linkUrl: `/timesheets`,
+    }).catch(() => {})
+  }
 
   return success({ week: updated })
 })

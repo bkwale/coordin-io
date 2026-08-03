@@ -6,6 +6,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateLeaveTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
 import { NotFoundError, PermissionError } from '@/lib/errors'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
@@ -232,6 +233,27 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
+  }
+
+  // ── Notifications ──
+  const requesterName = updated.profile?.fullName ?? 'Someone'
+  if (newStatus === 'SUBMITTED' && leaveRequest.approverId) {
+    await createNotification({
+      profileId: leaveRequest.approverId,
+      type: NOTIFICATION_EVENTS.LEAVE_REQUESTED,
+      title: `${requesterName} submitted a leave request`,
+      body: `${leaveRequest.leaveType} leave — ${leaveRequest.days} day(s)`,
+      linkUrl: `/leave?role=approver`,
+    }).catch(() => {})
+  }
+  if (['APPROVED', 'REJECTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED', 'CANCELLED'].includes(newStatus)) {
+    await createNotification({
+      profileId: leaveRequest.profileId,
+      type: NOTIFICATION_EVENTS.LEAVE_DECISION,
+      title: `Your leave request was ${newStatus.toLowerCase().replace(/_/g, ' ')}`,
+      body: comment ?? undefined,
+      linkUrl: `/leave`,
+    }).catch(() => {})
   }
 
   return success({ leaveRequest: updated })

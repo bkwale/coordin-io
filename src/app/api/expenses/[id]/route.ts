@@ -6,6 +6,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateRequestTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
 import { NotFoundError, PermissionError } from '@/lib/errors'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
@@ -139,6 +140,27 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
+  }
+
+  // ── Notifications ──
+  const claimantName = updated.profile?.fullName ?? 'Someone'
+  if (newStatus === 'SUBMITTED' && claim.approverId) {
+    await createNotification({
+      profileId: claim.approverId,
+      type: NOTIFICATION_EVENTS.EXPENSE_SUBMITTED,
+      title: `${claimantName} submitted an expense claim`,
+      body: `${claim.currency} ${claim.amount} — ${claim.description ?? 'No description'}`,
+      linkUrl: `/expenses`,
+    }).catch(() => {})
+  }
+  if (['APPROVED', 'REJECTED'].includes(newStatus)) {
+    await createNotification({
+      profileId: claim.profileId,
+      type: NOTIFICATION_EVENTS.EXPENSE_DECISION,
+      title: `Your expense claim was ${newStatus.toLowerCase()}`,
+      body: comment ?? undefined,
+      linkUrl: `/expenses`,
+    }).catch(() => {})
   }
 
   return success({ claim: updated })

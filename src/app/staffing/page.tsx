@@ -1340,9 +1340,17 @@ function EmployeeDetailPanel({
           <h2 className="text-[16px] font-semibold text-ink-900">{emp.fullName}</h2>
           <p className="text-[12px] text-ink-400">{emp.jobTitle ?? 'No role'} | {emp.office?.name ?? 'No office'}</p>
         </div>
-        <button onClick={onClose} className="p-2 rounded-lg hover:bg-ink-50 transition-colors">
-          <X className="w-4 h-4 text-ink-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/staffing/${emp.id}`}
+            className="text-[12px] text-blue-600 hover:underline px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            Full profile
+          </a>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-ink-50 transition-colors">
+            <X className="w-4 h-4 text-ink-400" />
+          </button>
+        </div>
       </div>
 
       {/* ── Section tabs ────────────────────────────────────── */}

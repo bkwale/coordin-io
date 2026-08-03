@@ -528,6 +528,7 @@ enum ProjectStage {
 }
 
 enum ProjectStatus {
+  DRAFT
   ACTIVE
   PAUSED
   COMPLETED

@@ -3,7 +3,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
-import { requireString, parseBody } from '@/lib/validation'
+import { requireString, requireNumber, requireDate, parseBody } from '@/lib/validation'
 import { ValidationError } from '@/lib/errors'
 
 /**
@@ -131,16 +131,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const targetProfileId = requireString(body.profileId, 'profileId')
   const projectId = requireString(body.projectId, 'projectId')
 
-  if (!body.weekStarting) {
-    throw new ValidationError('weekStarting is required')
-  }
-  const weekStarting = new Date(String(body.weekStarting))
+  const weekStarting = requireDate(body.weekStarting, 'weekStarting')
   weekStarting.setHours(0, 0, 0, 0)
 
-  const hoursAllocated = typeof body.hoursAllocated === 'number' ? body.hoursAllocated : parseFloat(String(body.hoursAllocated))
-  if (isNaN(hoursAllocated) || hoursAllocated < 0 || hoursAllocated > 168) {
-    throw new ValidationError('hoursAllocated must be between 0 and 168')
-  }
+  const hoursAllocated = requireNumber(body.hoursAllocated, 'hoursAllocated', { min: 0, max: 168 })
 
   // Verify the target profile is in the same org
   const targetProfile = await modulesPrisma.profile.findUnique({

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
 import { PermissionError, ValidationError } from '@/lib/errors'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { validateTaskTransition, isReviewerTransition } from '@/lib/task-transitions'
 import { withTaskAccess } from '@/lib/with-task-access'
 import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
@@ -140,6 +141,42 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
       },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
+  }
+
+  // ── Notifications ──
+  if (ownerId && ownerId !== profile.id) {
+    await createNotification({
+      profileId: ownerId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned a task: ${task.title}`,
+      linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+    }).catch(() => {})
+  }
+  if (reviewerId && reviewerId !== profile.id) {
+    await createNotification({
+      profileId: reviewerId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned as reviewer: ${task.title}`,
+      linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+    }).catch(() => {})
+  }
+  if (status && status !== currentTask.status) {
+    if (status === 'READY_FOR_REVIEW' && currentTask.reviewerId) {
+      await createNotification({
+        profileId: currentTask.reviewerId,
+        type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
+        title: `Task ready for review: ${task.title}`,
+        linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+      }).catch(() => {})
+    }
+    if ((status === 'COMPLETED' || status === 'CHANGES_REQUIRED') && currentTask.ownerId && currentTask.ownerId !== profile.id) {
+      await createNotification({
+        profileId: currentTask.ownerId,
+        type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
+        title: `Task ${status === 'COMPLETED' ? 'completed' : 'needs changes'}: ${task.title}`,
+        linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+      }).catch(() => {})
+    }
   }
 
   return success({ task })

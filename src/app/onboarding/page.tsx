@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  ClipboardList,
   Clock,
   FileText,
   GraduationCap,
@@ -16,6 +17,7 @@ import {
   ShieldCheck,
   User,
 } from 'lucide-react'
+import { useToast } from '@/components/Toast'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -55,6 +57,33 @@ type TrainingItem = {
   score: number | null
 }
 
+type AssignmentData = {
+  id: string
+  templateId: string
+  startDate: string
+  status: string
+  progress: number
+  template: { id: string; name: string }
+}
+
+type OnboardingTask = {
+  id: string
+  title: string
+  category: string
+  stage: string
+  status: string
+  dueDate: string | null
+  assigneeName: string
+  completedAt: string | null
+  evidenceUrl: string
+  evidenceNote: string
+  responsibleRole: string
+  requiresEvidence: boolean
+  requiresApproval: boolean
+  description: string
+  approvedAt: string | null
+}
+
 // ────────────────────────────────────────────────────────
 // Constants
 // ────────────────────────────────────────────────────────
@@ -67,12 +96,28 @@ const STEPS: { key: OnboardingStep; label: string; icon: typeof FileText }[] = [
   { key: 'complete', label: 'Complete', icon: CheckCircle2 },
 ]
 
+const STAGE_META: Record<string, { label: string; color: string }> = {
+  BEFORE_START: { label: 'Before Start', color: 'bg-blue-100 text-blue-800' },
+  DAY_ONE: { label: 'Day One', color: 'bg-green-100 text-green-800' },
+  ROLE_SPECIFIC: { label: 'Role Specific', color: 'bg-purple-100 text-purple-800' },
+  PROBATION: { label: 'Probation', color: 'bg-amber-100 text-amber-800' },
+}
+
+const TASK_STATUS_COLORS: Record<string, string> = {
+  PENDING: 'bg-gray-100 text-gray-700',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+  OVERDUE: 'bg-red-100 text-red-700',
+  WAIVED: 'bg-gray-100 text-gray-500',
+}
+
 // ────────────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome')
   const [progress, setProgress] = useState<StepProgress | null>(null)
   const [policies, setPolicies] = useState<PolicyItem[]>([])
@@ -86,6 +131,45 @@ export default function OnboardingPage() {
     emergencyPhone: '',
   })
   const [completing, setCompleting] = useState(false)
+
+  // Template-based onboarding state
+  const [hasAssignment, setHasAssignment] = useState(false)
+  const [assignment, setAssignment] = useState<AssignmentData | null>(null)
+  const [groupedTasks, setGroupedTasks] = useState<Record<string, OnboardingTask[]>>({})
+
+  // ── Check for template assignment ─────────────────────
+  const checkAssignment = useCallback(async () => {
+    try {
+      const res = await fetch('/api/onboarding/assignments?mine=true&status=ACTIVE')
+      if (!res.ok) return false
+      const json = await res.json()
+      const assignments = json.data?.assignments ?? []
+      if (assignments.length > 0) {
+        setHasAssignment(true)
+        setAssignment(assignments[0])
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }, [])
+
+  // ── Fetch assignment tasks ────────────────────────────
+  const fetchAssignmentTasks = useCallback(async (assignmentId: string) => {
+    try {
+      const res = await fetch(`/api/onboarding/assignments/${assignmentId}/tasks`)
+      if (!res.ok) return
+      const json = await res.json()
+      setGroupedTasks(json.data?.tasks ?? {})
+      // Update assignment progress from response
+      if (json.data?.assignment) {
+        setAssignment((prev) => prev ? { ...prev, progress: json.data.assignment.progress, status: json.data.assignment.status } : prev)
+      }
+    } catch {
+      // Non-fatal
+    }
+  }, [])
 
   // ── Fetch progress ────────────────────────────────────
   const fetchProgress = useCallback(async () => {
@@ -127,11 +211,23 @@ export default function OnboardingPage() {
   useEffect(() => {
     async function init() {
       setLoading(true)
-      await Promise.all([fetchProgress(), fetchPolicies(), fetchTraining()])
+      // Check for template-based assignment first
+      const hasTemplateBased = await checkAssignment()
+      if (!hasTemplateBased) {
+        // Fall back to legacy wizard
+        await Promise.all([fetchProgress(), fetchPolicies(), fetchTraining()])
+      }
       setLoading(false)
     }
     init()
-  }, [fetchProgress, fetchPolicies, fetchTraining])
+  }, [checkAssignment, fetchProgress, fetchPolicies, fetchTraining])
+
+  // Load tasks when assignment is available
+  useEffect(() => {
+    if (assignment?.id) {
+      fetchAssignmentTasks(assignment.id)
+    }
+  }, [assignment?.id, fetchAssignmentTasks])
 
   // ── Acknowledge a policy ──────────────────────────────
   async function acknowledgePolicy(policyId: string) {
@@ -220,6 +316,29 @@ export default function OnboardingPage() {
   const canProceedFromTraining = progress?.training?.completed ?? false
   const canFinish = canProceedFromPolicies && canProceedFromTraining
 
+  // ── Handle task update (employee) ────────────────────
+  async function handleTaskAction(taskId: string, updates: Record<string, unknown>) {
+    if (!assignment) return
+    setActionLoading(taskId)
+    try {
+      const res = await fetch(`/api/onboarding/assignments/${assignment.id}/tasks`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, ...updates }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error || 'Failed to update task')
+      }
+      toast('Task updated', 'success')
+      await fetchAssignmentTasks(assignment.id)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to update task', 'error')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   // ── Loading state ─────────────────────────────────────
   if (loading) {
     return (
@@ -228,6 +347,154 @@ export default function OnboardingPage() {
           <Loader2 className="w-8 h-8 text-accent-500 animate-spin mx-auto mb-3" />
           <p className="text-ink-500 text-[14px]">Loading your onboarding...</p>
         </div>
+      </div>
+    )
+  }
+
+  // ── Template-based onboarding view ────────────────────
+  if (hasAssignment && assignment) {
+    const stageOrder = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION']
+    const allTasks = stageOrder.flatMap((s) => groupedTasks[s] ?? [])
+    const completedCount = allTasks.filter((t) => t.status === 'COMPLETED' || t.status === 'WAIVED').length
+    const totalCount = allTasks.length
+    const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+
+    return (
+      <div className="min-h-screen bg-surface-50">
+        <header className="bg-white border-b border-surface-200">
+          <div className="max-w-3xl mx-auto px-6 py-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-accent flex items-center justify-center text-white font-display text-base">
+                C
+              </div>
+              <div>
+                <span className="font-display text-[17px] text-ink-900">coordin.io</span>
+                <span className="text-ink-400 text-[13px] ml-2">Onboarding</span>
+              </div>
+            </div>
+            <h1 className="font-display text-[20px] text-ink-900 mb-1">{assignment.template.name}</h1>
+            <p className="text-ink-400 text-[13px]">
+              Started {new Date(assignment.startDate).toLocaleDateString()} &middot; {completedCount}/{totalCount} tasks complete
+            </p>
+            {/* Progress bar */}
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex-1 h-2.5 bg-surface-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${progressPct === 100 ? 'bg-emerald-500' : 'bg-accent-500'}`}
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <span className="text-[13px] font-semibold text-ink-700 w-12 text-right">{progressPct}%</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+          {stageOrder.map((stageKey) => {
+            const tasks = groupedTasks[stageKey] ?? []
+            if (tasks.length === 0) return null
+            const meta = STAGE_META[stageKey] ?? { label: stageKey, color: 'bg-gray-100 text-gray-700' }
+            const stageCompleted = tasks.filter((t) => t.status === 'COMPLETED' || t.status === 'WAIVED').length
+            return (
+              <div key={stageKey}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`text-[12px] font-semibold px-2.5 py-1 rounded ${meta.color}`}>
+                    {meta.label}
+                  </span>
+                  <span className="text-[12px] text-ink-400">{stageCompleted}/{tasks.length} complete</span>
+                </div>
+                <div className="space-y-2">
+                  {tasks.map((task) => {
+                    const isDone = task.status === 'COMPLETED' || task.status === 'WAIVED'
+                    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !isDone
+                    return (
+                      <div
+                        key={task.id}
+                        className={`bg-white rounded-xl border shadow-card p-4 transition-all ${
+                          isDone ? 'border-emerald-200 bg-emerald-50/30' : isOverdue ? 'border-red-200' : 'border-surface-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3 flex-1">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                              isDone ? 'bg-emerald-100 text-emerald-600' : isOverdue ? 'bg-red-100 text-red-600' : 'bg-accent-50 text-accent-600'
+                            }`}>
+                              {isDone ? <Check className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-[14px] text-ink-900">{task.title}</h3>
+                              {task.description !== 'Not provided' && (
+                                <p className="text-[13px] text-ink-500 mt-1">{task.description}</p>
+                              )}
+                              <div className="flex items-center gap-3 mt-1.5 text-[12px] text-ink-400">
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TASK_STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                                  {task.status}
+                                </span>
+                                {task.dueDate && (
+                                  <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                                    Due: {new Date(task.dueDate).toLocaleDateString()}
+                                  </span>
+                                )}
+                                {task.category !== 'Not provided' && <span>{task.category}</span>}
+                                {task.responsibleRole !== 'Not provided' && <span>{task.responsibleRole}</span>}
+                                {task.requiresEvidence && <span className="text-amber-600">Evidence required</span>}
+                              </div>
+                              {task.evidenceUrl !== 'Not provided' && (
+                                <div className="mt-1.5 text-[12px] text-blue-600">
+                                  <a href={task.evidenceUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">View evidence</a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex-shrink-0 flex items-center gap-2">
+                            {!isDone && task.responsibleRole === 'EMPLOYEE' && (
+                              <>
+                                {task.status === 'PENDING' && (
+                                  <button
+                                    onClick={() => handleTaskAction(task.id, { status: 'IN_PROGRESS' })}
+                                    disabled={actionLoading === task.id}
+                                    className="text-accent-600 text-[13px] font-semibold px-3 py-1.5 rounded-lg hover:bg-accent-50 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                                  >
+                                    {actionLoading === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                    Start
+                                  </button>
+                                )}
+                                {(task.status === 'IN_PROGRESS' || task.status === 'OVERDUE') && (
+                                  <button
+                                    onClick={() => handleTaskAction(task.id, { status: 'COMPLETED' })}
+                                    disabled={actionLoading === task.id}
+                                    className="bg-emerald-500 text-white text-[13px] font-semibold px-3 py-1.5 rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                                  >
+                                    {actionLoading === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                    Complete
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {isDone && (
+                              <div className="flex items-center gap-1.5 text-emerald-600 text-[13px] font-medium">
+                                <CheckCircle2 className="w-4 h-4" />
+                                Done
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          {totalCount === 0 && (
+            <div className="bg-white rounded-xl border border-surface-200 p-8 text-center">
+              <ClipboardList className="w-8 h-8 text-ink-300 mx-auto mb-2" />
+              <p className="text-ink-400 text-[14px]">No onboarding tasks have been set up yet.</p>
+            </div>
+          )}
+        </main>
       </div>
     )
   }
