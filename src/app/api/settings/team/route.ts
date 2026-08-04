@@ -37,5 +37,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     })),
     total: members.length,
     active: members.filter((m) => m.status === 'ACTIVE').length,
+    viewerPermission: profile.orgPermission,
+    viewerProfileId: profile.id,
   })
 })

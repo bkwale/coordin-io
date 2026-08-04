@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Building2, Users, CreditCard, Hash, Globe, Puzzle, Shield,
   Save, Plus, Mail, CheckCircle, XCircle, Clock, UserPlus,
-  ChevronRight, Loader2,
+  ChevronRight, Loader2, Pencil, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +39,8 @@ interface TeamData {
   members: TeamMember[]
   total: number
   active: number
+  viewerPermission?: string
+  viewerProfileId?: string
 }
 
 // ── Settings Tabs ──────────────────────────────────────────
@@ -305,6 +307,12 @@ function TeamSection() {
   const [invError, setInvError] = useState<string | null>(null)
   const [invSuccess, setInvSuccess] = useState(false)
 
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ jobTitle: '', orgPermission: '', status: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   const fetchTeam = useCallback(() => {
     setLoading(true)
     fetch('/api/settings/team')
@@ -377,6 +385,65 @@ function TeamSection() {
       case 'MEMBER': return 'Team Member'
       case 'VIEWER': return 'External'
       default: return p
+    }
+  }
+
+  const viewerPermission = team?.viewerPermission || 'MEMBER'
+  const viewerProfileId = team?.viewerProfileId || ''
+  const canEditTeam = ['OWNER', 'ADMIN', 'HR'].includes(viewerPermission)
+
+  const permissionOptions = (() => {
+    const all = [
+      { value: 'OWNER', label: 'Practice Principal' },
+      { value: 'ADMIN', label: 'Practice Manager' },
+      { value: 'HR', label: 'HR Manager' },
+      { value: 'MANAGER', label: 'Project Lead' },
+      { value: 'MEMBER', label: 'Team Member' },
+      { value: 'VIEWER', label: 'External' },
+    ]
+    if (viewerPermission === 'OWNER') return all
+    return all.filter((o) => ['MANAGER', 'MEMBER', 'VIEWER'].includes(o.value))
+  })()
+
+  const startEdit = (member: TeamMember) => {
+    setEditingId(member.id)
+    setEditForm({
+      jobTitle: member.jobTitle || '',
+      orgPermission: member.orgPermission,
+      status: member.status,
+    })
+    setSaveError(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setSaveError(null)
+  }
+
+  const handleEditSave = async () => {
+    if (!editingId) return
+    setEditSaving(true)
+    setSaveError(null)
+    try {
+      const res = await fetch(`/api/staffing/employees/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobTitle: editForm.jobTitle || undefined,
+          orgPermission: editForm.orgPermission,
+          status: editForm.status,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `Failed to save (${res.status})`)
+      }
+      setEditingId(null)
+      fetchTeam()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -487,44 +554,125 @@ function TeamSection() {
                 <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Permission</th>
                 <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Office</th>
                 <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Status</th>
+                {canEditTeam && (
+                  <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {team.members.map((member) => (
-                <tr key={member.id} className="border-b border-surface-200/60 hover:bg-surface-50/50 transition-colors">
-                  <td className="py-3 px-4">
-                    <div>
-                      <p className="text-[13px] font-medium text-ink-900">{member.fullName}</p>
-                      <p className="text-[11px] text-ink-400">{member.email}</p>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <p className="text-[13px] text-ink-600">{member.role?.name || member.jobTitle || '—'}</p>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={cn(
-                      'inline-block text-[11px] font-medium px-2 py-0.5 rounded-full',
-                      member.orgPermission === 'OWNER' ? 'bg-purple-50 text-purple-700' :
-                      member.orgPermission === 'ADMIN' ? 'bg-blue-50 text-blue-700' :
-                      member.orgPermission === 'HR' ? 'bg-teal-50 text-teal-700' :
-                      member.orgPermission === 'MANAGER' ? 'bg-amber-50 text-amber-700' :
-                      member.orgPermission === 'VIEWER' ? 'bg-surface-100 text-ink-400' :
-                      'bg-surface-100 text-ink-500'
-                    )}>
-                      {member.orgPermissionLabel || permissionLabel(member.orgPermission)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-[13px] text-ink-500">
-                    {member.office?.name || '—'}
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-1.5">
-                      {statusIcon(member.status)}
-                      <span className="text-[12px] text-ink-500 capitalize">{member.status.toLowerCase()}</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {team.members.map((member) => {
+                const isEditing = editingId === member.id
+                const isSelf = member.id === viewerProfileId
+                return (
+                  <tr key={member.id} className={cn(
+                    'border-b border-surface-200/60 transition-colors',
+                    isEditing ? 'bg-accent-50/30' : 'hover:bg-surface-50/50'
+                  )}>
+                    <td className="py-3 px-4">
+                      <div>
+                        <p className="text-[13px] font-medium text-ink-900">{member.fullName}</p>
+                        <p className="text-[11px] text-ink-400">{member.email}</p>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.jobTitle}
+                          onChange={(e) => setEditForm({ ...editForm, jobTitle: e.target.value })}
+                          placeholder="Job title"
+                          className="w-full px-2 py-1.5 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                        />
+                      ) : (
+                        <p className="text-[13px] text-ink-600">{member.role?.name || member.jobTitle || '—'}</p>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      {isEditing && !isSelf ? (
+                        <select
+                          value={editForm.orgPermission}
+                          onChange={(e) => setEditForm({ ...editForm, orgPermission: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                        >
+                          {permissionOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={cn(
+                          'inline-block text-[11px] font-medium px-2 py-0.5 rounded-full',
+                          member.orgPermission === 'OWNER' ? 'bg-purple-50 text-purple-700' :
+                          member.orgPermission === 'ADMIN' ? 'bg-blue-50 text-blue-700' :
+                          member.orgPermission === 'HR' ? 'bg-teal-50 text-teal-700' :
+                          member.orgPermission === 'MANAGER' ? 'bg-amber-50 text-amber-700' :
+                          member.orgPermission === 'VIEWER' ? 'bg-surface-100 text-ink-400' :
+                          'bg-surface-100 text-ink-500'
+                        )}>
+                          {member.orgPermissionLabel || permissionLabel(member.orgPermission)}
+                          {isEditing && isSelf && (
+                            <span className="ml-1 text-[10px] text-ink-300">(own)</span>
+                          )}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-[13px] text-ink-500">
+                      {member.office?.name || '—'}
+                    </td>
+                    <td className="py-3 px-4">
+                      {isEditing && !isSelf ? (
+                        <select
+                          value={editForm.status}
+                          onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                        >
+                          <option value="ACTIVE">Active</option>
+                          <option value="DEACTIVATED">Deactivated</option>
+                        </select>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          {statusIcon(member.status)}
+                          <span className="text-[12px] text-ink-500 capitalize">{member.status.toLowerCase()}</span>
+                        </div>
+                      )}
+                    </td>
+                    {canEditTeam && (
+                      <td className="py-3 px-4">
+                        {isEditing ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={handleEditSave}
+                              disabled={editSaving}
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                              title="Save"
+                            >
+                              {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              disabled={editSaving}
+                              className="p-1.5 rounded-lg bg-surface-100 text-ink-400 hover:bg-surface-200 disabled:opacity-50 transition-colors"
+                              title="Cancel"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startEdit(member)}
+                            className="p-1.5 rounded-lg text-ink-300 hover:bg-surface-100 hover:text-ink-600 transition-colors"
+                            title="Edit member"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        )}
+                        {saveError && isEditing && (
+                          <p className="text-[11px] text-red-600 mt-1 max-w-[160px]">{saveError}</p>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

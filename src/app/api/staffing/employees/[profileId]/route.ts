@@ -4,7 +4,7 @@ import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, parseBody } from '@/lib/validation'
-import { NotFoundError, PermissionError } from '@/lib/errors'
+import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { hasFullStaffingAccess, canManageHR, toDirectoryEntry } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
 
@@ -179,6 +179,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
  * PATCH /api/staffing/employees/[profileId] — Update employee fields.
  *
  * Permission: HR+ can update any employee. Self can update own emergency contact/phone.
+ * orgPermission changes: OWNER can set any level, ADMIN/HR can set up to MANAGER.
  */
 export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const profileId = request.url.match(/\/employees\/([^/?]+)/)?.[1]
@@ -222,6 +223,46 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (body.roleId !== undefined) adminFields.roleId = body.roleId || null
     if (body.managerId !== undefined) adminFields.managerId = body.managerId || null
     if (body.status !== undefined) adminFields.status = body.status
+
+    // orgPermission — with privilege escalation guard
+    // OWNER can set any level. ADMIN/HR can set up to MANAGER (cannot promote to HR/ADMIN/OWNER).
+    if (body.orgPermission !== undefined) {
+      const validPermissions = ['OWNER', 'ADMIN', 'HR', 'MANAGER', 'MEMBER', 'VIEWER']
+      const newPerm = body.orgPermission as string
+      if (!validPermissions.includes(newPerm)) {
+        throw new ValidationError(`Invalid permission level: ${newPerm}`)
+      }
+      const highPerms = ['OWNER', 'ADMIN', 'HR']
+      if (highPerms.includes(newPerm) && role !== 'OWNER') {
+        throw new PermissionError('Only the Practice Principal (Owner) can assign HR, Admin, or Owner roles')
+      }
+      // Prevent demoting OWNER unless you are OWNER
+      if (role !== 'OWNER') {
+        const target = await modulesPrisma.profile.findUnique({
+          where: { id: profileId },
+          select: { orgPermission: true },
+        })
+        if (target?.orgPermission === 'OWNER') {
+          throw new PermissionError('Only owners can change another owner\'s role')
+        }
+      }
+      // Prevent self-demotion for last OWNER
+      if (isSelf && role === 'OWNER' && newPerm !== 'OWNER') {
+        const ownerCount = await modulesPrisma.profile.count({
+          where: { organisationId: profile.organisationId, orgPermission: 'OWNER' },
+        })
+        if (ownerCount <= 1) {
+          throw new ValidationError('Cannot demote the last owner — assign another owner first')
+        }
+      }
+      adminFields.orgPermission = newPerm
+    }
+
+    // department
+    if (body.department !== undefined) {
+      const dept = optionalString(body.department, 'department', 200)
+      adminFields.department = dept || null
+    }
   }
 
   // Update profile
