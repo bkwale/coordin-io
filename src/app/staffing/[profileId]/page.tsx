@@ -6,7 +6,8 @@ import {
   ArrowLeft, User, Briefcase, Calendar, BarChart3, GraduationCap,
   Wrench, FileText, ChevronDown, ChevronRight, AlertTriangle,
   RefreshCw, Mail, Phone, MapPin, Shield, Clock, Heart,
-  Building2, Users, Pencil, X, Save, Loader2,
+  Building2, Users, Pencil, X, Save, Loader2, Plus, ExternalLink,
+  Upload, Lock, Award, AlertCircle,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -85,6 +86,39 @@ interface EmployeeProfileData {
   hrDocumentCounts: Record<string, number>
   isAdmin: boolean
   isSelf: boolean
+}
+
+interface TrainingRecord {
+  id: string
+  title: string
+  provider: string | null
+  category: string
+  description: string | null
+  mandatory: boolean
+  durationMinutes: number | null
+  contentUrl: string | null
+  cpdHours: number
+  expiryDate: string | null
+  renewalDate: string | null
+  expiryStatus: 'current' | 'expiring' | 'expired'
+  profileId: string | null
+  completions: Array<{ id: string; completedAt: string | null; profileId: string }>
+  completionCount: number
+  createdAt: string
+}
+
+interface HRDocumentRecord {
+  id: string
+  profileId: string
+  documentType: string
+  title: string
+  description: string | null
+  fileUrl: string | null
+  expiryDate: string | null
+  isConfidential: boolean
+  uploadedById: string | null
+  createdAt: string
+  profile?: { id: string; fullName: string; jobTitle: string | null }
 }
 
 /* ================================================================
@@ -904,12 +938,127 @@ function ProjectsContent({ data }: { data: EmployeeProfileData }) {
 }
 
 function TrainingContent({ data }: { data: EmployeeProfileData }) {
-  const { training } = data
+  const { training, isAdmin } = data
+  const { toast } = useToast()
+  const params = useParams()
+  const profileId = params.profileId as string
+
+  const [trainingRecords, setTrainingRecords] = useState<TrainingRecord[]>([])
+  const [loadingRecords, setLoadingRecords] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Add form state
+  const [formTitle, setFormTitle] = useState('')
+  const [formProvider, setFormProvider] = useState('')
+  const [formCategory, setFormCategory] = useState('CPD')
+  const [formCompletedDate, setFormCompletedDate] = useState('')
+  const [formCpdHours, setFormCpdHours] = useState('')
+  const [formMandatory, setFormMandatory] = useState(false)
+  const [formCertificateUrl, setFormCertificateUrl] = useState('')
+  const [formExpiryDate, setFormExpiryDate] = useState('')
+  const [formNotes, setFormNotes] = useState('')
+
+  // Fetch training records
+  const fetchRecords = useCallback(async () => {
+    setLoadingRecords(true)
+    try {
+      const res = await fetch(`/api/staffing/training?profileId=${profileId}`)
+      if (res.ok) {
+        const json = await res.json()
+        setTrainingRecords(json.data?.records || [])
+      }
+    } catch {
+      // Silent fail — summary stats still visible from profile data
+    } finally {
+      setLoadingRecords(false)
+    }
+  }, [profileId])
+
+  useEffect(() => {
+    fetchRecords()
+  }, [fetchRecords])
+
+  const handleSubmit = async () => {
+    if (!formTitle.trim()) {
+      toast('Title is required', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const payload: Record<string, unknown> = {
+        title: formTitle,
+        provider: formProvider || undefined,
+        category: formCategory,
+        completedDate: formCompletedDate || undefined,
+        cpdHours: formCpdHours ? parseFloat(formCpdHours) : undefined,
+        isMandatory: formMandatory,
+        certificateUrl: formCertificateUrl || undefined,
+        expiryDate: formExpiryDate || undefined,
+        notes: formNotes || undefined,
+        profileId,
+      }
+      const res = await fetch('/api/staffing/training', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Failed to create training record')
+      }
+      toast('Training record created', 'success')
+      setShowAddForm(false)
+      resetForm()
+      fetchRecords()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const resetForm = () => {
+    setFormTitle('')
+    setFormProvider('')
+    setFormCategory('CPD')
+    setFormCompletedDate('')
+    setFormCpdHours('')
+    setFormMandatory(false)
+    setFormCertificateUrl('')
+    setFormExpiryDate('')
+    setFormNotes('')
+  }
+
+  // Calculate annual CPD hours (current year)
+  const currentYear = new Date().getFullYear()
+  const annualCpdHours = trainingRecords.reduce((sum, r) => {
+    if (r.completions && r.completions.length > 0) {
+      const yearCompletions = r.completions.filter((c: { completedAt: string | null }) => {
+        if (!c.completedAt) return false
+        return new Date(c.completedAt).getFullYear() === currentYear
+      })
+      if (yearCompletions.length > 0) return sum + (r.cpdHours || 0)
+    }
+    return sum
+  }, 0)
+
+  // Categorize records by expiry status
+  const expiringRecords = trainingRecords.filter((r) => r.expiryStatus === 'expiring')
+  const expiredRecords = trainingRecords.filter((r) => r.expiryStatus === 'expired')
+
+  const CATEGORY_STYLES: Record<string, { label: string; color: string; bg: string }> = {
+    MANDATORY: { label: 'Mandatory', color: 'text-red-600', bg: 'bg-red-50' },
+    PROFESSIONAL: { label: 'Professional', color: 'text-blue-600', bg: 'bg-blue-50' },
+    CPD: { label: 'CPD', color: 'text-violet-600', bg: 'bg-violet-50' },
+    HEALTH_SAFETY: { label: 'Health & Safety', color: 'text-amber-600', bg: 'bg-amber-50' },
+    COMPLIANCE: { label: 'Compliance', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  }
 
   return (
     <div className="space-y-4 pt-4">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 bg-ink-25 rounded-lg text-center">
           <p className="text-[20px] font-semibold text-ink-900">{training.mandatoryComplete}</p>
           <p className="text-[11px] text-ink-400 mt-1">Mandatory complete</p>
@@ -920,21 +1069,235 @@ function TrainingContent({ data }: { data: EmployeeProfileData }) {
         </div>
         <div className="p-4 bg-ink-25 rounded-lg text-center">
           <p className="text-[20px] font-semibold text-ink-900">{training.cpdHours}</p>
-          <p className="text-[11px] text-ink-400 mt-1">CPD hours</p>
+          <p className="text-[11px] text-ink-400 mt-1">CPD hours (all time)</p>
+        </div>
+        <div className="p-4 bg-violet-50 rounded-lg text-center">
+          <p className="text-[20px] font-semibold text-violet-700">{annualCpdHours}</p>
+          <p className="text-[11px] text-violet-600 mt-1">CPD hours ({currentYear})</p>
         </div>
       </div>
 
-      {/* Recent completions */}
-      {training.completions.length === 0 ? (
+      {/* Expiry alerts */}
+      {(expiringRecords.length > 0 || expiredRecords.length > 0) && (
+        <div className="space-y-2">
+          {expiredRecords.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <span className="text-[12px] text-red-700">
+                <strong>{r.title}</strong> — expired {formatDate(r.expiryDate)}
+              </span>
+            </div>
+          ))}
+          {expiringRecords.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-[12px] text-amber-700">
+                <strong>{r.title}</strong> — expires {formatDate(r.expiryDate)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add training button */}
+      {isAdmin && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Training Record
+          </button>
+        </div>
+      )}
+
+      {/* Add training form */}
+      {showAddForm && (
+        <div className="bg-ink-25 border border-ink-100 rounded-xl p-4 space-y-4">
+          <h4 className="text-[13px] font-semibold text-ink-900">New Training Record</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Title *</label>
+              <input
+                type="text"
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="e.g. Fire Safety Training"
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Provider</label>
+              <input
+                type="text"
+                value={formProvider}
+                onChange={(e) => setFormProvider(e.target.value)}
+                placeholder="e.g. RICS, RIBA, In-house"
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Category</label>
+              <select
+                value={formCategory}
+                onChange={(e) => setFormCategory(e.target.value)}
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              >
+                <option value="MANDATORY">Mandatory</option>
+                <option value="PROFESSIONAL">Professional</option>
+                <option value="CPD">CPD</option>
+                <option value="HEALTH_SAFETY">Health &amp; Safety</option>
+                <option value="COMPLIANCE">Compliance</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Completed date</label>
+              <input
+                type="date"
+                value={formCompletedDate}
+                onChange={(e) => setFormCompletedDate(e.target.value)}
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">CPD hours</label>
+              <input
+                type="number"
+                value={formCpdHours}
+                onChange={(e) => setFormCpdHours(e.target.value)}
+                placeholder="0"
+                min="0"
+                step="0.5"
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Expiry date</label>
+              <input
+                type="date"
+                value={formExpiryDate}
+                onChange={(e) => setFormExpiryDate(e.target.value)}
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-ink-400 mb-1">Certificate URL</label>
+              <input
+                type="url"
+                value={formCertificateUrl}
+                onChange={(e) => setFormCertificateUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-ink-400 mb-1">Notes</label>
+              <textarea
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                rows={2}
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10 resize-none"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="training-mandatory"
+                checked={formMandatory}
+                onChange={(e) => setFormMandatory(e.target.checked)}
+                className="w-4 h-4 rounded border-ink-300"
+              />
+              <label htmlFor="training-mandatory" className="text-[12px] text-ink-600">Mandatory training</label>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 justify-end pt-2">
+            <button
+              onClick={() => { setShowAddForm(false); resetForm() }}
+              className="px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] text-ink-600 hover:bg-ink-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {submitting ? 'Saving...' : 'Save record'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Training records list */}
+      {loadingRecords ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
+        </div>
+      ) : trainingRecords.length === 0 && training.completions.length === 0 ? (
         <div className="text-center py-6">
           <GraduationCap className="w-8 h-8 text-ink-200 mx-auto mb-2" />
           <p className="text-[13px] text-ink-400">No training records</p>
         </div>
       ) : (
         <div>
-          <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Recent completions</h4>
+          <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Training Records</h4>
           <div className="space-y-2">
-            {training.completions.map((t) => (
+            {trainingRecords.length > 0 ? trainingRecords.map((r) => {
+              const catStyle = CATEGORY_STYLES[r.category] || { label: r.category, color: 'text-ink-500', bg: 'bg-ink-50' }
+              const statusColor = r.expiryStatus === 'expired'
+                ? 'border-l-red-400'
+                : r.expiryStatus === 'expiring'
+                  ? 'border-l-amber-400'
+                  : 'border-l-emerald-400'
+
+              return (
+                <div key={r.id} className={`flex items-center justify-between p-3 bg-ink-25 rounded-lg border-l-4 ${statusColor}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[13px] font-medium text-ink-900">{r.title}</p>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${catStyle.bg} ${catStyle.color}`}>
+                        {catStyle.label}
+                      </span>
+                      {r.mandatory && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+                          Required
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-ink-400">
+                      {r.provider && <span>{r.provider}</span>}
+                      {r.cpdHours > 0 && <span>{r.cpdHours} CPD hrs</span>}
+                      {r.completions && r.completions.length > 0 && (
+                        <span className="text-emerald-600">Completed {formatDate((r.completions[0] as { completedAt: string | null }).completedAt)}</span>
+                      )}
+                      {r.expiryDate && (
+                        <span className={r.expiryStatus === 'expired' ? 'text-red-600' : r.expiryStatus === 'expiring' ? 'text-amber-600' : ''}>
+                          {r.expiryStatus === 'expired' ? 'Expired' : 'Expires'} {formatDate(r.expiryDate)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    {r.contentUrl && (
+                      <a
+                        href={r.contentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg hover:bg-ink-100 transition-colors"
+                        title="View certificate"
+                      >
+                        <Award className="w-4 h-4 text-blue-500" />
+                      </a>
+                    )}
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${
+                      r.expiryStatus === 'expired' ? 'bg-red-400' :
+                      r.expiryStatus === 'expiring' ? 'bg-amber-400' : 'bg-emerald-400'
+                    }`} />
+                  </div>
+                </div>
+              )
+            }) : training.completions.map((t) => (
               <div key={t.id} className="flex items-center justify-between py-2 border-b border-ink-50 last:border-0">
                 <div>
                   <p className="text-[13px] text-ink-900">{t.module.title}</p>
@@ -946,10 +1309,6 @@ function TrainingContent({ data }: { data: EmployeeProfileData }) {
           </div>
         </div>
       )}
-
-      <div className="text-right">
-        <a href="/training" className="text-[12px] text-blue-600 hover:underline">View training page</a>
-      </div>
     </div>
   )
 }
@@ -989,41 +1348,327 @@ function AssetsContent({ data }: { data: EmployeeProfileData }) {
 }
 
 function DocumentsContent({ data }: { data: EmployeeProfileData }) {
-  const { hrDocumentCounts } = data
+  const { hrDocumentCounts, isAdmin } = data
+  const { toast } = useToast()
+  const params = useParams()
+  const profileId = params.profileId as string
+
+  const [documents, setDocuments] = useState<HRDocumentRecord[]>([])
+  const [loadingDocs, setLoadingDocs] = useState(false)
+  const [showUploadForm, setShowUploadForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+
+  // Upload form state
+  const [docType, setDocType] = useState('CONTRACT')
+  const [docTitle, setDocTitle] = useState('')
+  const [docExpiryDate, setDocExpiryDate] = useState('')
+  const [docConfidential, setDocConfidential] = useState(false)
+  const [uploadedFileUrl, setUploadedFileUrl] = useState('')
+  const [uploadedFileName, setUploadedFileName] = useState('')
+
   const entries = Object.entries(hrDocumentCounts)
   const totalDocs = entries.reduce((sum, [, count]) => sum + count, 0)
 
-  if (totalDocs === 0) {
-    return (
-      <div className="text-center py-6 pt-4">
-        <FileText className="w-8 h-8 text-ink-200 mx-auto mb-2" />
-        <p className="text-[13px] text-ink-400">No HR documents on file</p>
-        {data.isAdmin && (
-          <p className="text-[11px] text-ink-400 mt-1">Upload documents from the HR documents page.</p>
-        )}
-      </div>
-    )
+  // Fetch documents
+  const fetchDocuments = useCallback(async () => {
+    setLoadingDocs(true)
+    try {
+      const res = await fetch(`/api/staffing/hr-documents?profileId=${profileId}`)
+      if (res.ok) {
+        const json = await res.json()
+        setDocuments(json.data?.documents || [])
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadingDocs(false)
+    }
+  }, [profileId])
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [fetchDocuments])
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('profileId', profileId)
+
+      const res = await fetch('/api/staffing/hr-documents/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Upload failed')
+      }
+
+      const json = await res.json()
+      setUploadedFileUrl(json.data?.url || '')
+      setUploadedFileName(json.data?.fileName || file.name)
+      if (!docTitle) setDocTitle(file.name.replace(/\.[^/.]+$/, ''))
+      toast('File uploaded', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Upload failed', 'error')
+    } finally {
+      setUploading(false)
+    }
   }
+
+  const handleSubmitDocument = async () => {
+    if (!docTitle.trim()) {
+      toast('Title is required', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const payload: Record<string, unknown> = {
+        profileId,
+        documentType: docType,
+        title: docTitle,
+        fileUrl: uploadedFileUrl || undefined,
+        expiryDate: docExpiryDate || undefined,
+        isConfidential: docConfidential,
+      }
+      const res = await fetch('/api/staffing/hr-documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Failed to create document record')
+      }
+      toast('Document added', 'success')
+      setShowUploadForm(false)
+      resetDocForm()
+      fetchDocuments()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const resetDocForm = () => {
+    setDocType('CONTRACT')
+    setDocTitle('')
+    setDocExpiryDate('')
+    setDocConfidential(false)
+    setUploadedFileUrl('')
+    setUploadedFileName('')
+  }
+
+  const DOC_TYPE_OPTIONS = [
+    { value: 'CONTRACT', label: 'Contract' },
+    { value: 'OFFER_LETTER', label: 'Offer Letter' },
+    { value: 'RIGHT_TO_WORK', label: 'Right to Work' },
+    { value: 'VISA', label: 'Visa' },
+    { value: 'DBS_CHECK', label: 'DBS Check' },
+    { value: 'PROFESSIONAL_MEMBERSHIP', label: 'Professional Membership' },
+    { value: 'QUALIFICATION', label: 'Qualification' },
+    { value: 'TRAINING_CERTIFICATE', label: 'Training Certificate' },
+    { value: 'PERFORMANCE_REVIEW', label: 'Performance Review' },
+    { value: 'DISCIPLINARY', label: 'Disciplinary' },
+    { value: 'GRIEVANCE', label: 'Grievance' },
+    { value: 'POLICY_ACKNOWLEDGEMENT', label: 'Policy Acknowledgement' },
+    { value: 'OTHER', label: 'Other' },
+  ]
 
   return (
     <div className="space-y-4 pt-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[13px] text-ink-600">{totalDocs} document{totalDocs !== 1 ? 's' : ''} on file</p>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {entries.map(([type, count]) => (
-          <div key={type} className="p-3 bg-ink-25 rounded-lg">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-ink-400" />
-              <span className="text-[13px] font-medium text-ink-900">{count}</span>
+      {/* Summary counts */}
+      {totalDocs > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {entries.slice(0, 4).map(([type, count]) => (
+            <div key={type} className="p-3 bg-ink-25 rounded-lg">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-ink-400" />
+                <span className="text-[13px] font-medium text-ink-900">{count}</span>
+              </div>
+              <p className="text-[11px] text-ink-400 mt-1">{DOC_TYPE_LABELS[type] ?? type}</p>
             </div>
-            <p className="text-[11px] text-ink-400 mt-1">{DOC_TYPE_LABELS[type] ?? type}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Upload button */}
+      {isAdmin && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowUploadForm(!showUploadForm)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" /> Upload Document
+          </button>
+        </div>
+      )}
+
+      {/* Upload form */}
+      {showUploadForm && (
+        <div className="bg-ink-25 border border-ink-100 rounded-xl p-4 space-y-4">
+          <h4 className="text-[13px] font-semibold text-ink-900">Upload HR Document</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Document type *</label>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              >
+                {DOC_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Title *</label>
+              <input
+                type="text"
+                value={docTitle}
+                onChange={(e) => setDocTitle(e.target.value)}
+                placeholder="e.g. Employment Contract 2024"
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">Expiry date</label>
+              <input
+                type="date"
+                value={docExpiryDate}
+                onChange={(e) => setDocExpiryDate(e.target.value)}
+                className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-ink-400 mb-1">File</label>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] text-ink-600 hover:bg-ink-50 transition-colors cursor-pointer">
+                  {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  {uploading ? 'Uploading...' : 'Choose file'}
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                    className="hidden"
+                  />
+                </label>
+                {uploadedFileName && (
+                  <span className="text-[11px] text-emerald-600 truncate max-w-[200px]">
+                    {uploadedFileName}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="doc-confidential"
+                checked={docConfidential}
+                onChange={(e) => setDocConfidential(e.target.checked)}
+                className="w-4 h-4 rounded border-ink-300"
+              />
+              <label htmlFor="doc-confidential" className="text-[12px] text-ink-600 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Confidential (HR/Admin only)
+              </label>
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="text-right pt-2">
-        <a href="/hr-documents" className="text-[12px] text-blue-600 hover:underline">View HR documents</a>
-      </div>
+          <div className="flex items-center gap-2 justify-end pt-2">
+            <button
+              onClick={() => { setShowUploadForm(false); resetDocForm() }}
+              className="px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] text-ink-600 hover:bg-ink-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitDocument}
+              disabled={submitting || uploading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {submitting ? 'Saving...' : 'Save document'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Document list */}
+      {loadingDocs ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
+        </div>
+      ) : documents.length === 0 ? (
+        <div className="text-center py-6">
+          <FileText className="w-8 h-8 text-ink-200 mx-auto mb-2" />
+          <p className="text-[13px] text-ink-400">No HR documents on file</p>
+          {isAdmin && (
+            <p className="text-[11px] text-ink-400 mt-1">Use the Upload Document button above to add documents.</p>
+          )}
+        </div>
+      ) : (
+        <div>
+          <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Documents on File</h4>
+          <div className="space-y-2">
+            {documents.map((doc) => {
+              const now = new Date()
+              const isExpired = doc.expiryDate && new Date(doc.expiryDate) < now
+              const isExpiring = doc.expiryDate && !isExpired &&
+                new Date(doc.expiryDate) <= new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
+
+              return (
+                <div
+                  key={doc.id}
+                  className={`flex items-center justify-between p-3 bg-ink-25 rounded-lg border-l-4 ${
+                    isExpired ? 'border-l-red-400' : isExpiring ? 'border-l-amber-400' : 'border-l-ink-200'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[13px] font-medium text-ink-900">{doc.title}</p>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                        {DOC_TYPE_LABELS[doc.documentType] ?? doc.documentType}
+                      </span>
+                      {doc.isConfidential && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-600 flex items-center gap-0.5">
+                          <Lock className="w-2.5 h-2.5" /> Confidential
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-ink-400">
+                      <span>Added {formatDate(doc.createdAt)}</span>
+                      {doc.expiryDate && (
+                        <span className={isExpired ? 'text-red-600' : isExpiring ? 'text-amber-600' : ''}>
+                          {isExpired ? 'Expired' : 'Expires'} {formatDate(doc.expiryDate)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    {doc.fileUrl && (
+                      <a
+                        href={doc.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-ink-100 transition-colors text-[11px] text-blue-600"
+                        title="View/download document"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" /> View
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

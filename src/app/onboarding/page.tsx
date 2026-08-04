@@ -131,6 +131,9 @@ export default function OnboardingPage() {
     emergencyPhone: '',
   })
   const [completing, setCompleting] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   // Template-based onboarding state
   const [hasAssignment, setHasAssignment] = useState(false)
@@ -207,6 +210,63 @@ export default function OnboardingPage() {
     }
   }, [])
 
+  // ── Phone validation ──────────────────────────────────
+  function validatePhone(value: string): string | null {
+    if (!value.trim()) return null // optional field
+    // Allow digits, spaces, hyphens, parentheses, plus sign, dots
+    const cleaned = value.replace(/[\s\-().]/g, '')
+    if (!/^\+?\d{7,15}$/.test(cleaned)) {
+      return 'Enter a valid phone number (e.g. +44 7911 123456, 07911123456, or +234 801 234 5678)'
+    }
+    return null
+  }
+
+  // ── Save profile independently ──────────────────────
+  async function saveProfile() {
+    setProfileSaving(true)
+    setError('')
+    setFieldErrors({})
+
+    // Validate fields
+    const errors: Record<string, string> = {}
+    const phoneError = validatePhone(profileForm.phone)
+    if (phoneError) errors.phone = phoneError
+    const emergencyPhoneError = validatePhone(profileForm.emergencyPhone)
+    if (emergencyPhoneError) errors.emergencyPhone = emergencyPhoneError
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      setProfileSaving(false)
+      return false
+    }
+
+    try {
+      const res = await fetch('/api/settings/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: profileForm.phone || undefined,
+          emergencyContactName: profileForm.emergencyName || undefined,
+          emergencyContactPhone: profileForm.emergencyPhone || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        const msg = json.error?.message || json.error || 'Failed to save profile'
+        throw new Error(msg)
+      }
+      setProfileSaved(true)
+      toast('Profile saved', 'success')
+      return true
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save profile'
+      setError(msg)
+      return false
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
   // ── Initial load ──────────────────────────────────────
   useEffect(() => {
     async function init() {
@@ -279,16 +339,30 @@ export default function OnboardingPage() {
   async function finishOnboarding() {
     setCompleting(true)
     setError('')
+    setFieldErrors({})
+
+    // Save profile data first
+    const profileOk = await saveProfile()
+    if (!profileOk) {
+      setCompleting(false)
+      return
+    }
+
     try {
       const res = await fetch('/api/onboarding/complete', { method: 'POST' })
       if (!res.ok) {
-        const json = await res.json()
-        throw new Error(json.error || 'Could not complete onboarding')
+        const json = await res.json().catch(() => ({}))
+        const detail = json.error?.message || json.error || 'Could not complete onboarding'
+        const missing = json.error?.details?.missing
+        if (missing && Array.isArray(missing)) {
+          throw new Error(`Onboarding incomplete: ${missing.join('; ')}`)
+        }
+        throw new Error(detail)
       }
       setCurrentStep('complete')
       setTimeout(() => router.push('/dashboard'), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      setError(err instanceof Error ? err.message : 'Could not complete onboarding')
     } finally {
       setCompleting(false)
     }
@@ -585,7 +659,12 @@ export default function OnboardingPage() {
           <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-red-700 text-[14px] font-medium">Something went wrong</p>
+              <p className="text-red-700 text-[14px] font-medium">
+                {error.startsWith('Onboarding incomplete') ? 'Onboarding incomplete' :
+                 error.startsWith('Enter a valid') ? 'Validation error' :
+                 error.includes('Failed to save') ? 'Profile save failed' :
+                 'An error occurred'}
+              </p>
               <p className="text-red-600 text-[13px] mt-0.5">{error}</p>
             </div>
           </div>
@@ -880,10 +959,16 @@ export default function OnboardingPage() {
                 <input
                   type="tel"
                   value={profileForm.phone}
-                  onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 border border-surface-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
-                  placeholder="+234 801 234 5678"
+                  onChange={(e) => {
+                    setProfileForm({ ...profileForm, phone: e.target.value })
+                    setFieldErrors((prev) => { const next = { ...prev }; delete next.phone; return next })
+                  }}
+                  className={`w-full px-3.5 py-2.5 border rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${fieldErrors.phone ? 'border-red-400' : 'border-surface-300'}`}
+                  placeholder="+44 7911 123456 or 07911123456"
                 />
+                {fieldErrors.phone && (
+                  <p className="text-red-600 text-[12px] mt-1">{fieldErrors.phone}</p>
+                )}
               </div>
 
               <div className="pt-3 border-t border-surface-200">
@@ -910,22 +995,61 @@ export default function OnboardingPage() {
                     <input
                       type="tel"
                       value={profileForm.emergencyPhone}
-                      onChange={(e) => setProfileForm({ ...profileForm, emergencyPhone: e.target.value })}
-                      className="w-full px-3.5 py-2.5 border border-surface-300 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
-                      placeholder="+234 801 234 5678"
+                      onChange={(e) => {
+                        setProfileForm({ ...profileForm, emergencyPhone: e.target.value })
+                        setFieldErrors((prev) => { const next = { ...prev }; delete next.emergencyPhone; return next })
+                      }}
+                      className={`w-full px-3.5 py-2.5 border rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent ${fieldErrors.emergencyPhone ? 'border-red-400' : 'border-surface-300'}`}
+                      placeholder="+44 7911 123456 or 07911123456"
                     />
+                    {fieldErrors.emergencyPhone && (
+                      <p className="text-red-600 text-[12px] mt-1">{fieldErrors.emergencyPhone}</p>
+                    )}
                   </div>
                 </div>
+              </div>
+
+              {/* Save profile independently */}
+              <div className="pt-3 border-t border-surface-200 flex items-center gap-3">
+                <button
+                  onClick={saveProfile}
+                  disabled={profileSaving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-500 text-white text-[13px] font-semibold hover:bg-accent-600 transition-colors disabled:opacity-50"
+                >
+                  {profileSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  Save profile
+                </button>
+                {profileSaved && (
+                  <span className="text-emerald-600 text-[13px] font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> Saved
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="flex items-center justify-between mt-8">
-              <button
-                onClick={goBack}
-                className="text-ink-500 text-[14px] font-medium hover:text-ink-700 transition-colors"
-              >
-                Back
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={goBack}
+                  className="text-ink-500 text-[14px] font-medium hover:text-ink-700 transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={async () => {
+                    await saveProfile()
+                    toast('Progress saved — you can return to finish onboarding later', 'success')
+                  }}
+                  disabled={profileSaving}
+                  className="text-ink-400 text-[13px] font-medium hover:text-ink-600 transition-colors underline underline-offset-2"
+                >
+                  Save and continue later
+                </button>
+              </div>
               <button
                 onClick={finishOnboarding}
                 disabled={!canFinish || completing}

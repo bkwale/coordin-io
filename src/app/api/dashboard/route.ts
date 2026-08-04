@@ -70,17 +70,34 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
         t.status === 'READY_FOR_REVIEW' && t.reviewerId === profile.id,
     ).length
 
+    // Compute effective health from actual task data
+    const totalTaskCount = project.tasks.length
+    let effectiveHealth: string
+    if (totalTaskCount === 0) {
+      effectiveHealth = 'GREY'
+    } else if (overdueTaskCount > 3 || (totalTaskCount > 0 && overdueTaskCount / totalTaskCount > 0.25)) {
+      effectiveHealth = 'RED'
+    } else if (overdueTaskCount > 0 && project.healthStatus === 'GREEN') {
+      effectiveHealth = 'AMBER'
+    } else {
+      effectiveHealth = project.healthStatus ?? 'GREY'
+    }
+
     return {
       id: project.id,
       name: project.name,
       code: project.code,
       stage: project.stage,
       healthStatus: project.healthStatus,
+      effectiveHealth,
       myTaskCount,
       overdueTaskCount,
       inReviewTaskCount,
     }
   })
+
+  const allProjectsHealthy = projectSummaries.length > 0 &&
+    projectSummaries.every((p) => p.effectiveHealth === 'GREEN')
 
   // ── 2. Urgent tasks ──────────────────────────────────────
   //    Overdue OR due today OR high/critical priority,
@@ -179,6 +196,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
       overdueTasks,
       inReviewTasks,
       completedThisWeek,
+      allProjectsHealthy,
     },
   })
 })

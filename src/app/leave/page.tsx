@@ -55,11 +55,12 @@ interface UserProfile {
 
 type Tab = 'my-leave' | 'team-calendar' | 'approvals' | 'admin'
 
-type FilterStatus = 'ALL' | 'DRAFT' | 'SUBMITTED' | 'LINE_MANAGER_APPROVED' | 'HR_APPROVED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'WITHDRAWN'
+type FilterStatus = 'ACTIVE' | 'ALL' | 'DRAFT' | 'SUBMITTED' | 'LINE_MANAGER_APPROVED' | 'HR_APPROVED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'WITHDRAWN'
 
 /* ── Constants ─────────────────────────────────────────── */
 
 const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
+  { value: 'ACTIVE', label: 'Active' },
   { value: 'ALL', label: 'All' },
   { value: 'DRAFT', label: 'Draft' },
   { value: 'SUBMITTED', label: 'Submitted' },
@@ -244,7 +245,7 @@ export default function LeavePage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL')
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('ACTIVE')
 
   // Detail view
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null)
@@ -430,7 +431,11 @@ export default function LeavePage() {
 
   /* ── Filter ──────────────────────────────────────── */
 
-  const filtered = statusFilter === 'ALL' ? requests : requests.filter((r) => r.status === statusFilter)
+  const filtered = statusFilter === 'ALL'
+    ? requests
+    : statusFilter === 'ACTIVE'
+      ? requests.filter((r) => r.status !== 'WITHDRAWN' && r.status !== 'CANCELLED')
+      : requests.filter((r) => r.status === statusFilter)
   const statusCounts = requests.reduce<Record<string, number>>((acc, r) => {
     acc[r.status] = (acc[r.status] || 0) + 1
     return acc
@@ -820,8 +825,12 @@ function MyLeaveTab(props: MyLeaveTabProps) {
       {/* ── Filter bar ─────────────────────────────── */}
       <div className="flex gap-1 flex-wrap">
         {STATUS_FILTERS.map((f) => {
-          const count = f.value === 'ALL' ? requests.length : (statusCounts[f.value] || 0)
-          if (f.value !== 'ALL' && count === 0) return null
+          const count = f.value === 'ALL'
+            ? requests.length
+            : f.value === 'ACTIVE'
+              ? requests.filter((r) => r.status !== 'WITHDRAWN' && r.status !== 'CANCELLED').length
+              : (statusCounts[f.value] || 0)
+          if (f.value !== 'ALL' && f.value !== 'ACTIVE' && count === 0) return null
           return (
             <button
               key={f.value}

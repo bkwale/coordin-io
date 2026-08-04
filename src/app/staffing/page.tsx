@@ -362,12 +362,17 @@ export default function StaffingPage() {
   /* ── Error state ───────────────────────────────────────────── */
 
   if (error) {
+    const errorRef = `ERR-${Date.now()}`
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
         <AlertTriangle className="w-8 h-8 text-red-500" />
-        <p className="text-[13px] text-ink-600">{error}</p>
+        <div className="text-center max-w-md">
+          <p className="text-[14px] font-medium text-ink-900 mb-1">Failed to load staffing data</p>
+          <p className="text-[13px] text-ink-600 mb-2">{error}</p>
+          <p className="text-[11px] text-ink-400">Reference: {errorRef}</p>
+        </div>
         <button
-          onClick={fetchData}
+          onClick={() => window.location.reload()}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
         >
           <RefreshCw className="w-4 h-4" /> Try again

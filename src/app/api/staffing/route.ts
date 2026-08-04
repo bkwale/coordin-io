@@ -13,33 +13,82 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   const orgId = profile.organisationId
 
   // ── Active employees ───────────────────────────────────────
-  const allProfiles = await modulesPrisma.profile.findMany({
-    where: { organisationId: orgId },
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      jobTitle: true,
-      status: true,
-      startDate: true,
-      officeId: true,
-      orgPermission: true,
-      office: { select: { id: true, name: true } },
-      corporateRole: { select: { id: true, title: true, department: true } },
-      employeeProfile: {
-        select: {
-          annualLeaveAllocation: true,
-          onboardingComplete: true,
+  let allProfiles: {
+    id: string
+    fullName: string
+    email: string
+    jobTitle: string | null
+    status: string
+    startDate: string | null
+    officeId: string | null
+    orgPermission: string
+    office: { id: string; name: string } | null
+    corporateRole: { id: string; title: string; department: string | null } | null
+    employeeProfile: { annualLeaveAllocation: number; onboardingComplete: boolean } | null
+  }[]
+
+  try {
+    allProfiles = await modulesPrisma.profile.findMany({
+      where: { organisationId: orgId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        jobTitle: true,
+        status: true,
+        startDate: true,
+        officeId: true,
+        orgPermission: true,
+        office: { select: { id: true, name: true } },
+        corporateRole: { select: { id: true, title: true, department: true } },
+        employeeProfile: {
+          select: {
+            annualLeaveAllocation: true,
+            onboardingComplete: true,
+          },
         },
       },
-    },
-  })
+    })
+  } catch {
+    // employeeProfile relation may fail if table has no records or schema mismatch —
+    // fall back to query without it
+    const baseProfiles: {
+      id: string
+      fullName: string
+      email: string
+      jobTitle: string | null
+      status: string
+      startDate: string | null
+      officeId: string | null
+      orgPermission: string
+      office: { id: string; name: string } | null
+      corporateRole: { id: string; title: string; department: string | null } | null
+    }[] = await modulesPrisma.profile.findMany({
+      where: { organisationId: orgId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        jobTitle: true,
+        status: true,
+        startDate: true,
+        officeId: true,
+        orgPermission: true,
+        office: { select: { id: true, name: true } },
+        corporateRole: { select: { id: true, title: true, department: true } },
+      },
+    })
+    allProfiles = baseProfiles.map((p) => ({
+      ...p,
+      employeeProfile: null,
+    }))
+  }
 
   const activeEmployees = allProfiles.filter(
-    (p: { status: string }) => p.status === 'ACTIVE',
+    (p) => p.status === 'ACTIVE',
   )
   const onboardingEmployees = allProfiles.filter(
-    (p: { status: string }) => p.status === 'ONBOARDING',
+    (p) => p.status === 'ONBOARDING',
   )
 
   // ── By-office breakdown ────────────────────────────────────
@@ -190,19 +239,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     byOffice: Object.values(byOffice),
     byDepartment,
     expiringDocs,
-    employees: allProfiles.map((p: {
-      id: string
-      fullName: string
-      email: string
-      jobTitle: string | null
-      status: string
-      startDate: string | null
-      officeId: string | null
-      orgPermission: string
-      office: { id: string; name: string } | null
-      corporateRole: { id: string; title: string; department: string | null } | null
-      employeeProfile: { annualLeaveAllocation: number; onboardingComplete: boolean } | null
-    }) => ({
+    employees: allProfiles.map((p) => ({
       id: p.id,
       fullName: p.fullName,
       email: p.email,
