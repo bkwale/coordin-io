@@ -9,18 +9,20 @@ const globalForPrisma = globalThis as unknown as {
  * Create a Prisma client using the PrismaPg adapter (Prisma v7).
  *
  * Connection strategy:
- * - DIRECT_URL (port 5432): Used when available — bypasses PgBouncer.
- *   Required for interactive transactions ($transaction with callbacks).
- * - DATABASE_URL (port 6543): Falls back to pooled PgBouncer connection.
- *   Works for simple queries but may fail on interactive transactions.
+ * - DATABASE_URL (port 6543): Preferred — uses Supabase's Supavisor pooler
+ *   (PgBouncer-compatible). Handles connection limits in serverless (Vercel)
+ *   where many function instances share a small pool.
+ * - DIRECT_URL (port 5432): Fallback — bypasses pooler. Only use locally
+ *   or for migrations/schema pushes. In production this exhausts the
+ *   15-connection session-mode limit under concurrent load.
  *
  * Set both in .env.local for production:
  *   DATABASE_URL=postgresql://...@pooler.supabase.com:6543/postgres?pgbouncer=true
- *   DIRECT_URL=postgresql://...@db.supabase.com:5432/postgres
+ *   DIRECT_URL=postgresql://...@pooler.supabase.com:5432/postgres
  */
 function createPrismaClient() {
-  // Prefer direct connection for transaction safety
-  const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL
+  // Prefer pooled connection to avoid EMAXCONNSESSION in serverless
+  const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL
 
   if (!connectionString) {
     // During Vercel build (static analysis), DB isn't available.
