@@ -30,7 +30,7 @@ export function withDocumentAccess(handler: DocumentAccessHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
       // 1. Verify Supabase session
-      const supabase = createServerSupabaseClient()
+      const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
 
       if (authError || !user) {
@@ -119,7 +119,7 @@ type RevisionAccessHandler = (
 export function withRevisionAccess(handler: RevisionAccessHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
-      const supabase = createServerSupabaseClient()
+      const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
 
       if (authError || !user) {

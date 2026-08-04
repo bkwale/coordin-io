@@ -33,7 +33,7 @@ export async function POST(
     // ── Server-side auth verification ──────────────────────
     // The client just signed up via Supabase and should now have
     // a valid session cookie. We verify that — NOT a body param.
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
     const {
       data: { user },
       error: authError,

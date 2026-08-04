@@ -33,7 +33,7 @@ export function withSuperAdmin(handler: SuperAdminHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
       // 1. Verify Supabase session
-      const supabase = createServerSupabaseClient()
+      const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
 
       if (authError || !user) {
