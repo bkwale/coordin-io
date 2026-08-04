@@ -204,6 +204,7 @@ export default function OrgDetailPage() {
               >
                 <option value="OWNER">Owner</option>
                 <option value="ADMIN">Admin</option>
+                <option value="HR">HR Manager</option>
                 <option value="MANAGER">Manager</option>
                 <option value="MEMBER">Member</option>
                 <option value="VIEWER">Viewer</option>

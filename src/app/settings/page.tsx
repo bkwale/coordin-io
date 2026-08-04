@@ -361,6 +361,7 @@ function TeamSection() {
   const statusIcon = (status: string) => {
     switch (status) {
       case 'ACTIVE': return <CheckCircle className="w-4 h-4 text-emerald-500" />
+      case 'ONBOARDING': return <Clock className="w-4 h-4 text-blue-500" />
       case 'INVITED': return <Mail className="w-4 h-4 text-amber-500" />
       case 'DEACTIVATED': return <XCircle className="w-4 h-4 text-red-400" />
       default: return <Clock className="w-4 h-4 text-ink-300" />
@@ -371,6 +372,7 @@ function TeamSection() {
     switch (p) {
       case 'OWNER': return 'Practice Principal'
       case 'ADMIN': return 'Practice Manager'
+      case 'HR': return 'HR Manager'
       case 'MANAGER': return 'Project Lead'
       case 'MEMBER': return 'Team Member'
       case 'VIEWER': return 'External'
@@ -504,6 +506,7 @@ function TeamSection() {
                       'inline-block text-[11px] font-medium px-2 py-0.5 rounded-full',
                       member.orgPermission === 'OWNER' ? 'bg-purple-50 text-purple-700' :
                       member.orgPermission === 'ADMIN' ? 'bg-blue-50 text-blue-700' :
+                      member.orgPermission === 'HR' ? 'bg-teal-50 text-teal-700' :
                       member.orgPermission === 'MANAGER' ? 'bg-amber-50 text-amber-700' :
                       member.orgPermission === 'VIEWER' ? 'bg-surface-100 text-ink-400' :
                       'bg-surface-100 text-ink-500'
