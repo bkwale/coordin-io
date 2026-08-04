@@ -88,10 +88,14 @@ vi.mock('@/lib/with-auth', () => ({
 // ---------------------------------------------------------------------------
 
 import { GET as getAllocations } from '@/app/api/staffing/allocations/route'
-import { GET as getEmployee } from '@/app/api/staffing/employees/[profileId]/route'
+import { GET as getEmployee, PATCH as patchEmployee } from '@/app/api/staffing/employees/[profileId]/route'
+import { GET as getEmployeeProfile, PATCH as patchEmployeeProfile } from '@/app/api/staffing/employees/[profileId]/profile/route'
 import { GET as getHRDocs, POST as postHRDoc } from '@/app/api/staffing/hr-documents/route'
 import { GET as getProbation, POST as postProbation } from '@/app/api/staffing/probation/route'
 import { GET as getTraining, POST as postTraining } from '@/app/api/staffing/training/route'
+import { GET as getTrainingDetail, PATCH as patchTraining, DELETE as deleteTraining } from '@/app/api/staffing/training/[id]/route'
+import { POST as postTrainingCompletion } from '@/app/api/staffing/training/completions/route'
+import { recordAuditEvent } from '@/lib/audit'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -457,5 +461,533 @@ describe('POST /api/staffing/training — access control', () => {
     const res = await postTraining(req)
 
     expect(res.status).toBe(201)
+  })
+})
+
+// =====================================================================
+// Crispin #1: PATCH employee routes — write-path access control
+// =====================================================================
+
+describe('PATCH /api/staffing/employees/[profileId] — access control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Target employee exists in same org
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      id: 'emp-1',
+      organisationId: 'org-1',
+    })
+  })
+
+  it('MEMBER cannot PATCH another employee', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER', id: 'other-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1',
+      body: { jobTitle: 'Senior Engineer' },
+    })
+    const res = await patchEmployee(req)
+
+    expect(res.status).toBe(403)
+    const json = await res.json()
+    expect(json.error).toMatch(/HR managers/i)
+  })
+
+  it('MANAGER cannot PATCH another employee', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER', id: 'mgr-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1',
+      body: { jobTitle: 'Senior Engineer' },
+    })
+    const res = await patchEmployee(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('MEMBER can PATCH own profile (self-edit)', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER', id: 'emp-1' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1',
+      body: { phone: '+447700900099' },
+    })
+    const res = await patchEmployee(req)
+
+    expect(res.status).toBe(200)
+  })
+
+  it('HR can PATCH any employee', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR', id: 'hr-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1',
+      body: { jobTitle: 'Lead Engineer', status: 'ACTIVE' },
+    })
+    const res = await patchEmployee(req)
+
+    expect(res.status).toBe(200)
+  })
+
+  it('ADMIN can PATCH any employee', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'ADMIN', id: 'admin-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1',
+      body: { jobTitle: 'VP Engineering' },
+    })
+    const res = await patchEmployee(req)
+
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('PATCH /api/staffing/employees/[profileId]/profile — access control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      id: 'emp-1',
+      organisationId: 'org-1',
+    })
+  })
+
+  it('MEMBER cannot PATCH another employee profile (salary etc)', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER', id: 'other-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1/profile',
+      body: { salary: 100000 },
+    })
+    const res = await patchEmployeeProfile(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('MANAGER cannot PATCH another employee profile', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER', id: 'mgr-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1/profile',
+      body: { salary: 100000 },
+    })
+    const res = await patchEmployeeProfile(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('MEMBER can PATCH own profile (emergency contact, phone)', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER', id: 'emp-1' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1/profile',
+      body: { emergencyName: 'Jane Doe', emergencyPhone: '+44123456' },
+    })
+    const res = await patchEmployeeProfile(req)
+
+    expect(res.status).toBe(200)
+  })
+
+  it('HR can PATCH any employee profile including salary', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR', id: 'hr-user' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1/profile',
+      body: { salary: 75000, department: 'Engineering' },
+    })
+    const res = await patchEmployeeProfile(req)
+
+    expect(res.status).toBe(200)
+  })
+})
+
+// =====================================================================
+// Crispin #2: Salary audit event verification
+// =====================================================================
+
+describe('GET /api/staffing/employees/[profileId]/profile — salary audit', () => {
+  const employeeWithSalary = {
+    id: 'emp-1',
+    fullName: 'Alice Smith',
+    email: 'alice@example.com',
+    phone: '+447700900000',
+    jobTitle: 'Engineer',
+    avatarUrl: null,
+    status: 'ACTIVE',
+    startDate: '2025-01-15',
+    orgPermission: 'MEMBER',
+    organisationId: 'org-1',
+    office: { id: 'o1', name: 'London', city: 'London', country: 'UK' },
+    corporateRole: { id: 'r1', name: 'Engineer', level: 1 },
+    manager: null,
+    employeeProfile: {
+      salary: 65000,
+      salaryFrequency: 'ANNUAL',
+      salaryCurrency: 'GBP',
+      department: 'Engineering',
+      annualLeaveAllocation: 28,
+      onboardingComplete: true,
+      workingHours: 40,
+      availabilityStatus: 'IN_OFFICE',
+      emergencyName: null,
+      emergencyPhone: null,
+      emergencyRelation: null,
+      contractType: null,
+      employmentType: null,
+      probationEndDate: null,
+      benefits: null,
+      hmoProvider: null,
+      hmoPlan: null,
+      dependants: null,
+      pensionProvider: null,
+      pensionContribution: null,
+      workingPattern: null,
+      noticePeriod: null,
+      mentorId: null,
+      qualificationPathway: null,
+    },
+    projectMemberships: [],
+    leaveBalances: [],
+    trainingCompletions: [],
+    assetAssignments: [],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.profile.findUnique.mockResolvedValue(employeeWithSalary)
+    mockPrisma.hRDocument.findMany.mockResolvedValue([])
+    mockPrisma.resourceAllocation.findMany.mockResolvedValue([])
+    mockPrisma.leaveRequest.count.mockResolvedValue(0)
+    mockPrisma.cPDRecord.findMany.mockResolvedValue([])
+  })
+
+  it('fires audit event when HR views another employee salary', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR', id: 'hr-user' })
+
+    const req = createMockRequest({ url: 'http://localhost/api/staffing/employees/emp-1/profile' })
+    const res = await getEmployeeProfile(req)
+
+    expect(res.status).toBe(200)
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'staffing.salary_data_accessed',
+        entityId: 'emp-1',
+        metadata: expect.objectContaining({ accessedBy: 'HR' }),
+      }),
+    )
+  })
+
+  it('does NOT fire audit event when viewing own salary', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR', id: 'emp-1' })
+
+    const req = createMockRequest({ url: 'http://localhost/api/staffing/employees/emp-1/profile' })
+    const res = await getEmployeeProfile(req)
+
+    expect(res.status).toBe(200)
+    expect(recordAuditEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'staffing.salary_data_accessed' }),
+    )
+  })
+
+  it('does NOT fire audit event when employee has no salary', async () => {
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      ...employeeWithSalary,
+      employeeProfile: { ...employeeWithSalary.employeeProfile, salary: null },
+    })
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'ADMIN', id: 'admin-user' })
+
+    const req = createMockRequest({ url: 'http://localhost/api/staffing/employees/emp-1/profile' })
+    const res = await getEmployeeProfile(req)
+
+    expect(res.status).toBe(200)
+    expect(recordAuditEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'staffing.salary_data_accessed' }),
+    )
+  })
+})
+
+// =====================================================================
+// Crispin #3: Training completions — MANAGER allowed (combined guard)
+// =====================================================================
+
+describe('POST /api/staffing/training/completions — access control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('MEMBER cannot record training completions', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER' })
+
+    const req = createMockRequest({
+      method: 'POST',
+      url: 'http://localhost/api/staffing/training/completions',
+      body: { trainingId: 'train-1', profileId: 'emp-1' },
+    })
+    const res = await postTrainingCompletion(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('MANAGER can record training completions (combined guard)', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER' })
+    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety' })
+    mockPrisma.profile.findUnique.mockResolvedValue({ id: 'emp-1', organisationId: 'org-1', fullName: 'Alice' })
+    mockPrisma.trainingCompletion.upsert.mockResolvedValue({
+      id: 'comp-1',
+      profileId: 'emp-1',
+      trainingId: 'train-1',
+      profile: { id: 'emp-1', fullName: 'Alice' },
+      training: { id: 'train-1', title: 'Fire Safety' },
+    })
+
+    const req = createMockRequest({
+      method: 'POST',
+      url: 'http://localhost/api/staffing/training/completions',
+      body: { trainingId: 'train-1', profileId: 'emp-1' },
+    })
+    const res = await postTrainingCompletion(req)
+
+    expect(res.status).toBe(201)
+  })
+
+  it('HR can record training completions', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR' })
+    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety' })
+    mockPrisma.profile.findUnique.mockResolvedValue({ id: 'emp-1', organisationId: 'org-1', fullName: 'Alice' })
+    mockPrisma.trainingCompletion.upsert.mockResolvedValue({
+      id: 'comp-1',
+      profileId: 'emp-1',
+      trainingId: 'train-1',
+      profile: { id: 'emp-1', fullName: 'Alice' },
+      training: { id: 'train-1', title: 'Fire Safety' },
+    })
+
+    const req = createMockRequest({
+      method: 'POST',
+      url: 'http://localhost/api/staffing/training/completions',
+      body: { trainingId: 'train-1', profileId: 'emp-1' },
+    })
+    const res = await postTrainingCompletion(req)
+
+    expect(res.status).toBe(201)
+  })
+})
+
+// =====================================================================
+// Crispin #4: Training DELETE + PATCH — HR only / MANAGER+
+// =====================================================================
+
+describe('DELETE /api/staffing/training/[id] — access control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety', description: '{}' })
+  })
+
+  it('MEMBER cannot delete training items', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER' })
+
+    const req = createMockRequest({
+      method: 'DELETE',
+      url: 'http://localhost/api/staffing/training/train-1',
+    })
+    const res = await deleteTraining(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('MANAGER cannot delete training items', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER' })
+
+    const req = createMockRequest({
+      method: 'DELETE',
+      url: 'http://localhost/api/staffing/training/train-1',
+    })
+    const res = await deleteTraining(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('HR can delete training items', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR' })
+
+    const req = createMockRequest({
+      method: 'DELETE',
+      url: 'http://localhost/api/staffing/training/train-1',
+    })
+    const res = await deleteTraining(req)
+
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('PATCH /api/staffing/training/[id] — access control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety', description: '{}' })
+    mockPrisma.trainingItem.update.mockResolvedValue({ id: 'train-1', title: 'Updated' })
+  })
+
+  it('MEMBER cannot update training items', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/training/train-1',
+      body: { title: 'Updated Title' },
+    })
+    const res = await patchTraining(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('MANAGER can update training items (combined guard)', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/training/train-1',
+      body: { title: 'Updated Title' },
+    })
+    const res = await patchTraining(req)
+
+    expect(res.status).toBe(200)
+  })
+
+  it('HR can update training items', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR' })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/training/train-1',
+      body: { title: 'Updated Title' },
+    })
+    const res = await patchTraining(req)
+
+    expect(res.status).toBe(200)
+  })
+})
+
+// =====================================================================
+// Crispin #5: Cross-org isolation
+// =====================================================================
+
+describe('Cross-org isolation — access control', () => {
+  it('HR in org-A cannot view employee in org-B', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR', id: 'hr-user', organisationId: 'org-A' })
+
+    // Employee belongs to org-B
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      ...makeEmployee(),
+      organisationId: 'org-B',
+    })
+
+    const req = createMockRequest({ url: 'http://localhost/api/staffing/employees/emp-1' })
+    const res = await getEmployee(req)
+
+    expect(res.status).toBe(403)
+    const json = await res.json()
+    expect(json.error).toMatch(/do not have access/i)
+  })
+
+  it('ADMIN in org-A cannot view employee profile in org-B', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'ADMIN', id: 'admin-user', organisationId: 'org-A' })
+
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      ...makeEmployee(),
+      organisationId: 'org-B',
+    })
+
+    const req = createMockRequest({ url: 'http://localhost/api/staffing/employees/emp-1/profile' })
+    const res = await getEmployeeProfile(req)
+
+    expect(res.status).toBe(403)
+    const json = await res.json()
+    expect(json.error).toMatch(/do not have access/i)
+  })
+
+  it('HR in org-A cannot PATCH employee in org-B', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'HR', id: 'hr-user', organisationId: 'org-A' })
+
+    mockPrisma.profile.findUnique.mockResolvedValue({
+      id: 'emp-1',
+      organisationId: 'org-B',
+    })
+
+    const req = createMockRequest({
+      method: 'PATCH',
+      url: 'http://localhost/api/staffing/employees/emp-1/profile',
+      body: { salary: 100000 },
+    })
+    const res = await patchEmployeeProfile(req)
+
+    expect(res.status).toBe(403)
+  })
+})
+
+// =====================================================================
+// Crispin #6: withAuth requiredPermission double-gate
+// =====================================================================
+
+describe('withAuth requiredPermission enforcement note', () => {
+  // The test mock bypasses withAuth's requiredPermission check.
+  // In production, allocations POST has { requiredPermission: 'ADMIN' }
+  // PLUS an inline hasStaffingDashboardAccess guard.
+  // We verify the inline guard works correctly here.
+  // The withAuth enforcement is tested separately via the real middleware in integration tests.
+
+  it('allocations POST inline guard blocks MEMBER even without withAuth gate', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER' })
+
+    const req = createMockRequest({
+      method: 'POST',
+      url: 'http://localhost/api/staffing/allocations',
+      body: {
+        profileId: 'emp-1',
+        projectId: 'proj-1',
+        weekStarting: '2026-08-03',
+        hoursAllocated: 20,
+      },
+    })
+
+    // Import POST handler
+    const { POST: postAllocation } = await import('@/app/api/staffing/allocations/route')
+    const res = await postAllocation(req)
+
+    expect(res.status).toBe(403)
+  })
+
+  it('allocations POST inline guard allows MANAGER', async () => {
+    ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER' })
+
+    mockPrisma.profile.findUnique.mockResolvedValue({ id: 'emp-1', organisationId: 'org-1' })
+    mockPrisma.project.findUnique.mockResolvedValue({ id: 'proj-1', organisationId: 'org-1' })
+    mockPrisma.resourceAllocation.upsert.mockResolvedValue({
+      id: 'alloc-1',
+      profile: { id: 'emp-1', fullName: 'Alice' },
+      project: { id: 'proj-1', name: 'Test', code: 'T1' },
+    })
+
+    const req = createMockRequest({
+      method: 'POST',
+      url: 'http://localhost/api/staffing/allocations',
+      body: {
+        profileId: 'emp-1',
+        projectId: 'proj-1',
+        weekStarting: '2026-08-03',
+        hoursAllocated: 20,
+      },
+    })
+
+    const { POST: postAllocation } = await import('@/app/api/staffing/allocations/route')
+    const res = await postAllocation(req)
+
+    expect(res.status).toBe(200)
   })
 })
