@@ -1,53 +1,5 @@
 import { describe, it, expect } from 'vitest'
-
-/**
- * Extract the dashboard health computation logic
- * (mirrors /api/dashboard/route.ts lines 74-84).
- *
- * Before the Bug 7 fix, this just returned project.healthStatus directly,
- * which meant a project with overdue tasks could still show GREEN.
- */
-function computeEffectiveHealth(project: {
-  healthStatus: string | null
-  tasks: Array<{ status: string; dueDate: Date | null }>
-}): string {
-  const now = new Date()
-  const NON_OVERDUE_STATUSES = ['COMPLETED']
-
-  const totalTaskCount = project.tasks.length
-  const overdueTaskCount = project.tasks.filter(
-    (t) =>
-      t.dueDate !== null &&
-      t.dueDate < now &&
-      !NON_OVERDUE_STATUSES.includes(t.status),
-  ).length
-
-  if (totalTaskCount === 0) return 'GREY'
-  if (
-    overdueTaskCount > 3 ||
-    (totalTaskCount > 0 && overdueTaskCount / totalTaskCount > 0.25)
-  )
-    return 'RED'
-  if (overdueTaskCount > 0 && project.healthStatus === 'GREEN') return 'AMBER'
-  return project.healthStatus ?? 'GREY'
-}
-
-/**
- * Mirrors /api/dashboard/route.ts line 99-100:
- *   projectSummaries.length > 0 &&
- *   projectSummaries.every((p) => p.effectiveHealth === 'GREEN')
- */
-function computeAllProjectsHealthy(
-  projects: Array<{
-    healthStatus: string | null
-    tasks: Array<{ status: string; dueDate: Date | null }>
-  }>,
-): boolean {
-  if (projects.length === 0) return false
-  return projects.every(
-    (p) => computeEffectiveHealth(p) === 'GREEN',
-  )
-}
+import { computeEffectiveHealth, computeAllProjectsHealthy } from '@/lib/dashboard-health'
 
 // Helpers — dates in the past and future
 const pastDate = new Date('2020-01-01')

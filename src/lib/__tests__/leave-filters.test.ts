@@ -1,39 +1,8 @@
 import { describe, it, expect } from 'vitest'
-
-/**
- * Leave request filtering logic extracted from /leave/page.tsx lines 434-438.
- *
- * Bug 8: The ACTIVE filter was not excluding WITHDRAWN requests,
- * causing them to appear alongside active requests.
- */
-type LeaveStatus =
-  | 'DRAFT'
-  | 'SUBMITTED'
-  | 'UNDER_REVIEW'
-  | 'LINE_MANAGER_APPROVED'
-  | 'HR_APPROVED'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'CANCELLED'
-  | 'WITHDRAWN'
-
-function filterLeaveRequests(
-  requests: Array<{ status: LeaveStatus }>,
-  filter: string,
-): Array<{ status: LeaveStatus }> {
-  if (filter === 'ALL') {
-    return requests
-  }
-  if (filter === 'ACTIVE') {
-    return requests.filter(
-      (r) => r.status !== 'WITHDRAWN' && r.status !== 'CANCELLED',
-    )
-  }
-  return requests.filter((r) => r.status === filter)
-}
+import { filterLeaveRequests } from '@/lib/leave-filters'
 
 // Test data covering all statuses
-const allRequests: Array<{ status: LeaveStatus }> = [
+const allRequests: Array<{ status: string }> = [
   { status: 'DRAFT' },
   { status: 'SUBMITTED' },
   { status: 'LINE_MANAGER_APPROVED' },
@@ -86,7 +55,7 @@ describe('filterLeaveRequests', () => {
   })
 
   it('list with only WITHDRAWN and CANCELLED returns empty for ACTIVE', () => {
-    const withdrawn: Array<{ status: LeaveStatus }> = [
+    const withdrawn: Array<{ status: string }> = [
       { status: 'WITHDRAWN' },
       { status: 'CANCELLED' },
     ]

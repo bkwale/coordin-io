@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
+import { mapStaffingEmployee } from '@/lib/staffing-utils'
 
 /**
  * GET /api/staffing — Staffing dashboard metrics.
@@ -239,20 +240,6 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     byOffice: Object.values(byOffice),
     byDepartment,
     expiringDocs,
-    employees: allProfiles.map((p) => ({
-      id: p.id,
-      fullName: p.fullName,
-      email: p.email,
-      jobTitle: p.jobTitle,
-      status: p.status,
-      startDate: p.startDate,
-      officeId: p.officeId,
-      orgPermission: p.orgPermission,
-      office: p.office?.name ?? null,
-      department: p.corporateRole?.department ?? null,
-      role: p.corporateRole?.title ?? null,
-      onboardingComplete: p.employeeProfile?.onboardingComplete ?? false,
-      leaveAllocation: p.employeeProfile?.annualLeaveAllocation ?? 25,
-    })),
+    employees: allProfiles.map(mapStaffingEmployee),
   })
 })

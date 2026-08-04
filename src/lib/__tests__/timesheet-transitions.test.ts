@@ -1,26 +1,5 @@
 import { describe, it, expect } from 'vitest'
-
-/**
- * Timesheet state machine extracted from
- * /api/timesheets/[weekId]/route.ts lines 9-17.
- *
- * Unlike request-transitions (which is a shared module),
- * the timesheet transitions are defined inline in the route file.
- * We replicate the map here for pure-logic testing.
- */
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ['SUBMITTED'],
-  SUBMITTED: ['CHANGES_REQUIRED', 'APPROVED', 'REJECTED'],
-  CHANGES_REQUIRED: ['DRAFT', 'SUBMITTED'],
-  APPROVED: ['LOCKED', 'REOPENED'],
-  REJECTED: ['DRAFT'],
-  LOCKED: ['REOPENED'],
-  REOPENED: ['DRAFT', 'SUBMITTED'],
-}
-
-function isValidTimesheetTransition(from: string, to: string): boolean {
-  return (VALID_TRANSITIONS[from] ?? []).includes(to)
-}
+import { isValidTimesheetTransition } from '@/lib/timesheet-transitions'
 
 describe('Timesheet state machine', () => {
   it('DRAFT -> SUBMITTED is valid', () => {

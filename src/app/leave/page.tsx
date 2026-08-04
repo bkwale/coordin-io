@@ -8,6 +8,8 @@ import {
   SunMedium, Moon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { filterLeaveRequests } from '@/lib/leave-filters'
+import type { LeaveFilterStatus } from '@/lib/leave-filters'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
 import { SkeletonRow } from '@/components/Skeleton'
@@ -55,7 +57,7 @@ interface UserProfile {
 
 type Tab = 'my-leave' | 'team-calendar' | 'approvals' | 'admin'
 
-type FilterStatus = 'ACTIVE' | 'ALL' | 'DRAFT' | 'SUBMITTED' | 'LINE_MANAGER_APPROVED' | 'HR_APPROVED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'WITHDRAWN'
+type FilterStatus = LeaveFilterStatus
 
 /* ── Constants ─────────────────────────────────────────── */
 
@@ -431,11 +433,7 @@ export default function LeavePage() {
 
   /* ── Filter ──────────────────────────────────────── */
 
-  const filtered = statusFilter === 'ALL'
-    ? requests
-    : statusFilter === 'ACTIVE'
-      ? requests.filter((r) => r.status !== 'WITHDRAWN' && r.status !== 'CANCELLED')
-      : requests.filter((r) => r.status === statusFilter)
+  const filtered = filterLeaveRequests(requests, statusFilter)
   const statusCounts = requests.reduce<Record<string, number>>((acc, r) => {
     acc[r.status] = (acc[r.status] || 0) + 1
     return acc

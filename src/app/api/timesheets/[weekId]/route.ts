@@ -5,19 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { parseBody, optionalString } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ['SUBMITTED'],
-  SUBMITTED: ['CHANGES_REQUIRED', 'APPROVED', 'REJECTED'],
-  CHANGES_REQUIRED: ['DRAFT', 'SUBMITTED'],
-  APPROVED: ['LOCKED', 'REOPENED'],
-  REJECTED: ['DRAFT'],
-  LOCKED: ['REOPENED'],
-  REOPENED: ['DRAFT', 'SUBMITTED'],
-}
-
-const MANAGER_STATUSES = ['CHANGES_REQUIRED', 'APPROVED', 'REJECTED', 'LOCKED']
-const OWNER_STATUSES = ['SUBMITTED', 'DRAFT']
+import { TIMESHEET_TRANSITIONS, MANAGER_STATUSES, OWNER_STATUSES } from '@/lib/timesheet-transitions'
 
 /**
  * GET /api/timesheets/[weekId] — Get a single timesheet week with entries.
@@ -94,7 +82,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // Validate transition
   const currentStatus = week.status as string
-  const allowed = VALID_TRANSITIONS[currentStatus] || []
+  const allowed = TIMESHEET_TRANSITIONS[currentStatus] || []
   if (!allowed.includes(newStatus)) {
     throw new ValidationError(
       `Cannot transition from ${currentStatus} to ${newStatus}. Allowed: ${allowed.join(', ') || 'none'}`,

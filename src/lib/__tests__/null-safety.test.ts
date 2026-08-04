@@ -1,229 +1,188 @@
 import { describe, it, expect } from 'vitest'
+import { computeEffectiveHealth } from '@/lib/dashboard-health'
+import { mapStaffingEmployee } from '@/lib/staffing-utils'
+import { filterLeaveRequests } from '@/lib/leave-filters'
+import { validateOnboardingCompletion } from '@/lib/onboarding-utils'
+import { isValidTimesheetTransition, TIMESHEET_TRANSITIONS } from '@/lib/timesheet-transitions'
 
-describe('Null-safety patterns', () => {
-  // Pattern 1: Optional chaining on nested relations (used in 50+ routes)
-  describe('optional relation mapping', () => {
-    // From dashboard route - project summary mapping
-    it('project with null healthStatus defaults to GREY', () => {
-      const project = { healthStatus: null }
-      const result = project.healthStatus ?? 'GREY'
-      expect(result).toBe('GREY')
+/**
+ * Null-safety integration tests.
+ *
+ * These test the REAL extracted functions with null/empty/edge-case inputs
+ * to verify the production code handles them gracefully.
+ * Unlike the previous version, these test actual production code paths.
+ */
+
+const pastDate = new Date('2020-01-01')
+const futureDate = new Date('2099-12-31')
+
+describe('Null-safety — real function tests', () => {
+
+  // ── Dashboard health with edge-case data ──────────────
+  describe('computeEffectiveHealth edge cases', () => {
+    it('null healthStatus with tasks defaults to GREY', () => {
+      expect(computeEffectiveHealth({
+        healthStatus: null,
+        tasks: [{ status: 'IN_PROGRESS', dueDate: futureDate }],
+      })).toBe('GREY')
     })
 
-    // From staffing route - employee mapping
-    it('employee with null employeeProfile defaults correctly', () => {
-      const profile = { employeeProfile: null as { onboardingComplete: boolean; annualLeaveAllocation: number } | null }
-      expect(profile.employeeProfile?.onboardingComplete ?? false).toBe(false)
-      expect(profile.employeeProfile?.annualLeaveAllocation ?? 25).toBe(25)
+    it('null healthStatus with overdue tasks still returns GREY (not AMBER — AMBER requires GREEN)', () => {
+      // AMBER rule: overdueTaskCount > 0 && healthStatus === 'GREEN'
+      // null !== 'GREEN', so it falls through to healthStatus ?? 'GREY'
+      // Use 5 tasks with 1 overdue (20% < 25%) to avoid hitting the RED threshold
+      expect(computeEffectiveHealth({
+        healthStatus: null,
+        tasks: [
+          { status: 'IN_PROGRESS', dueDate: futureDate },
+          { status: 'IN_PROGRESS', dueDate: futureDate },
+          { status: 'IN_PROGRESS', dueDate: futureDate },
+          { status: 'IN_PROGRESS', dueDate: futureDate },
+          { status: 'IN_PROGRESS', dueDate: pastDate },
+        ],
+      })).toBe('GREY')
     })
 
-    it('employee with null office defaults to null', () => {
-      const profile = { office: null as { name: string } | null }
-      expect(profile.office?.name ?? null).toBeNull()
+    it('tasks with null dueDates are never counted as overdue', () => {
+      expect(computeEffectiveHealth({
+        healthStatus: 'GREEN',
+        tasks: [
+          { status: 'IN_PROGRESS', dueDate: null },
+          { status: 'IN_PROGRESS', dueDate: null },
+          { status: 'IN_PROGRESS', dueDate: null },
+        ],
+      })).toBe('GREEN')
     })
 
-    it('employee with null corporateRole defaults to null', () => {
-      const profile = { corporateRole: null as { department: string | null; title: string | null } | null }
-      expect(profile.corporateRole?.department ?? null).toBeNull()
-      expect(profile.corporateRole?.title ?? null).toBeNull()
+    it('mix of null and past dueDates counts only non-null as overdue', () => {
+      // 1 overdue out of 5 total = 20% (< 25% threshold, avoids RED)
+      // overdueTaskCount > 0 && healthStatus === 'GREEN' → AMBER
+      expect(computeEffectiveHealth({
+        healthStatus: 'GREEN',
+        tasks: [
+          { status: 'IN_PROGRESS', dueDate: null },
+          { status: 'IN_PROGRESS', dueDate: null },
+          { status: 'IN_PROGRESS', dueDate: futureDate },
+          { status: 'IN_PROGRESS', dueDate: futureDate },
+          { status: 'IN_PROGRESS', dueDate: pastDate }, // 1 overdue
+        ],
+      })).toBe('AMBER') // 1 overdue + GREEN → AMBER
+    })
+  })
+
+  // ── Staffing mapping with null relations ──────────────
+  describe('mapStaffingEmployee null relations', () => {
+    const baseProfile = {
+      id: 'p1', fullName: 'Test', email: 'test@test.com',
+      jobTitle: null, status: 'ACTIVE', startDate: null,
+      officeId: null, orgPermission: 'MEMBER',
+      office: null, corporateRole: null, employeeProfile: null,
+    }
+
+    it('all null relations produce safe defaults without crashing', () => {
+      const result = mapStaffingEmployee(baseProfile)
+      expect(result.office).toBeNull()
+      expect(result.department).toBeNull()
+      expect(result.role).toBeNull()
+      expect(result.onboardingComplete).toBe(false)
+      expect(result.leaveAllocation).toBe(25)
+      expect(result.jobTitle).toBeNull()
     })
 
-    // From leave route - profile relation
-    it('leave request with null approver shows null name', () => {
-      const request = { approver: null as { fullName: string } | null }
-      expect(request.approver?.fullName ?? null).toBeNull()
+    it('null employeeProfile defaults leaveAllocation to 25, not NaN', () => {
+      const result = mapStaffingEmployee(baseProfile)
+      expect(typeof result.leaveAllocation).toBe('number')
+      expect(Number.isNaN(result.leaveAllocation)).toBe(false)
+      expect(result.leaveAllocation).toBe(25)
     })
 
-    // From expense route
-    it('expense claim with null profile shows fallback name', () => {
-      const claim = { profile: null as { fullName: string } | null }
-      expect(claim.profile?.fullName ?? 'Someone').toBe('Someone')
+    it('null employeeProfile defaults onboardingComplete to false, not undefined', () => {
+      const result = mapStaffingEmployee(baseProfile)
+      expect(typeof result.onboardingComplete).toBe('boolean')
+      expect(result.onboardingComplete).toBe(false)
     })
 
-    // From timesheet route
-    it('timesheet with null profile shows fallback name', () => {
-      const week = { profile: null as { fullName: string } | null }
-      expect(week.profile?.fullName ?? 'Someone').toBe('Someone')
+    it('partial relations work — office present but corporateRole null', () => {
+      const result = mapStaffingEmployee({
+        ...baseProfile,
+        office: { name: 'London' },
+      })
+      expect(result.office).toBe('London')
+      expect(result.department).toBeNull()
+    })
+  })
+
+  // ── Leave filtering edge cases ────────────────────────
+  describe('filterLeaveRequests edge cases', () => {
+    it('ACTIVE on empty array returns empty, not error', () => {
+      expect(filterLeaveRequests([], 'ACTIVE')).toEqual([])
     })
 
-    // From task route - owner/reviewer
-    it('task with null owner and reviewer maps safely', () => {
-      const task = {
-        owner: null as { id: string; fullName: string } | null,
-        reviewer: null as { id: string; fullName: string } | null,
+    it('unknown filter value returns empty (no requests match)', () => {
+      const requests = [{ status: 'DRAFT' }, { status: 'APPROVED' }]
+      expect(filterLeaveRequests(requests, 'NONEXISTENT')).toEqual([])
+    })
+
+    it('ACTIVE excludes both WITHDRAWN and CANCELLED simultaneously', () => {
+      const requests = [
+        { status: 'APPROVED' },
+        { status: 'WITHDRAWN' },
+        { status: 'CANCELLED' },
+        { status: 'DRAFT' },
+      ]
+      const result = filterLeaveRequests(requests, 'ACTIVE')
+      expect(result).toHaveLength(2)
+      expect(result.map(r => r.status)).toEqual(['APPROVED', 'DRAFT'])
+    })
+  })
+
+  // ── Onboarding validation edge cases ──────────────────
+  describe('validateOnboardingCompletion edge cases', () => {
+    it('zero of everything is valid (no mandatory items)', () => {
+      const result = validateOnboardingCompletion({
+        totalPolicies: 0, acknowledgedPolicies: 0,
+        totalTraining: 0, completedTraining: 0,
+      })
+      expect(result.valid).toBe(true)
+      expect(result.missing).toEqual([])
+    })
+
+    it('acknowledged > total still valid (over-completed is fine)', () => {
+      const result = validateOnboardingCompletion({
+        totalPolicies: 3, acknowledgedPolicies: 5,
+        totalTraining: 2, completedTraining: 4,
+      })
+      expect(result.valid).toBe(true)
+    })
+
+    it('exactly 0 acknowledged out of 1 total gives correct message', () => {
+      const result = validateOnboardingCompletion({
+        totalPolicies: 1, acknowledgedPolicies: 0,
+        totalTraining: 0, completedTraining: 0,
+      })
+      expect(result.valid).toBe(false)
+      expect(result.missing[0]).toBe('1 of 1 mandatory policies not acknowledged')
+    })
+  })
+
+  // ── Timesheet transitions edge cases ──────────────────
+  describe('timesheet transition edge cases', () => {
+    it('unknown status has no valid transitions', () => {
+      expect(isValidTimesheetTransition('NONEXISTENT', 'DRAFT')).toBe(false)
+    })
+
+    it('same status to same status is not a valid transition', () => {
+      expect(isValidTimesheetTransition('DRAFT', 'DRAFT')).toBe(false)
+      expect(isValidTimesheetTransition('APPROVED', 'APPROVED')).toBe(false)
+    })
+
+    it('all TIMESHEET_TRANSITIONS keys have at least one valid target', () => {
+      for (const [from, targets] of Object.entries(TIMESHEET_TRANSITIONS)) {
+        expect(targets.length).toBeGreaterThan(0)
+        for (const to of targets) {
+          expect(isValidTimesheetTransition(from, to)).toBe(true)
+        }
       }
-      expect(task.owner?.fullName ?? 'Unassigned').toBe('Unassigned')
-      expect(task.reviewer?.fullName ?? 'Unassigned').toBe('Unassigned')
-    })
-  })
-
-  // Pattern 2: Notification-safe null checks (used in 4+ route families)
-  describe('notification null guards', () => {
-    it('leave notification skips when approverId is null', () => {
-      const leaveRequest = { approverId: null as string | null }
-      const shouldNotify = leaveRequest.approverId !== null
-      expect(shouldNotify).toBe(false)
-    })
-
-    it('leave notification sends when approverId exists', () => {
-      const leaveRequest = { approverId: 'manager-1' }
-      const shouldNotify = leaveRequest.approverId !== null
-      expect(shouldNotify).toBe(true)
-    })
-
-    it('expense notification skips when approverId is null', () => {
-      const claim = { approverId: null as string | null }
-      const shouldNotify = claim.approverId !== null
-      expect(shouldNotify).toBe(false)
-    })
-
-    it('timesheet notification skips when managerId is null', () => {
-      const profile = { managerId: null as string | null }
-      const shouldNotify = profile.managerId !== null
-      expect(shouldNotify).toBe(false)
-    })
-
-    it('task notification skips when ownerId equals actorId', () => {
-      const task = { ownerId: 'profile-1' }
-      const actorId = 'profile-1'
-      const shouldNotify = task.ownerId !== actorId
-      expect(shouldNotify).toBe(false)
-    })
-
-    it('task notification sends when ownerId differs from actorId', () => {
-      const task = { ownerId: 'profile-2' }
-      const actorId = 'profile-1'
-      const shouldNotify = task.ownerId !== actorId
-      expect(shouldNotify).toBe(true)
-    })
-  })
-
-  // Pattern 3: Numeric defaults (Bug 1 root cause -- NaN when employeeProfile is null)
-  describe('numeric null defaults', () => {
-    it('totalHours from null entries sums to 0', () => {
-      const entries: { hours: number }[] = []
-      const total = entries.reduce((sum, e) => sum + e.hours, 0)
-      expect(total).toBe(0)
-    })
-
-    it('billableHours from null entries sums to 0', () => {
-      const entries: { hours: number; isBillable: boolean }[] = []
-      const billable = entries.filter(e => e.isBillable).reduce((sum, e) => sum + e.hours, 0)
-      expect(billable).toBe(0)
-    })
-
-    it('capacity calculation with 0 employees does not divide by zero', () => {
-      const totalCapacity = 0 * 40
-      const avgUtilisation = totalCapacity > 0 ? Math.round((0 / totalCapacity) * 100) : 0
-      expect(avgUtilisation).toBe(0)
-      expect(Number.isFinite(avgUtilisation)).toBe(true)
-    })
-
-    it('overdue percentage with 0 tasks does not divide by zero', () => {
-      const totalTasks = 0
-      const overdueTasks = 0
-      const overduePercent = totalTasks > 0 ? overdueTasks / totalTasks : 0
-      expect(overduePercent).toBe(0)
-      expect(Number.isFinite(overduePercent)).toBe(true)
-    })
-
-    it('leave allocation defaults to 25 when employeeProfile is null', () => {
-      const ep = null as { annualLeaveAllocation: number } | null
-      const allocation = ep?.annualLeaveAllocation ?? 25
-      expect(allocation).toBe(25)
-    })
-  })
-
-  // Pattern 4: Date null safety
-  describe('date null handling', () => {
-    it('null dueDate does not count as overdue', () => {
-      const task = { dueDate: null as Date | null, status: 'IN_PROGRESS' }
-      const now = new Date()
-      const isOverdue = task.dueDate !== null && task.dueDate < now && task.status !== 'COMPLETED'
-      expect(isOverdue).toBe(false)
-    })
-
-    it('future dueDate is not overdue', () => {
-      const task = { dueDate: new Date('2099-01-01'), status: 'IN_PROGRESS' }
-      const now = new Date()
-      const isOverdue = task.dueDate !== null && task.dueDate < now && task.status !== 'COMPLETED'
-      expect(isOverdue).toBe(false)
-    })
-
-    it('past dueDate with COMPLETED status is not overdue', () => {
-      const task = { dueDate: new Date('2020-01-01'), status: 'COMPLETED' }
-      const now = new Date()
-      const isOverdue = task.dueDate !== null && task.dueDate < now && task.status !== 'COMPLETED'
-      expect(isOverdue).toBe(false)
-    })
-
-    it('past dueDate with IN_PROGRESS status is overdue', () => {
-      const task = { dueDate: new Date('2020-01-01'), status: 'IN_PROGRESS' }
-      const now = new Date()
-      const isOverdue = task.dueDate !== null && task.dueDate < now && task.status !== 'COMPLETED'
-      expect(isOverdue).toBe(true)
-    })
-
-    it('null startDate on employee is safely handled', () => {
-      const profile = { startDate: null as string | null }
-      expect(profile.startDate).toBeNull()
-    })
-
-    it('null completedAt on task is safely handled', () => {
-      const task = { completedAt: null as Date | null }
-      const completedDisplay = task.completedAt?.toISOString() ?? 'Not completed'
-      expect(completedDisplay).toBe('Not completed')
-    })
-  })
-
-  // Pattern 5: Array safety -- empty arrays don't crash
-  describe('empty array safety', () => {
-    it('empty tasks array produces valid project summary', () => {
-      const tasks: { status: string; dueDate: Date | null; ownerId: string; reviewerId: string | null }[] = []
-      const myTaskCount = tasks.filter(t => t.ownerId === 'profile-1' && t.status !== 'COMPLETED').length
-      const overdueCount = tasks.filter(t => t.dueDate !== null && t.dueDate < new Date()).length
-      const inReviewCount = tasks.filter(t => t.status === 'READY_FOR_REVIEW' && t.reviewerId === 'profile-1').length
-
-      expect(myTaskCount).toBe(0)
-      expect(overdueCount).toBe(0)
-      expect(inReviewCount).toBe(0)
-    })
-
-    it('empty entries array produces valid timesheet totals', () => {
-      const entries: { hours: number; isBillable: boolean }[] = []
-      const totalHours = entries.reduce((sum, e) => sum + e.hours, 0)
-      const billableHours = entries.filter(e => e.isBillable).reduce((sum, e) => sum + e.hours, 0)
-
-      expect(totalHours).toBe(0)
-      expect(billableHours).toBe(0)
-    })
-
-    it('empty projects array produces valid allProjectsHealthy', () => {
-      const projects: { effectiveHealth: string }[] = []
-      // The dashboard route: projects.length > 0 && projects.every(...)
-      const allHealthy = projects.length > 0 && projects.every(p => p.effectiveHealth === 'GREEN')
-      expect(allHealthy).toBe(false) // empty means NOT all healthy (correct -- you need at least 1)
-    })
-  })
-
-  // Pattern 6: String formatting safety
-  describe('string formatting safety', () => {
-    it('status toLowerCase with underscores replaces correctly', () => {
-      const status = 'CHANGES_REQUIRED'
-      const display = status.toLowerCase().replace(/_/g, ' ')
-      expect(display).toBe('changes required')
-    })
-
-    it('LINE_MANAGER_APPROVED formats correctly', () => {
-      const status = 'LINE_MANAGER_APPROVED'
-      const display = status.toLowerCase().replace(/_/g, ' ')
-      expect(display).toBe('line manager approved')
-    })
-
-    it('null body in notification produces undefined', () => {
-      const body = null as string | null
-      const result = body ?? undefined
-      expect(result).toBeUndefined()
     })
   })
 })

@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { withAuth } from '@/lib/with-auth'
+import { validateOnboardingCompletion } from '@/lib/onboarding-utils'
 
 /**
  * POST /api/onboarding/complete — Finish onboarding.
@@ -41,22 +42,15 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     },
   })
 
-  // ── Gather missing items ──────────────────────────────────
-  const missing: string[] = []
+  // ── Validate prerequisites ────────────────────────────────
+  const { valid, missing } = validateOnboardingCompletion({
+    totalPolicies,
+    acknowledgedPolicies,
+    totalTraining,
+    completedTraining,
+  })
 
-  if (totalPolicies > 0 && acknowledgedPolicies < totalPolicies) {
-    missing.push(
-      `${totalPolicies - acknowledgedPolicies} of ${totalPolicies} mandatory policies not acknowledged`,
-    )
-  }
-
-  if (totalTraining > 0 && completedTraining < totalTraining) {
-    missing.push(
-      `${totalTraining - completedTraining} of ${totalTraining} mandatory training items not completed`,
-    )
-  }
-
-  if (missing.length > 0) {
+  if (!valid) {
     throw new ValidationError('Onboarding is not complete', { missing })
   }
 

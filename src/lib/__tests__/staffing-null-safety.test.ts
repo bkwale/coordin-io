@@ -1,45 +1,5 @@
 import { describe, it, expect } from 'vitest'
-
-/**
- * Extract the staffing employee mapping logic
- * (mirrors /api/staffing/route.ts lines 242-257).
- *
- * Bug 1 root cause: employeeProfile was null for new members who had
- * not yet completed onboarding, causing a crash when accessing
- * .onboardingComplete and .annualLeaveAllocation.
- */
-function mapStaffingEmployee(profile: {
-  id: string
-  fullName: string
-  email: string
-  jobTitle: string | null
-  status: string
-  startDate: string | null
-  officeId: string | null
-  orgPermission: string
-  office: { name: string } | null
-  corporateRole: { department: string | null; title: string | null } | null
-  employeeProfile: {
-    onboardingComplete: boolean
-    annualLeaveAllocation: number
-  } | null
-}) {
-  return {
-    id: profile.id,
-    fullName: profile.fullName,
-    email: profile.email,
-    jobTitle: profile.jobTitle,
-    status: profile.status,
-    startDate: profile.startDate,
-    officeId: profile.officeId,
-    orgPermission: profile.orgPermission,
-    office: profile.office?.name ?? null,
-    department: profile.corporateRole?.department ?? null,
-    role: profile.corporateRole?.title ?? null,
-    onboardingComplete: profile.employeeProfile?.onboardingComplete ?? false,
-    leaveAllocation: profile.employeeProfile?.annualLeaveAllocation ?? 25,
-  }
-}
+import { mapStaffingEmployee } from '@/lib/staffing-utils'
 
 // ── Full profile ──────────────────────────────────────────
 

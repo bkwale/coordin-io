@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { hasOrgPermission } from '@/lib/permissions'
+import { computeEffectiveHealth } from '@/lib/dashboard-health'
 import type { TaskStatus } from '@/generated/prisma/client'
 
 /**
@@ -70,18 +71,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
         t.status === 'READY_FOR_REVIEW' && t.reviewerId === profile.id,
     ).length
 
-    // Compute effective health from actual task data
-    const totalTaskCount = project.tasks.length
-    let effectiveHealth: string
-    if (totalTaskCount === 0) {
-      effectiveHealth = 'GREY'
-    } else if (overdueTaskCount > 3 || (totalTaskCount > 0 && overdueTaskCount / totalTaskCount > 0.25)) {
-      effectiveHealth = 'RED'
-    } else if (overdueTaskCount > 0 && project.healthStatus === 'GREEN') {
-      effectiveHealth = 'AMBER'
-    } else {
-      effectiveHealth = project.healthStatus ?? 'GREY'
-    }
+    const effectiveHealth = computeEffectiveHealth(project)
 
     return {
       id: project.id,
