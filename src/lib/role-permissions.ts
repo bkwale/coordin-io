@@ -6,7 +6,11 @@ import type { OrgPermission } from '@/generated/prisma/client'
  * Hard-coded per Purple Team recommendation — no database lookups,
  * no custom permission builder. Five profiles, flat lookup.
  *
- * Hierarchy: VIEWER → MEMBER → MANAGER → ADMIN → OWNER
+ * Hierarchy: VIEWER → MEMBER → MANAGER → HR → ADMIN → OWNER
+ *
+ * HR sits between MANAGER and ADMIN — full people-management access
+ * (staffing, leave, probation, HR docs, training, salary) but NOT
+ * system settings, billing, or org-level config.
  *
  * Design principles (from PT session):
  * - Financial data (fees, margins, invoices): ADMIN + OWNER only
@@ -65,9 +69,14 @@ export type Action =
   | 'create_edit'
   | 'send_to_client'
   // Staffing
+  | 'view_directory'
+  | 'view_full_profiles'
   | 'view_project_allocations'
   | 'assign_staff_project'
   | 'view_utilisation'
+  | 'manage_hr_documents'
+  | 'manage_probation'
+  | 'view_salary'
   // Knowledge Base
   | 'view'
   | 'contribute'
@@ -95,75 +104,80 @@ type PermissionMatrix = Record<string, Set<OrgPermission>>
  */
 const MATRIX: PermissionMatrix = {
   // ── Projects ──
-  'projects:view_assigned':       new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'projects:view_all':            new Set(['ADMIN', 'OWNER']),
-  'projects:create':              new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'projects:edit_own':            new Set(['MANAGER', 'ADMIN', 'OWNER']),
+  'projects:view_assigned':       new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'projects:view_all':            new Set(['HR', 'ADMIN', 'OWNER']),
+  'projects:create':              new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'projects:edit_own':            new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'projects:edit':                new Set(['ADMIN', 'OWNER']),
   'projects:archive':             new Set(['ADMIN', 'OWNER']),
   'projects:delete':              new Set(['OWNER']),
 
   // ── Tasks ──
-  'tasks:view_own':               new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'tasks:view_project':           new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'tasks:view_all':               new Set(['ADMIN', 'OWNER']),
-  'tasks:create_edit_own':        new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'tasks:create_edit_project':    new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'tasks:create_edit_all':        new Set(['ADMIN', 'OWNER']),
-  'tasks:assign_others':          new Set(['MANAGER', 'ADMIN', 'OWNER']),
+  'tasks:view_own':               new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'tasks:view_project':           new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'tasks:view_all':               new Set(['HR', 'ADMIN', 'OWNER']),
+  'tasks:create_edit_own':        new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'tasks:create_edit_project':    new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'tasks:create_edit_all':        new Set(['HR', 'ADMIN', 'OWNER']),
+  'tasks:assign_others':          new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
 
   // ── Documents ──
-  'documents:view_shared':        new Set(['VIEWER', 'MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'documents:view_project':       new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'documents:upload_edit':        new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'documents:approve_review':     new Set(['MANAGER', 'ADMIN', 'OWNER']),
+  'documents:view_shared':        new Set(['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'documents:view_project':       new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'documents:upload_edit':        new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'documents:approve_review':     new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'documents:issue_externally':   new Set(['ADMIN', 'OWNER']),
 
   // ── Timesheets ──
-  'timesheets:submit_own':        new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'timesheets:view_team':         new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'timesheets:view_all':          new Set(['ADMIN', 'OWNER']),
-  'timesheets:approve_direct_reports': new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'timesheets:approve_all':       new Set(['ADMIN', 'OWNER']),
+  'timesheets:submit_own':        new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'timesheets:view_team':         new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'timesheets:view_all':          new Set(['HR', 'ADMIN', 'OWNER']),
+  'timesheets:approve_direct_reports': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'timesheets:approve_all':       new Set(['HR', 'ADMIN', 'OWNER']),
 
   // ── Leave ──
-  'leave:submit_own':             new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'leave:approve_direct_reports': new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'leave:approve_all':            new Set(['ADMIN', 'OWNER']),
-  'leave:view_all':               new Set(['ADMIN', 'OWNER']),
+  'leave:submit_own':             new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'leave:approve_direct_reports': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'leave:approve_all':            new Set(['HR', 'ADMIN', 'OWNER']),
+  'leave:view_all':               new Set(['HR', 'ADMIN', 'OWNER']),
 
   // ── Expenses ──
-  'expenses:submit_own':          new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'expenses:approve_direct_reports': new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'expenses:approve_all':         new Set(['ADMIN', 'OWNER']),
-  'expenses:view_all':            new Set(['ADMIN', 'OWNER']),
+  'expenses:submit_own':          new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'expenses:approve_direct_reports': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'expenses:approve_all':         new Set(['HR', 'ADMIN', 'OWNER']),
+  'expenses:view_all':            new Set(['HR', 'ADMIN', 'OWNER']),
 
-  // ── Quotes & Invoices ──
+  // ── Quotes & Invoices ── (HR does NOT see financial data)
   'quotes_invoices:view_own_project': new Set(['MANAGER', 'ADMIN', 'OWNER']),
   'quotes_invoices:view_all':     new Set(['ADMIN', 'OWNER']),
   'quotes_invoices:create_edit':  new Set(['ADMIN', 'OWNER']),
   'quotes_invoices:send_to_client': new Set(['OWNER']),
 
-  // ── Staffing ──
-  'staffing:view_project_allocations': new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'staffing:assign_staff_project': new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'staffing:view_utilisation':    new Set(['ADMIN', 'OWNER']),
+  // ── Staffing ── (HR gets full staffing access)
+  'staffing:view_directory':      new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'staffing:view_full_profiles':  new Set(['HR', 'ADMIN', 'OWNER']),
+  'staffing:view_project_allocations': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'staffing:assign_staff_project': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'staffing:view_utilisation':    new Set(['HR', 'ADMIN', 'OWNER']),
+  'staffing:manage_hr_documents': new Set(['HR', 'ADMIN', 'OWNER']),
+  'staffing:manage_probation':    new Set(['HR', 'ADMIN', 'OWNER']),
+  'staffing:view_salary':         new Set(['HR', 'ADMIN', 'OWNER']),
 
   // ── Knowledge Base ──
-  'knowledge_base:view':          new Set(['VIEWER', 'MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
-  'knowledge_base:contribute':    new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
+  'knowledge_base:view':          new Set(['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'knowledge_base:contribute':    new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'knowledge_base:edit_delete':   new Set(['ADMIN', 'OWNER']),
 
-  // ── Settings ──
+  // ── Settings ── (HR does NOT get system settings)
   'settings:view_org_settings':   new Set(['ADMIN', 'OWNER']),
   'settings:edit_org_settings':   new Set(['OWNER']),
-  'settings:manage_team':         new Set(['ADMIN', 'OWNER']),
+  'settings:manage_team':         new Set(['HR', 'ADMIN', 'OWNER']),
   'settings:billing_currency':    new Set(['OWNER']),
   'settings:integrations':        new Set(['ADMIN', 'OWNER']),
   'settings:ai_governance':       new Set(['OWNER']),
 
   // ── AI Assistant ──
-  'ai:use_scoped':                new Set(['MEMBER', 'MANAGER', 'ADMIN', 'OWNER']),
+  'ai:use_scoped':                new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'ai:access_fee_data':           new Set(['ADMIN', 'OWNER']),
 
   // ── Portal (external) ──
@@ -247,6 +261,7 @@ export function getConsequenceTier(feature: Feature, action: Action): Consequenc
 export const ROLE_LABELS: Record<OrgPermission, string> = {
   OWNER: 'Practice Principal',
   ADMIN: 'Practice Manager',
+  HR: 'HR Manager',
   MANAGER: 'Project Lead',
   MEMBER: 'Team Member',
   VIEWER: 'External',
@@ -255,6 +270,7 @@ export const ROLE_LABELS: Record<OrgPermission, string> = {
 export const ROLE_DESCRIPTIONS: Record<OrgPermission, string> = {
   OWNER: 'Full control — organisation settings, billing, AI governance, and all features',
   ADMIN: 'Operational management — team, projects, finances, integrations',
+  HR: 'People management — staffing, leave, probation, HR documents, salary, training. No system settings or billing.',
   MANAGER: 'Project-level control — tasks, documents, approvals for direct reports',
   MEMBER: 'Day-to-day work — timesheets, tasks, expenses, leave requests',
   VIEWER: 'Read-only portal access for clients and external stakeholders',

@@ -66,6 +66,21 @@ vi.mock('@/lib/notifications', () => ({
   NOTIFICATION_EVENTS: {},
 }))
 
+// Mock Supabase client for upload route
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
+    storage: {
+      from: vi.fn(() => ({
+        upload: vi.fn().mockResolvedValue({ error: null }),
+        createSignedUrl: vi.fn().mockResolvedValue({
+          data: { signedUrl: 'https://example.com/signed-url' },
+          error: null,
+        }),
+      })),
+    },
+  })),
+}))
+
 vi.mock('@/lib/with-auth', () => ({
   withAuth: (handler: any) => {
     return async (req: any) => {
@@ -95,6 +110,7 @@ import { GET as getProbation, POST as postProbation } from '@/app/api/staffing/p
 import { GET as getTraining, POST as postTraining } from '@/app/api/staffing/training/route'
 import { GET as getTrainingDetail, PATCH as patchTraining, DELETE as deleteTraining } from '@/app/api/staffing/training/[id]/route'
 import { POST as postTrainingCompletion } from '@/app/api/staffing/training/completions/route'
+import { POST as postHRDocUpload } from '@/app/api/staffing/hr-documents/upload/route'
 import { recordAuditEvent } from '@/lib/audit'
 
 // ---------------------------------------------------------------------------
@@ -989,5 +1005,179 @@ describe('withAuth requiredPermission enforcement note', () => {
     const res = await postAllocation(req)
 
     expect(res.status).toBe(200)
+  })
+})
+
+// =====================================================================
+// POST /api/staffing/hr-documents/upload — MEMBER blocked, HR+ allowed
+// (Crispin gap: formData-based upload route with Supabase storage)
+// =====================================================================
+
+describe('POST /api/staffing/hr-documents/upload — access control', () => {
+  function makeFormDataRequest(role: string) {
+    ctx.profileRef.current = createMockProfile({
+      orgPermission: role,
+      organisationId: 'org-1',
+      id: 'caller-1',
+    })
+
+    // Build a real FormData with a file
+    const file = new File(['hello'], 'test.pdf', { type: 'application/pdf' })
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('profileId', 'emp-1')
+
+    return new Request('http://localhost/api/staffing/hr-documents/upload', {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
+  it('MEMBER → 403', async () => {
+    const req = makeFormDataRequest('MEMBER')
+    const res = await postHRDocUpload(req as any)
+    expect(res.status).toBe(403)
+  })
+
+  it('MANAGER → 403', async () => {
+    const req = makeFormDataRequest('MANAGER')
+    const res = await postHRDocUpload(req as any)
+    expect(res.status).toBe(403)
+  })
+
+  it('VIEWER → 403', async () => {
+    const req = makeFormDataRequest('VIEWER')
+    const res = await postHRDocUpload(req as any)
+    expect(res.status).toBe(403)
+  })
+
+  it('HR → 201 (allowed)', async () => {
+    const req = makeFormDataRequest('HR')
+    const res = await postHRDocUpload(req as any)
+    expect(res.status).toBe(201)
+  })
+
+  it('ADMIN → 201 (allowed)', async () => {
+    const req = makeFormDataRequest('ADMIN')
+    const res = await postHRDocUpload(req as any)
+    expect(res.status).toBe(201)
+  })
+
+  it('OWNER → 201 (allowed)', async () => {
+    const req = makeFormDataRequest('OWNER')
+    const res = await postHRDocUpload(req as any)
+    expect(res.status).toBe(201)
+  })
+})
+
+// =====================================================================
+// GET /api/staffing/training/[id] — MEMBER data-based permission
+// (Crispin gap: MEMBER can only see training if they have a completion)
+// =====================================================================
+
+describe('GET /api/staffing/training/[id] — MEMBER with/without completion', () => {
+  const trainingId = 'training-1'
+  const memberId = 'member-1'
+
+  beforeEach(() => {
+    ctx.profileRef.current = createMockProfile({
+      orgPermission: 'MEMBER',
+      organisationId: 'org-1',
+      id: memberId,
+    })
+  })
+
+  it('MEMBER without completion → 403', async () => {
+    // Training exists but MEMBER has no completion record
+    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+      id: trainingId,
+      title: 'Fire Safety',
+      description: null,
+      mandatory: true,
+      durationMinutes: 60,
+      contentUrl: null,
+      createdAt: new Date(),
+      completions: [], // no completions at all
+    })
+
+    const req = createMockRequest({ method: 'GET', url: `http://localhost/api/staffing/training/${trainingId}` })
+    const res = await getTrainingDetail(req)
+    expect(res.status).toBe(403)
+  })
+
+  it('MEMBER with completion → 200', async () => {
+    // Training exists and MEMBER has a completion record
+    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+      id: trainingId,
+      title: 'Fire Safety',
+      description: null,
+      mandatory: true,
+      durationMinutes: 60,
+      contentUrl: null,
+      createdAt: new Date(),
+      completions: [
+        {
+          id: 'comp-1',
+          profileId: memberId, // matches the caller
+          completedAt: new Date(),
+          profile: { id: memberId, fullName: 'Test Member', jobTitle: 'Engineer' },
+        },
+      ],
+    })
+
+    const req = createMockRequest({ method: 'GET', url: `http://localhost/api/staffing/training/${trainingId}` })
+    const res = await getTrainingDetail(req)
+    expect(res.status).toBe(200)
+
+    const body = await res.json()
+    expect(body.data.record.id).toBe(trainingId)
+  })
+
+  it('MANAGER → 200 (dashboard access, no completion needed)', async () => {
+    ctx.profileRef.current = createMockProfile({
+      orgPermission: 'MANAGER',
+      organisationId: 'org-1',
+      id: 'mgr-1',
+    })
+
+    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+      id: trainingId,
+      title: 'Fire Safety',
+      description: null,
+      mandatory: true,
+      durationMinutes: 60,
+      contentUrl: null,
+      createdAt: new Date(),
+      completions: [], // no completions — but MANAGER still gets in via hasStaffingDashboardAccess
+    })
+
+    const req = createMockRequest({ method: 'GET', url: `http://localhost/api/staffing/training/${trainingId}` })
+    const res = await getTrainingDetail(req)
+    expect(res.status).toBe(200)
+  })
+
+  it('MEMBER with other users completion only → 403', async () => {
+    // Training exists but only another user has completed it
+    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+      id: trainingId,
+      title: 'Fire Safety',
+      description: null,
+      mandatory: true,
+      durationMinutes: 60,
+      contentUrl: null,
+      createdAt: new Date(),
+      completions: [
+        {
+          id: 'comp-2',
+          profileId: 'other-user', // NOT the caller
+          completedAt: new Date(),
+          profile: { id: 'other-user', fullName: 'Other Person', jobTitle: 'Designer' },
+        },
+      ],
+    })
+
+    const req = createMockRequest({ method: 'GET', url: `http://localhost/api/staffing/training/${trainingId}` })
+    const res = await getTrainingDetail(req)
+    expect(res.status).toBe(403)
   })
 })

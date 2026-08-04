@@ -220,6 +220,7 @@ model Profile {
 enum OrgPermission {
   OWNER
   ADMIN
+  HR
   MANAGER
   MEMBER
   VIEWER

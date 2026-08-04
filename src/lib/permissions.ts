@@ -12,6 +12,7 @@ const ORG_PERMISSION_HIERARCHY: OrgPermission[] = [
   'VIEWER',
   'MEMBER',
   'MANAGER',
+  'HR',
   'ADMIN',
   'OWNER',
 ]
@@ -76,8 +77,8 @@ export async function canViewProject(
   projectId: string,
   orgPermission: OrgPermission
 ): Promise<boolean> {
-  // Admins and owners see everything
-  if (hasOrgPermission(orgPermission, 'ADMIN')) {
+  // HR, Admins, and Owners see everything
+  if (hasOrgPermission(orgPermission, 'HR')) {
     return true
   }
   // Everyone else needs an active membership
