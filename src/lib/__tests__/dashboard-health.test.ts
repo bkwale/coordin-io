@@ -142,4 +142,33 @@ describe('allProjectsHealthy aggregation', () => {
   it('is false when project list is empty', () => {
     expect(computeAllProjectsHealthy([])).toBe(false)
   })
+
+  it('is false when all projects are GREY (no tasks — GREY ≠ GREEN)', () => {
+    const projects = [
+      { healthStatus: 'GREEN', tasks: [] },
+      { healthStatus: 'GREEN', tasks: [] },
+    ]
+    expect(computeAllProjectsHealthy(projects)).toBe(false)
+  })
+
+  it('is true for single project that is GREEN with on-time tasks', () => {
+    const projects = [
+      { healthStatus: 'GREEN', tasks: makeTasks(3) },
+    ]
+    expect(computeAllProjectsHealthy(projects)).toBe(true)
+  })
+
+  it('is false when stored GREEN but overdue tasks force AMBER (Bug 7 aggregate)', () => {
+    const projects = [
+      { healthStatus: 'GREEN', tasks: makeTasks(5) },
+      {
+        healthStatus: 'GREEN',
+        tasks: [
+          ...makeTasks(9),
+          { status: 'IN_PROGRESS', dueDate: pastDate }, // forces AMBER
+        ],
+      },
+    ]
+    expect(computeAllProjectsHealthy(projects)).toBe(false)
+  })
 })

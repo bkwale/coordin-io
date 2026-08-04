@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isValidTimesheetTransition } from '@/lib/timesheet-transitions'
+import { isValidTimesheetTransition, validateTimesheetTransition, TIMESHEET_TRANSITIONS } from '@/lib/timesheet-transitions'
 
 describe('Timesheet state machine', () => {
   it('DRAFT -> SUBMITTED is valid', () => {
@@ -43,6 +43,28 @@ describe('Timesheet state machine', () => {
   it('CHANGES_REQUIRED -> SUBMITTED is valid (resubmit after changes)', () => {
     expect(isValidTimesheetTransition('CHANGES_REQUIRED', 'SUBMITTED')).toBe(
       true,
+    )
+  })
+})
+
+describe('validateTimesheetTransition (throwing variant)', () => {
+  it('does not throw for a valid transition', () => {
+    expect(() => validateTimesheetTransition('DRAFT', 'SUBMITTED')).not.toThrow()
+  })
+
+  it('throws Error for an invalid transition', () => {
+    expect(() => validateTimesheetTransition('DRAFT', 'APPROVED')).toThrow(Error)
+  })
+
+  it('error message includes from, to, and allowed statuses', () => {
+    expect(() => validateTimesheetTransition('DRAFT', 'APPROVED')).toThrow(
+      'Cannot transition from DRAFT to APPROVED. Allowed: SUBMITTED',
+    )
+  })
+
+  it('unknown from status throws with "Allowed: none"', () => {
+    expect(() => validateTimesheetTransition('NONEXISTENT', 'DRAFT')).toThrow(
+      'Cannot transition from NONEXISTENT to DRAFT. Allowed: none',
     )
   })
 })
