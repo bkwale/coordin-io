@@ -69,7 +69,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
         leaveType: true,
         startDate: true,
         endDate: true,
-        totalDays: true,
+        days: true,
         profile: { select: { fullName: true } },
       },
     })

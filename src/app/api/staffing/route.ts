@@ -24,7 +24,8 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     officeId: string | null
     orgPermission: string
     office: { id: string; name: string } | null
-    corporateRole: { id: string; title: string; department: string | null } | null
+    department: string | null
+    corporateRole: { id: string; name: string } | null
     employeeProfile: { annualLeaveAllocation: number; onboardingComplete: boolean } | null
   }[]
 
@@ -40,8 +41,9 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
         startDate: true,
         officeId: true,
         orgPermission: true,
+        department: true,
         office: { select: { id: true, name: true } },
-        corporateRole: { select: { id: true, title: true, department: true } },
+        corporateRole: { select: { id: true, name: true } },
         employeeProfile: {
           select: {
             annualLeaveAllocation: true,
@@ -62,8 +64,9 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
       startDate: string | null
       officeId: string | null
       orgPermission: string
+      department: string | null
       office: { id: string; name: string } | null
-      corporateRole: { id: string; title: string; department: string | null } | null
+      corporateRole: { id: string; name: string } | null
     }[] = await modulesPrisma.profile.findMany({
       where: { organisationId: orgId },
       select: {
@@ -75,12 +78,14 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
         startDate: true,
         officeId: true,
         orgPermission: true,
+        department: true,
         office: { select: { id: true, name: true } },
-        corporateRole: { select: { id: true, title: true, department: true } },
+        corporateRole: { select: { id: true, name: true } },
       },
     })
     allProfiles = baseProfiles.map((p) => ({
       ...p,
+      department: p.department ?? null,
       employeeProfile: null,
     }))
   }
@@ -106,7 +111,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   // ── By-department breakdown ────────────────────────────────
   const byDepartment: Record<string, number> = {}
   for (const p of activeEmployees) {
-    const dept = p.corporateRole?.department ?? 'Unassigned'
+    const dept = p.department ?? 'Unassigned'
     byDepartment[dept] = (byDepartment[dept] ?? 0) + 1
   }
 

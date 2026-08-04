@@ -13,7 +13,8 @@ const fullProfile = {
   officeId: 'office-1',
   orgPermission: 'MEMBER',
   office: { name: 'London HQ' },
-  corporateRole: { department: 'Design', title: 'Lead Architect' },
+  department: 'Design',
+  corporateRole: { name: 'Lead Architect' },
   employeeProfile: { onboardingComplete: true, annualLeaveAllocation: 28 },
 }
 
@@ -57,9 +58,10 @@ describe('mapStaffingEmployee', () => {
     expect(result.office).toBeNull()
   })
 
-  it('maps department and role to null when corporateRole is null', () => {
+  it('maps role to null when corporateRole is null, department from profile', () => {
     const result = mapStaffingEmployee({
       ...fullProfile,
+      department: null,
       corporateRole: null,
     })
 
@@ -77,6 +79,7 @@ describe('mapStaffingEmployee', () => {
       startDate: null,
       officeId: null,
       orgPermission: 'MEMBER',
+      department: null,
       office: null,
       corporateRole: null,
       employeeProfile: null,

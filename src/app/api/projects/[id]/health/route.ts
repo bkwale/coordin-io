@@ -49,14 +49,15 @@ async function computeDerivedHealth(projectId: string) {
   let budgetHealth: 'GREEN' | 'AMBER' | 'RED' | 'GREY' = 'GREY'
   let budgetReason = 'Budget tracking not configured'
   try {
-    const commercial = await modulesPrisma.commercialRecord.findFirst({
-      where: { projectId, category: 'BUDGET_SUMMARY' },
+    const budget = await modulesPrisma.budget.findFirst({
+      where: { projectId },
       orderBy: { createdAt: 'desc' },
     })
-    if (commercial) {
-      const data = commercial.metadata ? JSON.parse(commercial.metadata as string) : null
-      if (data?.spendRatio !== undefined) {
-        const ratio = data.spendRatio as number
+    if (budget) {
+      const totalBudget = (budget.totalBudget as number) || 0
+      const actualSpend = (budget.actualSpend as number) || 0
+      if (totalBudget > 0) {
+        const ratio = actualSpend / totalBudget
         if (ratio > 1.1) {
           budgetHealth = 'RED'
           budgetReason = `Spend at ${Math.round(ratio * 100)}% of budget`
@@ -79,7 +80,7 @@ async function computeDerivedHealth(projectId: string) {
   try {
     const totalSnags = await modulesPrisma.snag.count({ where: { projectId } })
     const openSnags = await modulesPrisma.snag.count({
-      where: { projectId, status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] } },
+      where: { projectId, status: { in: ['OPEN', 'ASSIGNED', 'RECTIFICATION_SUBMITTED'] } },
     })
     const totalObs = await modulesPrisma.siteObservation.count({ where: { projectId } })
     const openObs = await modulesPrisma.siteObservation.count({

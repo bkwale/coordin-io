@@ -75,7 +75,7 @@ describe('Null-safety — real function tests', () => {
     const baseProfile = {
       id: 'p1', fullName: 'Test', email: 'test@test.com',
       jobTitle: null, status: 'ACTIVE', startDate: null,
-      officeId: null, orgPermission: 'MEMBER',
+      officeId: null, orgPermission: 'MEMBER', department: null,
       office: null, corporateRole: null, employeeProfile: null,
     }
 

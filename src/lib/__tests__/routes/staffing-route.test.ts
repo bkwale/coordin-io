@@ -92,7 +92,8 @@ function makeStaffingProfile(overrides: Record<string, unknown> = {}) {
     officeId: 'office-1',
     orgPermission: 'MEMBER',
     office: { id: 'office-1', name: 'London Office' },
-    corporateRole: { id: 'role-1', title: 'Senior Engineer', department: 'Engineering' },
+    department: 'Engineering',
+    corporateRole: { id: 'role-1', name: 'Senior Engineer' },
     employeeProfile: { annualLeaveAllocation: 28, onboardingComplete: true },
     ...overrides,
   }
@@ -181,7 +182,8 @@ describe('GET /api/staffing', () => {
       makeStaffingProfile(),
       makeStaffingProfile({
         id: 'emp-2',
-        corporateRole: { id: 'role-2', title: 'PM', department: 'Management' },
+        department: 'Management',
+        corporateRole: { id: 'role-2', name: 'PM' },
       }),
     ])
 
@@ -207,7 +209,8 @@ describe('GET /api/staffing', () => {
           officeId: 'office-1',
           orgPermission: 'MEMBER',
           office: { id: 'office-1', name: 'London Office' },
-          corporateRole: { id: 'role-1', title: 'Senior Engineer', department: 'Engineering' },
+          department: 'Engineering',
+    corporateRole: { id: 'role-1', name: 'Senior Engineer' },
         },
       ])
 
@@ -226,6 +229,7 @@ describe('GET /api/staffing', () => {
       makeStaffingProfile({
         officeId: null,
         office: null,
+        department: null,
         corporateRole: null,
         employeeProfile: null,
       }),

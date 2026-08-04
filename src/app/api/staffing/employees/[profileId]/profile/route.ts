@@ -22,7 +22,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     where: { id: profileId },
     include: {
       office: { select: { id: true, name: true, city: true, country: true } },
-      corporateRole: { select: { id: true, title: true, department: true, level: true } },
+      corporateRole: { select: { id: true, name: true, level: true } },
       manager: { select: { id: true, fullName: true, jobTitle: true } },
       employeeProfile: true,
       projectMemberships: {
@@ -45,7 +45,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       },
       trainingCompletions: {
         include: {
-          module: { select: { id: true, title: true, category: true } },
+          training: { select: { id: true, title: true } },
         },
         orderBy: { completedAt: 'desc' as const },
       },
@@ -149,8 +149,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   // Training stats
   const trainingCompletions = employee.trainingCompletions ?? []
   const mandatoryComplete = trainingCompletions.filter(
-    (t: { module: { category: string | null } }) =>
-      t.module.category === 'MANDATORY' || t.module.category === 'mandatory'
+    (t: { training: { mandatory?: boolean } }) =>
+      t.training?.mandatory === true
   ).length
 
   // CPD hours total
@@ -158,9 +158,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   try {
     const cpdRecords = await modulesPrisma.cPDRecord.findMany({
       where: { profileId },
-      select: { hours: true },
+      select: { durationHours: true },
     })
-    totalCpdHours = cpdRecords.reduce((sum: number, r: { hours: number }) => sum + r.hours, 0)
+    totalCpdHours = cpdRecords.reduce((sum: number, r: { durationHours: number }) => sum + (r.durationHours ?? 0), 0)
   } catch {
     // Table may not exist yet
   }
@@ -213,19 +213,19 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
         }
       : null,
     leave: {
-      annualEntitlement: currentLeave?.entitlement ?? ep?.annualLeaveAllocation ?? 25,
+      annualEntitlement: currentLeave?.allocation ?? ep?.annualLeaveAllocation ?? 25,
       used: currentLeave?.used ?? 0,
-      pending: currentLeave?.pending ?? 0,
-      remaining: currentLeave?.remaining ?? currentLeave?.entitlement ?? ep?.annualLeaveAllocation ?? 25,
+      carriedForward: currentLeave?.carriedForward ?? 0,
+      remaining: (currentLeave?.allocation ?? ep?.annualLeaveAllocation ?? 25) - (currentLeave?.used ?? 0),
       sicknessCount,
     },
     projects: employee.projectMemberships.map((pm: {
       id: string
-      role: string | null
+      projectRole: string | null
       project: { id: string; name: string; code: string | null; status: string; stage: string }
     }) => ({
       membershipId: pm.id,
-      role: pm.role,
+      role: pm.projectRole,
       project: pm.project,
       weeklyHours: allocationByProject[pm.project.id]?.hours ?? null,
     })),

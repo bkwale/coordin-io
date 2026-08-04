@@ -20,7 +20,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     where: { id: profileId },
     include: {
       office: { select: { id: true, name: true, city: true, country: true } },
-      corporateRole: { select: { id: true, title: true, department: true, level: true } },
+      corporateRole: { select: { id: true, name: true, level: true } },
       manager: { select: { id: true, fullName: true, jobTitle: true } },
       employeeProfile: true,
       projectMemberships: {
@@ -42,13 +42,13 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       },
       trainingCompletions: {
         include: {
-          module: { select: { id: true, title: true, category: true } },
+          training: { select: { id: true, title: true } },
         },
         orderBy: { completedAt: 'desc' },
       },
       cpdRecords: {
         take: 10,
-        orderBy: { activityDate: 'desc' },
+        orderBy: { date: 'desc' },
       },
       assetAssignments: {
         include: {
@@ -142,11 +142,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     },
     projects: employee.projectMemberships.map((pm: {
       id: string
-      role: string | null
+      projectRole: string | null
       project: { id: string; name: string; code: string | null; status: string; stage: string }
     }) => ({
       membershipId: pm.id,
-      role: pm.role,
+      role: pm.projectRole,
       project: pm.project,
     })),
     leaveBalances: employee.leaveBalances,

@@ -11,8 +11,9 @@ export interface StaffingProfileInput {
   startDate: string | null
   officeId: string | null
   orgPermission: string
+  department: string | null
   office: { name: string } | null
-  corporateRole: { department: string | null; title: string | null } | null
+  corporateRole: { name: string } | null
   employeeProfile: { onboardingComplete: boolean; annualLeaveAllocation: number } | null
 }
 
@@ -43,8 +44,8 @@ export function mapStaffingEmployee(profile: StaffingProfileInput): StaffingEmpl
     officeId: profile.officeId,
     orgPermission: profile.orgPermission,
     office: profile.office?.name ?? null,
-    department: profile.corporateRole?.department ?? null,
-    role: profile.corporateRole?.title ?? null,
+    department: profile.department ?? null,
+    role: profile.corporateRole?.name ?? null,
     onboardingComplete: profile.employeeProfile?.onboardingComplete ?? false,
     leaveAllocation: profile.employeeProfile?.annualLeaveAllocation ?? 25,
   }
