@@ -4,10 +4,15 @@ import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { requireString, requireNumber, requireDate, parseBody } from '@/lib/validation'
-import { ValidationError } from '@/lib/errors'
+import { ValidationError, PermissionError } from '@/lib/errors'
+import { hasStaffingDashboardAccess } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
  * GET /api/staffing/allocations — Resource allocations.
+ *
+ * Permission: MANAGER+ only (staffing:view_project_allocations).
+ * MEMBERs cannot see resource allocation data.
  *
  * Query params:
  * - weekStarting: ISO date string (required for weekly view)
@@ -16,6 +21,11 @@ import { ValidationError } from '@/lib/errors'
  * - weeks: number of weeks to return (default 4)
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
+  // Permission guard: MANAGER+ required
+  if (!hasStaffingDashboardAccess(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only managers and above can view resource allocations')
+  }
+
   const url = new URL(request.url)
   const weekParam = url.searchParams.get('weekStarting')
   const profileIdFilter = url.searchParams.get('profileId')
@@ -121,9 +131,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
  * POST /api/staffing/allocations — Create or update a resource allocation.
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  // Only admins/owners can manage allocations
-  if (profile.orgPermission !== 'ADMIN' && profile.orgPermission !== 'OWNER') {
-    throw new ValidationError('Only admins can manage resource allocations')
+  // MANAGER+ can manage allocations (staffing:assign_staff_project)
+  if (!hasStaffingDashboardAccess(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only managers and above can manage resource allocations')
   }
 
   const body = await parseBody(request)

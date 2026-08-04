@@ -6,6 +6,8 @@ import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, optionalNumber, optionalDate, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { canPerform } from '@/lib/role-permissions'
+import { hasFullStaffingAccess } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
  * GET /api/staffing/employees/[profileId]/profile
@@ -67,7 +69,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('You do not have access to this employee')
   }
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  // hasFullStaffingAccess replaces inline isAdmin — gives HR, ADMIN, OWNER access
+  const hasHRAccess = hasFullStaffingAccess(profile.orgPermission as OrgPermission)
   const isSelf = profileId === profile.id
 
   // HR documents count by type
@@ -76,7 +79,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     const docs = await modulesPrisma.hRDocument.findMany({
       where: {
         profileId,
-        ...(isAdmin || isSelf ? {} : { isConfidential: false }),
+        ...(hasHRAccess || isSelf ? {} : { isConfidential: false }),
       },
       select: { documentType: true },
     })
@@ -165,9 +168,21 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     // Table may not exist yet
   }
 
-  // Build the employee profile fields - only show confidential (salary, etc.) to admin or self
+  // Build the employee profile fields - only show confidential (salary, etc.) to HR+/self
   const ep = employee.employeeProfile
-  const showConfidential = isAdmin || isSelf
+  const showConfidential = hasHRAccess || isSelf
+
+  // Audit event: log salary data access (PT recommendation)
+  if (showConfidential && !isSelf && ep?.salary) {
+    await recordAuditEvent({
+      organisationId: profile.organisationId,
+      actorId: profile.id,
+      action: 'staffing.salary_data_accessed',
+      entityType: 'profile',
+      entityId: profileId,
+      metadata: { accessedBy: profile.orgPermission },
+    })
+  }
 
   return success({
     employee: {
@@ -242,7 +257,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     },
     assets: employee.assetAssignments,
     hrDocumentCounts,
-    isAdmin,
+    hasHRAccess,
     isSelf,
   })
 })
@@ -258,10 +273,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const profileId = request.url.match(/\/employees\/([^/?]+)\/profile/)?.[1]
   if (!profileId) throw new NotFoundError('Employee not found')
 
-  const isAdmin = canPerform(profile.orgPermission, 'staffing', 'view_utilisation')
+  const hasHRAccess = hasFullStaffingAccess(profile.orgPermission as OrgPermission)
   const isSelf = profileId === profile.id
 
-  if (!isAdmin && !isSelf) {
+  if (!hasHRAccess && !isSelf) {
     throw new PermissionError('You can only update your own profile')
   }
 
@@ -282,7 +297,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const empData: Record<string, unknown> = {}
 
   // Self-editable fields
-  if (isSelf || isAdmin) {
+  if (isSelf || hasHRAccess) {
     const phone = optionalString(body.phone as unknown, 'phone', 50)
     if (phone !== null) profileData.phone = phone
 
@@ -299,8 +314,8 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (availabilityStatus !== null) empData.availabilityStatus = availabilityStatus
   }
 
-  // Admin-only fields
-  if (isAdmin) {
+  // HR+-only fields
+  if (hasHRAccess) {
     // Profile fields
     const jobTitle = optionalString(body.jobTitle as unknown, 'jobTitle', 200)
     if (jobTitle !== null) profileData.jobTitle = jobTitle

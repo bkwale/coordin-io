@@ -5,9 +5,13 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
+import { canManageHR, hasStaffingDashboardAccess } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
  * GET /api/staffing/training/[id] — Single training record with completions.
+ *
+ * Permission: HR+ sees all; MANAGER sees all; MEMBER sees only if they have a completion.
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
@@ -29,11 +33,12 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     throw new NotFoundError('Training record not found')
   }
 
-  // Non-admin can only see if they have a completion for this item
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isManager = profile.orgPermission === 'MANAGER'
+  const role = profile.orgPermission as OrgPermission
+  const hasHRAccess = canManageHR(role)
+  const hasDashboardAccess = hasStaffingDashboardAccess(role)
 
-  if (!isAdmin && !isManager) {
+  // Non-HR/manager can only see if they have a completion for this item
+  if (!hasHRAccess && !hasDashboardAccess) {
     const hasCompletion = (item.completions as Array<{ profileId: string }>)
       .some((c: { profileId: string }) => c.profileId === profile.id)
     if (!hasCompletion) {
@@ -70,17 +75,15 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * PATCH /api/staffing/training/[id] — Update a training record.
  *
- * Admin/HR can update everything. Managers can approve.
+ * Permission: HR+ can update everything. MANAGER can approve/update.
  */
 export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const id = url.pathname.split('/').pop()!
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isManager = profile.orgPermission === 'MANAGER'
-
-  if (!isAdmin && !isManager) {
-    throw new PermissionError('Only admins and managers can update training records')
+  const role = profile.orgPermission as OrgPermission
+  if (!canManageHR(role) && !hasStaffingDashboardAccess(role)) {
+    throw new PermissionError('Only HR managers and admins can update training records')
   }
 
   const existing = await modulesPrisma.trainingItem.findUnique({ where: { id } })
@@ -144,15 +147,14 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * DELETE /api/staffing/training/[id] — Remove a training record.
  *
- * Admin only.
+ * Permission: HR+ only (HR, ADMIN, OWNER).
  */
 export const DELETE = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const id = url.pathname.split('/').pop()!
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  if (!isAdmin) {
-    throw new PermissionError('Only admins can delete training records')
+  if (!canManageHR(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only HR managers and admins can delete training records')
   }
 
   const existing = await modulesPrisma.trainingItem.findUnique({ where: { id } })

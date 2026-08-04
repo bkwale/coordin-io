@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError, PermissionError } from '@/lib/errors'
+import { canManageHR } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -34,12 +36,11 @@ function getExtension(filename: string): string {
  * Stores in Supabase storage under `documents/hr/{organisationId}/{profileId}/`.
  * Returns `{ url, fileName, fileSize, contentType }`.
  *
- * Admin/Owner only.
+ * Permission: HR+ only (HR, ADMIN, OWNER).
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  if (!isAdmin) {
-    throw new PermissionError('Only admins can upload HR documents')
+  if (!canManageHR(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only HR managers and admins can upload HR documents')
   }
 
   const formData = await request.formData()

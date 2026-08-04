@@ -5,18 +5,19 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { requireString, optionalString, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
+import { canManageHR, hasStaffingDashboardAccess } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
  * POST /api/staffing/training/completions — Record a training completion.
  *
+ * Permission: HR+ or MANAGER can record completions.
  * Fields: trainingId, profileId, completedAt, score, certificateUrl
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isManager = profile.orgPermission === 'MANAGER'
-
-  if (!isAdmin && !isManager) {
-    throw new PermissionError('Only admins and managers can record training completions')
+  const role = profile.orgPermission as OrgPermission
+  if (!canManageHR(role) && !hasStaffingDashboardAccess(role)) {
+    throw new PermissionError('Only HR managers, managers, and admins can record training completions')
   }
 
   const body = await parseBody(request)

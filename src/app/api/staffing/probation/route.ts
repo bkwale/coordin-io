@@ -5,9 +5,13 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { requireString, optionalString, requireDate, optionalDate, parseBody } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
+import { canManageHR } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
  * GET /api/staffing/probation — List probation reviews.
+ *
+ * Permission: HR+ sees all reviews; others see only their own.
  *
  * Query params:
  * - profileId: filter by employee
@@ -18,7 +22,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const profileIdFilter = url.searchParams.get('profileId')
   const pendingOnly = url.searchParams.get('pending') === 'true'
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  // canManageHR replaces inline isAdmin — gives HR, ADMIN, OWNER access
+  const hasHRAccess = canManageHR(profile.orgPermission as OrgPermission)
 
   const where: Record<string, unknown> = {
     profile: { organisationId: profile.organisationId },
@@ -26,8 +31,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   if (profileIdFilter) {
     where.profileId = profileIdFilter
-  } else if (!isAdmin) {
-    // Non-admins see only their own
+  } else if (!hasHRAccess) {
+    // Non-HR see only their own
     where.profileId = profile.id
   }
 
@@ -50,12 +55,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * POST /api/staffing/probation — Create a probation review.
  *
- * Admin/Owner only.
+ * Permission: HR+ only (HR, ADMIN, OWNER).
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  if (!isAdmin) {
-    throw new PermissionError('Only admins can create probation reviews')
+  if (!canManageHR(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only HR managers and admins can create probation reviews')
   }
 
   const body = await parseBody(request)

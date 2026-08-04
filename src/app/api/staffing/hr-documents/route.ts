@@ -5,6 +5,8 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { requireString, requireEnum, optionalString, optionalDate, parseBody } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
+import { canManageHR } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 const HR_DOCUMENT_TYPES = [
   'CONTRACT', 'OFFER_LETTER', 'RIGHT_TO_WORK', 'VISA', 'DBS_CHECK',
@@ -15,6 +17,9 @@ const HR_DOCUMENT_TYPES = [
 
 /**
  * GET /api/staffing/hr-documents — List HR documents.
+ *
+ * Permission: HR+ sees all documents; others see only their own.
+ * Confidential documents are hidden from non-HR unless they're the subject.
  *
  * Query params:
  * - profileId: filter by employee
@@ -27,10 +32,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const typeFilter = url.searchParams.get('type')
   const expiringOnly = url.searchParams.get('expiring') === 'true'
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  // Query-then-strip: canManageHR replaces inline isAdmin check (HR, ADMIN, OWNER)
+  const hasHRAccess = canManageHR(profile.orgPermission as OrgPermission)
 
-  // Non-admins can only see their own documents
-  if (!isAdmin && profileIdFilter && profileIdFilter !== profile.id) {
+  // Non-HR can only see their own documents
+  if (!hasHRAccess && profileIdFilter && profileIdFilter !== profile.id) {
     throw new PermissionError('You can only view your own documents')
   }
 
@@ -38,14 +44,13 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     organisationId: profile.organisationId,
     ...(profileIdFilter
       ? { profileId: profileIdFilter }
-      : isAdmin
+      : hasHRAccess
         ? {}
         : { profileId: profile.id }),
-    // Non-admins cannot see confidential docs unless they are their own
-    ...(!isAdmin && !profileIdFilter ? {} : {}),
   }
 
-  if (!isAdmin && profileIdFilter !== profile.id) {
+  // Non-HR cannot see confidential docs unless viewing their own
+  if (!hasHRAccess && profileIdFilter !== profile.id) {
     where.isConfidential = false
   }
 
@@ -73,12 +78,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * POST /api/staffing/hr-documents — Upload/create an HR document record.
  *
- * Admin/Owner only.
+ * Permission: HR+ only (HR, ADMIN, OWNER).
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  if (!isAdmin) {
-    throw new PermissionError('Only admins can upload HR documents')
+  if (!canManageHR(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only HR managers and admins can upload HR documents')
   }
 
   const body = await parseBody(request)

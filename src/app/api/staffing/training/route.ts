@@ -9,6 +9,8 @@ import {
 } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { canManageHR, hasStaffingDashboardAccess } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 const TRAINING_CATEGORIES = [
   'MANDATORY', 'PROFESSIONAL', 'CPD', 'HEALTH_SAFETY', 'COMPLIANCE',
@@ -17,18 +19,20 @@ const TRAINING_CATEGORIES = [
 /**
  * GET /api/staffing/training — List training records for the org.
  *
- * Admin/HR see all; employees see their own.
+ * Permission: HR+ sees all; MANAGER sees team; MEMBER sees own only.
  * Supports ?profileId= filter.
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const profileIdFilter = url.searchParams.get('profileId')
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isManager = profile.orgPermission === 'MANAGER'
+  const role = profile.orgPermission as OrgPermission
+  // canManageHR: HR, ADMIN, OWNER. hasStaffingDashboardAccess: MANAGER+.
+  const hasHRAccess = canManageHR(role)
+  const hasDashboardAccess = hasStaffingDashboardAccess(role)
 
-  // Non-admin/manager can only see their own
-  if (!isAdmin && !isManager && profileIdFilter && profileIdFilter !== profile.id) {
+  // Non-HR/manager can only see their own
+  if (!hasHRAccess && !hasDashboardAccess && profileIdFilter && profileIdFilter !== profile.id) {
     throw new PermissionError('You can only view your own training records')
   }
 
@@ -36,7 +40,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const completionWhere: Record<string, unknown> = {}
   if (profileIdFilter) {
     completionWhere.profileId = profileIdFilter
-  } else if (!isAdmin && !isManager) {
+  } else if (!hasHRAccess && !hasDashboardAccess) {
     completionWhere.profileId = profile.id
   }
 
@@ -107,12 +111,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * POST /api/staffing/training — Create a new training record.
  *
- * Admin/HR only.
+ * Permission: HR+ only (HR, ADMIN, OWNER).
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  if (!isAdmin) {
-    throw new PermissionError('Only admins can create training records')
+  if (!canManageHR(profile.orgPermission as OrgPermission)) {
+    throw new PermissionError('Only HR managers and admins can create training records')
   }
 
   const body = await parseBody(request)

@@ -5,12 +5,15 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
+import { hasFullStaffingAccess, canManageHR, toDirectoryEntry } from '@/lib/staffing-utils'
+import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
- * GET /api/staffing/employees/[profileId] — Full employee profile detail.
+ * GET /api/staffing/employees/[profileId] — Employee profile detail.
  *
- * Returns personal details, emergency contact, HR documents,
- * project assignments, allocation history, probation reviews.
+ * Permission (query-then-strip pattern):
+ * - HR+ or self: full profile with HR docs, allocations, probation, emergency contact
+ * - MEMBER viewing someone else: directory-only fields (name, role, office, location)
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const profileId = request.url.match(/\/employees\/([^/?]+)/)?.[1]
@@ -67,15 +70,32 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('You do not have access to this employee')
   }
 
-  // ── HR Documents (non-confidential, or admin/owner) ────────
+  const role = profile.orgPermission as OrgPermission
+  const hasHRAccess = hasFullStaffingAccess(role)
+  const isSelf = profileId === profile.id
+
+  // MEMBER viewing someone else → directory-only response
+  if (!hasHRAccess && !isSelf) {
+    return success({
+      employee: toDirectoryEntry({
+        id: employee.id,
+        fullName: employee.fullName,
+        jobTitle: employee.jobTitle,
+        office: employee.office,
+        department: employee.employeeProfile?.department ?? null,
+        corporateRole: employee.corporateRole,
+      }),
+      directoryOnly: true,
+    })
+  }
+
+  // ── HR Documents (non-confidential, or HR+/self) ──────────
   let hrDocuments: unknown[] = []
   try {
-    const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-    const isSelf = profileId === profile.id
     hrDocuments = await modulesPrisma.hRDocument.findMany({
       where: {
         profileId,
-        ...(isAdmin || isSelf ? {} : { isConfidential: false }),
+        ...(hasHRAccess || isSelf ? {} : { isConfidential: false }),
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -110,10 +130,6 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     // Table may not exist yet
   }
 
-  // ── Confidential fields gating ─────────────────────────────
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isSelf = profileId === profile.id
-
   return success({
     employee: {
       id: employee.id,
@@ -128,7 +144,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       office: employee.office,
       role: employee.corporateRole,
       manager: employee.manager,
-      emergencyContact: isSelf || isAdmin
+      emergencyContact: isSelf || hasHRAccess
         ? {
             name: employee.employeeProfile?.emergencyName ?? null,
             phone: employee.employeeProfile?.emergencyPhone ?? null,
@@ -162,18 +178,18 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * PATCH /api/staffing/employees/[profileId] — Update employee fields.
  *
- * Only admins/owners can update other employees.
- * Users can update their own emergency contact fields.
+ * Permission: HR+ can update any employee. Self can update own emergency contact/phone.
  */
 export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const profileId = request.url.match(/\/employees\/([^/?]+)/)?.[1]
   if (!profileId) throw new NotFoundError('Employee not found')
 
-  const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const role = profile.orgPermission as OrgPermission
+  const hasHRAccess = hasFullStaffingAccess(role)
   const isSelf = profileId === profile.id
 
-  if (!isAdmin && !isSelf) {
-    throw new PermissionError('Only admins can update other employees')
+  if (!hasHRAccess && !isSelf) {
+    throw new PermissionError('Only HR managers and admins can update other employees')
   }
 
   const body = await parseBody(request)
@@ -182,7 +198,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const selfFields: Record<string, unknown> = {}
   const emergencyFields: Record<string, unknown> = {}
 
-  if (isSelf || isAdmin) {
+  if (isSelf || hasHRAccess) {
     const phone = optionalString(body.phone, 'phone', 50)
     if (phone !== undefined) selfFields.phone = phone
 
@@ -196,9 +212,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (emergencyRelation !== undefined) emergencyFields.emergencyRelation = emergencyRelation
   }
 
-  // Admin-only fields
+  // HR+-only fields
   const adminFields: Record<string, unknown> = {}
-  if (isAdmin) {
+  if (hasHRAccess) {
     const jobTitle = optionalString(body.jobTitle, 'jobTitle', 200)
     if (jobTitle !== undefined) adminFields.jobTitle = jobTitle
 
