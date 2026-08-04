@@ -63,6 +63,7 @@ model Organisation {
   serviceRequests     ServiceRequest[]
   hrDocuments         HRDocument[]
   onboardingTemplates OnboardingTemplate[]
+  feeQuotes           FeeQuote[]
 
   @@map("organisations")
 }
@@ -213,6 +214,9 @@ model Profile {
 
   // S27 — Timesheets
   timesheetWeeks TimesheetWeek[]
+
+  // Fee Quotes
+  feeQuotesCreated FeeQuote[] @relation("feeQuotesCreated")
 
   @@map("profiles")
 }
@@ -505,6 +509,7 @@ model Project {
   projectUpdates       ProjectUpdate[]
   soaVersions          SOAVersion[]
   keyMetrics           KeyMetric[]
+  feeQuotes            FeeQuote[]
 
   @@map("projects")
 }
@@ -1469,6 +1474,65 @@ enum InvoiceStatus {
   PAID
   CANCELLED
   WRITTEN_OFF
+}
+
+model FeeQuote {
+  id              String          @id @default(cuid())
+  organisationId  String          @map("organisation_id")
+  projectId       String?         @map("project_id")  // optional — quotes can exist before project
+  quoteNumber     String          @map("quote_number")
+  title           String
+  clientName      String          @map("client_name")
+  clientEmail     String?         @map("client_email")
+  clientAddress   String?         @map("client_address")
+  description     String?
+  status          FeeQuoteStatus  @default(DRAFT)
+  netTotal        Float           @default(0) @map("net_total")
+  taxRate         Float           @default(0) @map("tax_rate")
+  taxAmount       Float           @default(0) @map("tax_amount")
+  grossTotal      Float           @default(0) @map("gross_total")
+  currency        Currency        @default(GBP)
+  validUntil      DateTime?       @map("valid_until")
+  sentAt          DateTime?       @map("sent_at")
+  acceptedAt      DateTime?       @map("accepted_at")
+  rejectedAt      DateTime?       @map("rejected_at")
+  notes           String?
+  termsAndConditions String?      @map("terms_and_conditions")
+  createdById     String          @map("created_by_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  createdBy    Profile      @relation("feeQuotesCreated", fields: [createdById], references: [id])
+  lineItems    FeeQuoteLineItem[]
+
+  @@map("fee_quotes")
+}
+
+model FeeQuoteLineItem {
+  id          String   @id @default(cuid())
+  quoteId     String   @map("quote_id")
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float   @map("unit_price")
+  total       Float   @default(0)
+  sortOrder   Int     @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  quote FeeQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("fee_quote_line_items")
+}
+
+enum FeeQuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  SUPERSEDED
 }
 
 model CommercialRisk {

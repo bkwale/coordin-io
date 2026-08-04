@@ -6,7 +6,7 @@ import {
   Calendar, Clock, FileText, ChevronDown, ChevronRight, Search,
   Building2, Shield, GraduationCap, ClipboardList, TrendingUp,
   UserPlus, Mail, X, AlertCircle, CheckCircle2, Timer,
-  CalendarDays, BookOpen, Wrench, ChevronLeft,
+  CalendarDays, BookOpen, Wrench, ChevronLeft, Eye,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 
@@ -295,6 +295,17 @@ export default function StaffingPage() {
     }
   }, [selectedEmployeeId, fetchEmployeeDetail])
 
+  // Close drawer on Escape
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && selectedEmployeeId) {
+        setSelectedEmployeeId(null)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedEmployeeId])
+
   useEffect(() => {
     if (activeTab === 'resource-plan') {
       fetchAllocations()
@@ -526,11 +537,12 @@ export default function StaffingPage() {
         {/* ── Employee table ─────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
           {/* Table header */}
-          <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 px-5 py-3">
+          <div className="grid grid-cols-[1fr_1fr_auto_auto_auto] gap-4 px-5 py-3">
             <p className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Name</p>
             <p className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Role / Dept</p>
             <p className="text-[11px] font-medium text-ink-400 uppercase tracking-wide w-20 text-right">Office</p>
-            <p className="text-[11px] font-medium text-ink-400 uppercase tracking-wide w-24 text-right">Status</p>
+            <p className="text-[11px] font-medium text-ink-400 uppercase tracking-wide w-28 text-right">Status</p>
+            <span className="w-4" />
           </div>
           {filteredEmployees.length === 0 ? (
             <div className="px-5 py-8 text-center">
@@ -547,7 +559,7 @@ export default function StaffingPage() {
                     setSelectedEmployeeId(isSelected ? null : emp.id)
                     setDetailSection('overview')
                   }}
-                  className={`w-full grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-center px-5 py-3.5 text-left hover:bg-ink-25 transition-colors ${isSelected ? 'bg-ink-50' : ''}`}
+                  className={`w-full grid grid-cols-[1fr_1fr_auto_auto_auto] gap-4 items-center px-5 py-3.5 text-left cursor-pointer hover:bg-ink-25 transition-colors ${isSelected ? 'bg-ink-50' : ''}`}
                 >
                   <div className="min-w-0 flex items-center gap-2">
                     {isSelected ? <ChevronDown className="w-4 h-4 text-ink-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-ink-300 shrink-0" />}
@@ -561,19 +573,33 @@ export default function StaffingPage() {
                     {emp.department && <p className="text-[11px] text-ink-400 truncate">{emp.department}</p>}
                   </div>
                   <p className="text-[12px] text-ink-500 w-20 text-right truncate">{emp.office ?? '-'}</p>
-                  <div className="w-24 text-right">
+                  <div className="w-28 text-right">
                     <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${statusMeta.bg} ${statusMeta.color}`}>
                       {statusMeta.label}
                     </span>
+                    {emp.status === 'ONBOARDING' && (
+                      <span className={`block text-[10px] mt-0.5 ${emp.onboardingComplete ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {emp.onboardingComplete ? '✓ Complete' : 'In progress'}
+                      </span>
+                    )}
                   </div>
+                  <Eye className="w-4 h-4 text-ink-300 shrink-0" />
                 </button>
               )
             })
           )}
         </div>
 
-        {/* ── Employee detail panel ──────────────────────────── */}
-        {selectedEmployeeId && (
+        {/* ── Employee detail drawer ──────────────────────────── */}
+        {/* Backdrop */}
+        <div
+          className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ${selectedEmployeeId ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setSelectedEmployeeId(null)}
+        />
+        {/* Drawer */}
+        <div
+          className={`fixed inset-y-0 right-0 w-[480px] max-w-full z-50 transform transition-transform duration-300 ease-in-out ${selectedEmployeeId ? 'translate-x-0' : 'translate-x-full'}`}
+        >
           <EmployeeDetailPanel
             detail={employeeDetail}
             loading={detailLoading}
@@ -581,7 +607,7 @@ export default function StaffingPage() {
             onSectionChange={setDetailSection}
             onClose={() => setSelectedEmployeeId(null)}
           />
-        )}
+        </div>
       </div>
     )
   }
@@ -1319,7 +1345,7 @@ function EmployeeDetailPanel({
 }) {
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-ink-100 p-6 space-y-4">
+      <div className="bg-white h-full shadow-xl border-l border-ink-100 p-6 space-y-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-6 bg-ink-100 animate-pulse rounded" />
         ))}
@@ -1329,7 +1355,7 @@ function EmployeeDetailPanel({
 
   if (!detail) {
     return (
-      <div className="bg-white rounded-xl border border-ink-100 p-6 text-center">
+      <div className="bg-white h-full shadow-xl border-l border-ink-100 p-6 text-center">
         <p className="text-[13px] text-ink-400">Unable to load employee details</p>
       </div>
     )
@@ -1338,9 +1364,9 @@ function EmployeeDetailPanel({
   const { employee: emp } = detail
 
   return (
-    <div className="bg-white rounded-xl border border-ink-100 overflow-hidden">
+    <div className="bg-white h-full shadow-xl border-l border-ink-100 overflow-hidden flex flex-col">
       {/* ── Header ──────────────────────────────────────────── */}
-      <div className="px-6 py-4 border-b border-ink-100 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-ink-100 flex items-center justify-between shrink-0">
         <div>
           <h2 className="text-[16px] font-semibold text-ink-900">{emp.fullName}</h2>
           <p className="text-[12px] text-ink-400">{emp.jobTitle ?? 'No role'} | {emp.office?.name ?? 'No office'}</p>
@@ -1348,9 +1374,9 @@ function EmployeeDetailPanel({
         <div className="flex items-center gap-2">
           <a
             href={`/staffing/${emp.id}`}
-            className="text-[12px] text-blue-600 hover:underline px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+            className="text-[12px] text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors font-medium"
           >
-            Full profile
+            Full profile →
           </a>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-ink-50 transition-colors">
             <X className="w-4 h-4 text-ink-400" />
@@ -1359,7 +1385,7 @@ function EmployeeDetailPanel({
       </div>
 
       {/* ── Section tabs ────────────────────────────────────── */}
-      <div className="border-b border-ink-100 overflow-x-auto">
+      <div className="border-b border-ink-100 overflow-x-auto shrink-0">
         <div className="flex gap-0 px-4 min-w-max">
           {DETAIL_SECTIONS.map((s) => {
             const Icon = s.icon
@@ -1382,7 +1408,7 @@ function EmployeeDetailPanel({
       </div>
 
       {/* ── Section content ─────────────────────────────────── */}
-      <div className="p-6">
+      <div className="p-6 flex-1 overflow-y-auto">
         {section === 'overview' && <OverviewSection detail={detail} />}
         {section === 'projects' && <ProjectsSection detail={detail} />}
         {section === 'documents' && <DocumentsSection detail={detail} />}
