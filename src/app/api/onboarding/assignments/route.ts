@@ -22,7 +22,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const mineOnly = url.searchParams.get('mine') === 'true'
 
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isManager = profile.orgPermission === 'MANAGER' || isAdmin
+  const isHROrAbove = profile.orgPermission === 'HR' || isAdmin
+  const isManager = profile.orgPermission === 'MANAGER' || isHROrAbove
 
   const where: Record<string, unknown> = {
     organisationId: profile.organisationId,
@@ -119,13 +120,13 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 /**
  * POST /api/onboarding/assignments — Assign a template to an employee.
  *
- * Admin/Owner/Manager only. Auto-creates OnboardingTask records from template items.
+ * Admin/Owner/HR/Manager only. Auto-creates OnboardingTask records from template items.
  * Calculates due dates from employee start date.
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const isManager = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'MANAGER'
+  const isManager = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR' || profile.orgPermission === 'MANAGER'
   if (!isManager) {
-    throw new PermissionError('Only managers and admins can assign onboarding templates')
+    throw new PermissionError('Only managers, HR, and admins can assign onboarding templates')
   }
 
   const body = await parseBody(request)
