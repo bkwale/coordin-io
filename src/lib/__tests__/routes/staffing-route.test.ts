@@ -267,4 +267,147 @@ describe('GET /api/staffing', () => {
     expect(json.data.metrics.totalAllocatedHours).toBe(60)
     expect(json.data.metrics.avgUtilisation).toBe(75)
   })
+
+  // ── Access Control: MEMBER ──────────────────────────────────
+
+  describe('MEMBER role access', () => {
+    beforeEach(() => {
+      ctx.profileRef.current = createMockProfile({ orgPermission: 'MEMBER' })
+    })
+
+    it('returns directory-only response for MEMBER', async () => {
+      mockPrisma.profile.findMany.mockResolvedValue([
+        makeStaffingProfile({ office: { id: 'o1', name: 'London', city: 'London', country: 'UK' } }),
+      ])
+
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.data.directoryOnly).toBe(true)
+      expect(json.data.directory).toBeDefined()
+      expect(json.data.directory).toHaveLength(1)
+    })
+
+    it('directory entries contain only safe fields', async () => {
+      mockPrisma.profile.findMany.mockResolvedValue([
+        makeStaffingProfile({
+          email: 'secret@example.com',
+          office: { id: 'o1', name: 'London', city: 'London', country: 'UK' },
+        }),
+      ])
+
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      const entry = json.data.directory[0]
+      // Must have safe fields
+      expect(entry.fullName).toBe('Alice Smith')
+      expect(entry.office).toBe('London')
+      expect(entry.officeCity).toBe('London')
+      expect(entry.officeCountry).toBe('UK')
+      expect(entry.role).toBe('Senior Engineer')
+      expect(entry.department).toBe('Engineering')
+
+      // Must NOT have sensitive fields
+      expect(entry).not.toHaveProperty('email')
+      expect(entry).not.toHaveProperty('salary')
+      expect(entry).not.toHaveProperty('leaveAllocation')
+      expect(entry).not.toHaveProperty('startDate')
+      expect(entry).not.toHaveProperty('orgPermission')
+    })
+
+    it('does not return metrics, employees list, or byOffice for MEMBER', async () => {
+      mockPrisma.profile.findMany.mockResolvedValue([makeStaffingProfile()])
+
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      expect(json.data.metrics).toBeUndefined()
+      expect(json.data.employees).toBeUndefined()
+      expect(json.data.byOffice).toBeUndefined()
+      expect(json.data.byDepartment).toBeUndefined()
+      expect(json.data.expiringDocs).toBeUndefined()
+    })
+
+    it('excludes non-ACTIVE employees from directory', async () => {
+      mockPrisma.profile.findMany.mockResolvedValue([
+        makeStaffingProfile(),
+        makeStaffingProfile({ id: 'emp-2', status: 'ONBOARDING', fullName: 'New Person' }),
+        makeStaffingProfile({ id: 'emp-3', status: 'INACTIVE', fullName: 'Gone Person' }),
+      ])
+
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      expect(json.data.directory).toHaveLength(1)
+      expect(json.data.directory[0].fullName).toBe('Alice Smith')
+    })
+  })
+
+  // ── Access Control: MANAGER ─────────────────────────────────
+
+  describe('MANAGER role access', () => {
+    beforeEach(() => {
+      ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER' })
+    })
+
+    it('returns full dashboard (not directory-only)', async () => {
+      mockPrisma.profile.findMany.mockResolvedValue([makeStaffingProfile()])
+
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      expect(json.data.directoryOnly).toBeUndefined()
+      expect(json.data.metrics).toBeDefined()
+      expect(json.data.employees).toBeDefined()
+      expect(json.data.byOffice).toBeDefined()
+      expect(json.data.byDepartment).toBeDefined()
+    })
+
+    it('zeroes utilisation metrics for MANAGER (no HR access)', async () => {
+      mockPrisma.profile.findMany.mockResolvedValue([makeStaffingProfile()])
+
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      expect(json.data.metrics.avgUtilisation).toBe(0)
+      expect(json.data.metrics.overAllocated).toBe(0)
+      expect(json.data.metrics.underAllocated).toBe(0)
+      expect(json.data.metrics.pendingLeave).toBe(0)
+      expect(json.data.metrics.expiringDocuments).toBe(0)
+      expect(json.data.metrics.probationsDue).toBe(0)
+      expect(json.data.expiringDocs).toEqual([])
+    })
+  })
+
+  // ── Access Control: HR ──────────────────────────────────────
+
+  describe('HR role access', () => {
+    beforeEach(() => {
+      ctx.profileRef.current = createMockProfile({ orgPermission: 'HR' })
+      mockPrisma.profile.findMany.mockResolvedValue([makeStaffingProfile()])
+      mockPrisma.resourceAllocation.groupBy.mockResolvedValue([])
+      mockPrisma.leaveRequest.count.mockResolvedValue(0)
+      mockPrisma.hRDocument.findMany.mockResolvedValue([])
+      mockPrisma.probationReview.count.mockResolvedValue(0)
+    })
+
+    it('returns full dashboard with utilisation metrics', async () => {
+      const req = createMockRequest({ url: 'http://localhost/api/staffing' })
+      const res = await GET(req)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.data.metrics).toBeDefined()
+      expect(json.data.employees).toBeDefined()
+      expect(json.data.directoryOnly).toBeUndefined()
+    })
+  })
 })

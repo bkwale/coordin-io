@@ -14,7 +14,7 @@ import {
 // ── hasOrgPermission ───────────────────────────────────────────
 
 describe('hasOrgPermission', () => {
-  const levels: OrgPermission[] = ['VIEWER', 'MEMBER', 'MANAGER', 'ADMIN', 'OWNER']
+  const levels: OrgPermission[] = ['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']
 
   it('every level satisfies itself', () => {
     for (const level of levels) {
@@ -26,11 +26,17 @@ describe('hasOrgPermission', () => {
     expect(hasOrgPermission('OWNER', 'VIEWER')).toBe(true)
     expect(hasOrgPermission('OWNER', 'MEMBER')).toBe(true)
     expect(hasOrgPermission('OWNER', 'MANAGER')).toBe(true)
+    expect(hasOrgPermission('OWNER', 'HR')).toBe(true)
     expect(hasOrgPermission('OWNER', 'ADMIN')).toBe(true)
 
     expect(hasOrgPermission('ADMIN', 'VIEWER')).toBe(true)
     expect(hasOrgPermission('ADMIN', 'MEMBER')).toBe(true)
     expect(hasOrgPermission('ADMIN', 'MANAGER')).toBe(true)
+    expect(hasOrgPermission('ADMIN', 'HR')).toBe(true)
+
+    expect(hasOrgPermission('HR', 'VIEWER')).toBe(true)
+    expect(hasOrgPermission('HR', 'MEMBER')).toBe(true)
+    expect(hasOrgPermission('HR', 'MANAGER')).toBe(true)
 
     expect(hasOrgPermission('MANAGER', 'VIEWER')).toBe(true)
     expect(hasOrgPermission('MANAGER', 'MEMBER')).toBe(true)
@@ -41,15 +47,21 @@ describe('hasOrgPermission', () => {
   it('lower levels cannot satisfy higher requirements', () => {
     expect(hasOrgPermission('VIEWER', 'MEMBER')).toBe(false)
     expect(hasOrgPermission('VIEWER', 'MANAGER')).toBe(false)
+    expect(hasOrgPermission('VIEWER', 'HR')).toBe(false)
     expect(hasOrgPermission('VIEWER', 'ADMIN')).toBe(false)
     expect(hasOrgPermission('VIEWER', 'OWNER')).toBe(false)
 
     expect(hasOrgPermission('MEMBER', 'MANAGER')).toBe(false)
+    expect(hasOrgPermission('MEMBER', 'HR')).toBe(false)
     expect(hasOrgPermission('MEMBER', 'ADMIN')).toBe(false)
     expect(hasOrgPermission('MEMBER', 'OWNER')).toBe(false)
 
+    expect(hasOrgPermission('MANAGER', 'HR')).toBe(false)
     expect(hasOrgPermission('MANAGER', 'ADMIN')).toBe(false)
     expect(hasOrgPermission('MANAGER', 'OWNER')).toBe(false)
+
+    expect(hasOrgPermission('HR', 'ADMIN')).toBe(false)
+    expect(hasOrgPermission('HR', 'OWNER')).toBe(false)
 
     expect(hasOrgPermission('ADMIN', 'OWNER')).toBe(false)
   })
