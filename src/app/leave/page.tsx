@@ -1473,10 +1473,16 @@ function RequestDetailModal({ request, onClose, handleStatusChange, userProfile 
                         )}
                       </div>
                       <p className={cn(
-                        'text-[9px] mt-1 text-center',
+                        'text-[9px] mt-1 text-center leading-tight',
                         isCompleted ? 'text-ink-600 font-medium' : 'text-ink-300',
                       )}>
                         {step.label}
+                        {isCompleted && request.approver && (step.key === 'LINE_MANAGER_APPROVED' || step.key === 'HR_APPROVED') && (
+                          <>
+                            <br />
+                            <span className="text-ink-400 font-normal">{request.approver.fullName}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                     {i < APPROVAL_CHAIN_STEPS.length - 1 && (

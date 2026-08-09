@@ -26,6 +26,11 @@ interface ExpenseClaim {
   approver: { id: string; fullName: string } | null
 }
 
+interface ProjectOption {
+  id: string
+  name: string
+}
+
 type FilterStatus = 'ALL' | 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN'
 
 const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
@@ -103,22 +108,37 @@ export default function ExpensesPage() {
   const [formDescription, setFormDescription] = useState('')
   const [formAmount, setFormAmount] = useState('')
   const [formCurrency, setFormCurrency] = useState('NGN')
+  const [formProjectId, setFormProjectId] = useState('')
   const [formReceiptUrl, setFormReceiptUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadedFileName, setUploadedFileName] = useState('')
+  const [projects, setProjects] = useState<ProjectOption[]>([])
   const { mutate: createExpense, loading: creating } = useApiMutation<ExpenseClaim>('/api/expenses', 'POST')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/expenses')
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
+      const [expRes, projRes] = await Promise.all([
+        fetch('/api/expenses'),
+        fetch('/api/projects'),
+      ])
+      if (!expRes.ok) {
+        const body = await expRes.json().catch(() => ({}))
         throw new Error(body.error?.message || 'Failed to load expenses')
       }
-      const json = await res.json()
-      setClaims(json.data.claims)
+      const expJson = await expRes.json()
+      setClaims(expJson.data.claims)
+
+      if (projRes.ok) {
+        const projJson = await projRes.json()
+        setProjects(
+          (projJson.data.projects || []).map((p: { id: string; name: string }) => ({
+            id: p.id,
+            name: p.name,
+          })),
+        )
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -177,6 +197,7 @@ export default function ExpensesPage() {
       description: formDescription.trim(),
       amount: amt,
       currency: formCurrency,
+      ...(formProjectId ? { projectId: formProjectId } : {}),
       ...(formReceiptUrl ? { receiptUrl: formReceiptUrl } : {}),
     })
 
@@ -187,6 +208,7 @@ export default function ExpensesPage() {
       setFormDescription('')
       setFormAmount('')
       setFormCurrency('NGN')
+      setFormProjectId('')
       setFormReceiptUrl('')
       setUploadedFileName('')
       fetchData()
@@ -201,6 +223,7 @@ export default function ExpensesPage() {
     setFormDescription('')
     setFormAmount('')
     setFormCurrency('NGN')
+    setFormProjectId('')
     setFormReceiptUrl('')
     setUploadedFileName('')
   }
@@ -370,6 +393,24 @@ export default function ExpensesPage() {
             />
           </div>
 
+          {/* Project */}
+          {projects.length > 0 && (
+            <div>
+              <label htmlFor="exp-project" className="block text-[11px] font-medium text-ink-500 mb-1">Project</label>
+              <select
+                id="exp-project"
+                value={formProjectId}
+                onChange={(e) => setFormProjectId(e.target.value)}
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 bg-white"
+              >
+                <option value="">No project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Receipt upload */}
           <div>
             <label className="block text-[11px] font-medium text-ink-500 mb-1 uppercase">Receipt</label>
@@ -494,6 +535,10 @@ export default function ExpensesPage() {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <p className="text-[11px] text-ink-400">
                       {catLabel} · {new Date(claim.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {claim.projectId && (() => {
+                        const proj = projects.find((p) => p.id === claim.projectId)
+                        return proj ? ` · ${proj.name}` : null
+                      })()}
                     </p>
                     {claim.receiptUrl && (
                       <a

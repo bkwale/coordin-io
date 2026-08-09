@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireString, optionalString, optionalDate, requireEnum, parseBody } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
+import { modulesPrisma } from '@/lib/prisma-modules'
 
 const ASSET_CATEGORIES = [
   'LAPTOP', 'MONITOR', 'PHONE', 'TABLET', 'HELMET',
@@ -101,6 +102,33 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     metadata: { name, assetTag, category },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Create initial assignment if assignedTo profileId was provided
+  const assignedTo = optionalString(body.assignedTo, 'Assigned to', 100)
+  if (assignedTo) {
+    await modulesPrisma.assetAssignment.create({
+      data: {
+        assetId: asset.id,
+        profileId: assignedTo,
+      },
+    })
+
+    // Re-fetch with the new assignment included
+    const refreshed = await prisma.asset.findUnique({
+      where: { id: asset.id },
+      include: {
+        assignments: {
+          where: { returnedAt: null },
+          include: {
+            profile: { select: { id: true, fullName: true } },
+          },
+          take: 1,
+        },
+      },
+    })
+
+    return success({ asset: refreshed }, 201)
+  }
 
   return success({ asset }, 201)
 })

@@ -173,6 +173,18 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
   // Compute derived health from real data
   const derived = await computeDerivedHealth(projectId)
 
+  // Write-back on read: persist derived overall health if it differs from stored value
+  const currentProject = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { healthStatus: true },
+  })
+  if (currentProject && currentProject.healthStatus !== derived.derivedOverall) {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { healthStatus: derived.derivedOverall as 'GREEN' | 'AMBER' | 'RED' },
+    })
+  }
+
   return success({
     latest,
     history: historyWithNames,

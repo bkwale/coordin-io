@@ -4,7 +4,7 @@ import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { parseBody, requireString, optionalString, optionalDate, optionalNumber, optionalId } from '@/lib/validation'
 
-import { NotFoundError } from '@/lib/errors'
+import { NotFoundError, ConflictError } from '@/lib/errors'
 
 /**
  * Extract registerId from the URL path.
@@ -69,6 +69,15 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId }
   }
 
   const requirement = requireString(body.requirement, 'Requirement', 5000)
+
+  // Bug #1 fix: prevent duplicate requirements within the same register
+  const existing = await (prisma as any).complianceItem.findFirst({
+    where: { registerId, requirement },
+  })
+  if (existing) {
+    throw new ConflictError('A compliance item with this requirement already exists in this register')
+  }
+
   const section = optionalString(body.section, 'Section', 200)
   const source = optionalString(body.source, 'Source', 500)
   const version = optionalString(body.version, 'Version', 100)
@@ -91,6 +100,35 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId }
       comments,
       sortOrder,
     },
+  })
+
+  // Recompute parent register's overallStatus from item-level data
+  const allItems = await (prisma as any).complianceItem.findMany({
+    where: { registerId },
+    select: { status: true },
+  })
+
+  let newStatus: string = 'NOT_STARTED'
+  if (allItems.length > 0) {
+    const statuses = allItems.map((i: { status: string }) => i.status)
+    const resolvedStatuses = ['COMPLIANT', 'APPROVED_WITH_CONDITION', 'NOT_APPLICABLE', 'CLOSED']
+    const allResolved = statuses.every((s: string) => resolvedStatuses.includes(s))
+    const hasNonCompliant = statuses.some((s: string) => s === 'NON_COMPLIANT' || s === 'ACTION_REQUIRED')
+    const hasInProgress = statuses.some((s: string) => s === 'IN_PROGRESS' || s === 'EVIDENCE_SUBMITTED' || s === 'UNDER_REVIEW')
+
+    if (allResolved) {
+      newStatus = 'COMPLIANT'
+    } else if (hasNonCompliant) {
+      newStatus = 'ACTION_REQUIRED'
+    } else if (hasInProgress) {
+      newStatus = 'IN_PROGRESS'
+    }
+    // else: all items NOT_STARTED → register stays NOT_STARTED
+  }
+
+  await (prisma as any).complianceRegister.update({
+    where: { id: registerId },
+    data: { overallStatus: newStatus },
   })
 
   return success({ item }, 201)

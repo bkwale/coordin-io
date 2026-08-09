@@ -423,7 +423,7 @@ model Project {
   projectType    ProjectType   @default(HOTEL) @map("project_type")
   stage          ProjectStage  @default(BRIEF)
   status         ProjectStatus @default(ACTIVE)
-  healthStatus   HealthStatus  @default(GREEN) @map("health_status")
+  healthStatus   HealthStatus  @default(GREY) @map("health_status")
   currency       Currency? // Project-specific currency override (falls back to org default)
   clientBrand    String?       @map("client_brand") // e.g. "Accor", "Ibis Styles"
 

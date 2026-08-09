@@ -31,12 +31,14 @@ interface TeamMember {
   orgPermissionLabel?: string
   status: string
   startDate: string | null
+  officeId: string | null
   office: { name: string; city: string } | null
   role: { name: string; level: string } | null
 }
 
 interface TeamData {
   members: TeamMember[]
+  offices: Array<{ id: string; name: string; city: string }>
   total: number
   active: number
   viewerPermission?: string
@@ -309,7 +311,7 @@ function TeamSection() {
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ jobTitle: '', orgPermission: '', status: '' })
+  const [editForm, setEditForm] = useState({ jobTitle: '', orgPermission: '', status: '', officeId: '' })
   const [editSaving, setEditSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -321,7 +323,7 @@ function TeamSection() {
         return r.json()
       })
       .then(setTeam)
-      .catch(() => setTeam({ members: [], total: 0, active: 0 }))
+      .catch(() => setTeam({ members: [], offices: [], total: 0, active: 0 }))
       .finally(() => setLoading(false))
   }, [])
 
@@ -411,6 +413,7 @@ function TeamSection() {
       jobTitle: member.jobTitle || '',
       orgPermission: member.orgPermission,
       status: member.status,
+      officeId: member.officeId || '',
     })
     setSaveError(null)
   }
@@ -432,6 +435,7 @@ function TeamSection() {
           jobTitle: editForm.jobTitle || undefined,
           orgPermission: editForm.orgPermission,
           status: editForm.status,
+          officeId: editForm.officeId || null,
         }),
       })
       if (!res.ok) {
@@ -616,7 +620,20 @@ function TeamSection() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-[13px] text-ink-500">
-                      {member.office?.name || '—'}
+                      {isEditing ? (
+                        <select
+                          value={editForm.officeId}
+                          onChange={(e) => setEditForm({ ...editForm, officeId: e.target.value })}
+                          className="w-full px-2 py-1.5 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                        >
+                          <option value="">No office</option>
+                          {(team?.offices || []).map((office) => (
+                            <option key={office.id} value={office.id}>{office.name} — {office.city}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        member.office?.name || '—'
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       {isEditing && !isSelf ? (

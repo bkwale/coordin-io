@@ -196,7 +196,14 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       status: employee.status,
       startDate: employee.startDate,
       office: employee.office,
-      role: employee.corporateRole,
+      role: employee.corporateRole
+        ? {
+            id: employee.corporateRole.id,
+            title: employee.corporateRole.name,
+            department: ep?.department ?? null,
+            level: employee.corporateRole.level,
+          }
+        : null,
       manager: employee.manager,
       department: ep?.department ?? null,
       availabilityStatus: ep?.availabilityStatus ?? null,
@@ -257,7 +264,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     },
     assets: employee.assetAssignments,
     hrDocumentCounts,
-    hasHRAccess,
+    isAdmin: hasHRAccess,
     isSelf,
   })
 })

@@ -20,6 +20,7 @@ const HEALTH_COLORS: Record<string, string> = {
   GREEN: 'bg-emerald-400',
   AMBER: 'bg-amber-400',
   RED: 'bg-red-400',
+  GREY: 'bg-slate-300',
 }
 
 const STAGE_LABELS: Record<string, string> = {

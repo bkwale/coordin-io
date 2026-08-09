@@ -84,7 +84,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     fetch(`/api/projects/${projectId}`)
       .then(res => res.json())
       .then(data => {
-        if (data?.data?.name) setProjectName(data.data.name)
+        if (data?.data?.project?.name) setProjectName(data.data.project.name)
       })
       .catch(() => {})
   }, [projectId])

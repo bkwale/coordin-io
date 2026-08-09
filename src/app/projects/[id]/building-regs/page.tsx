@@ -74,6 +74,8 @@ interface ItemFormState {
   section: string
   source: string
   version: string
+  ownerId: string
+  dueDate: string
   comments: string
 }
 
@@ -143,8 +145,21 @@ function emptyRegisterForm(type: ComplianceRegisterType): RegisterFormState {
   return { name: '', registerType: type, description: '', templateVersion: '' }
 }
 
+const SOURCE_OPTIONS = [
+  'CDM 2015',
+  'Building Regulations',
+  'BS EN Standards',
+  'IFC GIIP',
+  'RIBA',
+  'Fire Safety Order',
+  'BREEAM',
+  'LEED',
+  'EDGE',
+  'Other',
+]
+
 function emptyItemForm(): ItemFormState {
-  return { requirement: '', section: '', source: '', version: '', comments: '' }
+  return { requirement: '', section: '', source: '', version: '', ownerId: '', dueDate: '', comments: '' }
 }
 
 /* ── Page component ─────────────────────────────────────── */
@@ -288,6 +303,8 @@ export default function CompliancePage() {
     if (itemForm.section.trim()) body.section = itemForm.section.trim()
     if (itemForm.source.trim()) body.source = itemForm.source.trim()
     if (itemForm.version.trim()) body.version = itemForm.version.trim()
+    if (itemForm.ownerId.trim()) body.ownerId = itemForm.ownerId.trim()
+    if (itemForm.dueDate) body.dueDate = itemForm.dueDate
     if (itemForm.comments.trim()) body.comments = itemForm.comments.trim()
 
     try {
@@ -882,12 +899,18 @@ export default function CompliancePage() {
                               <input
                                 id="item-source"
                                 type="text"
+                                list="source-options"
                                 value={itemForm.source}
                                 onChange={(e) => setItemForm(prev => ({ ...prev, source: e.target.value }))}
-                                placeholder="e.g. Approved Document B"
+                                placeholder="Select or type a source"
                                 className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
                                 maxLength={200}
                               />
+                              <datalist id="source-options">
+                                {SOURCE_OPTIONS.map(opt => (
+                                  <option key={opt} value={opt} />
+                                ))}
+                              </datalist>
                             </div>
                             <div className="w-24">
                               <label htmlFor="item-version" className="block text-[11px] font-medium text-ink-500 mb-1">Version</label>
@@ -899,6 +922,32 @@ export default function CompliancePage() {
                                 placeholder="v1.0"
                                 className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
                                 maxLength={50}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Owner + Due date */}
+                          <div className="flex gap-3">
+                            <div className="flex-1">
+                              <label htmlFor="item-owner" className="block text-[11px] font-medium text-ink-500 mb-1">Owner</label>
+                              <input
+                                id="item-owner"
+                                type="text"
+                                value={itemForm.ownerId}
+                                onChange={(e) => setItemForm(prev => ({ ...prev, ownerId: e.target.value }))}
+                                placeholder="e.g. John Smith"
+                                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
+                                maxLength={200}
+                              />
+                            </div>
+                            <div className="w-44">
+                              <label htmlFor="item-due" className="block text-[11px] font-medium text-ink-500 mb-1">Due date</label>
+                              <input
+                                id="item-due"
+                                type="date"
+                                value={itemForm.dueDate}
+                                onChange={(e) => setItemForm(prev => ({ ...prev, dueDate: e.target.value }))}
+                                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400"
                               />
                             </div>
                           </div>
@@ -981,7 +1030,11 @@ export default function CompliancePage() {
           />
           <SummaryCard
             label="Action required"
-            value={registers.filter(r => r.overallStatus === 'NON_COMPLIANT' || r.overallStatus === 'ACTION_REQUIRED').length}
+            value={registers.filter(r => {
+              if (r._count.items === 0) return false
+              const resolved = r.overallStatus === 'COMPLIANT' || r.overallStatus === 'APPROVED_WITH_CONDITION' || r.overallStatus === 'NOT_APPLICABLE' || r.overallStatus === 'CLOSED'
+              return !resolved
+            }).length}
             accent="red"
           />
         </div>

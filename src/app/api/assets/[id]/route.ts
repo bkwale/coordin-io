@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { optionalString, optionalEnum, optionalDate, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
+import { modulesPrisma } from '@/lib/prisma-modules'
 
 const ASSET_CONDITIONS = ['NEW', 'GOOD', 'REPAIR_REQUIRED', 'DAMAGED', 'LOST', 'RETIRED'] as const
 
@@ -97,6 +98,42 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     metadata: { ...(newCondition ? { condition: newCondition } : {}) },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  /* ── Assignment handling ──────────────────────────────── */
+  // assignedTo: profileId string → assign; null / "" → unassign
+  if (body.assignedTo !== undefined) {
+    // Return any active assignment first
+    await modulesPrisma.assetAssignment.updateMany({
+      where: { assetId: id, returnedAt: null },
+      data: { returnedAt: new Date() },
+    })
+
+    // Create new assignment if a profileId was provided
+    if (body.assignedTo) {
+      await modulesPrisma.assetAssignment.create({
+        data: {
+          assetId: id,
+          profileId: body.assignedTo,
+        },
+      })
+    }
+
+    // Re-fetch with updated assignments
+    const refreshed = await prisma.asset.findUnique({
+      where: { id },
+      include: {
+        assignments: {
+          where: { returnedAt: null },
+          include: {
+            profile: { select: { id: true, fullName: true } },
+          },
+          take: 1,
+        },
+      },
+    })
+
+    return success({ asset: refreshed })
+  }
 
   return success({ asset: updated })
 })

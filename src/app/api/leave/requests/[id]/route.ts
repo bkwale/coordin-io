@@ -130,9 +130,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   if (['APPROVED', 'REJECTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED'].includes(newStatus)) {
     updateData.approvedAt = new Date()
-    if (!leaveRequest.approverId) {
-      updateData.approverId = profile.id
-    }
+    updateData.approverId = profile.id
   }
 
   const includeRelations = {
