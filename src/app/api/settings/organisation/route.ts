@@ -32,6 +32,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
       name: o.name,
       city: o.city,
       country: o.country,
+      isHeadOffice: o.isHeadOffice,
     })),
     createdAt: org.createdAt,
   })

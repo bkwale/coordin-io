@@ -74,6 +74,7 @@ model Office {
   name           String
   city           String
   country        String   @default("NG")
+  isHeadOffice   Boolean  @default(false) @map("is_head_office")
   createdAt      DateTime @default(now()) @map("created_at")
 
   organisation    Organisation     @relation(fields: [organisationId], references: [id])

@@ -51,7 +51,24 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
     ],
   })
 
-  return success({ items })
+  // Resolve owner names from profile IDs
+  const ownerIds = [...new Set(items.map((i: Record<string, unknown>) => i.ownerId).filter(Boolean))] as string[]
+  let ownerMap: Record<string, string> = {}
+  if (ownerIds.length > 0) {
+    const { prisma: mainPrisma } = await import('@/lib/prisma')
+    const profiles = await mainPrisma.profile.findMany({
+      where: { id: { in: ownerIds } },
+      select: { id: true, fullName: true },
+    })
+    ownerMap = Object.fromEntries(profiles.map((p: { id: string; fullName: string }) => [p.id, p.fullName]))
+  }
+
+  const enrichedItems = items.map((item: Record<string, unknown>) => ({
+    ...item,
+    owner: item.ownerId ? ownerMap[item.ownerId as string] || null : null,
+  }))
+
+  return success({ items: enrichedItems })
 })
 
 /**
@@ -106,7 +123,18 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId }
   // Recompute parent register's overallStatus from item-level data
   await recomputeRegisterStatus(prisma as any, registerId)
 
-  return success({ item }, 201)
+  // Resolve owner name for the response
+  let ownerName: string | null = null
+  if (item.ownerId) {
+    const { prisma: mainPrisma } = await import('@/lib/prisma')
+    const ownerProfile = await mainPrisma.profile.findUnique({
+      where: { id: item.ownerId },
+      select: { fullName: true },
+    })
+    ownerName = ownerProfile?.fullName || null
+  }
+
+  return success({ item: { ...item, owner: ownerName } }, 201)
 })
 
 /**
@@ -150,7 +178,18 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId 
   // Recompute register status after any item change
   await recomputeRegisterStatus(prisma as any, registerId)
 
-  return success({ item })
+  // Resolve owner name for the response
+  let patchOwnerName: string | null = null
+  if (item.ownerId) {
+    const { prisma: mainPrisma } = await import('@/lib/prisma')
+    const ownerProfile = await mainPrisma.profile.findUnique({
+      where: { id: item.ownerId },
+      select: { fullName: true },
+    })
+    patchOwnerName = ownerProfile?.fullName || null
+  }
+
+  return success({ item: { ...item, owner: patchOwnerName } })
 })
 
 /**

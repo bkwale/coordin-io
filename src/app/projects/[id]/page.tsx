@@ -398,10 +398,10 @@ export default function ProjectDashboard() {
 
       {/* ── Quick Stats Row ─────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Total tasks" value={totalTasks} icon={ListChecks} accent="bg-blue-50 text-blue-600" />
-        <StatCard label="Completed" value={completedTasks} icon={CheckCircle2} accent="bg-emerald-50 text-emerald-600" />
-        <StatCard label="Overdue" value={taskStats.overdue} icon={AlertTriangle} accent="bg-red-50 text-red-600" />
-        <StatCard label="Documents" value={documentStats.total} icon={FileText} accent="bg-purple-50 text-purple-600" />
+        <StatCard label="Total tasks" value={totalTasks} icon={ListChecks} accent="bg-blue-50 text-blue-600" href={`/projects/${projectId}/tasks`} />
+        <StatCard label="Completed" value={completedTasks} icon={CheckCircle2} accent="bg-emerald-50 text-emerald-600" href={`/projects/${projectId}/tasks?status=COMPLETED`} />
+        <StatCard label="Overdue" value={taskStats.overdue} icon={AlertTriangle} accent="bg-red-50 text-red-600" href={`/projects/${projectId}/tasks?status=OVERDUE`} />
+        <StatCard label="Documents" value={documentStats.total} icon={FileText} accent="bg-purple-50 text-purple-600" href={`/projects/${projectId}/documents`} />
         <StatCard
           label={metrics.daysToTarget !== null ? (metrics.daysToTarget >= 0 ? 'Days to target' : 'Days overdue') : 'Days to target'}
           value={metrics.daysToTarget !== null ? Math.abs(metrics.daysToTarget) : 0}
@@ -757,15 +757,19 @@ export default function ProjectDashboard() {
 
 /* ── Sub-components ───────────────────────────────────── */
 
-function StatCard({ label, value, icon: Icon, accent, suffix }: {
+function StatCard({ label, value, icon: Icon, accent, suffix, href }: {
   label: string
   value: number
   icon: React.FC<{ className?: string }>
   accent: string
   suffix?: string
+  href?: string
 }) {
-  return (
-    <div className="bg-white rounded-xl border border-ink-100 p-5 flex items-start gap-4">
+  const content = (
+    <div className={cn(
+      'bg-white rounded-xl border border-ink-100 p-5 flex items-start gap-4',
+      href && 'cursor-pointer hover:border-ink-300 hover:shadow-sm transition-all'
+    )}>
       <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center shrink-0', accent)}>
         <Icon className="w-5 h-5" />
       </div>
@@ -777,6 +781,10 @@ function StatCard({ label, value, icon: Icon, accent, suffix }: {
       </div>
     </div>
   )
+  if (href) {
+    return <Link href={href}>{content}</Link>
+  }
+  return content
 }
 
 function Row({ label, value }: { label: string; value: string }) {

@@ -4,11 +4,19 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Building2, Users, CreditCard, Hash, Globe, Puzzle, Shield,
   Save, Plus, Mail, CheckCircle, XCircle, Clock, UserPlus,
-  ChevronRight, Loader2, Pencil, X,
+  ChevronRight, Loader2, Pencil, X, Trash2, Star,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Types ──────────────────────────────────────────────────
+
+interface OfficeData {
+  id: string
+  name: string
+  city: string
+  country: string
+  isHeadOffice: boolean
+}
 
 interface OrgData {
   id: string
@@ -17,7 +25,7 @@ interface OrgData {
   logoUrl: string | null
   defaultCurrency: string
   currencies: string[]
-  offices: Array<{ id: string; name: string; city: string; country: string }>
+  offices: OfficeData[]
   createdAt: string
 }
 
@@ -142,6 +150,201 @@ export default function SettingsPage() {
   )
 }
 
+// ── Offices Manager (inline CRUD) ─────────────────────────
+
+function OfficesManager({ offices, onUpdate }: { offices: OfficeData[]; onUpdate: (offices: OfficeData[]) => void }) {
+  const [editing, setEditing] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState({ name: '', city: '', country: '', isHeadOffice: false })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function startEdit(office: OfficeData) {
+    setEditing(office.id)
+    setForm({ name: office.name, city: office.city, country: office.country, isHeadOffice: office.isHeadOffice })
+    setAdding(false)
+    setError(null)
+  }
+
+  function startAdd() {
+    setAdding(true)
+    setEditing(null)
+    setForm({ name: '', city: '', country: '', isHeadOffice: false })
+    setError(null)
+  }
+
+  function cancel() {
+    setEditing(null)
+    setAdding(false)
+    setError(null)
+  }
+
+  async function handleSave() {
+    setBusy(true)
+    setError(null)
+    try {
+      if (adding) {
+        const res = await fetch('/api/settings/offices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to create'); }
+        const { office } = await res.json()
+        const updated = form.isHeadOffice
+          ? offices.map((o) => ({ ...o, isHeadOffice: false }))
+          : [...offices]
+        onUpdate([...updated, office])
+      } else if (editing) {
+        const res = await fetch('/api/settings/offices', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editing, ...form }),
+        })
+        if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to update'); }
+        const { office } = await res.json()
+        const updated = form.isHeadOffice
+          ? offices.map((o) => o.id === editing ? office : { ...o, isHeadOffice: false })
+          : offices.map((o) => o.id === editing ? office : o)
+        onUpdate(updated)
+      }
+      cancel()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(officeId: string) {
+    if (!confirm('Delete this office? Members must be reassigned first.')) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/offices', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: officeId }),
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to delete'); }
+      onUpdate(offices.filter((o) => o.id !== officeId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleSetHeadOffice(officeId: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/offices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: officeId, isHeadOffice: true }),
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed to update'); }
+      onUpdate(offices.map((o) => ({ ...o, isHeadOffice: o.id === officeId })))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <FieldGroup label="Offices" hint={`${offices.length} registered`}>
+      {error && (
+        <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">{error}</div>
+      )}
+
+      {offices.length > 0 ? (
+        <div className="space-y-2">
+          {offices.map((office) => (
+            <div key={office.id}>
+              {editing === office.id ? (
+                <div className="p-3 bg-surface-100 rounded-lg space-y-3 border border-surface-300">
+                  <div className="grid grid-cols-3 gap-2">
+                    <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Office name" className="settings-input text-[12px]" />
+                    <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" className="settings-input text-[12px]" />
+                    <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="settings-input text-[12px]" />
+                  </div>
+                  <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
+                    <input type="checkbox" checked={form.isHeadOffice} onChange={(e) => setForm({ ...form, isHeadOffice: e.target.checked })} className="rounded" />
+                    Head Office
+                  </label>
+                  <div className="flex gap-2">
+                    <button onClick={handleSave} disabled={busy || !form.name || !form.city} className="px-3 py-1.5 bg-ink-900 text-white text-[11px] font-medium rounded-md hover:bg-ink-800 disabled:opacity-50">
+                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+                    </button>
+                    <button onClick={cancel} className="px-3 py-1.5 text-[11px] text-ink-500 hover:text-ink-700">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-surface-50 rounded-lg group">
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <p className="text-[13px] font-medium text-ink-900 flex items-center gap-1.5">
+                        {office.name}
+                        {office.isHeadOffice && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded-full">
+                            <Star className="w-2.5 h-2.5" /> HQ
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-ink-400">{office.city}, {office.country}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!office.isHeadOffice && (
+                      <button onClick={() => handleSetHeadOffice(office.id)} title="Set as head office" className="p-1.5 text-ink-300 hover:text-amber-600 rounded-md hover:bg-surface-100">
+                        <Star className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button onClick={() => startEdit(office)} title="Edit office" className="p-1.5 text-ink-300 hover:text-ink-700 rounded-md hover:bg-surface-100">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(office.id)} title="Delete office" className="p-1.5 text-ink-300 hover:text-red-600 rounded-md hover:bg-surface-100">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[13px] text-ink-300 italic">No offices configured yet</p>
+      )}
+
+      {adding ? (
+        <div className="mt-3 p-3 bg-surface-100 rounded-lg space-y-3 border border-surface-300">
+          <div className="grid grid-cols-3 gap-2">
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Office name" className="settings-input text-[12px]" />
+            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" className="settings-input text-[12px]" />
+            <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="settings-input text-[12px]" />
+          </div>
+          <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
+            <input type="checkbox" checked={form.isHeadOffice} onChange={(e) => setForm({ ...form, isHeadOffice: e.target.checked })} className="rounded" />
+            Head Office
+          </label>
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={busy || !form.name || !form.city} className="px-3 py-1.5 bg-ink-900 text-white text-[11px] font-medium rounded-md hover:bg-ink-800 disabled:opacity-50">
+              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add Office'}
+            </button>
+            <button onClick={cancel} className="px-3 py-1.5 text-[11px] text-ink-500 hover:text-ink-700">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={startAdd} className="mt-3 flex items-center gap-1.5 text-[12px] text-brand-600 hover:text-brand-700 font-medium">
+          <Plus className="w-3.5 h-3.5" /> Add Office
+        </button>
+      )}
+    </FieldGroup>
+  )
+}
+
 // ── Section: Organisation Profile ──────────────────────────
 
 function OrganisationSection() {
@@ -248,23 +451,7 @@ function OrganisationSection() {
         </FieldGroup>
 
         {/* Offices */}
-        <FieldGroup label="Offices" hint={`${org?.offices?.length || 0} registered`}>
-          {org?.offices && org.offices.length > 0 ? (
-            <div className="space-y-2">
-              {org.offices.map((office) => (
-                <div key={office.id} className="flex items-center justify-between p-3 bg-surface-50 rounded-lg">
-                  <div>
-                    <p className="text-[13px] font-medium text-ink-900">{office.name}</p>
-                    <p className="text-[11px] text-ink-400">{office.city}, {office.country}</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-ink-300" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[13px] text-ink-300 italic">No offices configured yet</p>
-          )}
-        </FieldGroup>
+        <OfficesManager offices={org?.offices || []} onUpdate={(offices) => setOrg(org ? { ...org, offices } : null)} />
 
         {/* Member Since */}
         <FieldGroup label="Member Since">

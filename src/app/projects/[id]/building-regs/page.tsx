@@ -49,11 +49,13 @@ interface ComplianceRegister {
 
 interface ComplianceItem {
   id: string
+  registerId: string
   requirement: string
   section: string | null
   source: string | null
   version: string | null
   status: ComplianceStatus
+  ownerId: string | null
   owner: string | null
   dueDate: string | null
   evidenceUrl: string | null
@@ -770,9 +772,29 @@ export default function CompliancePage() {
                                   {item.source || '-'}
                                 </span>
                                 <StatusBadge status={item.status} />
-                                <span className="text-[11px] text-ink-500 truncate">
-                                  {item.owner || '-'}
-                                </span>
+                                <select
+                                  className="text-[11px] text-ink-500 truncate bg-transparent border-0 p-0 cursor-pointer hover:text-ink-700 focus:ring-0 focus:outline-none"
+                                  value={item.ownerId || ''}
+                                  onChange={async (e) => {
+                                    const ownerId = e.target.value || null
+                                    try {
+                                      const res = await fetch(`/api/projects/${id}/compliance/${item.registerId}/items`, {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ itemId: item.id, ownerId }),
+                                      })
+                                      if (res.ok) {
+                                        const { item: updated } = await res.json()
+                                        setItems(prev => prev.map(i => i.id === item.id ? { ...i, ownerId: updated.ownerId, owner: updated.owner } : i))
+                                      }
+                                    } catch {}
+                                  }}
+                                >
+                                  <option value="">—</option>
+                                  {teamMembers.map(m => (
+                                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                                  ))}
+                                </select>
                                 <span className={cn(
                                   'text-[11px] truncate',
                                   item.dueDate && new Date(item.dueDate) < new Date()
