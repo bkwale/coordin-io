@@ -118,6 +118,17 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       })
     }
 
+    // Audit the assignment change
+    await recordAuditEvent({
+      organisationId: profile.organisationId,
+      actorId: profile.id,
+      action: body.assignedTo ? AuditActions.ASSET_UPDATED : AuditActions.ASSET_UPDATED,
+      entityType: 'asset',
+      entityId: id,
+      metadata: { assignmentAction: body.assignedTo ? 'assigned' : 'unassigned', assignedTo: body.assignedTo || null },
+      ipAddress: request.headers.get('x-forwarded-for') || undefined,
+    })
+
     // Re-fetch with updated assignments
     const refreshed = await prisma.asset.findUnique({
       where: { id },

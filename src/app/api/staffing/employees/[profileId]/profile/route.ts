@@ -265,6 +265,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     assets: employee.assetAssignments,
     hrDocumentCounts,
     isAdmin: hasHRAccess,
+    hasHRAccess,
     isSelf,
   })
 })

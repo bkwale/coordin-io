@@ -190,6 +190,17 @@ export default function CompliancePage() {
   const [showItemForm, setShowItemForm] = useState<string | null>(null)
   const [itemForm, setItemForm] = useState<ItemFormState>(emptyItemForm())
 
+  /* ── Team members for owner dropdown ─────────────── */
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; fullName: string }>>([])
+  useEffect(() => {
+    fetch('/api/settings/team')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.members) setTeamMembers(data.members.map((m: { id: string; fullName: string }) => ({ id: m.id, fullName: m.fullName })))
+      })
+      .catch(() => {})
+  }, [])
+
   /* ── Mutations ─────────────────────────────────────── */
   const { mutate: createRegister, loading: creatingRegister, error: createRegisterError, clearError: clearRegisterError } =
     useApiMutation<ComplianceRegister>(`/api/projects/${id}/compliance`, 'POST')
@@ -930,15 +941,17 @@ export default function CompliancePage() {
                           <div className="flex gap-3">
                             <div className="flex-1">
                               <label htmlFor="item-owner" className="block text-[11px] font-medium text-ink-500 mb-1">Owner</label>
-                              <input
+                              <select
                                 id="item-owner"
-                                type="text"
                                 value={itemForm.ownerId}
                                 onChange={(e) => setItemForm(prev => ({ ...prev, ownerId: e.target.value }))}
-                                placeholder="e.g. John Smith"
-                                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
-                                maxLength={200}
-                              />
+                                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+                              >
+                                <option value="">No owner</option>
+                                {teamMembers.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                                ))}
+                              </select>
                             </div>
                             <div className="w-44">
                               <label htmlFor="item-due" className="block text-[11px] font-medium text-ink-500 mb-1">Due date</label>

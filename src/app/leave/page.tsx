@@ -1477,7 +1477,7 @@ function RequestDetailModal({ request, onClose, handleStatusChange, userProfile 
                         isCompleted ? 'text-ink-600 font-medium' : 'text-ink-300',
                       )}>
                         {step.label}
-                        {isCompleted && request.approver && (step.key === 'LINE_MANAGER_APPROVED' || step.key === 'HR_APPROVED') && (
+                        {isCompleted && request.approver && step.key === request.status && (
                           <>
                             <br />
                             <span className="text-ink-400 font-normal">{request.approver.fullName}</span>

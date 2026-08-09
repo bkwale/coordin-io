@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import {
-  CheckCircle2, Loader2, ShieldCheck, ChevronRight, Check, X, Clock,
-  FileText, CreditCard,
+  CheckCircle2, Loader2, ChevronRight, Check, X, Clock,
+  CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -85,7 +85,7 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [comment, setComment] = useState('')
+  const [comments, setComments] = useState<Record<string, string>>({})
   const [acting, setActing] = useState<string | null>(null)
   const { toast } = useToast()
 
@@ -133,7 +133,7 @@ export default function ApprovalsPage() {
       const res = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, comment: comment || undefined }),
+        body: JSON.stringify({ status: newStatus, comment: comments[id] || undefined }),
       })
 
       if (!res.ok) {
@@ -142,7 +142,7 @@ export default function ApprovalsPage() {
       }
 
       toast(newStatus === 'REJECTED' ? 'Request rejected' : 'Request approved', 'success')
-      setComment('')
+      setComments(prev => { const next = { ...prev }; delete next[id]; return next })
       setExpandedId(null)
       fetchApprovals()
     } catch (err) {
@@ -331,8 +331,8 @@ export default function ApprovalsPage() {
                     </label>
                     <input
                       type="text"
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
+                      value={comments[req.id] || ''}
+                      onChange={(e) => setComments(prev => ({ ...prev, [req.id]: e.target.value }))}
                       placeholder="Add a comment..."
                       className="w-full px-3 py-2 text-[12px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
                       maxLength={1000}

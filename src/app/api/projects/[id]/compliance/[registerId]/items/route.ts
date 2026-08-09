@@ -5,6 +5,7 @@ import { withProjectAccess } from '@/lib/with-project-access'
 import { parseBody, requireString, optionalString, optionalDate, optionalNumber, optionalId } from '@/lib/validation'
 
 import { NotFoundError, ConflictError } from '@/lib/errors'
+import { recomputeRegisterStatus } from '@/lib/compliance-helpers'
 
 /**
  * Extract registerId from the URL path.
@@ -103,33 +104,82 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId }
   })
 
   // Recompute parent register's overallStatus from item-level data
-  const allItems = await (prisma as any).complianceItem.findMany({
-    where: { registerId },
-    select: { status: true },
-  })
-
-  let newStatus: string = 'NOT_STARTED'
-  if (allItems.length > 0) {
-    const statuses = allItems.map((i: { status: string }) => i.status)
-    const resolvedStatuses = ['COMPLIANT', 'APPROVED_WITH_CONDITION', 'NOT_APPLICABLE', 'CLOSED']
-    const allResolved = statuses.every((s: string) => resolvedStatuses.includes(s))
-    const hasNonCompliant = statuses.some((s: string) => s === 'NON_COMPLIANT' || s === 'ACTION_REQUIRED')
-    const hasInProgress = statuses.some((s: string) => s === 'IN_PROGRESS' || s === 'EVIDENCE_SUBMITTED' || s === 'UNDER_REVIEW')
-
-    if (allResolved) {
-      newStatus = 'COMPLIANT'
-    } else if (hasNonCompliant) {
-      newStatus = 'ACTION_REQUIRED'
-    } else if (hasInProgress) {
-      newStatus = 'IN_PROGRESS'
-    }
-    // else: all items NOT_STARTED → register stays NOT_STARTED
-  }
-
-  await (prisma as any).complianceRegister.update({
-    where: { id: registerId },
-    data: { overallStatus: newStatus },
-  })
+  await recomputeRegisterStatus(prisma as any, registerId)
 
   return success({ item }, 201)
+})
+
+/**
+ * PATCH /api/projects/[id]/compliance/[registerId]/items — Update a compliance item.
+ * Expects { itemId, ...fields } in the body.
+ */
+export const PATCH = withProjectAccess(async (request: NextRequest, { projectId }) => {
+  const registerId = extractRegisterId(request)
+  const body = await parseBody(request)
+
+  const register = await (prisma as any).complianceRegister.findFirst({
+    where: { id: registerId, projectId },
+  })
+  if (!register) {
+    throw new NotFoundError('Compliance register not found')
+  }
+
+  const itemId = requireString(body.itemId, 'Item ID', 100)
+  const existing = await (prisma as any).complianceItem.findFirst({
+    where: { id: itemId, registerId },
+  })
+  if (!existing) {
+    throw new NotFoundError('Compliance item not found')
+  }
+
+  const data: Record<string, unknown> = {}
+  if ('status' in body) data.status = body.status
+  if ('section' in body) data.section = optionalString(body.section, 'Section', 200)
+  if ('source' in body) data.source = optionalString(body.source, 'Source', 500)
+  if ('version' in body) data.version = optionalString(body.version, 'Version', 100)
+  if ('ownerId' in body) data.ownerId = optionalId(body.ownerId, 'Owner ID')
+  if ('dueDate' in body) data.dueDate = optionalDate(body.dueDate, 'Due date')
+  if ('evidence' in body) data.evidence = optionalString(body.evidence, 'Evidence', 5000)
+  if ('comments' in body) data.comments = optionalString(body.comments, 'Comments', 5000)
+
+  const item = await (prisma as any).complianceItem.update({
+    where: { id: itemId },
+    data,
+  })
+
+  // Recompute register status after any item change
+  await recomputeRegisterStatus(prisma as any, registerId)
+
+  return success({ item })
+})
+
+/**
+ * DELETE /api/projects/[id]/compliance/[registerId]/items — Delete a compliance item.
+ * Expects { itemId } in the body.
+ */
+export const DELETE = withProjectAccess(async (request: NextRequest, { projectId }) => {
+  const registerId = extractRegisterId(request)
+  const body = await parseBody(request)
+
+  const register = await (prisma as any).complianceRegister.findFirst({
+    where: { id: registerId, projectId },
+  })
+  if (!register) {
+    throw new NotFoundError('Compliance register not found')
+  }
+
+  const itemId = requireString(body.itemId, 'Item ID', 100)
+  const existing = await (prisma as any).complianceItem.findFirst({
+    where: { id: itemId, registerId },
+  })
+  if (!existing) {
+    throw new NotFoundError('Compliance item not found')
+  }
+
+  await (prisma as any).complianceItem.delete({ where: { id: itemId } })
+
+  // Recompute register status after deletion
+  await recomputeRegisterStatus(prisma as any, registerId)
+
+  return success({ deleted: true })
 })
