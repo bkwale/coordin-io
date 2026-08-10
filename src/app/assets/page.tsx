@@ -26,6 +26,7 @@ interface Asset {
   category: string
   serialNumber: string | null
   condition: string
+  location: string | null
   purchaseDate: string | null
   warrantyExpiry: string | null
   createdAt: string
@@ -124,6 +125,7 @@ export default function AssetsPage() {
   const [formTag, setFormTag] = useState('')
   const [formCategory, setFormCategory] = useState('LAPTOP')
   const [formSerial, setFormSerial] = useState('')
+  const [formLocation, setFormLocation] = useState('')
   const [formAssignedTo, setFormAssignedTo] = useState('')
   const { mutate: createAsset, loading: creating } = useApiMutation<Asset>('/api/assets', 'POST')
 
@@ -181,6 +183,7 @@ export default function AssetsPage() {
       assetTag: formTag,
       category: formCategory,
       serialNumber: formSerial || undefined,
+      location: formLocation || undefined,
       assignedTo: formAssignedTo || undefined,
     })
 
@@ -191,6 +194,7 @@ export default function AssetsPage() {
       setFormTag('')
       setFormCategory('LAPTOP')
       setFormSerial('')
+      setFormLocation('')
       setFormAssignedTo('')
       fetchData()
     } else {
@@ -357,6 +361,18 @@ export default function AssetsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
+              <label htmlFor="asset-location" className="block text-[11px] font-medium text-ink-500 mb-1">Location</label>
+              <input
+                id="asset-location"
+                type="text"
+                value={formLocation}
+                onChange={(e) => setFormLocation(e.target.value)}
+                placeholder="e.g. Head Office, Lagos Office"
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
+                maxLength={200}
+              />
+            </div>
+            <div>
               <label htmlFor="asset-assigned" className="block text-[11px] font-medium text-ink-500 mb-1">Assigned to</label>
               <select
                 id="asset-assigned"
@@ -440,6 +456,7 @@ export default function AssetsPage() {
                   <p className="text-[11px] text-ink-400 mt-0.5">
                     {asset.assetTag}
                     {asset.serialNumber && <span> · SN: {asset.serialNumber}</span>}
+                    {asset.location && <span> · {asset.location}</span>}
                     {currentAssignment && (
                       <span className="text-blue-500"> · Assigned to {currentAssignment.profile.fullName}</span>
                     )}
