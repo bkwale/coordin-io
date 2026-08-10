@@ -136,20 +136,20 @@ export default function ProjectTasksPage() {
     fetchTasks()
   }, [fetchTasks])
 
-  // Fetch project members for owner dropdown
+  // Fetch org members for owner dropdown
   useEffect(() => {
-    fetch(`/api/projects/${projectId}/members`)
+    fetch('/api/staffing')
       .then(res => res.ok ? res.json() : null)
       .then(json => {
-        if (json?.data?.members) {
-          setProjectMembers(json.data.members.map((m: Record<string, unknown>) => ({
-            id: (m.profile as Record<string, unknown>)?.id || m.id,
-            fullName: (m.profile as Record<string, unknown>)?.fullName || m.fullName,
-          })) as {id: string; fullName: string}[])
-        }
+        if (!json?.data) return
+        const people: {id: string; fullName: string}[] =
+          (json.data.employees ?? json.data.directory ?? []).map(
+            (p: Record<string, unknown>) => ({ id: p.id as string, fullName: p.fullName as string })
+          )
+        setProjectMembers(people.sort((a, b) => a.fullName.localeCompare(b.fullName)))
       })
       .catch(() => {})
-  }, [projectId])
+  }, [])
 
   /* ── Filter & sort ──────────────────────────────────── */
 

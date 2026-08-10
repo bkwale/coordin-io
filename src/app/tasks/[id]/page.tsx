@@ -156,22 +156,21 @@ export default function TaskDetailPage() {
     fetchProfile()
   }, [fetchTask, fetchProfile])
 
-  // Fetch project members for owner/reviewer selects
+  // Fetch org members for owner/reviewer selects
   useEffect(() => {
-    if (task?.projectId) {
-      fetch(`/api/projects/${task.projectId}/members`)
-        .then(res => res.ok ? res.json() : null)
-        .then(json => {
-          if (json?.data?.members) {
-            setProjectMembers(json.data.members.map((m: Record<string, unknown>) => ({
-              id: (m.profile as Record<string, unknown>)?.id || m.id,
-              fullName: (m.profile as Record<string, unknown>)?.fullName || m.fullName,
-            })) as {id: string; fullName: string}[])
-          }
-        })
-        .catch(() => {})
-    }
-  }, [task?.projectId])
+    fetch('/api/staffing')
+      .then(res => res.ok ? res.json() : null)
+      .then(json => {
+        if (!json?.data) return
+        // MANAGER+ gets employees[], MEMBER gets directory[]
+        const people: {id: string; fullName: string}[] =
+          (json.data.employees ?? json.data.directory ?? []).map(
+            (p: Record<string, unknown>) => ({ id: p.id as string, fullName: p.fullName as string })
+          )
+        setProjectMembers(people.sort((a, b) => a.fullName.localeCompare(b.fullName)))
+      })
+      .catch(() => {})
+  }, [])
 
   /* ── Status transition ──────────────────────────────── */
 
