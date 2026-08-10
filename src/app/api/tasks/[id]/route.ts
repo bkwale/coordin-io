@@ -77,22 +77,20 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
     }
   }
 
-  // Validate ownerId / reviewerId are project members if provided
-  if (ownerId) {
-    const ownerMembership = await prisma.projectMembership.findUnique({
-      where: { projectId_profileId: { projectId: currentTask.projectId, profileId: ownerId } },
+  // Ensure ownerId / reviewerId are project members — auto-add if not
+  for (const assigneeId of [ownerId, reviewerId].filter(Boolean) as string[]) {
+    const membership = await prisma.projectMembership.findUnique({
+      where: { projectId_profileId: { projectId: currentTask.projectId, profileId: assigneeId } },
     })
-    if (!ownerMembership || ownerMembership.removedAt !== null) {
-      throw new PermissionError('Owner must be a member of this project')
-    }
-  }
-
-  if (reviewerId) {
-    const reviewerMembership = await prisma.projectMembership.findUnique({
-      where: { projectId_profileId: { projectId: currentTask.projectId, profileId: reviewerId } },
-    })
-    if (!reviewerMembership || reviewerMembership.removedAt !== null) {
-      throw new PermissionError('Reviewer must be a member of this project')
+    if (!membership) {
+      await prisma.projectMembership.create({
+        data: { projectId: currentTask.projectId, profileId: assigneeId, role: 'TEAM_MEMBER' },
+      })
+    } else if (membership.removedAt !== null) {
+      await prisma.projectMembership.update({
+        where: { id: membership.id },
+        data: { removedAt: null },
+      })
     }
   }
 
