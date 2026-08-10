@@ -219,6 +219,13 @@ export default function ProjectDashboard() {
   const [showMilestoneForm, setShowMilestoneForm] = useState(false)
   const [showUpdateForm, setShowUpdateForm] = useState(false)
 
+  // Add member state
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [newMemberId, setNewMemberId] = useState('')
+  const [newMemberRole, setNewMemberRole] = useState('TEAM_MEMBER')
+  const [addingMember, setAddingMember] = useState(false)
+  const [orgEmployees, setOrgEmployees] = useState<{profileId: string; name: string}[]>([])
+
   const fetchOverview = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -240,6 +247,20 @@ export default function ProjectDashboard() {
   useEffect(() => {
     fetchOverview()
   }, [fetchOverview])
+
+  // Fetch org employees when add member form is opened
+  useEffect(() => {
+    if (showAddMember) {
+      fetch('/api/staffing')
+        .then(res => res.ok ? res.json() : null)
+        .then(json => {
+          if (json?.data?.employees) {
+            setOrgEmployees(json.data.employees)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [showAddMember])
 
   /* ── Loading ────────────────────────────────────────── */
 
@@ -683,14 +704,22 @@ export default function ProjectDashboard() {
 
           {/* Team */}
           <div className="bg-white rounded-xl border border-ink-100 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="w-4 h-4 text-ink-400" />
-              <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">
-                Team
-                <span className="ml-1.5 text-ink-400 font-normal lowercase">
-                  ({data.team.count})
-                </span>
-              </h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-ink-400" />
+                <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">
+                  Team
+                  <span className="ml-1.5 text-ink-400 font-normal lowercase">
+                    ({data.team.count})
+                  </span>
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAddMember(true)}
+                className="flex items-center gap-1 text-[12px] text-accent-600 font-medium hover:text-accent-700"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add
+              </button>
             </div>
             <div className="space-y-3">
               {data.team.members.map((m) => (
@@ -707,6 +736,92 @@ export default function ProjectDashboard() {
                 </div>
               ))}
             </div>
+
+            {/* Add member inline form */}
+            {showAddMember && (
+              <div className="mt-4 pt-4 border-t border-ink-100 space-y-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-ink-500 mb-1">Person</label>
+                  <select
+                    value={newMemberId}
+                    onChange={(e) => setNewMemberId(e.target.value)}
+                    className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+                  >
+                    <option value="">Select a person</option>
+                    {orgEmployees.map((emp) => (
+                      <option key={emp.profileId} value={emp.profileId}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-ink-500 mb-1">Project role</label>
+                  <select
+                    value={newMemberRole}
+                    onChange={(e) => setNewMemberRole(e.target.value)}
+                    className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+                  >
+                    <option value="TEAM_MEMBER">Team Member</option>
+                    <option value="ARCHITECT">Architect</option>
+                    <option value="SENIOR_ARCHITECT">Senior Architect</option>
+                    <option value="DESIGN_LEAD">Design Lead</option>
+                    <option value="PROJECT_ARCHITECT">Project Architect</option>
+                    <option value="PROJECT_LEAD">Project Lead</option>
+                    <option value="EXTERNAL_CONSULTANT">External Consultant</option>
+                    <option value="CONTRACTOR">Contractor</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddMember(false)
+                      setNewMemberId('')
+                      setNewMemberRole('TEAM_MEMBER')
+                    }}
+                    className="px-3 py-1.5 text-[12px] font-medium text-ink-500 hover:text-ink-700 transition-colors"
+                    disabled={addingMember}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={addingMember || !newMemberId}
+                    onClick={async () => {
+                      setAddingMember(true)
+                      try {
+                        const res = await fetch(`/api/projects/${projectId}/members`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ profileId: newMemberId, projectRole: newMemberRole }),
+                        })
+                        if (!res.ok) {
+                          const body = await res.json().catch(() => ({}))
+                          throw new Error(body.error?.message || 'Failed to add member')
+                        }
+                        toast('Member added', 'success')
+                        setShowAddMember(false)
+                        setNewMemberId('')
+                        setNewMemberRole('TEAM_MEMBER')
+                        fetchOverview()
+                      } catch (err) {
+                        toast(err instanceof Error ? err.message : 'Failed to add member', 'error')
+                      } finally {
+                        setAddingMember(false)
+                      }
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors',
+                      addingMember || !newMemberId
+                        ? 'bg-ink-200 text-ink-400 cursor-not-allowed'
+                        : 'bg-ink-900 text-white hover:bg-ink-800',
+                    )}
+                  >
+                    {addingMember && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Key metrics */}

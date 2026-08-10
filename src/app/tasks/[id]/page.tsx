@@ -116,6 +116,7 @@ export default function TaskDetailPage() {
   const [checklistLoading, setChecklistLoading] = useState<string | null>(null)
   const [newItemLabel, setNewItemLabel] = useState('')
   const [addingItem, setAddingItem] = useState(false)
+  const [projectMembers, setProjectMembers] = useState<{id: string; fullName: string}[]>([])
 
   /* ── Fetch task ──────────────────────────────────────── */
 
@@ -154,6 +155,23 @@ export default function TaskDetailPage() {
     fetchTask()
     fetchProfile()
   }, [fetchTask, fetchProfile])
+
+  // Fetch project members for owner/reviewer selects
+  useEffect(() => {
+    if (task?.projectId) {
+      fetch(`/api/projects/${task.projectId}/members`)
+        .then(res => res.ok ? res.json() : null)
+        .then(json => {
+          if (json?.data?.members) {
+            setProjectMembers(json.data.members.map((m: Record<string, unknown>) => ({
+              id: (m.profile as Record<string, unknown>)?.id || m.id,
+              fullName: (m.profile as Record<string, unknown>)?.fullName || m.fullName,
+            })) as {id: string; fullName: string}[])
+          }
+        })
+        .catch(() => {})
+    }
+  }, [task?.projectId])
 
   /* ── Status transition ──────────────────────────────── */
 
@@ -547,17 +565,61 @@ export default function TaskDetailPage() {
                 <span className="text-[12px] text-ink-400 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" /> Owner
                 </span>
-                <span className="text-[13px] font-medium text-ink-700">
-                  {task.owner?.fullName || 'Unassigned'}
-                </span>
+                <select
+                  value={task.owner?.id || ''}
+                  onChange={async (e) => {
+                    const val = e.target.value
+                    try {
+                      const res = await fetch(`/api/tasks/${taskId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ownerId: val || null }),
+                      })
+                      if (!res.ok) throw new Error('Failed to update owner')
+                      const json = await res.json()
+                      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments } : prev)
+                      toast('Owner updated', 'success')
+                    } catch {
+                      toast('Failed to update owner', 'error')
+                    }
+                  }}
+                  className="text-[13px] font-medium text-ink-700 bg-transparent border-0 cursor-pointer text-right appearance-none"
+                >
+                  <option value="">Unassigned</option>
+                  {projectMembers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-ink-400 flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5" /> Reviewer
                 </span>
-                <span className="text-[13px] font-medium text-ink-700">
-                  {task.reviewer?.fullName || 'Unassigned'}
-                </span>
+                <select
+                  value={task.reviewer?.id || ''}
+                  onChange={async (e) => {
+                    const val = e.target.value
+                    try {
+                      const res = await fetch(`/api/tasks/${taskId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reviewerId: val || null }),
+                      })
+                      if (!res.ok) throw new Error('Failed to update reviewer')
+                      const json = await res.json()
+                      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments } : prev)
+                      toast('Reviewer updated', 'success')
+                    } catch {
+                      toast('Failed to update reviewer', 'error')
+                    }
+                  }}
+                  className="text-[13px] font-medium text-ink-700 bg-transparent border-0 cursor-pointer text-right appearance-none"
+                >
+                  <option value="">Unassigned</option>
+                  {projectMembers.map((m) => (
+                    <option key={m.id} value={m.id}>{m.fullName}</option>
+                  ))}
+                </select>
               </div>
               {isReviewer && task.status === 'READY_FOR_REVIEW' && (
                 <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">

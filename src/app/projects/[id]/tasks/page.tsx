@@ -75,6 +75,8 @@ export default function ProjectTasksPage() {
   const [newTitle, setNewTitle] = useState('')
   const [newPriority, setNewPriority] = useState('MEDIUM')
   const [newDueDate, setNewDueDate] = useState('')
+  const [newOwner, setNewOwner] = useState('')
+  const [projectMembers, setProjectMembers] = useState<{id: string; fullName: string}[]>([])
   const { mutate: createTask, loading: creating, error: createError, clearError: clearCreateError } =
     useApiMutation<TaskListItem>(`/api/projects/${projectId}/tasks`, 'POST')
 
@@ -85,6 +87,7 @@ export default function ProjectTasksPage() {
 
     const body: Record<string, unknown> = { title: trimmed, priority: newPriority }
     if (newDueDate) body.dueDate = newDueDate
+    if (newOwner) body.ownerId = newOwner
 
     const result = await createTask(body)
     if (result) {
@@ -92,6 +95,7 @@ export default function ProjectTasksPage() {
       setNewTitle('')
       setNewPriority('MEDIUM')
       setNewDueDate('')
+      setNewOwner('')
       setShowCreateForm(false)
       clearCreateError()
       fetchTasks()
@@ -105,6 +109,7 @@ export default function ProjectTasksPage() {
     setNewTitle('')
     setNewPriority('MEDIUM')
     setNewDueDate('')
+    setNewOwner('')
     clearCreateError()
   }
 
@@ -130,6 +135,21 @@ export default function ProjectTasksPage() {
   useEffect(() => {
     fetchTasks()
   }, [fetchTasks])
+
+  // Fetch project members for owner dropdown
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/members`)
+      .then(res => res.ok ? res.json() : null)
+      .then(json => {
+        if (json?.data?.members) {
+          setProjectMembers(json.data.members.map((m: Record<string, unknown>) => ({
+            id: (m.profile as Record<string, unknown>)?.id || m.id,
+            fullName: (m.profile as Record<string, unknown>)?.fullName || m.fullName,
+          })) as {id: string; fullName: string}[])
+        }
+      })
+      .catch(() => {})
+  }, [projectId])
 
   /* ── Filter & sort ──────────────────────────────────── */
 
@@ -290,6 +310,24 @@ export default function ProjectTasksPage() {
                 className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400"
               />
             </div>
+          </div>
+
+          {/* Owner */}
+          <div>
+            <label htmlFor="task-owner" className="block text-[11px] font-medium text-ink-500 mb-1">
+              Owner
+            </label>
+            <select
+              id="task-owner"
+              value={newOwner}
+              onChange={(e) => setNewOwner(e.target.value)}
+              className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+            >
+              <option value="">Unassigned</option>
+              {projectMembers.map((m) => (
+                <option key={m.id} value={m.id}>{m.fullName}</option>
+              ))}
+            </select>
           </div>
 
           {/* Error */}

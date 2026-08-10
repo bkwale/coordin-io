@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, AlertCircle, CheckCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-/* ── Shared Marketing Nav ──────────────────────────── */
+/* -- Shared Marketing Nav -------------------------------- */
 function AuthNav() {
   return (
     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-surface-200/60">
@@ -29,9 +29,10 @@ function AuthNav() {
   )
 }
 
-/* ── Main Page ─────────────────────────────────────── */
-export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('')
+/* -- Main Page ------------------------------------------- */
+export default function ResetPasswordPage() {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -39,13 +40,22 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
     setLoading(true)
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?redirect=/reset-password`,
-      })
+      const { error } = await supabase.auth.updateUser({ password })
 
       if (error) {
         setError(error.message)
@@ -53,7 +63,7 @@ export default function ForgotPasswordPage() {
       }
 
       setSuccess(true)
-    } catch (err) {
+    } catch {
       setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
@@ -66,10 +76,10 @@ export default function ForgotPasswordPage() {
 
       <section className="max-w-md mx-auto px-6 sm:px-10 pt-20 sm:pt-28 pb-20 animate-fade-in">
         <h1 className="font-display text-[2.5rem] sm:text-[3rem] leading-[1.05] text-ink-900 text-center mb-3">
-          Reset password
+          Set new password
         </h1>
         <p className="text-[15px] text-ink-500 text-center mb-10 max-w-sm mx-auto leading-relaxed">
-          Enter your email and we&rsquo;ll send you a link to reset your password.
+          Enter your new password below.
         </p>
 
         {success ? (
@@ -77,15 +87,15 @@ export default function ForgotPasswordPage() {
             <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
-            <h3 className="font-display text-xl text-ink-900 mb-2">Check your email</h3>
+            <h3 className="font-display text-xl text-ink-900 mb-2">Password updated</h3>
             <p className="text-[13px] text-ink-500 leading-relaxed mb-4">
-              We&rsquo;ve sent a password reset link to <strong className="text-ink-700">{email}</strong>.
+              Your password has been changed successfully.
             </p>
             <Link
               href="/login"
               className="text-[13px] text-accent-600 hover:text-accent-700 font-medium"
             >
-              Back to sign in
+              Sign in with new password
             </Link>
           </div>
         ) : (
@@ -97,18 +107,34 @@ export default function ForgotPasswordPage() {
               </div>
             )}
 
-            {/* Email */}
+            {/* New Password */}
             <div>
-              <label htmlFor="email" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
-                Email <span className="text-red-400">*</span>
+              <label htmlFor="password" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+                New password <span className="text-red-400">*</span>
               </label>
               <input
-                id="email"
-                type="email"
+                id="password"
+                type="password"
                 required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@practice.com"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow"
+              />
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label htmlFor="confirmPassword" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+                Confirm password <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter your password"
                 className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow"
               />
             </div>
@@ -119,7 +145,7 @@ export default function ForgotPasswordPage() {
               disabled={loading}
               className="w-full bg-gradient-accent text-white font-semibold text-[14px] py-3.5 rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-glow-indigo mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? 'Sending link...' : 'Send reset link'}
+              {loading ? 'Updating password...' : 'Update password'}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
 
