@@ -50,6 +50,9 @@ function getExtension(filename: string): string {
   return idx >= 0 ? filename.slice(idx).toLowerCase() : ''
 }
 
+// Allow up to 60s for large file uploads
+export const maxDuration = 60
+
 /**
  * POST /api/upload/documents — Upload a project document to Supabase Storage.
  *
@@ -57,7 +60,14 @@ function getExtension(filename: string): string {
  * Returns `{ url, fileName, fileSize, contentType }`.
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
-  const formData = await request.formData()
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch (err) {
+    console.error('[DOCUMENT_UPLOAD] FormData parse error:', err)
+    throw new ValidationError('Failed to parse upload — file may be too large for this server')
+  }
+
   const file = formData.get('file')
   const projectId = formData.get('projectId')
 
@@ -95,6 +105,12 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     )
   }
 
+  // Ensure service role key is available
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[DOCUMENT_UPLOAD] SUPABASE_SERVICE_ROLE_KEY is not set')
+    throw new ValidationError('File storage is not configured — contact your administrator')
+  }
+
   // Build storage path: {orgId}/{projectId}/{timestamp}-{sanitisedFilename}
   const timestamp = Date.now()
   const sanitisedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -103,41 +119,51 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   // Create a Supabase client with the service role key for storage operations
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
   )
 
-  // Read file into buffer and upload
-  const arrayBuffer = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+  try {
+    // Read file into buffer and upload
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from('documents')
-    .upload(storagePath, buffer, {
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('documents')
+      .upload(storagePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      })
+
+    if (uploadError) {
+      console.error('[DOCUMENT_UPLOAD] Storage error:', uploadError.message)
+      throw new ValidationError(`Upload failed: ${uploadError.message}`)
+    }
+
+    // Generate a signed URL with 1-year expiry (in seconds)
+    const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
+
+    const { data: signedData, error: signError } = await supabaseAdmin.storage
+      .from('documents')
+      .createSignedUrl(storagePath, ONE_YEAR_SECONDS)
+
+    if (signError || !signedData?.signedUrl) {
+      console.error('[DOCUMENT_UPLOAD] Signed URL error:', signError?.message)
+      throw new ValidationError('File uploaded but failed to generate access URL')
+    }
+
+    return success({
+      url: signedData.signedUrl,
+      fileName: file.name,
+      fileSize: file.size,
       contentType: file.type,
-      upsert: false,
-    })
-
-  if (uploadError) {
-    console.error('[DOCUMENT_UPLOAD] Storage error:', uploadError.message)
-    throw new ValidationError(`Upload failed: ${uploadError.message}`)
+    }, 201)
+  } catch (err) {
+    // Re-throw our own ValidationErrors
+    if (err instanceof ValidationError) throw err
+    // Catch unexpected Supabase / runtime errors and surface them as 400
+    console.error('[DOCUMENT_UPLOAD] Unexpected error:', err)
+    throw new ValidationError(
+      `Upload failed: ${err instanceof Error ? err.message : 'Unknown storage error'}`,
+    )
   }
-
-  // Generate a signed URL with 1-year expiry (in seconds)
-  const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
-
-  const { data: signedData, error: signError } = await supabaseAdmin.storage
-    .from('documents')
-    .createSignedUrl(storagePath, ONE_YEAR_SECONDS)
-
-  if (signError || !signedData?.signedUrl) {
-    console.error('[DOCUMENT_UPLOAD] Signed URL error:', signError?.message)
-    throw new ValidationError('File uploaded but failed to generate access URL')
-  }
-
-  return success({
-    url: signedData.signedUrl,
-    fileName: file.name,
-    fileSize: file.size,
-    contentType: file.type,
-  }, 201)
 })
