@@ -85,7 +85,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
     })
     if (!membership) {
       await prisma.projectMembership.create({
-        data: { projectId: currentTask.projectId, profileId: assigneeId, role: 'TEAM_MEMBER' },
+        data: { projectId: currentTask.projectId, profileId: assigneeId },
       })
     } else if (membership.removedAt !== null) {
       await prisma.projectMembership.update({
