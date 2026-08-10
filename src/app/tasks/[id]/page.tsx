@@ -7,11 +7,13 @@ import {
   ChevronRight, User, Users, Calendar, Clock,
   MessageSquare, CheckSquare, Send, Plus, Loader2,
   AlertTriangle, RefreshCw, Square, CheckSquare2,
+  Paperclip, FileText, Download, Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { StatusFlow, StatusTransitionDropdown, PriorityBadge } from '@/components/StatusFlow'
 import { SkeletonTaskDetail } from '@/components/Skeleton'
+import FileUpload, { type UploadResult } from '@/components/FileUpload'
 
 /* ── Types mirroring GET /api/tasks/[id] response ──────── */
 
@@ -61,8 +63,16 @@ interface TaskDetail {
   owner: TaskOwner | null
   reviewer: TaskOwner | null
   project: TaskProject
+  attachments: string | null
   checklistItems: ChecklistItem[]
   comments: TaskComment[]
+}
+
+interface AttachmentFile {
+  url: string
+  fileName: string
+  fileSize: number
+  contentType: string
 }
 
 /* ── Helpers ───────────────────────────────────────────── */
@@ -550,6 +560,95 @@ export default function TaskDetailPage() {
                 )}
               </button>
             </form>
+          </div>
+
+          {/* ── Attachments ──────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-ink-100">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-ink-50">
+              <Paperclip className="w-4 h-4 text-ink-400" />
+              <h3 className="text-[13px] font-semibold text-ink-700">
+                Attachments
+                {(() => {
+                  const parsed: AttachmentFile[] = task.attachments ? JSON.parse(task.attachments) : []
+                  return parsed.length > 0 ? <span className="ml-1.5 text-ink-400 font-normal">{parsed.length}</span> : null
+                })()}
+              </h3>
+            </div>
+
+            {/* Existing attachments */}
+            {(() => {
+              const parsed: AttachmentFile[] = task.attachments ? JSON.parse(task.attachments) : []
+              return parsed.length > 0 ? (
+                <div className="divide-y divide-ink-50">
+                  {parsed.map((att, idx) => (
+                    <div key={idx} className="flex items-center gap-3 px-5 py-3">
+                      <FileText className="w-4 h-4 text-ink-300 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-medium text-accent-600 hover:underline truncate block">
+                          {att.fileName}
+                        </a>
+                        <span className="text-[11px] text-ink-300">{(att.fileSize / 1024).toFixed(0)} KB</span>
+                      </div>
+                      <a href={att.url} target="_blank" rel="noopener noreferrer" className="p-1 text-ink-300 hover:text-ink-600">
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                      <button
+                        onClick={async () => {
+                          const updated = parsed.filter((_, i) => i !== idx)
+                          try {
+                            const res = await fetch(`/api/tasks/${taskId}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ attachments: JSON.stringify(updated) }),
+                            })
+                            if (res.ok) {
+                              setTask({ ...task, attachments: JSON.stringify(updated) })
+                              toast('Attachment removed', 'success')
+                            }
+                          } catch { /* ignore */ }
+                        }}
+                        className="p-1 text-ink-300 hover:text-red-500"
+                        title="Remove attachment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null
+            })()}
+
+            {/* Upload zone */}
+            <div className="px-5 py-4">
+              <FileUpload
+                projectId={task.projectId}
+                label="Drop files here or click to upload"
+                multiple
+                onFilesChange={async (files: UploadResult[]) => {
+                  const completed = files.filter(f => f.url)
+                  if (completed.length === 0) return
+                  const existing: AttachmentFile[] = task.attachments ? JSON.parse(task.attachments) : []
+                  const newAtts: AttachmentFile[] = completed.map(f => ({
+                    url: f.url,
+                    fileName: f.fileName,
+                    fileSize: f.fileSize,
+                    contentType: f.contentType || 'application/octet-stream',
+                  }))
+                  const merged = [...existing, ...newAtts]
+                  try {
+                    const res = await fetch(`/api/tasks/${taskId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ attachments: JSON.stringify(merged) }),
+                    })
+                    if (res.ok) {
+                      setTask({ ...task, attachments: JSON.stringify(merged) })
+                      toast(`${newAtts.length} file${newAtts.length > 1 ? 's' : ''} attached`, 'success')
+                    }
+                  } catch { /* ignore */ }
+                }}
+              />
+            </div>
           </div>
         </div>
 

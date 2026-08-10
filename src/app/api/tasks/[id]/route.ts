@@ -51,6 +51,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
   if ('priority' in body) data.priority = optionalEnum(body.priority, 'Priority', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const)
   if ('dueDate' in body) data.dueDate = optionalDate(body.dueDate, 'Due date')
   if ('estimatedHours' in body) data.estimatedHours = optionalNumber(body.estimatedHours, 'Estimated hours', { min: 0, max: 10000 })
+  if ('attachments' in body) data.attachments = typeof body.attachments === 'string' ? body.attachments : (body.attachments ? JSON.stringify(body.attachments) : null)
 
   // Validate IDs
   const ownerId = 'ownerId' in body ? optionalId(body.ownerId, 'Owner ID') : undefined
