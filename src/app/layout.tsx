@@ -10,6 +10,7 @@ import { DemoTimerBanner } from '@/components/DemoTimerBanner'
 import { DemoExpiredOverlay } from '@/components/DemoExpiredOverlay'
 import { ToastProvider } from '@/components/Toast'
 import { cn } from '@/lib/utils'
+import { Analytics } from '@vercel/analytics/next'
 
 const MARKETING_ROUTES = ['/', '/welcome', '/faq', '/demo-access', '/use-cases', '/features/brpd', '/features/quotes', '/book-demo', '/login', '/signup', '/forgot-password']
 const FULLSCREEN_PREFIXES = ['/activate', '/onboarding', '/admin']
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             )}
           </ToastProvider>
         </DemoTimerProvider>
+        <Analytics />
       </body>
     </html>
   )
