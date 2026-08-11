@@ -254,9 +254,15 @@ export default function ProjectDashboard() {
       fetch('/api/staffing')
         .then(res => res.ok ? res.json() : null)
         .then(json => {
-          if (json?.data?.employees) {
-            setOrgEmployees(json.data.employees)
-          }
+          const list = json?.data?.employees || json?.data?.directory || []
+          const existingIds = new Set(data?.team?.members?.map((m: any) => m.profile.id) || [])
+          setOrgEmployees(list
+            .map((emp: any) => ({
+              profileId: emp.id || emp.profileId,
+              name: emp.fullName || emp.name,
+            }))
+            .filter((emp: any) => !existingIds.has(emp.profileId))
+          )
         })
         .catch(() => {})
     }
