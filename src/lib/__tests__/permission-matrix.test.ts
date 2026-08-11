@@ -10,7 +10,9 @@ vi.mock('@/lib/prisma', () => ({
 
 import { canPerform } from '@/lib/role-permissions'
 import { hasOrgPermission, hasProjectRole, canReviewWork, canIssueDocument } from '@/lib/permissions'
-import type { OrgPermission, ProjectRole } from '@/generated/prisma/client'
+// Use string literals instead of importing from generated client (not available pre-build)
+type OrgPermission = 'OWNER' | 'ADMIN' | 'HR' | 'MANAGER' | 'MEMBER' | 'VIEWER'
+type ProjectRole = 'PROJECT_LEAD' | 'PROJECT_ARCHITECT' | 'DESIGN_LEAD' | 'SENIOR_ARCHITECT' | 'ARCHITECT' | 'TEAM_MEMBER' | 'EXTERNAL_CONSULTANT' | 'CONTRACTOR' | 'LEAD' | 'MANAGER' | 'MEMBER' | 'VIEWER'
 
 // ---------------------------------------------------------------------------
 // Org Permission Hierarchy Tests

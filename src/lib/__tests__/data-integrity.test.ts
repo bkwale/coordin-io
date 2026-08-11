@@ -599,7 +599,8 @@ describe('Error class integrity', () => {
       return err
     }
 
-    const prismaMapping: Array<[string, typeof AppError, number]> = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prismaMapping: Array<[string, any, number]> = [
       ['P2002', ConflictError, 409],
       ['P2025', NotFoundError, 404],
       ['P2003', ValidationError, 400],
