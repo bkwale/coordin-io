@@ -27,9 +27,9 @@ describe('Null-safety — real function tests', () => {
       })).toBe('GREY')
     })
 
-    it('null healthStatus with overdue tasks still returns GREY (not AMBER — AMBER requires GREEN)', () => {
-      // AMBER rule: overdueTaskCount > 0 && healthStatus === 'GREEN'
-      // null !== 'GREEN', so it falls through to healthStatus ?? 'GREY'
+    it('null healthStatus with overdue tasks escalates to AMBER via worst()', () => {
+      // null healthStatus defaults to GREY, then worst(GREY, AMBER) = AMBER
+      // because overdue tasks always escalate health via worst()
       // Use 5 tasks with 1 overdue (20% < 25%) to avoid hitting the RED threshold
       expect(computeEffectiveHealth({
         healthStatus: null,
@@ -40,7 +40,7 @@ describe('Null-safety — real function tests', () => {
           { status: 'IN_PROGRESS', dueDate: futureDate },
           { status: 'IN_PROGRESS', dueDate: pastDate },
         ],
-      })).toBe('GREY')
+      })).toBe('AMBER')
     })
 
     it('tasks with null dueDates are never counted as overdue', () => {

@@ -57,6 +57,11 @@ function parsePrismaSchema(schemaPath: string): Map<string, SchemaModel> {
     }
 
     if (currentModel) {
+      // Skip comments and directives BEFORE brace tracking —
+      // comments like `// JSON array of {url, fileName}` contain braces
+      // that would break depth counting.
+      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('@@')) continue
+
       if (trimmed === '{') braceDepth++
       if (trimmed.includes('}')) {
         braceDepth--
@@ -65,8 +70,6 @@ function parsePrismaSchema(schemaPath: string): Map<string, SchemaModel> {
           continue
         }
       }
-
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('@@')) continue
 
       const fieldMatch = trimmed.match(/^(\w+)\s+(\S+)/)
       if (fieldMatch) {
