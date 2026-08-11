@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { NotFoundError, ConflictError } from '@/lib/errors'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { requireId, requireEnum, parseBody } from '@/lib/validation'
 import type { ProjectRole } from '@/generated/prisma/client'
 
@@ -40,7 +41,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
  * POST /api/projects/[id]/members — Add a member to the project.
  * Requires PROJECT_LEAD+ on the project (or MANAGER+ org).
  */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, project, profile }) => {
   const body = await parseBody(request)
   const profileId = requireId(body.profileId, 'Profile ID')
   const projectRole = requireEnum(body.projectRole, 'Project role', VALID_PROJECT_ROLES)
@@ -123,6 +124,17 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
       projectRole,
     },
   })
+
+  // Notify the added member (skip if they added themselves)
+  if (profileId !== profile.id) {
+    await createNotification({
+      profileId,
+      type: NOTIFICATION_EVENTS.PROJECT_MEMBER_ADDED,
+      title: `You were added to project: ${project.name}`,
+      body: `${profile.fullName} added you as ${projectRole.replace(/_/g, ' ').toLowerCase()}.`,
+      linkUrl: `/projects/${projectId}`,
+    }).catch(() => {})
+  }
 
   return success({ membership }, 201)
 }, { minProjectRole: 'PROJECT_LEAD' })

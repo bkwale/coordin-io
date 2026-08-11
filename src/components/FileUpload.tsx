@@ -170,7 +170,7 @@ export default function FileUpload({
           } else {
             try {
               const json = JSON.parse(xhr.responseText)
-              reject(new Error(json.error?.message || `Upload failed (${xhr.status})`))
+              reject(new Error(typeof json.error === 'string' ? json.error : json.error?.message || `Upload failed (${xhr.status})`))
             } catch {
               reject(new Error(`Upload failed (${xhr.status})`))
             }
