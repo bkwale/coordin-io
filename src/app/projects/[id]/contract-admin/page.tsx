@@ -647,7 +647,7 @@ export default function CommercialPage() {
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
-        throw new Error(json.error?.message || `Failed (${res.status})`)
+        throw new Error(typeof json.error === 'string' ? json.error : json.error?.message || `Failed (${res.status})`)
       }
       toast(`${type.charAt(0).toUpperCase() + type.slice(1)} ${action}d`, 'success')
       refreshCurrentTab()

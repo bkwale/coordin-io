@@ -297,7 +297,8 @@ model Invitation {
   roleId         String?   @map("role_id")
   managerId      String?   @map("manager_id")
   startDate      DateTime? @map("start_date")
-  annualLeave    Float?    @map("annual_leave")
+  annualLeave    Float?        @map("annual_leave")
+  orgPermission  OrgPermission @default(MEMBER) @map("org_permission")
 
   // Invitation state
   status       InvitationStatus @default(PENDING)

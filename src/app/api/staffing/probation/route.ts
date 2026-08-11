@@ -6,6 +6,7 @@ import { recordAuditEvent } from '@/lib/audit'
 import { requireString, optionalString, requireDate, optionalDate, parseBody } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
 import { canManageHR } from '@/lib/staffing-utils'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -110,6 +111,16 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     entityId: review.id,
     metadata: { targetProfileId, reviewType, scheduledDate: scheduledDate.toISOString() },
   })
+
+  // Notify the employee about their probation review
+  if (targetProfileId !== profile.id) {
+    await createNotification({
+      profileId: targetProfileId,
+      type: NOTIFICATION_EVENTS.PROBATION_REVIEW_SCHEDULED,
+      title: `A ${reviewType} probation review has been scheduled for you`,
+      linkUrl: `/staffing/employees/${targetProfileId}`,
+    }).catch(() => {})
+  }
 
   return success({ review }, 201)
 })

@@ -6,6 +6,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, optionalString, optionalEnum, optionalNumber, optionalId } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { hasOrgPermission } from '@/lib/permissions'
+// TODO: Add createNotification when Variation model gets createdById field
 
 const VARIATION_REASONS = [
   'DESIGN_CHANGE', 'CLIENT_INSTRUCTION', 'SITE_CONDITION',

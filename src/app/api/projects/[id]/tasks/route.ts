@@ -4,6 +4,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 /**
  * GET /api/projects/[id]/tasks — List tasks for a project.
@@ -101,6 +102,24 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     metadata: { title: task.title, projectId },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify assignees
+  if (ownerId && ownerId !== profile.id) {
+    await createNotification({
+      profileId: ownerId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned a task: ${task.title}`,
+      linkUrl: `/projects/${projectId}/tasks/${task.id}`,
+    }).catch(() => {})
+  }
+  if (reviewerId && reviewerId !== profile.id && reviewerId !== ownerId) {
+    await createNotification({
+      profileId: reviewerId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned as reviewer on: ${task.title}`,
+      linkUrl: `/projects/${projectId}/tasks/${task.id}`,
+    }).catch(() => {})
+  }
 
   return success({ task }, 201)
 })

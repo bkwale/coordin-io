@@ -15,7 +15,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   // Permission check handled by withAuth({ requiredPermission: 'MANAGER' })
 
   const body = await request.json()
-  const { email, fullName, jobTitle, officeId, roleId, managerId, startDate, annualLeave } = body
+  const { email, fullName, jobTitle, officeId, roleId, managerId, startDate, annualLeave, orgPermission } = body
 
   if (!email || !fullName) {
     throw new ValidationError('Email and full name are required')
@@ -49,6 +49,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       managerId: managerId || null,
       startDate: startDate ? new Date(startDate) : null,
       annualLeave: annualLeave ?? null,
+      orgPermission: orgPermission || 'MEMBER',
       expiresAt,
       createdById: profile.id,
     },

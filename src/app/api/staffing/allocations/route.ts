@@ -6,6 +6,7 @@ import { recordAuditEvent } from '@/lib/audit'
 import { requireString, requireNumber, requireDate, parseBody } from '@/lib/validation'
 import { ValidationError, PermissionError } from '@/lib/errors'
 import { hasStaffingDashboardAccess } from '@/lib/staffing-utils'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -204,6 +205,16 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     entityId: allocation.id,
     metadata: { targetProfileId, projectId, weekStarting: weekStarting.toISOString(), hoursAllocated },
   })
+
+  // Notify the allocated person
+  if (targetProfileId !== profile.id) {
+    await createNotification({
+      profileId: targetProfileId,
+      type: NOTIFICATION_EVENTS.PROJECT_MEMBER_ADDED,
+      title: `You were allocated ${hoursAllocated}h to ${allocation.project.name}`,
+      linkUrl: `/projects/${projectId}`,
+    }).catch(() => {})
+  }
 
   return success({ allocation })
 }, { requiredPermission: 'ADMIN' })

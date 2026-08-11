@@ -6,6 +6,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { optionalString, optionalEnum, optionalDate, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { modulesPrisma } from '@/lib/prisma-modules'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const ASSET_CONDITIONS = ['NEW', 'GOOD', 'REPAIR_REQUIRED', 'DAMAGED', 'LOST', 'RETIRED'] as const
 
@@ -116,6 +117,16 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
           profileId: body.assignedTo,
         },
       })
+      // Notify new assignee
+      const assigneeId = body.assignedTo as string
+      if (assigneeId !== profile.id) {
+        await createNotification({
+          profileId: assigneeId,
+          type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+          title: `You were assigned an asset: ${updated.name}`,
+          linkUrl: `/assets/${id}`,
+        }).catch(() => {})
+      }
     }
 
     // Audit the assignment change

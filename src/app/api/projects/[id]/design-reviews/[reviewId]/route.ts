@@ -5,6 +5,7 @@ import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, optionalString, optionalEnum, optionalDate, optionalId } from '@/lib/validation'
 import { NotFoundError } from '@/lib/errors'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const REVIEW_TYPES = [
   'INTERNAL', 'CLIENT', 'OPERATOR', 'ARCHITECTURE', 'INTERIORS',
@@ -113,6 +114,25 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
     metadata: { updatedFields: Object.keys(data) },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify on lead reviewer reassignment
+  if (data.leadReviewerId && data.leadReviewerId !== profile.id && data.leadReviewerId !== existing.leadReviewerId) {
+    await createNotification({
+      profileId: data.leadReviewerId as string,
+      type: NOTIFICATION_EVENTS.DOCUMENT_REVIEW_REQUESTED,
+      title: `You were assigned as lead reviewer on: ${review.title}`,
+      linkUrl: `/projects/${projectId}/design-reviews/${reviewId}`,
+    }).catch(() => {})
+  }
+  // Notify lead reviewer on status change
+  if (data.status && data.status !== existing.status && review.leadReviewerId && review.leadReviewerId !== profile.id) {
+    await createNotification({
+      profileId: review.leadReviewerId,
+      type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
+      title: `Design review "${review.title}" moved to ${data.status}`,
+      linkUrl: `/projects/${projectId}/design-reviews/${reviewId}`,
+    }).catch(() => {})
+  }
 
   return success({ review })
 })

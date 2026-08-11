@@ -6,6 +6,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, optionalString, optionalEnum } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { hasOrgPermission } from '@/lib/permissions'
+// TODO: Add createNotification when Budget model gets createdById field
 
 const BUDGET_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'SUPERSEDED'] as const
 

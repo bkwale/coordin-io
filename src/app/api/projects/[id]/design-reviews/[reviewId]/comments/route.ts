@@ -5,6 +5,7 @@ import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, requireString, optionalString, optionalEnum, optionalDate, optionalId } from '@/lib/validation'
 import { NotFoundError } from '@/lib/errors'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const CLASSIFICATIONS = [
   'COMMENT', 'ACTION', 'DECISION', 'INFORMATION',
@@ -78,7 +79,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
   // Verify review exists and belongs to this project
   const review = await (prisma as any).designReview.findFirst({
     where: { id: reviewId, projectId },
-    select: { id: true, reviewNumber: true },
+    select: { id: true, reviewNumber: true, leadReviewerId: true, title: true },
   })
 
   if (!review) {
@@ -124,6 +125,25 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     metadata: { reviewId, reviewNumber: review.reviewNumber, commentNumber, projectId },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify the design review lead about the new comment
+  if (review.leadReviewerId && review.leadReviewerId !== profile.id) {
+    await createNotification({
+      profileId: review.leadReviewerId,
+      type: NOTIFICATION_EVENTS.TASK_COMMENT,
+      title: `New comment on design review: ${review.title || review.reviewNumber}`,
+      linkUrl: `/projects/${projectId}/design-reviews/${reviewId}`,
+    }).catch(() => {})
+  }
+  // Notify the comment owner if different from author and lead
+  if (ownerId && ownerId !== profile.id && ownerId !== review.leadReviewerId) {
+    await createNotification({
+      profileId: ownerId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned a design review comment on: ${review.title || review.reviewNumber}`,
+      linkUrl: `/projects/${projectId}/design-reviews/${reviewId}`,
+    }).catch(() => {})
+  }
 
   return success({ comment }, 201)
 })

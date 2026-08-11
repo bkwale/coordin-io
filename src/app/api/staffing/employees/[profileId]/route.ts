@@ -6,6 +6,7 @@ import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { hasFullStaffingAccess, canManageHR, toDirectoryEntry } from '@/lib/staffing-utils'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -291,6 +292,20 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     entityId: profileId,
     metadata: { fields: Object.keys({ ...profileData, ...emergencyFields }) },
   })
+
+  // Notify the employee about changes (only when HR updates someone else's profile)
+  if (!isSelf && profileId && Object.keys(adminFields).length > 0) {
+    const changedFields = Object.keys(adminFields)
+    const summary = changedFields.includes('orgPermission')
+      ? `Your role was updated to ${adminFields.orgPermission}`
+      : `Your profile was updated (${changedFields.join(', ')})`
+    await createNotification({
+      profileId,
+      type: NOTIFICATION_EVENTS.PROJECT_UPDATE,
+      title: summary,
+      linkUrl: `/staffing/employees/${profileId}`,
+    }).catch(() => {})
+  }
 
   return success({ updated: true })
 })

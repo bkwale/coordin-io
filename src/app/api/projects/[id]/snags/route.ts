@@ -7,6 +7,7 @@ import {
   requireString, optionalString, optionalEnum, optionalDate, optionalId,
   parseBody,
 } from '@/lib/validation'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const SNAG_CATEGORIES = [
   'ARCHITECTURAL', 'MEP', 'STRUCTURAL', 'FIRE',
@@ -134,6 +135,17 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify assignee
+  if (assignedToId && assignedToId !== profile.id) {
+    await createNotification({
+      profileId: assignedToId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned snag ${snagNumber}`,
+      body: snag.description?.slice(0, 200),
+      linkUrl: `/projects/${projectId}/snags/${snag.id}`,
+    }).catch(() => {})
+  }
 
   return success({ snag }, 201)
 })

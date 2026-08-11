@@ -7,6 +7,7 @@ import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { optionalString, optionalEnum, optionalDate, optionalId, parseBody } from '@/lib/validation'
 import { validateSnagTransition } from '@/lib/snag-transitions'
 import { canViewProject } from '@/lib/permissions'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission, SnagStatus, SnagCategory, SnagSeverity } from '@/generated/prisma/client'
 
 const SNAG_CATEGORIES: readonly SnagCategory[] = [
@@ -228,6 +229,25 @@ export const PATCH = withAuth(async (request, { profile }) => {
       },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
+  }
+
+  // Notify on reassignment
+  if (data.assignedToId && data.assignedToId !== profile.id && data.assignedToId !== currentSnag.assignedToId) {
+    await createNotification({
+      profileId: data.assignedToId as string,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned snag ${snag.snagNumber}`,
+      linkUrl: `/projects/${snag.projectId}/snags/${snagId}`,
+    }).catch(() => {})
+  }
+  // Notify assignee on status change
+  if (newStatus && newStatus !== currentSnag.status && snag.assignedToId && snag.assignedToId !== profile.id) {
+    await createNotification({
+      profileId: snag.assignedToId,
+      type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
+      title: `Snag ${snag.snagNumber} moved to ${newStatus}`,
+      linkUrl: `/projects/${snag.projectId}/snags/${snagId}`,
+    }).catch(() => {})
   }
 
   return success({ snag })

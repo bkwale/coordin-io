@@ -6,6 +6,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireString, optionalString, optionalDate, requireEnum, parseBody } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
 import { modulesPrisma } from '@/lib/prisma-modules'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const ASSET_CATEGORIES = [
   'LAPTOP', 'MONITOR', 'PHONE', 'TABLET', 'HELMET',
@@ -69,6 +70,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const assetTag = requireString(body.assetTag, 'Asset tag', 50)
   const category = requireEnum(body.category, 'Category', ASSET_CATEGORIES)
   const serialNumber = optionalString(body.serialNumber, 'Serial number', 100)
+  const location = optionalString(body.location, 'Location', 200)
   const purchaseDate = optionalDate(body.purchaseDate, 'Purchase date')
   const warrantyExpiry = optionalDate(body.warrantyExpiry, 'Warranty expiry')
 
@@ -79,6 +81,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       assetTag,
       category,
       serialNumber,
+      location,
       purchaseDate,
       warrantyExpiry,
     },
@@ -105,6 +108,14 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   // Create initial assignment if assignedTo profileId was provided
   const assignedTo = optionalString(body.assignedTo, 'Assigned to', 100)
+  if (assignedTo && assignedTo !== profile.id) {
+    await createNotification({
+      profileId: assignedTo,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned asset: ${name}`,
+      linkUrl: `/assets/${asset.id}`,
+    }).catch(() => {})
+  }
   if (assignedTo) {
     await modulesPrisma.assetAssignment.create({
       data: {

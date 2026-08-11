@@ -8,6 +8,7 @@ import {
   optionalString, optionalEnum, optionalDate, optionalId, parseBody,
 } from '@/lib/validation'
 import { validateSnagTransition } from '@/lib/snag-transitions'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const SNAG_CATEGORIES = [
   'ARCHITECTURAL', 'MEP', 'STRUCTURAL', 'FIRE',
@@ -226,6 +227,25 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { profile, p
       },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
+  }
+
+  // Notify on reassignment
+  if (data.assignedToId && data.assignedToId !== profile.id && data.assignedToId !== currentSnag.assignedToId) {
+    await createNotification({
+      profileId: data.assignedToId as string,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned snag ${snag.snagNumber}`,
+      linkUrl: `/projects/${projectId}/snags/${snagId}`,
+    }).catch(() => {})
+  }
+  // Notify assignee on status change
+  if (newStatus && newStatus !== currentSnag.status && snag.assignedToId && snag.assignedToId !== profile.id) {
+    await createNotification({
+      profileId: snag.assignedToId,
+      type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
+      title: `Snag ${snag.snagNumber} moved to ${newStatus}`,
+      linkUrl: `/projects/${projectId}/snags/${snagId}`,
+    }).catch(() => {})
   }
 
   return success({ snag })

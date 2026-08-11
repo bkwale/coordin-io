@@ -7,6 +7,7 @@ import {
   requireString, optionalString, optionalNumber, optionalEnum, optionalDate,
   optionalId, parseBody,
 } from '@/lib/validation'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const OBSERVATION_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
 const OBSERVATION_STATUSES = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'REOPENED'] as const
@@ -137,6 +138,17 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify assignee
+  if (assignedToId && assignedToId !== profile.id) {
+    await createNotification({
+      profileId: assignedToId,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned observation ${observationNumber}`,
+      body: observation.description?.slice(0, 200),
+      linkUrl: `/projects/${projectId}/observations/${observation.id}`,
+    }).catch(() => {})
+  }
 
   return success({ observation }, 201)
 })

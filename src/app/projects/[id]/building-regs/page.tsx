@@ -328,7 +328,7 @@ export default function CompliancePage() {
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
-        throw new Error(json.error?.message || `Failed to create item (${res.status})`)
+        throw new Error(typeof json.error === 'string' ? json.error : json.error?.message || `Failed to create item (${res.status})`)
       }
       toast('Item added', 'success')
       setShowItemForm(null)

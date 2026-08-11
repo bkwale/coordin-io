@@ -252,7 +252,7 @@ export default function OnboardingPage() {
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
-        const msg = json.error?.message || json.error || 'Failed to save profile'
+        const msg = (typeof json.error === 'string' ? json.error : json.error?.message) || 'Failed to save profile'
         throw new Error(msg)
       }
       setProfileSaved(true)
@@ -352,7 +352,7 @@ export default function OnboardingPage() {
       const res = await fetch('/api/onboarding/complete', { method: 'POST' })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
-        const detail = json.error?.message || json.error || 'Could not complete onboarding'
+        const detail = (typeof json.error === 'string' ? json.error : json.error?.message) || 'Could not complete onboarding'
         const missing = json.error?.details?.missing
         if (missing && Array.isArray(missing)) {
           throw new Error(`Onboarding incomplete: ${missing.join('; ')}`)

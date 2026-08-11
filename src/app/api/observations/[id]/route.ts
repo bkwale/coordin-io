@@ -7,6 +7,7 @@ import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { optionalString, optionalNumber, optionalEnum, optionalDate, optionalId, parseBody } from '@/lib/validation'
 import { canViewProject } from '@/lib/permissions'
 import { validateObservationTransition } from '@/lib/observation-transitions'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 const OBSERVATION_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
@@ -135,6 +136,25 @@ export const PATCH = withAuth(async (request, { profile }) => {
       : { updatedFields: Object.keys(data) },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify on reassignment
+  if (data.assignedToId && data.assignedToId !== profile.id && data.assignedToId !== current.assignedToId) {
+    await createNotification({
+      profileId: data.assignedToId as string,
+      type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
+      title: `You were assigned observation ${current.observationNumber}`,
+      linkUrl: `/projects/${current.projectId}/observations/${observationId}`,
+    }).catch(() => {})
+  }
+  // Notify assignee on status change
+  if (newStatus && newStatus !== current.status && observation.assignedToId && observation.assignedToId !== profile.id) {
+    await createNotification({
+      profileId: observation.assignedToId,
+      type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
+      title: `Observation ${current.observationNumber} moved to ${newStatus}`,
+      linkUrl: `/projects/${current.projectId}/observations/${observationId}`,
+    }).catch(() => {})
+  }
 
   return success({ observation })
 })

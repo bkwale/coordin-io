@@ -127,7 +127,7 @@ export async function POST(
             managerId: invitation.managerId,
             startDate: invitation.startDate,
             status: 'ONBOARDING',
-            orgPermission: 'MEMBER',
+            orgPermission: invitation.orgPermission ?? 'MEMBER',
           },
         })
 

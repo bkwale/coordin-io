@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, requireString, optionalString, optionalEnum, optionalDate, optionalId } from '@/lib/validation'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 const REVIEW_TYPES = [
   'INTERNAL', 'CLIENT', 'OPERATOR', 'ARCHITECTURE', 'INTERIORS',
@@ -86,6 +87,16 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     metadata: { reviewNumber, title, projectId },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
+
+  // Notify lead reviewer
+  if (leadReviewerId && leadReviewerId !== profile.id) {
+    await createNotification({
+      profileId: leadReviewerId,
+      type: NOTIFICATION_EVENTS.DOCUMENT_REVIEW_REQUESTED,
+      title: `You were assigned as lead reviewer on: ${title}`,
+      linkUrl: `/projects/${projectId}/design-reviews/${review.id}`,
+    }).catch(() => {})
+  }
 
   return success({ review }, 201)
 })

@@ -75,12 +75,19 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const sanitisedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `hr/${profile.organisationId}/${targetProfileId}/${timestamp}-${sanitisedName}`
 
+  // Ensure service role key is available
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[HR_DOC_UPLOAD] SUPABASE_SERVICE_ROLE_KEY is not set')
+    throw new ValidationError('File storage is not configured — contact your administrator')
+  }
+
   // Create Supabase admin client
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
   )
 
+  try {
   // Read file and upload
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
@@ -116,4 +123,11 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     contentType: file.type,
     extension,
   }, 201)
+  } catch (err) {
+    if (err instanceof ValidationError) throw err
+    console.error('[HR_DOC_UPLOAD] Unexpected error:', err)
+    throw new ValidationError(
+      `Upload failed: ${err instanceof Error ? err.message : 'Unknown storage error'}`,
+    )
+  }
 })

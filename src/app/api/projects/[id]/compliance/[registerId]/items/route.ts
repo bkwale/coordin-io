@@ -6,6 +6,7 @@ import { parseBody, requireString, optionalString, optionalDate, optionalNumber,
 
 import { NotFoundError, ConflictError } from '@/lib/errors'
 import { recomputeRegisterStatus } from '@/lib/compliance-helpers'
+import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 
 /**
  * Extract registerId from the URL path.
@@ -74,7 +75,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
 /**
  * POST /api/projects/[id]/compliance/[registerId]/items — Create a compliance item.
  */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { profile, projectId }) => {
   const registerId = extractRegisterId(request)
   const body = await parseBody(request)
 
@@ -134,6 +135,16 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId }
     ownerName = ownerProfile?.fullName || null
   }
 
+  // Notify the compliance item owner
+  if (ownerId && ownerId !== profile.id) {
+    await createNotification({
+      profileId: ownerId,
+      type: NOTIFICATION_EVENTS.COMPLIANCE_ACTION_DUE,
+      title: `You were assigned a compliance item: ${requirement.slice(0, 100)}`,
+      linkUrl: `/projects/${projectId}/compliance/${registerId}`,
+    }).catch(() => {})
+  }
+
   return success({ item: { ...item, owner: ownerName } }, 201)
 })
 
@@ -141,7 +152,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId }
  * PATCH /api/projects/[id]/compliance/[registerId]/items — Update a compliance item.
  * Expects { itemId, ...fields } in the body.
  */
-export const PATCH = withProjectAccess(async (request: NextRequest, { projectId }) => {
+export const PATCH = withProjectAccess(async (request: NextRequest, { profile, projectId }) => {
   const registerId = extractRegisterId(request)
   const body = await parseBody(request)
 
@@ -187,6 +198,16 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId 
       select: { fullName: true },
     })
     patchOwnerName = ownerProfile?.fullName || null
+  }
+
+  // Notify on owner reassignment
+  if (data.ownerId && data.ownerId !== profile.id && data.ownerId !== existing.ownerId) {
+    await createNotification({
+      profileId: data.ownerId as string,
+      type: NOTIFICATION_EVENTS.COMPLIANCE_ACTION_DUE,
+      title: `You were assigned a compliance item: ${item.requirement?.slice(0, 100)}`,
+      linkUrl: `/projects/${projectId}/compliance/${registerId}`,
+    }).catch(() => {})
   }
 
   return success({ item: { ...item, owner: patchOwnerName } })
