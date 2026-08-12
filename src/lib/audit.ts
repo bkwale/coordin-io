@@ -268,21 +268,53 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'asset.lost': 'Reported asset lost',
   'asset.updated': 'Updated asset',
 
+  // CPD
+  'cpd.created': 'Created CPD record',
+  'cpd.submitted': 'Submitted CPD record',
+  'cpd.verified': 'Verified CPD record',
+  'cpd.returned': 'Returned CPD record',
+
+  // Competency
+  'competency.assessed': 'Assessed competency',
+  'competency.updated': 'Updated competency',
+
+  // Supervision
+  'supervision.recorded': 'Recorded supervision session',
+  'supervision.updated': 'Updated supervision session',
+
   // Site
   'site.observation_created': 'Created site observation',
   'site.observation_updated': 'Updated site observation',
+  'site.observation_assigned': 'Assigned site observation',
+  'site.observation_resolved': 'Resolved site observation',
+  'site.observation_closed': 'Closed site observation',
+  'site.observation_reopened': 'Reopened site observation',
   'site.snag_created': 'Created snag',
   'site.snag_assigned': 'Assigned snag',
   'site.snag_rectification': 'Submitted snag rectification',
   'site.snag_verified': 'Verified snag rectification',
   'site.snag_closed': 'Closed snag',
+  'site.snag_reopened': 'Reopened snag',
 
   // Commercial
   'commercial.budget_created': 'Created budget',
   'commercial.budget_updated': 'Updated budget',
+  'commercial.budget_approved': 'Approved budget',
+  'commercial.budget_deleted': 'Deleted budget',
   'commercial.variation_created': 'Created variation',
+  'commercial.variation_updated': 'Updated variation',
+  'commercial.variation_approved': 'Approved variation',
   'commercial.po_created': 'Created purchase order',
+  'commercial.po_updated': 'Updated purchase order',
+  'commercial.tender_created': 'Created tender',
+  'commercial.tender_updated': 'Updated tender',
+  'commercial.tender_return_added': 'Added tender return',
+  'commercial.valuation_created': 'Created valuation',
+  'commercial.valuation_updated': 'Updated valuation',
   'commercial.invoice_created': 'Created invoice',
+  'commercial.invoice_updated': 'Updated invoice',
+  'commercial.risk_created': 'Created risk',
+  'commercial.risk_updated': 'Updated risk',
 
   // Drawings
   'drawing.created': 'Created drawing',
@@ -292,6 +324,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   // Design Reviews
   'design_review.created': 'Created design review',
   'design_review.updated': 'Updated design review',
+  'design_review.comment_created': 'Added design review comment',
 
   // Security
   'security.permission_denied': 'Permission denied',

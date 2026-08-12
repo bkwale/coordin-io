@@ -49,6 +49,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     throw new ValidationError('"from" date must be before "to" date')
   }
 
+  // Set rate-limit timestamp immediately to prevent concurrent exports
+  exportTimestamps.set(profile.id, Date.now())
+
   const isFullAccess = hasOrgPermission(profile.orgPermission, 'ADMIN')
 
   // Build where clause
@@ -60,14 +63,22 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   if (actorId) where.actorId = actorId
 
-  if (actionFilter) {
+  const isHrComposite = actionFilter === 'hr'
+
+  if (isHrComposite) {
+    where.OR = HR_VISIBLE_PREFIXES.map(prefix => ({
+      action: { startsWith: prefix },
+    }))
+  } else if (actionFilter) {
     where.action = { startsWith: actionFilter }
   }
 
   // HR scope restriction
   if (!isFullAccess) {
-    if (actionFilter) {
-      const isAllowed = HR_VISIBLE_PREFIXES.some(p => actionFilter.startsWith(p.replace('.', '')) || p.startsWith(actionFilter))
+    if (isHrComposite) {
+      // Already filtered to HR prefixes — allowed
+    } else if (actionFilter) {
+      const isAllowed = HR_VISIBLE_PREFIXES.some(p => actionFilter.startsWith(p) || p.startsWith(actionFilter))
       if (!isAllowed) {
         return new NextResponse('Date,Action,Actor,Entity,Details\n', {
           headers: {
@@ -93,7 +104,6 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   })
 
   // Record the export as an audit event
-  exportTimestamps.set(profile.id, Date.now())
   await recordAuditEvent({
     organisationId: profile.organisationId,
     actorId: profile.id,

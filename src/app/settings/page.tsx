@@ -1254,15 +1254,18 @@ interface AuditEvent {
 }
 
 const QUICK_FILTERS = [
-  { label: 'All Actions', value: '' },
-  { label: 'HR Actions', value: 'staffing.' },
+  { label: 'All', value: '' },
+  { label: 'HR (All)', value: 'hr' },
   { label: 'Staffing', value: 'staffing.' },
-  { label: 'Leave & Expenses', value: 'leave.' },
+  { label: 'Leave', value: 'leave.' },
+  { label: 'Expenses', value: 'expense.' },
+  { label: 'Onboarding', value: 'onboarding.' },
   { label: 'Invitations', value: 'invitation.' },
+  { label: 'Requests', value: 'request.' },
+  { label: 'Assets', value: 'asset.' },
   { label: 'Projects', value: 'project.' },
   { label: 'Tasks', value: 'task.' },
   { label: 'Documents', value: 'document.' },
-  { label: 'Assets', value: 'asset.' },
   { label: 'Security', value: 'security.' },
   { label: 'Commercial', value: 'commercial.' },
   { label: 'Site', value: 'site.' },

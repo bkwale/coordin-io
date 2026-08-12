@@ -47,27 +47,31 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     where.actorId = actorId
   }
 
-  // Action filter — user-provided prefix or HR scope restriction
-  if (actionFilter) {
-    // User wants a specific category
+  // Action filter — user-provided prefix, "hr" composite, or HR scope restriction
+  const isHrComposite = actionFilter === 'hr'
+
+  if (isHrComposite) {
+    // Composite: all HR-visible prefixes
+    where.OR = HR_VISIBLE_PREFIXES.map(prefix => ({
+      action: { startsWith: prefix },
+    }))
+  } else if (actionFilter) {
+    // Single prefix
     where.action = { startsWith: actionFilter }
   }
 
   // HR scope: restrict to HR-visible prefixes only
   if (!isFullAccess) {
-    if (actionFilter) {
+    if (isHrComposite) {
+      // Already filtered to HR prefixes — allowed
+    } else if (actionFilter) {
       // Verify the requested prefix is in the HR-visible list
-      const isAllowed = HR_VISIBLE_PREFIXES.some(p => actionFilter.startsWith(p.replace('.', '')) || p.startsWith(actionFilter))
+      const isAllowed = HR_VISIBLE_PREFIXES.some(p => actionFilter.startsWith(p) || p.startsWith(actionFilter))
       if (!isAllowed) {
         return success({ events: [], total: 0, labels: AUDIT_ACTION_LABELS })
       }
     } else {
       // No filter specified — restrict to HR-visible prefixes
-      where.action = {
-        in: undefined, // Will be replaced by OR below
-      }
-      // Use OR to match any HR-visible prefix
-      delete where.action
       where.OR = HR_VISIBLE_PREFIXES.map(prefix => ({
         action: { startsWith: prefix },
       }))
