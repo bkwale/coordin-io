@@ -155,10 +155,15 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  GRADUATE: 'Graduate',
-  PROJECT_ARCHITECT: 'Architect',
-  PROJECT_LEAD: 'Project Lead',
+  TEAM_MEMBER: 'Team Member',
+  ARCHITECT: 'Architect',
   SENIOR_ARCHITECT: 'Senior Architect',
+  DESIGN_LEAD: 'Design Lead',
+  PROJECT_ARCHITECT: 'Project Architect',
+  PROJECT_LEAD: 'Project Lead',
+  EXTERNAL_CONSULTANT: 'External Consultant',
+  CONTRACTOR: 'Contractor',
+  GRADUATE: 'Graduate',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -728,17 +733,65 @@ export default function ProjectDashboard() {
               </button>
             </div>
             <div className="space-y-3">
-              {data.team.members.map((m) => (
-                <div key={m.profile.id} className="flex items-center gap-3">
+              {data.team.members.map((m: any) => (
+                <div key={m.profile.id} className="flex items-center gap-3 group">
                   <div className="w-7 h-7 rounded-full bg-accent-100 flex items-center justify-center shrink-0">
                     <span className="text-[10px] font-semibold text-accent-700">
-                      {m.profile.fullName.split(' ').map(n => n[0]).join('')}
+                      {m.profile.fullName.split(' ').map((n: string) => n[0]).join('')}
                     </span>
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-[12px] font-medium text-ink-700 truncate">{m.profile.fullName}</p>
-                    <p className="text-[10px] text-ink-400">{ROLE_LABELS[m.projectRole] || m.projectRole}</p>
+                    <select
+                      value={m.projectRole}
+                      onChange={async (e) => {
+                        try {
+                          const res = await fetch(`/api/projects/${projectId}/members`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ membershipId: m.id, projectRole: e.target.value }),
+                          })
+                          if (!res.ok) {
+                            const body = await res.json().catch(() => ({}))
+                            throw new Error(body.error?.message || 'Failed to update role')
+                          }
+                          toast('Role updated', 'success')
+                          fetchOverview()
+                        } catch (err) {
+                          toast(err instanceof Error ? err.message : 'Failed to update role', 'error')
+                        }
+                      }}
+                      className="text-[10px] text-ink-400 bg-transparent border-none p-0 cursor-pointer hover:text-ink-600 focus:outline-none focus:ring-0"
+                    >
+                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
                   </div>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Remove ${m.profile.fullName} from this project?`)) return
+                      try {
+                        const res = await fetch(`/api/projects/${projectId}/members`, {
+                          method: 'DELETE',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ membershipId: m.id }),
+                        })
+                        if (!res.ok) {
+                          const body = await res.json().catch(() => ({}))
+                          throw new Error(body.error?.message || 'Failed to remove member')
+                        }
+                        toast('Member removed', 'success')
+                        fetchOverview()
+                      } catch (err) {
+                        toast(err instanceof Error ? err.message : 'Failed to remove member', 'error')
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-ink-300 hover:text-red-500 transition-all shrink-0"
+                    title={`Remove ${m.profile.fullName}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ))}
             </div>

@@ -138,3 +138,97 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
 
   return success({ membership }, 201)
 }, { minProjectRole: 'PROJECT_LEAD' })
+
+/**
+ * PATCH /api/projects/[id]/members — Update a member's project role.
+ * Body: { membershipId, projectRole }
+ * Requires PROJECT_LEAD+ on the project.
+ */
+export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+  const body = await parseBody(request)
+  const membershipId = requireId(body.membershipId, 'Membership ID')
+  const projectRole = requireEnum(body.projectRole, 'Project role', VALID_PROJECT_ROLES)
+
+  const membership = await prisma.projectMembership.findFirst({
+    where: { id: membershipId, projectId, removedAt: null },
+    include: { profile: { select: { id: true, fullName: true } } },
+  })
+
+  if (!membership) {
+    throw new NotFoundError('Membership not found')
+  }
+
+  const updated = await prisma.projectMembership.update({
+    where: { id: membershipId },
+    data: { projectRole },
+    include: {
+      profile: { select: { id: true, fullName: true, email: true } },
+    },
+  })
+
+  await recordAuditEvent({
+    organisationId: profile.organisationId,
+    actorId: profile.id,
+    action: AuditActions.PROJECT_MEMBER_UPDATED,
+    entityType: 'ProjectMembership',
+    entityId: membershipId,
+    metadata: {
+      projectId,
+      targetProfileId: membership.profile.id,
+      oldRole: membership.projectRole,
+      newRole: projectRole,
+    },
+  })
+
+  return success({ membership: updated })
+}, { minProjectRole: 'PROJECT_LEAD' })
+
+/**
+ * DELETE /api/projects/[id]/members — Soft-remove a member from the project.
+ * Body: { membershipId }
+ * Requires PROJECT_LEAD+ on the project.
+ */
+export const DELETE = withProjectAccess(async (request: NextRequest, { projectId, project, profile }) => {
+  const body = await parseBody(request)
+  const membershipId = requireId(body.membershipId, 'Membership ID')
+
+  const membership = await prisma.projectMembership.findFirst({
+    where: { id: membershipId, projectId, removedAt: null },
+    include: { profile: { select: { id: true, fullName: true } } },
+  })
+
+  if (!membership) {
+    throw new NotFoundError('Membership not found')
+  }
+
+  await prisma.projectMembership.update({
+    where: { id: membershipId },
+    data: { removedAt: new Date() },
+  })
+
+  await recordAuditEvent({
+    organisationId: profile.organisationId,
+    actorId: profile.id,
+    action: AuditActions.PROJECT_MEMBER_REMOVED ?? 'project.member.removed',
+    entityType: 'ProjectMembership',
+    entityId: membershipId,
+    metadata: {
+      projectId,
+      removedProfileId: membership.profile.id,
+      removedProfileName: membership.profile.fullName,
+    },
+  })
+
+  // Notify the removed member (skip if they removed themselves)
+  if (membership.profile.id !== profile.id) {
+    await createNotification({
+      profileId: membership.profile.id,
+      type: NOTIFICATION_EVENTS.PROJECT_MEMBER_REMOVED ?? 'project.member.removed',
+      title: `You were removed from project: ${project.name}`,
+      body: `${profile.fullName} removed you from the project team.`,
+      linkUrl: `/projects/${projectId}`,
+    }).catch(() => {})
+  }
+
+  return success({ removed: true })
+}, { minProjectRole: 'PROJECT_LEAD' })

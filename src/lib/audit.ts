@@ -50,6 +50,7 @@ export const AuditActions = {
   PROJECT_CREATED: 'project.created',
   PROJECT_UPDATED: 'project.updated',
   PROJECT_MEMBER_ADDED: 'project.member_added',
+  PROJECT_MEMBER_UPDATED: 'project.member_updated',
   PROJECT_MEMBER_REMOVED: 'project.member_removed',
 
   // Tasks

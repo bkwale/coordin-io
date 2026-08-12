@@ -42,6 +42,7 @@ export const NOTIFICATION_EVENTS = {
 
   // Project
   PROJECT_MEMBER_ADDED: 'project.member_added',
+  PROJECT_MEMBER_REMOVED: 'project.member_removed',
   PROJECT_UPDATE: 'project.update',
   PROJECT_HEALTH_CHANGED: 'project.health_changed',
   PROJECT_MILESTONE_DUE: 'project.milestone_due',
