@@ -5,6 +5,7 @@ import {
   Building2, Users, CreditCard, Hash, Globe, Puzzle, Shield,
   Save, Plus, Mail, CheckCircle, XCircle, Clock, UserPlus,
   ChevronRight, Loader2, Pencil, X, Trash2, Star,
+  ScrollText, Download, ChevronLeft, Filter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -63,6 +64,7 @@ const SETTINGS_TABS = [
   { key: 'regional', label: 'Regional', icon: Globe, description: 'Locale, timezone & date format' },
   { key: 'integrations', label: 'Integrations', icon: Puzzle, description: 'Connected services' },
   { key: 'governance', label: 'AI Governance', icon: Shield, description: 'AI source permissions & audit' },
+  { key: 'audit', label: 'Audit Trail', icon: ScrollText, description: 'Activity log & export' },
 ] as const
 
 type TabKey = typeof SETTINGS_TABS[number]['key']
@@ -142,6 +144,7 @@ export default function SettingsPage() {
               {activeTab === 'regional' && <RegionalSection />}
               {activeTab === 'integrations' && <IntegrationsSection />}
               {activeTab === 'governance' && <GovernanceSection />}
+              {activeTab === 'audit' && <AuditSection />}
             </div>
           </div>
         </div>
@@ -1229,6 +1232,312 @@ function GovernanceSection() {
           <p className="text-[13px] text-ink-300">No AI interactions logged yet</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Section: Audit Trail ──────────────────────────────────
+
+interface AuditEvent {
+  id: string
+  action: string
+  actionLabel: string
+  entityType: string
+  entityId: string
+  metadata: unknown
+  actorId: string
+  actorName: string | null
+  actorEmail: string | null
+  actorRole: string | null
+  createdAt: string
+  ipAddress: string | null
+}
+
+const QUICK_FILTERS = [
+  { label: 'All Actions', value: '' },
+  { label: 'HR Actions', value: 'staffing.' },
+  { label: 'Staffing', value: 'staffing.' },
+  { label: 'Leave & Expenses', value: 'leave.' },
+  { label: 'Invitations', value: 'invitation.' },
+  { label: 'Projects', value: 'project.' },
+  { label: 'Tasks', value: 'task.' },
+  { label: 'Documents', value: 'document.' },
+  { label: 'Assets', value: 'asset.' },
+  { label: 'Security', value: 'security.' },
+  { label: 'Commercial', value: 'commercial.' },
+  { label: 'Site', value: 'site.' },
+]
+
+function AuditSection() {
+  const [events, setEvents] = useState<AuditEvent[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [offset, setOffset] = useState(0)
+  const [actionFilter, setActionFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
+  const limit = 50
+
+  const fetchEvents = useCallback(() => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    params.set('limit', String(limit))
+    params.set('offset', String(offset))
+    if (actionFilter) params.set('action', actionFilter)
+    if (fromDate) params.set('from', fromDate)
+    if (toDate) params.set('to', toDate)
+
+    fetch(`/api/audit?${params}`)
+      .then((r) => {
+        if (r.status === 403) {
+          setAccessDenied(true)
+          return null
+        }
+        if (!r.ok) throw new Error('Failed to load')
+        return r.json()
+      })
+      .then((data) => {
+        if (!data) return
+        setEvents(data.data?.events || [])
+        setTotal(data.data?.total || 0)
+      })
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false))
+  }, [offset, actionFilter, fromDate, toDate])
+
+  useEffect(() => {
+    fetchEvents()
+  }, [fetchEvents])
+
+  function handleFilterChange(value: string) {
+    setActionFilter(value)
+    setOffset(0)
+  }
+
+  function handleDateChange(field: 'from' | 'to', value: string) {
+    if (field === 'from') setFromDate(value)
+    else setToDate(value)
+    setOffset(0)
+  }
+
+  async function handleExport() {
+    if (!fromDate || !toDate) {
+      setExportError('Select both From and To dates to export')
+      return
+    }
+    setExporting(true)
+    setExportError(null)
+    try {
+      const params = new URLSearchParams()
+      params.set('from', fromDate)
+      params.set('to', toDate)
+      if (actionFilter) params.set('action', actionFilter)
+
+      const res = await fetch(`/api/audit/export?${params}`)
+      if (res.status === 429) {
+        setExportError('Please wait 1 minute between exports')
+        return
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Export failed')
+      }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `audit-${fromDate}-to-${toDate}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (accessDenied) {
+    return (
+      <div>
+        <SectionHeader
+          title="Audit Trail"
+          description="You do not have permission to view the audit trail. Contact your Practice Principal."
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <SectionHeader
+        title="Audit Trail"
+        description="Review all actions taken within your organisation — filter by type, person, or date range"
+      />
+
+      {/* Filters */}
+      <div className="mt-6 space-y-4">
+        {/* Quick Filter Presets */}
+        <div className="flex flex-wrap gap-2">
+          {QUICK_FILTERS.map((f) => (
+            <button
+              key={f.label}
+              onClick={() => handleFilterChange(f.value)}
+              className={cn(
+                'px-3 py-1.5 text-[11px] font-medium rounded-full border transition-colors',
+                actionFilter === f.value
+                  ? 'bg-ink-900 text-white border-ink-900'
+                  : 'bg-white text-ink-500 border-surface-200 hover:border-surface-300 hover:text-ink-700'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Date Range + Export */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-400 uppercase tracking-wider mb-1">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => handleDateChange('from', e.target.value)}
+              className="px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-ink-400 uppercase tracking-wider mb-1">To</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => handleDateChange('to', e.target.value)}
+              className="px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+            />
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting || !fromDate || !toDate}
+            className="flex items-center gap-2 px-4 py-2 bg-ink-900 text-white text-[12px] font-medium rounded-lg hover:bg-ink-800 disabled:opacity-50 transition-colors"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            Export CSV
+          </button>
+        </div>
+
+        {exportError && (
+          <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">{exportError}</div>
+        )}
+      </div>
+
+      {/* Summary */}
+      <div className="mt-4 mb-2 flex items-center justify-between">
+        <span className="text-[11px] text-ink-400">{total} events found</span>
+        {(actionFilter || fromDate || toDate) && (
+          <button
+            onClick={() => { setActionFilter(''); setFromDate(''); setToDate(''); setOffset(0) }}
+            className="text-[11px] text-accent-600 hover:text-accent-700 font-medium"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Events Table */}
+      {loading ? (
+        <LoadingState />
+      ) : events.length === 0 ? (
+        <EmptyState
+          icon={ScrollText}
+          title="No audit events"
+          description={actionFilter || fromDate ? 'Try adjusting your filters' : 'Actions will appear here as they happen'}
+        />
+      ) : (
+        <>
+          <div className="border border-surface-200 rounded-lg overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="bg-surface-50 border-b border-surface-200">
+                  <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Time</th>
+                  <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Action</th>
+                  <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Entity</th>
+                  <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Actor</th>
+                  <th className="text-left py-3 px-4 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((event) => (
+                  <tr key={event.id} className="border-b border-surface-200/60 hover:bg-surface-50/50 transition-colors">
+                    <td className="py-3 px-4 text-[12px] text-ink-500 whitespace-nowrap">
+                      {new Date(event.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}{' '}
+                      <span className="text-ink-300">
+                        {new Date(event.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-[12px] text-ink-700">{event.actionLabel}</span>
+                      <span className="block text-[10px] text-ink-300 font-mono mt-0.5">{event.action}</span>
+                    </td>
+                    <td className="py-3 px-4 text-[12px] text-ink-500">
+                      {event.entityType}
+                      <span className="text-ink-300 ml-1 font-mono text-[10px]">{event.entityId.slice(0, 8)}</span>
+                    </td>
+                    <td className="py-3 px-4 text-[12px] text-ink-600">
+                      {event.actorName || event.actorEmail || 'System'}
+                    </td>
+                    <td className="py-3 px-4">
+                      {event.actorRole && (
+                        <span className={cn(
+                          'inline-block text-[10px] font-medium px-2 py-0.5 rounded-full',
+                          event.actorRole === 'OWNER' ? 'bg-purple-50 text-purple-700' :
+                          event.actorRole === 'ADMIN' ? 'bg-blue-50 text-blue-700' :
+                          event.actorRole === 'HR' ? 'bg-teal-50 text-teal-700' :
+                          'bg-surface-100 text-ink-500'
+                        )}>
+                          {event.actorRole === 'OWNER' ? 'Principal' :
+                           event.actorRole === 'ADMIN' ? 'Manager' :
+                           event.actorRole === 'HR' ? 'HR' :
+                           event.actorRole}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {total > limit && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-[11px] text-ink-400">
+                {offset + 1}–{Math.min(offset + limit, total)} of {total}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  disabled={offset === 0}
+                  onClick={() => setOffset(Math.max(0, offset - limit))}
+                  className="p-2 rounded-lg border border-surface-200 disabled:opacity-40 hover:bg-surface-50"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  disabled={offset + limit >= total}
+                  onClick={() => setOffset(offset + limit)}
+                  className="p-2 rounded-lg border border-surface-200 disabled:opacity-40 hover:bg-surface-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

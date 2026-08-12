@@ -174,4 +174,131 @@ export const AuditActions = {
   DESIGN_REVIEW_CREATED: 'design_review.created',
   DESIGN_REVIEW_UPDATED: 'design_review.updated',
   DESIGN_REVIEW_COMMENT_CREATED: 'design_review.comment_created',
+
+  // Audit trail
+  AUDIT_EXPORTED: 'audit.exported',
 } as const
+
+/**
+ * Action prefixes that HR-level users can see.
+ * OWNER/ADMIN see everything; HR sees only these categories.
+ */
+export const HR_VISIBLE_PREFIXES = [
+  'staffing.',
+  'leave.',
+  'expense.',
+  'onboarding.',
+  'invitation.',
+  'asset.',
+  'request.',
+] as const
+
+/**
+ * Human-readable labels for audit actions.
+ */
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  // Invitations
+  'invitation.created': 'Sent invitation',
+  'invitation.sent': 'Resent invitation email',
+  'invitation.activated': 'Invitation activated',
+  'invitation.expired': 'Invitation expired',
+  'invitation.revoked': 'Revoked invitation',
+
+  // Auth
+  'auth.login': 'Logged in',
+  'auth.failed_activation': 'Failed account activation',
+
+  // Onboarding
+  'onboarding.item_opened': 'Opened onboarding item',
+  'onboarding.item_acknowledged': 'Acknowledged onboarding item',
+  'onboarding.completed': 'Completed onboarding',
+
+  // Projects
+  'project.created': 'Created project',
+  'project.updated': 'Updated project',
+  'project.member_added': 'Added team member to project',
+  'project.member_updated': 'Changed team member role',
+  'project.member_removed': 'Removed team member from project',
+
+  // Tasks
+  'task.created': 'Created task',
+  'task.assigned': 'Assigned task',
+  'task.status_changed': 'Changed task status',
+  'task.reviewed': 'Reviewed task',
+
+  // Documents
+  'document.uploaded': 'Uploaded document',
+  'document.downloaded': 'Downloaded document',
+  'document.reviewed': 'Reviewed document',
+  'document.approved': 'Approved document',
+  'document.issued': 'Issued document',
+  'document.superseded': 'Superseded document',
+
+  // Staffing
+  'staffing.employee_updated': 'Updated employee profile',
+  'staffing.employee_profile_updated': 'Updated employee details',
+
+  // Leave
+  'leave.requested': 'Requested leave',
+  'leave.submitted': 'Submitted leave request',
+  'leave.approved': 'Approved leave request',
+  'leave.rejected': 'Rejected leave request',
+  'leave.withdrawn': 'Withdrew leave request',
+
+  // Expenses
+  'expense.created': 'Created expense claim',
+  'expense.submitted': 'Submitted expense claim',
+  'expense.approved': 'Approved expense claim',
+  'expense.rejected': 'Rejected expense claim',
+  'expense.withdrawn': 'Withdrew expense claim',
+
+  // Requests
+  'request.created': 'Created service request',
+  'request.submitted': 'Submitted service request',
+  'request.approved': 'Approved service request',
+  'request.rejected': 'Rejected service request',
+  'request.completed': 'Completed service request',
+  'request.withdrawn': 'Withdrew service request',
+
+  // Assets
+  'asset.created': 'Created asset',
+  'asset.assigned': 'Assigned asset',
+  'asset.returned': 'Returned asset',
+  'asset.damaged': 'Reported asset damaged',
+  'asset.lost': 'Reported asset lost',
+  'asset.updated': 'Updated asset',
+
+  // Site
+  'site.observation_created': 'Created site observation',
+  'site.observation_updated': 'Updated site observation',
+  'site.snag_created': 'Created snag',
+  'site.snag_assigned': 'Assigned snag',
+  'site.snag_rectification': 'Submitted snag rectification',
+  'site.snag_verified': 'Verified snag rectification',
+  'site.snag_closed': 'Closed snag',
+
+  // Commercial
+  'commercial.budget_created': 'Created budget',
+  'commercial.budget_updated': 'Updated budget',
+  'commercial.variation_created': 'Created variation',
+  'commercial.po_created': 'Created purchase order',
+  'commercial.invoice_created': 'Created invoice',
+
+  // Drawings
+  'drawing.created': 'Created drawing',
+  'drawing.updated': 'Updated drawing',
+  'drawing.revision_created': 'Created drawing revision',
+
+  // Design Reviews
+  'design_review.created': 'Created design review',
+  'design_review.updated': 'Updated design review',
+
+  // Security
+  'security.permission_denied': 'Permission denied',
+
+  // Profile
+  'profile.deactivated': 'Deactivated profile',
+
+  // Audit
+  'audit.exported': 'Exported audit trail',
+}
