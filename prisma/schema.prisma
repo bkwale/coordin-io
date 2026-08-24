@@ -487,6 +487,9 @@ model Project {
   isCDM                    Boolean   @default(false) @map("is_cdm")
   complianceFrameworks     String?   @map("compliance_frameworks") // Comma-separated: BUILDING_REGS, PLANNING, FIRE_SAFETY, EDGE, BREEAM, LEED, OPERATOR_REQS
 
+  // Sprint 2 — BUG-05: project-level SharePoint link
+  sharepointUrl String? @map("sharepoint_url")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

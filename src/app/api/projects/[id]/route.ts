@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { optionalString, optionalId, optionalEnum, optionalDate, parseBody } from '@/lib/validation'
+import { ValidationError } from '@/lib/errors'
+import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 
 /**
  * GET /api/projects/[id] — Single project detail with members and task counts.
@@ -79,6 +80,33 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
   if ('targetCompletion' in body) data.targetCompletion = optionalDate(body.targetCompletion, 'Target completion')
   if ('currentIssueRef' in body) data.currentIssueRef = optionalString(body.currentIssueRef, 'Current issue ref', 100)
   if ('currentIssueDate' in body) data.currentIssueDate = optionalDate(body.currentIssueDate, 'Current issue date')
+
+  // Sprint 2 — additional project fields
+  if ('sharepointUrl' in body) {
+    const url = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
+    if (url && !/^https?:\/\//i.test(url)) {
+      throw new ValidationError('SharePoint URL must start with http:// or https://')
+    }
+    data.sharepointUrl = url
+  }
+  if ('siteAddress' in body) data.siteAddress = optionalString(body.siteAddress, 'Site address', 500)
+  if ('siteCity' in body) data.siteCity = optionalString(body.siteCity, 'Site city', 200)
+  if ('siteCountry' in body) data.siteCountry = optionalString(body.siteCountry, 'Site country', 200)
+  if ('buildingType' in body) data.buildingType = optionalString(body.buildingType, 'Building type', 100)
+  if ('jurisdiction' in body) data.jurisdiction = optionalString(body.jurisdiction, 'Jurisdiction', 200)
+  if ('feeBasis' in body) data.feeBasis = optionalEnum(body.feeBasis, 'Fee basis', ['PERCENTAGE', 'LUMP_SUM', 'TIME_CHARGE'] as const)
+  if ('appointmentType' in body) data.appointmentType = optionalEnum(body.appointmentType, 'Appointment type', ['FULL_SERVICE', 'PARTIAL', 'NOVATED'] as const)
+  if ('contractValue' in body) data.contractValue = optionalNumber(body.contractValue, 'Contract value', { min: 0 })
+  if ('feeValue' in body) data.feeValue = optionalNumber(body.feeValue, 'Fee value', { min: 0 })
+  if ('grossFloorArea' in body) data.grossFloorArea = optionalNumber(body.grossFloorArea, 'Gross floor area', { min: 0 })
+  if ('numberOfUnits' in body) data.numberOfUnits = optionalNumber(body.numberOfUnits, 'Number of units', { min: 0 })
+  if ('developmentType' in body) data.developmentType = optionalEnum(body.developmentType, 'Development type', [
+    'NEW_BUILD', 'CONVERSION', 'REFURBISHMENT', 'EXTENSION', 'COMPLETION', 'FIT_OUT', 'MIXED',
+  ] as const)
+  if ('workStageFramework' in body) data.workStageFramework = optionalEnum(body.workStageFramework, 'Work stage framework', [
+    'RIBA', 'NIGERIAN_CWA', 'INTERNATIONAL', 'DESIGN_BUILD', 'CUSTOM',
+  ] as const)
+  if ('budget' in body) data.budget = optionalNumber(body.budget, 'Budget', { min: 0 })
 
   const project = await prisma.project.update({
     where: { id: projectId },

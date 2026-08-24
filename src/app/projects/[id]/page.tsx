@@ -9,6 +9,7 @@ import {
   CheckCircle2, Clock, Eye, PauseCircle,
   Plus, X, Loader2, Building2, Shield,
   Milestone, MessageSquare, Target, CalendarDays,
+  Pencil, ExternalLink, BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
@@ -31,6 +32,15 @@ interface ProjectMember {
   }
 }
 
+interface MilestoneTaskSummary {
+  total: number
+  completed: number
+  inProgress: number
+  blocked: number
+  notStarted: number
+  percentage: number
+}
+
 interface MilestoneItem {
   id: string
   title: string
@@ -39,8 +49,11 @@ interface MilestoneItem {
   dueDate: string
   completedDate: string | null
   status: string
+  storedStatus?: string
   stage: string | null
   sortOrder: number
+  taskSummary?: MilestoneTaskSummary
+  tasks?: { id: string; title: string; status: string }[]
 }
 
 interface ProjectUpdateItem {
@@ -96,6 +109,7 @@ interface OverviewData {
     jurisdiction: string | null
     feeBasis: string | null
     appointmentType: string | null
+    sharepointUrl: string | null
     office: { id: string; name: string; city: string } | null
     memberships: ProjectMember[]
   }
@@ -221,6 +235,7 @@ export default function ProjectDashboard() {
   const [error, setError] = useState<string | null>(null)
 
   // Modal state
+  const [showProjectEdit, setShowProjectEdit] = useState(false)
   const [showMilestoneForm, setShowMilestoneForm] = useState(false)
   const [showUpdateForm, setShowUpdateForm] = useState(false)
 
@@ -375,8 +390,27 @@ export default function ProjectDashboard() {
             <span>{STAGE_LABELS[project.stage] || project.stage}</span>
             <span>·</span>
             <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {locationStr}</span>
+            {project.sharepointUrl && (
+              <>
+                <span>·</span>
+                <a
+                  href={project.sharepointUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-accent-600 hover:text-accent-700 font-medium"
+                >
+                  <ExternalLink className="w-3 h-3" /> SharePoint
+                </a>
+              </>
+            )}
           </div>
         </div>
+        <button
+          onClick={() => setShowProjectEdit(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors"
+        >
+          <Pencil className="w-3.5 h-3.5" /> Edit project
+        </button>
       </div>
 
       {/* ── Project Summary Card ────────────────────────── */}
@@ -524,16 +558,24 @@ export default function ProjectDashboard() {
                           <p className="text-[11px] text-ink-400 truncate mt-0.5">{ms.description}</p>
                         )}
                       </div>
-                      <div className="text-right shrink-0">
+                      <div className="text-right shrink-0 space-y-1">
                         <span className={cn(
                           'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium',
                           meta.bgColor, meta.color,
                         )}>
                           {meta.label}
                         </span>
-                        <p className="text-[10px] text-ink-400 mt-0.5">
+                        <p className="text-[10px] text-ink-400">
                           {ms.status === 'COMPLETED' ? formatDate(ms.completedDate) : formatDate(ms.dueDate)}
                         </p>
+                        {ms.taskSummary && ms.taskSummary.total > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-16 h-1.5 bg-ink-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${ms.taskSummary.percentage}%` }} />
+                            </div>
+                            <span className="text-[9px] text-ink-400">{ms.taskSummary.completed}/{ms.taskSummary.total}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -900,6 +942,20 @@ export default function ProjectDashboard() {
         </div>
       </div>
 
+      {/* ── Edit Project Modal ──────────────────────── */}
+      {showProjectEdit && (
+        <ProjectEditModal
+          projectId={projectId}
+          project={project}
+          onClose={() => setShowProjectEdit(false)}
+          onSuccess={() => {
+            setShowProjectEdit(false)
+            toast('Project updated', 'success')
+            fetchOverview()
+          }}
+        />
+      )}
+
       {/* ── Add Milestone Modal ─────────────────────── */}
       {showMilestoneForm && (
         <MilestoneFormModal
@@ -1061,6 +1117,249 @@ function MilestoneFormModal({ projectId, onClose, onSuccess }: {
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Add milestone
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/* ── Project Edit Modal ───────────────────────────────── */
+
+function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
+  projectId: string
+  project: OverviewData['project']
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [form, setForm] = useState({
+    name: project.name,
+    code: project.code || '',
+    description: project.description || '',
+    location: project.location || '',
+    siteAddress: project.siteAddress || '',
+    siteCity: project.siteCity || '',
+    siteCountry: project.siteCountry || '',
+    clientBrand: project.clientBrand || '',
+    stage: project.stage,
+    status: project.status,
+    developmentType: project.developmentType || '',
+    workStageFramework: project.workStageFramework || '',
+    sharepointUrl: project.sharepointUrl || '',
+    startDate: project.startDate ? project.startDate.slice(0, 10) : '',
+    targetCompletion: project.targetCompletion ? project.targetCompletion.slice(0, 10) : '',
+    budget: project.budget !== null && project.budget !== undefined ? String(project.budget) : '',
+    contractValue: project.contractValue !== null && project.contractValue !== undefined ? String(project.contractValue) : '',
+    jurisdiction: project.jurisdiction || '',
+    buildingType: project.buildingType || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm(f => ({ ...f, [field]: e.target.value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      const body: Record<string, unknown> = {}
+      if (form.name !== project.name) body.name = form.name
+      if (form.code !== (project.code || '')) body.code = form.code || null
+      if (form.description !== (project.description || '')) body.description = form.description || null
+      if (form.location !== (project.location || '')) body.location = form.location || null
+      if (form.siteAddress !== (project.siteAddress || '')) body.siteAddress = form.siteAddress || null
+      if (form.siteCity !== (project.siteCity || '')) body.siteCity = form.siteCity || null
+      if (form.siteCountry !== (project.siteCountry || '')) body.siteCountry = form.siteCountry || null
+      if (form.clientBrand !== (project.clientBrand || '')) body.clientBrand = form.clientBrand || null
+      if (form.stage !== project.stage) body.stage = form.stage
+      if (form.status !== project.status) body.status = form.status
+      if (form.developmentType !== (project.developmentType || '')) body.developmentType = form.developmentType || null
+      if (form.workStageFramework !== (project.workStageFramework || '')) body.workStageFramework = form.workStageFramework || null
+      if (form.sharepointUrl !== (project.sharepointUrl || '')) body.sharepointUrl = form.sharepointUrl || null
+      if (form.startDate !== (project.startDate ? project.startDate.slice(0, 10) : '')) body.startDate = form.startDate || null
+      if (form.targetCompletion !== (project.targetCompletion ? project.targetCompletion.slice(0, 10) : '')) body.targetCompletion = form.targetCompletion || null
+      if (form.budget !== (project.budget !== null && project.budget !== undefined ? String(project.budget) : '')) body.budget = form.budget ? parseFloat(form.budget) : null
+      if (form.contractValue !== (project.contractValue !== null && project.contractValue !== undefined ? String(project.contractValue) : '')) body.contractValue = form.contractValue ? parseFloat(form.contractValue) : null
+      if (form.jurisdiction !== (project.jurisdiction || '')) body.jurisdiction = form.jurisdiction || null
+      if (form.buildingType !== (project.buildingType || '')) body.buildingType = form.buildingType || null
+
+      if (Object.keys(body).length === 0) {
+        onClose()
+        return
+      }
+
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error?.message || 'Failed to update project')
+      }
+      onSuccess()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update project')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputClass = 'w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100 sticky top-0 bg-white z-10">
+          <h3 className="text-[14px] font-semibold text-ink-900">Edit Project</h3>
+          <button onClick={onClose} className="text-ink-400 hover:text-ink-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-5">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] px-3 py-2 rounded-lg">{error}</div>
+          )}
+
+          {/* Basic Info */}
+          <fieldset className="space-y-3">
+            <legend className="text-[11px] font-semibold text-ink-400 uppercase tracking-wide mb-2">Basic Information</legend>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Project name *</label>
+                <input type="text" value={form.name} onChange={set('name')} required className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Project code</label>
+                <input type="text" value={form.code} onChange={set('code')} className={inputClass} placeholder="e.g. ALC" maxLength={50} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Description</label>
+              <textarea value={form.description} onChange={set('description')} rows={3} className={cn(inputClass, 'resize-none')} />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Client / Brand</label>
+              <input type="text" value={form.clientBrand} onChange={set('clientBrand')} className={inputClass} />
+            </div>
+          </fieldset>
+
+          {/* Status & Stage */}
+          <fieldset className="space-y-3">
+            <legend className="text-[11px] font-semibold text-ink-400 uppercase tracking-wide mb-2">Status & Stage</legend>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Status</label>
+                <select value={form.status} onChange={set('status')} className={inputClass}>
+                  <option value="ACTIVE">Active</option>
+                  <option value="PAUSED">Paused</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="ARCHIVED">Archived</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Stage</label>
+                <select value={form.stage} onChange={set('stage')} className={inputClass}>
+                  {Object.entries(STAGE_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Work stage framework</label>
+                <select value={form.workStageFramework} onChange={set('workStageFramework')} className={inputClass}>
+                  <option value="">Select framework</option>
+                  {Object.entries(FRAMEWORK_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Development type</label>
+                <select value={form.developmentType} onChange={set('developmentType')} className={inputClass}>
+                  <option value="">Select type</option>
+                  {Object.entries(DEV_TYPE_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Building type</label>
+                <input type="text" value={form.buildingType} onChange={set('buildingType')} className={inputClass} placeholder="Hotel, Residential, Office..." />
+              </div>
+            </div>
+          </fieldset>
+
+          {/* Location */}
+          <fieldset className="space-y-3">
+            <legend className="text-[11px] font-semibold text-ink-400 uppercase tracking-wide mb-2">Location</legend>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Site address</label>
+                <input type="text" value={form.siteAddress} onChange={set('siteAddress')} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">City</label>
+                <input type="text" value={form.siteCity} onChange={set('siteCity')} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Country</label>
+                <input type="text" value={form.siteCountry} onChange={set('siteCountry')} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Jurisdiction</label>
+                <input type="text" value={form.jurisdiction} onChange={set('jurisdiction')} className={inputClass} placeholder="England, Nigeria-Lagos..." />
+              </div>
+            </div>
+          </fieldset>
+
+          {/* Dates & Financials */}
+          <fieldset className="space-y-3">
+            <legend className="text-[11px] font-semibold text-ink-400 uppercase tracking-wide mb-2">Dates & Financials</legend>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Start date</label>
+                <input type="date" value={form.startDate} onChange={set('startDate')} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Target completion</label>
+                <input type="date" value={form.targetCompletion} onChange={set('targetCompletion')} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Budget</label>
+                <input type="number" value={form.budget} onChange={set('budget')} className={inputClass} min="0" step="0.01" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Contract value</label>
+                <input type="number" value={form.contractValue} onChange={set('contractValue')} className={inputClass} min="0" step="0.01" />
+              </div>
+            </div>
+          </fieldset>
+
+          {/* Links */}
+          <fieldset className="space-y-3">
+            <legend className="text-[11px] font-semibold text-ink-400 uppercase tracking-wide mb-2">Links</legend>
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">SharePoint URL</label>
+              <input type="url" value={form.sharepointUrl} onChange={set('sharepointUrl')} className={inputClass} placeholder="https://..." />
+            </div>
+          </fieldset>
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-ink-100">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-medium text-ink-600 hover:text-ink-800">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !form.name}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save changes
             </button>
           </div>
         </form>

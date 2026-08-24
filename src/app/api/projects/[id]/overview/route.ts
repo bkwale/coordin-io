@@ -2,6 +2,11 @@ import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
+import {
+  calculateMilestoneStatus,
+  buildMilestoneTaskSummary,
+  type TaskStatusForCalc,
+} from '@/lib/milestone-status'
 
 /**
  * GET /api/projects/[id]/overview — Comprehensive project overview.
@@ -11,7 +16,7 @@ import { withProjectAccess } from '@/lib/with-project-access'
  */
 export const GET = withProjectAccess(async (_request: NextRequest, { projectId }) => {
   // Run independent queries in parallel
-  const [project, taskCounts, documentCounts, milestones, updates] = await Promise.all([
+  const [project, taskCounts, documentCounts, drawingCount, milestonesRaw, updates] = await Promise.all([
     // 1. Full project with team
     prisma.project.findUniqueOrThrow({
       where: { id: projectId },
@@ -50,9 +55,20 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
       _count: { _all: true },
     }),
 
-    // 4. Milestones — ordered by dueDate
+    // 3b. Drawing count (included in total documents)
+    prisma.drawing.count({
+      where: { projectId },
+    }),
+
+    // 4. Milestones with linked tasks for calculated status
     prisma.projectMilestone.findMany({
       where: { projectId },
+      include: {
+        tasks: {
+          where: { archivedAt: null },
+          select: { status: true },
+        },
+      },
       orderBy: { dueDate: 'asc' },
     }),
 
@@ -70,6 +86,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
       projectId,
       dueDate: { lt: new Date() },
       status: { notIn: ['COMPLETED'] },
+      archivedAt: null,
     },
   })
 
@@ -88,10 +105,24 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
     return acc
   }, {})
 
-  const totalDocuments = Object.values(documentsByType).reduce((a, b) => a + b, 0)
+  const totalDocuments = Object.values(documentsByType).reduce((a, b) => a + b, 0) + drawingCount
 
-  // ── Milestone summary ─────────────────────────────────
+  // ── Milestone summary with calculated status ──────────
   const now = new Date()
+
+  const milestones = milestonesRaw.map((m) => {
+    const taskStatuses = m.tasks.map((t) => t.status as TaskStatusForCalc)
+    const calcStatus = calculateMilestoneStatus({
+      currentStatus: m.status,
+      dueDate: m.dueDate,
+      taskStatuses,
+    })
+    const taskSummary = buildMilestoneTaskSummary(taskStatuses)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tasks: _tasks, ...rest } = m
+    return { ...rest, status: calcStatus, storedStatus: m.status, taskSummary }
+  })
+
   const activeMilestones = milestones.filter(m => m.status !== 'COMPLETED' && m.status !== 'CANCELLED')
   const nextMilestone = activeMilestones.find(m => m.dueDate >= now) || activeMilestones[0] || null
 
