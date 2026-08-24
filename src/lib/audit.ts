@@ -175,6 +175,16 @@ export const AuditActions = {
   DESIGN_REVIEW_UPDATED: 'design_review.updated',
   DESIGN_REVIEW_COMMENT_CREATED: 'design_review.comment_created',
 
+  // Approval Engine
+  APPROVAL_INSTANCE_CREATED: 'approval.instance_created',
+  APPROVAL_STEP_APPROVED: 'approval.step_approved',
+  APPROVAL_STEP_REJECTED: 'approval.step_rejected',
+  APPROVAL_COMPLETED: 'approval.completed',
+  APPROVAL_FORCE_APPROVED: 'approval.force_approved',
+  APPROVAL_CANCELLED: 'approval.cancelled',
+  APPROVAL_ROUTE_CREATED: 'approval.route_created',
+  APPROVAL_ROUTE_UPDATED: 'approval.route_updated',
+
   // Audit trail
   AUDIT_EXPORTED: 'audit.exported',
 } as const
@@ -390,6 +400,16 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
 
   // Profile
   'profile.deactivated': 'Deactivated profile',
+
+  // Approval Workflows
+  'approval.instance_created': 'Created approval workflow',
+  'approval.step_approved': 'Approved approval step',
+  'approval.step_rejected': 'Rejected approval step',
+  'approval.completed': 'Completed approval workflow',
+  'approval.force_approved': 'Force approved workflow',
+  'approval.cancelled': 'Cancelled approval workflow',
+  'approval.route_created': 'Created approval route',
+  'approval.route_updated': 'Updated approval route',
 
   // Audit
   'audit.exported': 'Exported audit trail',

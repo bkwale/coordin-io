@@ -55,6 +55,12 @@ export const NOTIFICATION_EVENTS = {
 
   // Training
   TRAINING_EXPIRING: 'training.expiring',
+
+  // Approval Engine
+  APPROVAL_REQUESTED: 'approval.requested',
+  APPROVAL_COMPLETED: 'approval.completed',
+  APPROVAL_REJECTED: 'approval.rejected',
+  APPROVAL_ESCALATED: 'approval.escalated',
 } as const
 
 export type NotificationEvent = typeof NOTIFICATION_EVENTS[keyof typeof NOTIFICATION_EVENTS]
@@ -73,6 +79,11 @@ const EMAIL_EVENTS: Set<NotificationEvent> = new Set([
   NOTIFICATION_EVENTS.PROJECT_MEMBER_ADDED,
   NOTIFICATION_EVENTS.PROJECT_HEALTH_CHANGED,
   NOTIFICATION_EVENTS.MENTION,
+  // Approval engine emails
+  NOTIFICATION_EVENTS.APPROVAL_REQUESTED,
+  NOTIFICATION_EVENTS.APPROVAL_COMPLETED,
+  NOTIFICATION_EVENTS.APPROVAL_REJECTED,
+  NOTIFICATION_EVENTS.APPROVAL_ESCALATED,
 ])
 
 // ── Core Interface ──────────────────────────────────────

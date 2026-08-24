@@ -65,6 +65,7 @@ const SETTINGS_TABS = [
   { key: 'integrations', label: 'Integrations', icon: Puzzle, description: 'Connected services' },
   { key: 'governance', label: 'AI Governance', icon: Shield, description: 'AI source permissions & audit' },
   { key: 'audit', label: 'Audit Trail', icon: ScrollText, description: 'Activity log & export' },
+  { key: 'approvals', label: 'Approval Workflows', icon: CheckCircle, description: 'Configure approval routes' },
 ] as const
 
 type TabKey = typeof SETTINGS_TABS[number]['key']
@@ -145,6 +146,7 @@ export default function SettingsPage() {
               {activeTab === 'integrations' && <IntegrationsSection />}
               {activeTab === 'governance' && <GovernanceSection />}
               {activeTab === 'audit' && <AuditSection />}
+              {activeTab === 'approvals' && <ApprovalRoutesSection />}
             </div>
           </div>
         </div>
@@ -1552,6 +1554,418 @@ function SectionHeader({ title, description }: { title: string; description: str
     <div className="pb-6 border-b border-surface-200">
       <h2 className="font-display text-xl text-ink-900">{title}</h2>
       <p className="text-[13px] text-ink-400 mt-1">{description}</p>
+    </div>
+  )
+}
+
+// ── Approval Routes Section ─────────────────────────────
+
+interface ApprovalRoute {
+  id: string
+  requestType: string
+  name: string
+  isDefault: boolean
+  isActive: boolean
+  priority: number
+  conditions: Record<string, unknown> | null
+  steps: ApprovalRouteStep[]
+}
+
+interface ApprovalRouteStep {
+  id: string
+  stepOrder: number
+  label: string
+  approverType: string
+  approverRole: string | null
+  approverId: string | null
+  canSkipIfSameAsPrevious: boolean
+  escalationDays: number | null
+}
+
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  LEAVE: 'Leave',
+  EXPENSE: 'Expense',
+  SERVICE_REQUEST: 'Service Request',
+  TRAVEL: 'Travel',
+}
+
+const APPROVER_TYPE_LABELS: Record<string, string> = {
+  LINE_MANAGER: 'Line Manager',
+  PROJECT_MANAGER: 'Project Manager',
+  ROLE: 'Role-based',
+  SPECIFIC_PERSON: 'Specific Person',
+}
+
+function ApprovalRoutesSection() {
+  const [routes, setRoutes] = useState<ApprovalRoute[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  // New route form state
+  const [newRoute, setNewRoute] = useState({
+    name: '',
+    requestType: 'LEAVE' as string,
+    isDefault: false,
+    priority: 0,
+    steps: [{ label: 'Step 1', approverType: 'LINE_MANAGER', approverRole: '', approverId: '', canSkipIfSameAsPrevious: false, escalationDays: '' }] as Array<{
+      label: string; approverType: string; approverRole: string; approverId: string; canSkipIfSameAsPrevious: boolean; escalationDays: string
+    }>,
+  })
+
+  const fetchRoutes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/approval-routes')
+      if (!res.ok) throw new Error('Failed to load')
+      const data = await res.json()
+      setRoutes(data.routes || [])
+    } catch {
+      setError('Failed to load approval routes')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchRoutes() }, [fetchRoutes])
+
+  const toggleActive = async (route: ApprovalRoute) => {
+    try {
+      await fetch(`/api/approval-routes/${route.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !route.isActive }),
+      })
+      fetchRoutes()
+    } catch { /* silent */ }
+  }
+
+  const deleteRoute = async (route: ApprovalRoute) => {
+    if (!confirm(`Delete "${route.name}"?`)) return
+    try {
+      const res = await fetch(`/api/approval-routes/${route.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error?.message || 'Cannot delete route')
+        return
+      }
+      fetchRoutes()
+    } catch { /* silent */ }
+  }
+
+  const createRoute = async () => {
+    if (!newRoute.name.trim()) return
+    setSaving(true)
+    try {
+      const body = {
+        name: newRoute.name,
+        requestType: newRoute.requestType,
+        isDefault: newRoute.isDefault,
+        priority: newRoute.priority,
+        steps: newRoute.steps.map(s => ({
+          label: s.label,
+          approverType: s.approverType,
+          approverRole: s.approverRole || undefined,
+          approverId: s.approverId || undefined,
+          canSkipIfSameAsPrevious: s.canSkipIfSameAsPrevious,
+          escalationDays: s.escalationDays ? parseInt(s.escalationDays) : undefined,
+        })),
+      }
+      const res = await fetch('/api/approval-routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error?.message || 'Failed to create route')
+        return
+      }
+      setShowCreate(false)
+      setNewRoute({
+        name: '', requestType: 'LEAVE', isDefault: false, priority: 0,
+        steps: [{ label: 'Step 1', approverType: 'LINE_MANAGER', approverRole: '', approverId: '', canSkipIfSameAsPrevious: false, escalationDays: '' }],
+      })
+      fetchRoutes()
+    } catch {
+      alert('Failed to create route')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addStep = () => {
+    setNewRoute(prev => ({
+      ...prev,
+      steps: [...prev.steps, {
+        label: `Step ${prev.steps.length + 1}`,
+        approverType: 'LINE_MANAGER',
+        approverRole: '', approverId: '',
+        canSkipIfSameAsPrevious: false, escalationDays: '',
+      }],
+    }))
+  }
+
+  const removeStep = (idx: number) => {
+    if (newRoute.steps.length <= 1) return
+    setNewRoute(prev => ({
+      ...prev,
+      steps: prev.steps.filter((_, i) => i !== idx),
+    }))
+  }
+
+  const updateStep = (idx: number, field: string, value: unknown) => {
+    setNewRoute(prev => ({
+      ...prev,
+      steps: prev.steps.map((s, i) => i === idx ? { ...s, [field]: value } : s),
+    }))
+  }
+
+  if (loading) return <LoadingState />
+  if (error) return <div className="text-red-500 text-sm p-4">{error}</div>
+
+  // Group by request type
+  const grouped = routes.reduce<Record<string, ApprovalRoute[]>>((acc, r) => {
+    const key = r.requestType
+    if (!acc[key]) acc[key] = []
+    acc[key].push(r)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Approval Workflows"
+        description="Configure multi-step approval routes for leave, expenses, service requests, and travel."
+      />
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-[13px] font-medium hover:bg-brand-700 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          New Route
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="bg-surface-50 border border-surface-200 rounded-lg p-4 space-y-4">
+          <h3 className="font-medium text-ink-800 text-sm">Create Approval Route</h3>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-500 uppercase mb-1">Name</label>
+              <input
+                value={newRoute.name}
+                onChange={e => setNewRoute(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-1.5 border border-surface-200 rounded-md text-sm"
+                placeholder="e.g. Standard Leave Approval"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-500 uppercase mb-1">Request Type</label>
+              <select
+                value={newRoute.requestType}
+                onChange={e => setNewRoute(prev => ({ ...prev, requestType: e.target.value }))}
+                className="w-full px-3 py-1.5 border border-surface-200 rounded-md text-sm"
+              >
+                {Object.entries(REQUEST_TYPE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-4 items-center">
+            <label className="flex items-center gap-2 text-sm text-ink-600">
+              <input
+                type="checkbox"
+                checked={newRoute.isDefault}
+                onChange={e => setNewRoute(prev => ({ ...prev, isDefault: e.target.checked }))}
+              />
+              Default route
+            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] font-semibold text-ink-500 uppercase">Priority</label>
+              <input
+                type="number"
+                value={newRoute.priority}
+                onChange={e => setNewRoute(prev => ({ ...prev, priority: parseInt(e.target.value) || 0 }))}
+                className="w-16 px-2 py-1 border border-surface-200 rounded text-sm"
+                min={0} max={100}
+              />
+            </div>
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-ink-500 uppercase">Approval Steps</label>
+              <button onClick={addStep} className="text-brand-600 text-xs font-medium hover:text-brand-700">+ Add Step</button>
+            </div>
+
+            {newRoute.steps.map((step, idx) => (
+              <div key={idx} className="bg-white border border-surface-200 rounded-md p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-ink-500">Step {idx + 1}</span>
+                  {newRoute.steps.length > 1 && (
+                    <button onClick={() => removeStep(idx)} className="text-red-400 hover:text-red-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={step.label}
+                    onChange={e => updateStep(idx, 'label', e.target.value)}
+                    className="px-2 py-1 border border-surface-200 rounded text-sm"
+                    placeholder="Step label"
+                  />
+                  <select
+                    value={step.approverType}
+                    onChange={e => updateStep(idx, 'approverType', e.target.value)}
+                    className="px-2 py-1 border border-surface-200 rounded text-sm"
+                  >
+                    {Object.entries(APPROVER_TYPE_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {step.approverType === 'ROLE' && (
+                    <input
+                      value={step.approverRole}
+                      onChange={e => updateStep(idx, 'approverRole', e.target.value)}
+                      className="px-2 py-1 border border-surface-200 rounded text-sm"
+                      placeholder="Role (e.g. HR)"
+                    />
+                  )}
+                  <input
+                    value={step.escalationDays}
+                    onChange={e => updateStep(idx, 'escalationDays', e.target.value)}
+                    className="px-2 py-1 border border-surface-200 rounded text-sm"
+                    placeholder="Escalation days"
+                    type="number"
+                  />
+                  <label className="flex items-center gap-1 text-xs text-ink-500">
+                    <input
+                      type="checkbox"
+                      checked={step.canSkipIfSameAsPrevious}
+                      onChange={e => updateStep(idx, 'canSkipIfSameAsPrevious', e.target.checked)}
+                    />
+                    Skip if same approver
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={createRoute}
+              disabled={saving || !newRoute.name.trim()}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-brand-600 text-white rounded-lg text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Create Route
+            </button>
+            <button
+              onClick={() => setShowCreate(false)}
+              className="px-4 py-1.5 border border-surface-200 rounded-lg text-[13px] text-ink-500 hover:bg-surface-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Routes grouped by type */}
+      {routes.length === 0 ? (
+        <EmptyState
+          icon={CheckCircle}
+          title="No approval routes configured"
+          description="Create routes to enable multi-step approval workflows for leave, expenses, and service requests."
+        />
+      ) : (
+        Object.entries(grouped).map(([type, typeRoutes]) => (
+          <div key={type} className="space-y-2">
+            <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wider">
+              {REQUEST_TYPE_LABELS[type] || type}
+            </h3>
+
+            {typeRoutes.map(route => (
+              <div key={route.id} className="border border-surface-200 rounded-lg overflow-hidden">
+                <div
+                  className="flex items-center justify-between px-4 py-3 bg-white cursor-pointer hover:bg-surface-25"
+                  onClick={() => setExpandedId(expandedId === route.id ? null : route.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <ChevronRight className={cn('w-4 h-4 text-ink-300 transition-transform', expandedId === route.id && 'rotate-90')} />
+                    <span className="text-sm font-medium text-ink-800">{route.name}</span>
+                    {route.isDefault && (
+                      <span className="px-1.5 py-0.5 bg-brand-50 text-brand-600 text-[10px] font-semibold rounded">DEFAULT</span>
+                    )}
+                    {!route.isActive && (
+                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-semibold rounded">INACTIVE</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-ink-400">{route.steps.length} step{route.steps.length !== 1 ? 's' : ''}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleActive(route) }}
+                      className={cn(
+                        'px-2 py-0.5 rounded text-[10px] font-medium',
+                        route.isActive ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-surface-100 text-ink-400 hover:bg-surface-200',
+                      )}
+                    >
+                      {route.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteRoute(route) }}
+                      className="p-1 text-red-300 hover:text-red-500"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {expandedId === route.id && (
+                  <div className="border-t border-surface-100 px-4 py-3 bg-surface-25 space-y-2">
+                    <div className="text-xs text-ink-400">
+                      Priority: {route.priority} | Conditions: {route.conditions ? JSON.stringify(route.conditions) : 'None'}
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-ink-400 border-b border-surface-100">
+                          <th className="text-left py-1 font-medium">#</th>
+                          <th className="text-left py-1 font-medium">Label</th>
+                          <th className="text-left py-1 font-medium">Approver Type</th>
+                          <th className="text-left py-1 font-medium">Skip if Same</th>
+                          <th className="text-left py-1 font-medium">Escalation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {route.steps.map(step => (
+                          <tr key={step.id} className="border-b border-surface-50 text-ink-600">
+                            <td className="py-1.5">{step.stepOrder}</td>
+                            <td className="py-1.5">{step.label}</td>
+                            <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}</td>
+                            <td className="py-1.5">{step.canSkipIfSameAsPrevious ? 'Yes' : 'No'}</td>
+                            <td className="py-1.5">{step.escalationDays ? `${step.escalationDays} days` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ))
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateRequestTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { createApprovalInstance } from '@/lib/approval-engine'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
@@ -161,6 +162,20 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       body: comment ?? undefined,
       linkUrl: `/expenses`,
     }).catch(() => {})
+  }
+
+  // ── Approval Engine: create approval instance on SUBMITTED ──
+  if (newStatus === 'SUBMITTED') {
+    await createApprovalInstance({
+      organisationId: profile.organisationId,
+      requestType: 'EXPENSE',
+      entityId: id,
+      submitterId: profile.id,
+      amount: claim.amount,
+      submitterManagerId: profile.managerId,
+    }).catch(() => {})
+    // If no matching route exists, the engine returns null and the existing
+    // manual approval flow (via approverId) continues as before.
   }
 
   return success({ claim: updated })

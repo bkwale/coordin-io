@@ -64,6 +64,8 @@ model Organisation {
   hrDocuments         HRDocument[]
   onboardingTemplates OnboardingTemplate[]
   feeQuotes           FeeQuote[]
+  approvalRoutes      ApprovalRoute[]
+  approvalInstances   ApprovalInstance[]
 
   @@map("organisations")
 }
@@ -219,6 +221,11 @@ model Profile {
 
   // Fee Quotes
   feeQuotesCreated FeeQuote[] @relation("feeQuotesCreated")
+
+  // Approval Engine
+  approvalSubmissions        ApprovalInstance[]     @relation("ApprovalSubmitter")
+  approvalStepsAsApprover    ApprovalStepInstance[] @relation("ApprovalStepApprover")
+  approvalStepsEscalatedTo   ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
 
   @@map("profiles")
 }
@@ -2317,4 +2324,116 @@ model SOARow {
   version SOAVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
   @@map("soa_rows")
+}
+
+// ── Approval Workflow Engine ─────────────────────────────────
+
+enum ApprovalRequestType {
+  LEAVE
+  EXPENSE
+  SERVICE_REQUEST
+  TRAVEL
+}
+
+enum ApproverType {
+  LINE_MANAGER
+  PROJECT_MANAGER
+  ROLE
+  SPECIFIC_PERSON
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+  ESCALATED
+}
+
+/// Template defining an approval workflow for a given request type.
+/// Organisations can have multiple routes per type with conditions (e.g. amount thresholds).
+model ApprovalRoute {
+  id               String              @id @default(cuid())
+  organisationId   String              @map("organisation_id")
+  requestType      ApprovalRequestType @map("request_type")
+  name             String // e.g. "Standard Leave", "Large Expense (>£5k)"
+  isDefault        Boolean             @default(false) @map("is_default")
+  isActive         Boolean             @default(true) @map("is_active")
+  priority         Int                 @default(0) // Higher = checked first
+  conditions       Json?               // e.g. { "minAmount": 5000, "department": "Design" }
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  steps        ApprovalRouteStep[]
+  instances    ApprovalInstance[]
+
+  @@index([organisationId, requestType])
+  @@map("approval_routes")
+}
+
+/// A step within an approval route template.
+/// Steps execute in stepOrder; each step must be approved before advancing.
+model ApprovalRouteStep {
+  id                     String       @id @default(cuid())
+  routeId                String       @map("route_id")
+  stepOrder              Int          @map("step_order")
+  label                  String       @default("") // e.g. "Line Manager Review"
+  approverType           ApproverType @map("approver_type")
+  approverRole           String?      @map("approver_role") // OrgPermission value if approverType=ROLE
+  approverId             String?      @map("approver_id") // Profile ID if approverType=SPECIFIC_PERSON
+  canSkipIfSameAsPrevious Boolean     @default(false) @map("can_skip_if_same_as_previous")
+  escalationDays         Int?         @map("escalation_days") // Auto-escalate after N days
+
+  route ApprovalRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, stepOrder])
+  @@map("approval_route_steps")
+}
+
+/// An active approval workflow instance for a specific entity (expense, leave request, etc).
+model ApprovalInstance {
+  id               String              @id @default(cuid())
+  organisationId   String              @map("organisation_id")
+  routeId          String              @map("route_id")
+  requestType      ApprovalRequestType @map("request_type")
+  entityId         String              @map("entity_id") // FK to the entity being approved
+  submitterId      String              @map("submitter_id")
+  currentStepOrder Int                 @default(1) @map("current_step_order")
+  status           String              @default("IN_PROGRESS") // IN_PROGRESS, APPROVED, REJECTED, CANCELLED
+  completedAt      DateTime?           @map("completed_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  route        ApprovalRoute          @relation(fields: [routeId], references: [id])
+  submitter    Profile                @relation("ApprovalSubmitter", fields: [submitterId], references: [id])
+  steps        ApprovalStepInstance[]
+
+  @@index([organisationId, status])
+  @@index([entityId, requestType])
+  @@index([submitterId])
+  @@map("approval_instances")
+}
+
+/// An individual step instance within an active approval workflow.
+model ApprovalStepInstance {
+  id                String             @id @default(cuid())
+  instanceId        String             @map("instance_id")
+  stepOrder         Int                @map("step_order")
+  label             String             @default("")
+  approverId        String?            @map("approver_id") // Resolved approver Profile ID
+  status            ApprovalStepStatus @default(PENDING)
+  comment           String?
+  actionedAt        DateTime?          @map("actioned_at")
+  escalationDueAt   DateTime?          @map("escalation_due_at")
+  escalatedToId     String?            @map("escalated_to_id") // If escalated, who got it
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  instance    ApprovalInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  approver    Profile?         @relation("ApprovalStepApprover", fields: [approverId], references: [id])
+  escalatedTo Profile?         @relation("ApprovalStepEscalatedTo", fields: [escalatedToId], references: [id])
+
+  @@unique([instanceId, stepOrder])
+  @@map("approval_step_instances")
 }

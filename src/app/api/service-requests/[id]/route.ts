@@ -18,6 +18,7 @@ import {
   isApproverTransition,
   isAdminTransition,
 } from '@/lib/request-transitions'
+import { createApprovalInstance } from '@/lib/approval-engine'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
@@ -236,6 +237,18 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       },
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
     })
+  }
+
+  // ── Approval Engine: create approval instance on SUBMITTED ──
+  if (body.status === 'SUBMITTED') {
+    await createApprovalInstance({
+      organisationId: profile.organisationId,
+      requestType: 'SERVICE_REQUEST',
+      entityId: id,
+      submitterId: profile.id,
+      amount: serviceRequest.estimatedCost ?? undefined,
+      submitterManagerId: profile.managerId,
+    }).catch(() => {})
   }
 
   return success({ serviceRequest: updated })

@@ -7,6 +7,7 @@ import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateLeaveTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { createApprovalInstance } from '@/lib/approval-engine'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
@@ -251,6 +252,19 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       title: `Your leave request was ${newStatus.toLowerCase().replace(/_/g, ' ')}`,
       body: comment ?? undefined,
       linkUrl: `/leave`,
+    }).catch(() => {})
+  }
+
+  // ── Approval Engine: create approval instance on SUBMITTED ──
+  if (newStatus === 'SUBMITTED') {
+    const approvalRequestType = leaveRequest.leaveType === 'BUSINESS_TRAVEL' ? 'TRAVEL' : 'LEAVE'
+    await createApprovalInstance({
+      organisationId: profile.organisationId,
+      requestType: approvalRequestType as 'LEAVE' | 'TRAVEL',
+      entityId: id,
+      submitterId: profile.id,
+      leaveType: leaveRequest.leaveType,
+      submitterManagerId: profile.managerId,
     }).catch(() => {})
   }
 
