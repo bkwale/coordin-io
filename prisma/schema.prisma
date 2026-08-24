@@ -49,6 +49,8 @@ model Organisation {
   logoUrl         String?    @map("logo_url")
   defaultCurrency Currency   @default(NGN) @map("default_currency")
   currencies      Currency[] // All currencies this org uses
+  // Org-level settings: regional, numbering templates, etc.
+  settings        Json?      @default("{}") @map("settings")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
@@ -247,6 +249,9 @@ model Profile {
   approvalStepsAsApprover    ApprovalStepInstance[] @relation("ApprovalStepApprover")
   approvalStepsEscalatedTo   ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
   externalLinksCreated       ExternalLink[]         @relation("ExternalLinkCreator")
+
+  // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
+  notificationPreferences Json? @default("{}") @map("notification_preferences")
 
   @@map("profiles")
 }

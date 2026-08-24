@@ -116,36 +116,49 @@ export async function createNotification(
 ): Promise<CreateNotificationResult> {
   const { profileId, type, title, body, linkUrl } = params
 
-  // 1. Create in-app notification
-  const notification = await prisma.notification.create({
-    data: {
-      profileId,
-      type,
-      title,
-      body: body ?? null,
-      linkUrl: linkUrl ?? null,
+  // 0. Load user's notification preferences
+  const recipientProfile = await prisma.profile.findUnique({
+    where: { id: profileId },
+    select: {
+      email: true,
+      fullName: true,
+      notificationPreferences: true,
     },
   })
 
+  const prefs = (recipientProfile?.notificationPreferences as Record<string, { inApp?: boolean; email?: boolean }>) ?? {}
+  const eventPref = prefs[type]
+  const wantsInApp = eventPref?.inApp ?? true   // default: enabled
+  const wantsEmail = eventPref?.email ?? true    // default: enabled
+
+  // 1. Create in-app notification (skip if user opted out)
+  let notificationId = ''
+  if (wantsInApp) {
+    const notification = await prisma.notification.create({
+      data: {
+        profileId,
+        type,
+        title,
+        body: body ?? null,
+        linkUrl: linkUrl ?? null,
+      },
+    })
+    notificationId = notification.id
+  }
+
   // 2. Determine if email should be sent
-  const shouldEmail = params.sendEmail ?? EMAIL_EVENTS.has(type)
+  const shouldEmail = (params.sendEmail ?? EMAIL_EVENTS.has(type)) && wantsEmail
   let emailSent = false
 
   if (shouldEmail) {
     try {
-      // Look up user email
-      const profile = await prisma.profile.findUnique({
-        where: { id: profileId },
-        select: { email: true, fullName: true },
-      })
-
-      if (profile?.email) {
+      if (recipientProfile?.email) {
         await resend.emails.send({
           from: FROM_EMAIL,
-          to: profile.email,
+          to: recipientProfile.email,
           subject: title,
           html: buildNotificationEmail({
-            recipientName: profile.fullName,
+            recipientName: recipientProfile.fullName,
             title,
             body: body ?? '',
             linkUrl: linkUrl ? `${APP_URL}${linkUrl}` : undefined,
@@ -159,7 +172,7 @@ export async function createNotification(
     }
   }
 
-  return { notificationId: notification.id, emailSent }
+  return { notificationId, emailSent }
 }
 
 // ── Batch Create (notify multiple people) ───────────────

@@ -64,6 +64,7 @@ const SETTINGS_TABS = [
   { key: 'regional', label: 'Regional', icon: Globe, description: 'Locale, timezone & date format' },
   { key: 'integrations', label: 'Integrations', icon: Puzzle, description: 'Connected services' },
   { key: 'governance', label: 'AI Governance', icon: Shield, description: 'AI source permissions & audit' },
+  { key: 'notifications', label: 'Notifications', icon: Mail, description: 'Email & in-app preferences' },
   { key: 'audit', label: 'Audit Trail', icon: ScrollText, description: 'Activity log & export' },
   { key: 'approvals', label: 'Approval Workflows', icon: CheckCircle, description: 'Configure approval routes' },
   { key: 'holidays', label: 'Public Holidays', icon: CalendarDays, description: 'Manage public holidays' },
@@ -146,6 +147,7 @@ export default function SettingsPage() {
               {activeTab === 'regional' && <RegionalSection />}
               {activeTab === 'integrations' && <IntegrationsSection />}
               {activeTab === 'governance' && <GovernanceSection />}
+              {activeTab === 'notifications' && <NotificationPreferencesSection />}
               {activeTab === 'audit' && <AuditSection />}
               {activeTab === 'approvals' && <ApprovalRoutesSection />}
               {activeTab === 'holidays' && <PublicHolidaysSection />}
@@ -1043,6 +1045,65 @@ function BillingSection() {
 // ── Section: Document Numbering ────────────────────────────
 
 function NumberingSection() {
+  const [numbering, setNumbering] = useState<Record<string, { format: string; active: boolean }>>({
+    project: { format: '{OFFICE}-{YEAR}-{SEQ:3}', active: true },
+    quote: { format: 'Q-{YEAR}-{SEQ:3}', active: true },
+    drawing: { format: '{PROJECT}-{SEQ:2}', active: true },
+  })
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [editFormat, setEditFormat] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/org-settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.data?.settings?.numbering) {
+          const n = data.data.settings.numbering
+          setNumbering({
+            project: { format: n.project?.format ?? '{OFFICE}-{YEAR}-{SEQ:3}', active: n.project?.active ?? true },
+            quote: { format: n.quote?.format ?? 'Q-{YEAR}-{SEQ:3}', active: n.quote?.active ?? true },
+            drawing: { format: n.drawing?.format ?? '{PROJECT}-{SEQ:2}', active: n.drawing?.active ?? true },
+          })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const previewFormat = (fmt: string) => {
+    return fmt
+      .replace('{OFFICE}', 'LON')
+      .replace('{YEAR}', '2026')
+      .replace('{YY}', '26')
+      .replace('{PROJECT}', 'LON-2026-001')
+      .replace(/\{SEQ:(\d+)\}/g, (_m, n) => '1'.padStart(Number(n), '0'))
+  }
+
+  const saveTemplate = async (key: string, format: string) => {
+    setSaving(true)
+    try {
+      await fetch('/api/org-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { numbering: { [key]: { format } } } }),
+      })
+      setNumbering((prev) => ({ ...prev, [key]: { ...prev[key], format } }))
+      setEditingKey(null)
+    } catch {
+      // silent
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const labels: Record<string, string> = { project: 'Project Numbers', quote: 'Quote Numbers', drawing: 'Drawing Issue Numbers' }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-brand-500" /></div>
+  }
+
   return (
     <div>
       <SectionHeader
@@ -1051,21 +1112,53 @@ function NumberingSection() {
       />
 
       <div className="mt-6 space-y-4">
-        {[
-          { title: 'Project Numbers', description: 'Format: {OFFICE}-{YEAR}-{SEQ:3}', example: 'LON-2026-001', active: true },
-          { title: 'Quote Numbers', description: 'Format: Q-{YEAR}-{SEQ:3}', example: 'Q-2026-042', active: true },
-          { title: 'Drawing Issue Numbers', description: 'Format: {PROJECT}-{SEQ:2}', example: 'LON-2026-001-01', active: true },
-        ].map((tmpl) => (
-          <div key={tmpl.title} className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
+        {Object.entries(numbering).map(([key, tmpl]) => (
+          <div key={key} className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-[13px] font-medium text-ink-900">{tmpl.title}</p>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">Active</span>
+                <p className="text-[13px] font-medium text-ink-900">{labels[key]}</p>
+                <span className={cn(
+                  'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                  tmpl.active ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-100 text-surface-500',
+                )}>{tmpl.active ? 'Active' : 'Inactive'}</span>
               </div>
-              <p className="text-[11px] text-ink-400 mt-1">{tmpl.description}</p>
-              <p className="text-[11px] text-ink-500 mt-0.5">Preview: <span className="font-mono font-medium">{tmpl.example}</span></p>
+              {editingKey === key ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editFormat}
+                    onChange={(e) => setEditFormat(e.target.value)}
+                    className="settings-input flex-1 text-[12px] font-mono"
+                  />
+                  <button
+                    onClick={() => saveTemplate(key, editFormat)}
+                    disabled={saving}
+                    className="text-[12px] text-white bg-brand-600 px-3 py-1.5 rounded-lg hover:bg-brand-700 font-medium"
+                  >
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditingKey(null)}
+                    className="text-[12px] text-surface-500 hover:text-surface-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[11px] text-ink-400 mt-1">Format: {tmpl.format}</p>
+                  <p className="text-[11px] text-ink-500 mt-0.5">Preview: <span className="font-mono font-medium">{previewFormat(tmpl.format)}</span></p>
+                </>
+              )}
             </div>
-            <button className="text-[12px] text-accent-600 hover:text-accent-700 font-medium">Edit</button>
+            {editingKey !== key && (
+              <button
+                onClick={() => { setEditingKey(key); setEditFormat(tmpl.format) }}
+                className="text-[12px] text-accent-600 hover:text-accent-700 font-medium"
+              >
+                Edit
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -1087,6 +1180,54 @@ function NumberingSection() {
 // ── Section: Regional ──────────────────────────────────────
 
 function RegionalSection() {
+  const [regional, setRegional] = useState({
+    timezone: 'Europe/London',
+    dateFormat: 'DD/MM/YYYY',
+    numberFormat: 'en-GB',
+    weekStart: 'monday',
+    language: 'en',
+  })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/org-settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.data?.settings?.regional) {
+          setRegional((prev) => ({ ...prev, ...data.data.settings.regional }))
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const update = (key: string, value: string) => {
+    setRegional((prev) => ({ ...prev, [key]: value }))
+    setDirty(true)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await fetch('/api/org-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { regional } }),
+      })
+      setDirty(false)
+    } catch {
+      // silent
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-brand-500" /></div>
+  }
+
   return (
     <div>
       <SectionHeader
@@ -1096,7 +1237,7 @@ function RegionalSection() {
 
       <div className="space-y-6 mt-8">
         <FieldGroup label="Timezone">
-          <select className="settings-input" defaultValue="Europe/London">
+          <select className="settings-input" value={regional.timezone} onChange={(e) => update('timezone', e.target.value)}>
             <option value="Europe/London">Europe/London (GMT/BST)</option>
             <option value="Europe/Berlin">Europe/Berlin (CET/CEST)</option>
             <option value="America/New_York">America/New_York (EST/EDT)</option>
@@ -1106,7 +1247,7 @@ function RegionalSection() {
         </FieldGroup>
 
         <FieldGroup label="Date Format">
-          <select className="settings-input" defaultValue="DD/MM/YYYY">
+          <select className="settings-input" value={regional.dateFormat} onChange={(e) => update('dateFormat', e.target.value)}>
             <option value="DD/MM/YYYY">DD/MM/YYYY — 18/07/2026</option>
             <option value="MM/DD/YYYY">MM/DD/YYYY — 07/18/2026</option>
             <option value="YYYY-MM-DD">YYYY-MM-DD — 2026-07-18</option>
@@ -1115,21 +1256,21 @@ function RegionalSection() {
         </FieldGroup>
 
         <FieldGroup label="Number Format">
-          <select className="settings-input" defaultValue="en-GB">
+          <select className="settings-input" value={regional.numberFormat} onChange={(e) => update('numberFormat', e.target.value)}>
             <option value="en-GB">1,234.56 (UK/US)</option>
             <option value="de-DE">1.234,56 (EU)</option>
           </select>
         </FieldGroup>
 
         <FieldGroup label="Week Starts On">
-          <select className="settings-input" defaultValue="monday">
+          <select className="settings-input" value={regional.weekStart} onChange={(e) => update('weekStart', e.target.value)}>
             <option value="monday">Monday</option>
             <option value="sunday">Sunday</option>
           </select>
         </FieldGroup>
 
         <FieldGroup label="Language">
-          <select className="settings-input" defaultValue="en">
+          <select className="settings-input" value={regional.language} onChange={(e) => update('language', e.target.value)}>
             <option value="en">English</option>
           </select>
           <p className="text-[11px] text-ink-300 mt-1">More languages coming soon</p>
@@ -1137,8 +1278,17 @@ function RegionalSection() {
       </div>
 
       <div className="mt-8 pt-6 border-t border-surface-200">
-        <button className="flex items-center gap-2 px-5 py-2.5 bg-ink-900 text-white text-[13px] font-medium rounded-lg hover:bg-ink-800 transition-colors">
-          <Save className="w-4 h-4" />
+        <button
+          onClick={save}
+          disabled={!dirty || saving}
+          className={cn(
+            'flex items-center gap-2 px-5 py-2.5 text-[13px] font-medium rounded-lg transition-colors',
+            dirty
+              ? 'bg-ink-900 text-white hover:bg-ink-800'
+              : 'bg-surface-100 text-surface-400 cursor-not-allowed',
+          )}
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Save Changes
         </button>
       </div>
@@ -2000,6 +2150,245 @@ interface PublicHoliday {
   officeId: string | null
   office: { id: string; name: string } | null
 }
+
+// ── Notification Preferences Section ─────────────────────
+
+const NOTIFICATION_CATEGORIES: Array<{
+  label: string
+  events: Array<{ key: string; label: string }>
+}> = [
+  {
+    label: 'Tasks',
+    events: [
+      { key: 'task.assigned', label: 'Task assigned to me' },
+      { key: 'task.status_changed', label: 'Task status changed' },
+      { key: 'task.overdue', label: 'Task overdue' },
+      { key: 'task.comment', label: 'Task comment' },
+    ],
+  },
+  {
+    label: 'Documents',
+    events: [
+      { key: 'document.review_requested', label: 'Document review requested' },
+      { key: 'document.reviewed', label: 'Document reviewed' },
+      { key: 'document.issued', label: 'Document issued' },
+    ],
+  },
+  {
+    label: 'Leave',
+    events: [
+      { key: 'leave.requested', label: 'Leave requested (for approvers)' },
+      { key: 'leave.decision', label: 'Leave decision' },
+    ],
+  },
+  {
+    label: 'Expenses',
+    events: [
+      { key: 'expense.submitted', label: 'Expense submitted (for approvers)' },
+      { key: 'expense.decision', label: 'Expense decision' },
+    ],
+  },
+  {
+    label: 'Timesheets',
+    events: [
+      { key: 'timesheet.submitted', label: 'Timesheet submitted (for approvers)' },
+      { key: 'timesheet.decision', label: 'Timesheet decision' },
+    ],
+  },
+  {
+    label: 'Onboarding & Probation',
+    events: [
+      { key: 'onboarding.task_assigned', label: 'Onboarding task assigned' },
+      { key: 'onboarding.task_due', label: 'Onboarding task due' },
+      { key: 'probation.review_scheduled', label: 'Probation review scheduled' },
+      { key: 'probation.review_due', label: 'Probation review due' },
+    ],
+  },
+  {
+    label: 'Projects',
+    events: [
+      { key: 'project.member_added', label: 'Added to project' },
+      { key: 'project.member_removed', label: 'Removed from project' },
+      { key: 'project.update', label: 'Project update' },
+      { key: 'project.health_changed', label: 'Project health changed' },
+      { key: 'project.milestone_due', label: 'Milestone due' },
+    ],
+  },
+  {
+    label: 'Approvals',
+    events: [
+      { key: 'approval.requested', label: 'Approval requested' },
+      { key: 'approval.completed', label: 'Approval completed' },
+      { key: 'approval.rejected', label: 'Approval rejected' },
+      { key: 'approval.escalated', label: 'Approval escalated' },
+    ],
+  },
+  {
+    label: 'Other',
+    events: [
+      { key: 'mention', label: 'Mentioned in a comment' },
+      { key: 'compliance.action_due', label: 'Compliance action due' },
+      { key: 'training.expiring', label: 'Training expiring' },
+    ],
+  },
+]
+
+function NotificationPreferencesSection() {
+  const [preferences, setPreferences] = useState<Record<string, { inApp: boolean; email: boolean }>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/notification-preferences')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.data?.preferences) setPreferences(data.data.preferences)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const toggle = (eventKey: string, channel: 'inApp' | 'email') => {
+    setPreferences((prev) => ({
+      ...prev,
+      [eventKey]: {
+        ...prev[eventKey],
+        [channel]: !(prev[eventKey]?.[channel] ?? true),
+      },
+    }))
+    setDirty(true)
+  }
+
+  const toggleAll = (channel: 'inApp' | 'email', value: boolean) => {
+    setPreferences((prev) => {
+      const next = { ...prev }
+      for (const cat of NOTIFICATION_CATEGORIES) {
+        for (const ev of cat.events) {
+          next[ev.key] = { ...next[ev.key], [channel]: value }
+        }
+      }
+      return next
+    })
+    setDirty(true)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/notification-preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferences }),
+      })
+      const data = await res.json()
+      if (data.data?.preferences) setPreferences(data.data.preferences)
+      setDirty(false)
+    } catch {
+      // silent
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
+      </div>
+    )
+  }
+
+  // Check if all are enabled for the toggle-all buttons
+  const allEvents = NOTIFICATION_CATEGORIES.flatMap((c) => c.events)
+  const allInApp = allEvents.every((e) => preferences[e.key]?.inApp !== false)
+  const allEmail = allEvents.every((e) => preferences[e.key]?.email !== false)
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-surface-900">Notification Preferences</h2>
+          <p className="text-sm text-surface-500 mt-1">Control which notifications you receive via email and in-app.</p>
+        </div>
+        <button
+          onClick={save}
+          disabled={!dirty || saving}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+            dirty
+              ? 'bg-brand-600 text-white hover:bg-brand-700'
+              : 'bg-surface-100 text-surface-400 cursor-not-allowed',
+          )}
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Save
+        </button>
+      </div>
+
+      {/* Toggle-all row */}
+      <div className="flex items-center gap-6 border-b border-surface-200 pb-3">
+        <span className="text-sm font-medium text-surface-700 flex-1">Enable / disable all</span>
+        <label className="flex items-center gap-2 text-xs text-surface-600">
+          <input
+            type="checkbox"
+            checked={allInApp}
+            onChange={() => toggleAll('inApp', !allInApp)}
+            className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+          />
+          In-App
+        </label>
+        <label className="flex items-center gap-2 text-xs text-surface-600">
+          <input
+            type="checkbox"
+            checked={allEmail}
+            onChange={() => toggleAll('email', !allEmail)}
+            className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+          />
+          Email
+        </label>
+      </div>
+
+      {/* Categories */}
+      {NOTIFICATION_CATEGORIES.map((cat) => (
+        <div key={cat.label}>
+          <h3 className="text-sm font-semibold text-surface-800 mb-2">{cat.label}</h3>
+          <div className="space-y-1">
+            {cat.events.map((ev) => {
+              const inApp = preferences[ev.key]?.inApp ?? true
+              const email = preferences[ev.key]?.email ?? true
+              return (
+                <div key={ev.key} className="flex items-center gap-6 py-1.5">
+                  <span className="text-sm text-surface-700 flex-1">{ev.label}</span>
+                  <label className="flex items-center gap-2 text-xs text-surface-600">
+                    <input
+                      type="checkbox"
+                      checked={inApp}
+                      onChange={() => toggle(ev.key, 'inApp')}
+                      className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    In-App
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-surface-600">
+                    <input
+                      type="checkbox"
+                      checked={email}
+                      onChange={() => toggle(ev.key, 'email')}
+                      className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    Email
+                  </label>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Public Holidays Section ──────────────────────────────
 
 function PublicHolidaysSection() {
   const [holidays, setHolidays] = useState<PublicHoliday[]>([])
