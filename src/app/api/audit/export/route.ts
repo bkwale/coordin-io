@@ -3,8 +3,9 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { withAuth } from '@/lib/with-auth'
 import { hasOrgPermission } from '@/lib/permissions'
-import { HR_VISIBLE_PREFIXES, AUDIT_ACTION_LABELS, recordAuditEvent, AuditActions } from '@/lib/audit'
-import { RateLimitedError, ValidationError } from '@/lib/errors'
+import { canPerform } from '@/lib/role-permissions'
+import { HR_VISIBLE_PREFIXES, AUDIT_ACTION_LABELS, recordAuditEvent, AuditActions, getAuditPrefixesForRole } from '@/lib/audit'
+import { RateLimitedError, ValidationError, PermissionError } from '@/lib/errors'
 
 const EXPORT_COOLDOWN_MS = 60_000 // 1 minute
 const MAX_DATE_RANGE_DAYS = 90
@@ -14,12 +15,19 @@ const exportTimestamps = new Map<string, number>()
  * GET /api/audit/export — Download audit trail as CSV.
  *
  * Same access control as /api/audit:
- *   OWNER/ADMIN see all; HR sees only HR-relevant actions.
+ *   OWNER/ADMIN see all; lateral roles see only their domain.
+ *   HR → HR prefixes, LEGAL → legal prefixes, FINANCE → finance prefixes,
+ *   COMMERCIAL → commercial prefixes.
  *
  * Query params: action, actorId, from, to (required — max 90 days).
  * Rate limited: 1 export per minute per user.
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
+  // Access check — must have audit export permission
+  if (!canPerform(profile.orgPermission, 'audit', 'export_audit')) {
+    throw new PermissionError('You do not have permission to export the audit trail')
+  }
+
   // Rate limit per profile
   const lastExport = exportTimestamps.get(profile.id) || 0
   if (Date.now() - lastExport < EXPORT_COOLDOWN_MS) {
@@ -53,6 +61,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   exportTimestamps.set(profile.id, Date.now())
 
   const isFullAccess = hasOrgPermission(profile.orgPermission, 'ADMIN')
+  const rolePrefixes = getAuditPrefixesForRole(profile.orgPermission)
 
   // Build where clause
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,14 +82,20 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     where.action = { startsWith: actionFilter }
   }
 
-  // HR scope restriction
-  if (!isFullAccess) {
-    if (isHrComposite) {
-      // Already filtered to HR prefixes — allowed
+  // Role scope restriction — restrict to role-visible prefixes only
+  if (!isFullAccess && rolePrefixes !== null) {
+    if (isHrComposite && profile.orgPermission !== 'HR') {
+      // Non-HR role requested HR composite — override to their own prefixes
+      where.OR = rolePrefixes.map(prefix => ({
+        action: { startsWith: prefix },
+      }))
+    } else if (isHrComposite) {
+      // HR role with HR composite — already filtered correctly
     } else if (actionFilter) {
-      const isAllowed = HR_VISIBLE_PREFIXES.some(p => actionFilter.startsWith(p) || p.startsWith(actionFilter))
+      // Verify the requested prefix is in the role's visible list
+      const isAllowed = rolePrefixes.some(p => actionFilter.startsWith(p) || p.startsWith(actionFilter))
       if (!isAllowed) {
-        return new NextResponse('Date,Action,Actor,Entity,Details\n', {
+        return new NextResponse('Date,Time,Action,Actor,Actor Role,Entity Type,Entity ID,Details\n', {
           headers: {
             'Content-Type': 'text/csv',
             'Content-Disposition': `attachment; filename="audit-export-${from}-to-${to}.csv"`,
@@ -88,7 +103,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
         })
       }
     } else {
-      where.OR = HR_VISIBLE_PREFIXES.map(prefix => ({
+      // No filter specified — restrict to role-visible prefixes
+      where.OR = rolePrefixes.map(prefix => ({
         action: { startsWith: prefix },
       }))
     }
@@ -159,4 +175,4 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       'Content-Disposition': `attachment; filename="audit-${from}-to-${to}.csv"`,
     },
   })
-}, { requiredPermission: 'HR' })
+}, { requiredPermission: 'MEMBER' })

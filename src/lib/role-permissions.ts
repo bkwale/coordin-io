@@ -4,16 +4,22 @@ import type { OrgPermission } from '@/generated/prisma/client'
  * Role-based permission matrix for Coordin.io.
  *
  * Hard-coded per Purple Team recommendation — no database lookups,
- * no custom permission builder. Five profiles, flat lookup.
+ * no custom permission builder.
  *
- * Hierarchy: VIEWER → MEMBER → MANAGER → HR → ADMIN → OWNER
+ * Hierarchy with lateral roles:
+ *   VIEWER → MEMBER → MANAGER → [HR | LEGAL | FINANCE | COMMERCIAL] → ADMIN → OWNER
  *
- * HR sits between MANAGER and ADMIN — full people-management access
- * (staffing, leave, probation, HR docs, training, salary) but NOT
- * system settings, billing, or org-level config.
+ * Lateral roles are peers at Tier 3 — each has domain-specific access:
+ *   HR: staffing, leave, probation, HR docs, training, salary
+ *   LEGAL: planning/legal, contracts, due diligence, compliance
+ *   FINANCE: expenses, invoices, budgets, payroll
+ *   COMMERCIAL: cost plans, tenders, valuations, variations, procurement
+ *
+ * Key isolation rule: LEGAL and FINANCE must NOT gain access to each
+ * other's restricted information. Each lateral role sees only its domain.
  *
  * Design principles (from PT session):
- * - Financial data (fees, margins, invoices): ADMIN + OWNER only
+ * - Financial data (fees, margins, invoices): FINANCE + ADMIN + OWNER
  * - External-facing actions (issue docs, send invoices): OWNER for sending, ADMIN+ for creating
  * - AI respects role visibility — if you can't see it in UI, AI won't surface it
  * - Audit trails on all external-facing actions (professional indemnity)
@@ -35,6 +41,10 @@ export type Feature =
   | 'settings'
   | 'ai'
   | 'portal'
+  | 'planning_legal'
+  | 'commercial'
+  | 'assets'
+  | 'audit'
 
 export type Action =
   // Projects
@@ -93,6 +103,26 @@ export type Action =
   | 'access_fee_data'
   // Portal
   | 'view_portal_content'
+  // Planning & Legal
+  | 'view_planning'
+  | 'edit_planning'
+  | 'view_legal'
+  | 'edit_legal'
+  | 'approve_planning'
+  // Commercial
+  | 'view_commercial'
+  | 'edit_commercial'
+  | 'approve_commercial'
+  | 'manage_tenders'
+  | 'manage_budgets'
+  // Assets
+  | 'view_catalogue'
+  | 'view_own_assets'
+  | 'manage_assets'
+  | 'assign_assets'
+  // Audit
+  | 'view_audit'
+  | 'export_audit'
 
 // ── Permission Matrix ──────────────────────────────────────
 
@@ -104,71 +134,96 @@ type PermissionMatrix = Record<string, Set<OrgPermission>>
  */
 const MATRIX: PermissionMatrix = {
   // ── Projects ──
-  'projects:view_assigned':       new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'projects:view_all':            new Set(['HR', 'ADMIN', 'OWNER']),
-  'projects:create':              new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'projects:edit_own':            new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  // All lateral roles can view assigned projects; view_all for those who need cross-project visibility
+  'projects:view_assigned':       new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'projects:view_all':            new Set(['HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'projects:create':              new Set(['MANAGER', 'ADMIN', 'OWNER']),
+  'projects:edit_own':            new Set(['MANAGER', 'ADMIN', 'OWNER']),
   'projects:edit':                new Set(['ADMIN', 'OWNER']),
   'projects:archive':             new Set(['ADMIN', 'OWNER']),
   'projects:delete':              new Set(['OWNER']),
 
   // ── Tasks ──
-  'tasks:view_own':               new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'tasks:view_project':           new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'tasks:view_own':               new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'tasks:view_project':           new Set(['MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'tasks:view_all':               new Set(['HR', 'ADMIN', 'OWNER']),
-  'tasks:create_edit_own':        new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'tasks:create_edit_own':        new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'tasks:create_edit_project':    new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'tasks:create_edit_all':        new Set(['HR', 'ADMIN', 'OWNER']),
   'tasks:assign_others':          new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
 
   // ── Documents ──
-  'documents:view_shared':        new Set(['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'documents:view_project':       new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'documents:upload_edit':        new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'documents:approve_review':     new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'documents:view_shared':        new Set(['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'documents:view_project':       new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'documents:upload_edit':        new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'documents:approve_review':     new Set(['MANAGER', 'HR', 'LEGAL', 'ADMIN', 'OWNER']),
   'documents:issue_externally':   new Set(['ADMIN', 'OWNER']),
 
   // ── Timesheets ──
-  'timesheets:submit_own':        new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'timesheets:submit_own':        new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'timesheets:view_team':         new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'timesheets:view_all':          new Set(['HR', 'ADMIN', 'OWNER']),
   'timesheets:approve_direct_reports': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'timesheets:approve_all':       new Set(['HR', 'ADMIN', 'OWNER']),
 
   // ── Leave ──
-  'leave:submit_own':             new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'leave:submit_own':             new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'leave:approve_direct_reports': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'leave:approve_all':            new Set(['HR', 'ADMIN', 'OWNER']),
   'leave:view_all':               new Set(['HR', 'ADMIN', 'OWNER']),
 
-  // ── Expenses ──
-  'expenses:submit_own':          new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'expenses:approve_direct_reports': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'expenses:approve_all':         new Set(['HR', 'ADMIN', 'OWNER']),
-  'expenses:view_all':            new Set(['HR', 'ADMIN', 'OWNER']),
+  // ── Expenses ── (FINANCE gets full expense access)
+  'expenses:submit_own':          new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'expenses:approve_direct_reports': new Set(['MANAGER', 'HR', 'FINANCE', 'ADMIN', 'OWNER']),
+  'expenses:approve_all':         new Set(['HR', 'FINANCE', 'ADMIN', 'OWNER']),
+  'expenses:view_all':            new Set(['HR', 'FINANCE', 'ADMIN', 'OWNER']),
 
-  // ── Quotes & Invoices ── (HR does NOT see financial data)
-  'quotes_invoices:view_own_project': new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'quotes_invoices:view_all':     new Set(['ADMIN', 'OWNER']),
-  'quotes_invoices:create_edit':  new Set(['ADMIN', 'OWNER']),
+  // ── Quotes & Invoices ── (FINANCE sees financial data; HR does NOT)
+  'quotes_invoices:view_own_project': new Set(['MANAGER', 'FINANCE', 'ADMIN', 'OWNER']),
+  'quotes_invoices:view_all':     new Set(['FINANCE', 'ADMIN', 'OWNER']),
+  'quotes_invoices:create_edit':  new Set(['FINANCE', 'ADMIN', 'OWNER']),
   'quotes_invoices:send_to_client': new Set(['OWNER']),
 
-  // ── Staffing ── (HR gets full staffing access)
-  'staffing:view_directory':      new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  // ── Staffing ── (HR gets full staffing access; other laterals see directory only)
+  'staffing:view_directory':      new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'staffing:view_full_profiles':  new Set(['HR', 'ADMIN', 'OWNER']),
   'staffing:view_project_allocations': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'staffing:assign_staff_project': new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'staffing:view_utilisation':    new Set(['HR', 'ADMIN', 'OWNER']),
   'staffing:manage_hr_documents': new Set(['HR', 'ADMIN', 'OWNER']),
   'staffing:manage_probation':    new Set(['HR', 'ADMIN', 'OWNER']),
-  'staffing:view_salary':         new Set(['HR', 'ADMIN', 'OWNER']),
+  'staffing:view_salary':         new Set(['HR', 'FINANCE', 'ADMIN', 'OWNER']),
+
+  // ── Planning & Legal ── (LEGAL gets full access; others see planning only)
+  'planning_legal:view_planning': new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'planning_legal:edit_planning': new Set(['LEGAL', 'ADMIN', 'OWNER']),
+  'planning_legal:view_legal':    new Set(['LEGAL', 'ADMIN', 'OWNER']),
+  'planning_legal:edit_legal':    new Set(['LEGAL', 'ADMIN', 'OWNER']),
+  'planning_legal:approve_planning': new Set(['LEGAL', 'ADMIN', 'OWNER']),
+
+  // ── Commercial ── (COMMERCIAL gets full access; FINANCE can view)
+  'commercial:view_commercial':   new Set(['MANAGER', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'commercial:edit_commercial':   new Set(['COMMERCIAL', 'ADMIN', 'OWNER']),
+  'commercial:approve_commercial': new Set(['COMMERCIAL', 'ADMIN', 'OWNER']),
+  'commercial:manage_tenders':    new Set(['COMMERCIAL', 'ADMIN', 'OWNER']),
+  'commercial:manage_budgets':    new Set(['COMMERCIAL', 'FINANCE', 'ADMIN', 'OWNER']),
+
+  // ── Assets ──
+  'assets:view_catalogue':        new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'assets:view_own_assets':       new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'assets:manage_assets':         new Set(['HR', 'ADMIN', 'OWNER']),
+  'assets:assign_assets':         new Set(['HR', 'ADMIN', 'OWNER']),
+
+  // ── Audit Trail ──
+  'audit:view_audit':             new Set(['HR', 'LEGAL', 'FINANCE', 'ADMIN', 'OWNER']),
+  'audit:export_audit':           new Set(['HR', 'LEGAL', 'FINANCE', 'ADMIN', 'OWNER']),
 
   // ── Knowledge Base ──
-  'knowledge_base:view':          new Set(['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'knowledge_base:contribute':    new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'knowledge_base:view':          new Set(['VIEWER', 'MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'knowledge_base:contribute':    new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'knowledge_base:edit_delete':   new Set(['ADMIN', 'OWNER']),
 
-  // ── Settings ── (HR does NOT get system settings)
+  // ── Settings ── (no lateral role gets system settings)
   'settings:view_org_settings':   new Set(['ADMIN', 'OWNER']),
   'settings:edit_org_settings':   new Set(['OWNER']),
   'settings:manage_team':         new Set(['HR', 'ADMIN', 'OWNER']),
@@ -177,8 +232,8 @@ const MATRIX: PermissionMatrix = {
   'settings:ai_governance':       new Set(['OWNER']),
 
   // ── AI Assistant ──
-  'ai:use_scoped':                new Set(['MEMBER', 'MANAGER', 'HR', 'ADMIN', 'OWNER']),
-  'ai:access_fee_data':           new Set(['ADMIN', 'OWNER']),
+  'ai:use_scoped':                new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
+  'ai:access_fee_data':           new Set(['FINANCE', 'ADMIN', 'OWNER']),
 
   // ── Portal (external) ──
   'portal:view_portal_content':   new Set(['VIEWER']),
@@ -236,6 +291,8 @@ const HIGH_CONSEQUENCE_ACTIONS = new Set([
   'settings:edit_org_settings',
   'settings:ai_governance',
   'settings:billing_currency',
+  'planning_legal:edit_legal',
+  'commercial:approve_commercial',
 ])
 
 const MEDIUM_CONSEQUENCE_ACTIONS = new Set([
@@ -247,6 +304,11 @@ const MEDIUM_CONSEQUENCE_ACTIONS = new Set([
   'quotes_invoices:create_edit',
   'settings:manage_team',
   'documents:approve_review',
+  'planning_legal:approve_planning',
+  'commercial:manage_tenders',
+  'commercial:manage_budgets',
+  'assets:manage_assets',
+  'audit:export_audit',
 ])
 
 export function getConsequenceTier(feature: Feature, action: Action): ConsequenceTier {
@@ -261,7 +323,10 @@ export function getConsequenceTier(feature: Feature, action: Action): Consequenc
 export const ROLE_LABELS: Record<OrgPermission, string> = {
   OWNER: 'Practice Principal',
   ADMIN: 'Practice Manager',
-  HR: 'HR Manager',
+  HR: 'HR / People Admin',
+  LEGAL: 'Legal',
+  FINANCE: 'Finance / Accounts',
+  COMMERCIAL: 'Commercial',
   MANAGER: 'Project Lead',
   MEMBER: 'Team Member',
   VIEWER: 'External',
@@ -271,6 +336,9 @@ export const ROLE_DESCRIPTIONS: Record<OrgPermission, string> = {
   OWNER: 'Full control — organisation settings, billing, AI governance, and all features',
   ADMIN: 'Operational management — team, projects, finances, integrations',
   HR: 'People management — staffing, leave, probation, HR documents, salary, training. No system settings or billing.',
+  LEGAL: 'Legal and planning — due diligence, contracts, planning applications, compliance. No HR or financial data.',
+  FINANCE: 'Finance and accounts — expenses, invoices, payments, budgets, payroll. No HR documents or legal data.',
+  COMMERCIAL: 'Commercial management — cost plans, tenders, valuations, variations, procurement. No HR, legal, or payroll data.',
   MANAGER: 'Project-level control — tasks, documents, approvals for direct reports',
   MEMBER: 'Day-to-day work — timesheets, tasks, expenses, leave requests',
   VIEWER: 'Read-only portal access for clients and external stakeholders',

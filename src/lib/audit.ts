@@ -194,6 +194,65 @@ export const HR_VISIBLE_PREFIXES = [
 ] as const
 
 /**
+ * Action prefixes visible to LEGAL role.
+ */
+export const LEGAL_VISIBLE_PREFIXES = [
+  'project.',
+  'document.',
+  'drawing.',
+  'design_review.',
+  'cpd.',
+  'competency.',
+] as const
+
+/**
+ * Action prefixes visible to FINANCE role.
+ */
+export const FINANCE_VISIBLE_PREFIXES = [
+  'expense.',
+  'commercial.',
+  'leave.',
+  'request.',
+  'audit.',
+] as const
+
+/**
+ * Action prefixes visible to COMMERCIAL role.
+ */
+export const COMMERCIAL_VISIBLE_PREFIXES = [
+  'commercial.',
+  'project.',
+  'site.',
+  'drawing.',
+  'document.',
+] as const
+
+/**
+ * Get the visible audit prefixes for a given role.
+ * ADMIN/OWNER see everything (returns null = no filter).
+ * Lateral roles see only their domain prefixes.
+ */
+export function getAuditPrefixesForRole(
+  role: string
+): readonly string[] | null {
+  switch (role) {
+    case 'OWNER':
+    case 'ADMIN':
+      return null
+    case 'HR':
+      return HR_VISIBLE_PREFIXES
+    case 'LEGAL':
+      return LEGAL_VISIBLE_PREFIXES
+    case 'FINANCE':
+      return FINANCE_VISIBLE_PREFIXES
+    case 'COMMERCIAL':
+      return COMMERCIAL_VISIBLE_PREFIXES
+    default:
+      return []
+  }
+}
+
+/**
  * Human-readable labels for audit actions.
  */
 export const AUDIT_ACTION_LABELS: Record<string, string> = {

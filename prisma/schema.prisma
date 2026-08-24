@@ -226,6 +226,9 @@ enum OrgPermission {
   OWNER
   ADMIN
   HR
+  LEGAL
+  FINANCE
+  COMMERCIAL
   MANAGER
   MEMBER
   VIEWER

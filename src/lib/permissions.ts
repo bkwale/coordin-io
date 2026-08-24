@@ -8,22 +8,67 @@ import { prisma } from './prisma'
 
 // ── Org-level checks ────────────────────────────────────────
 
-const ORG_PERMISSION_HIERARCHY: OrgPermission[] = [
-  'VIEWER',
-  'MEMBER',
-  'MANAGER',
-  'HR',
-  'ADMIN',
-  'OWNER',
-]
+/**
+ * Permission hierarchy with lateral role support.
+ *
+ * Tier 0: VIEWER
+ * Tier 1: MEMBER
+ * Tier 2: MANAGER
+ * Tier 3 (lateral): HR, LEGAL, FINANCE, COMMERCIAL — peers, not ranked
+ * Tier 4: ADMIN
+ * Tier 5: OWNER
+ *
+ * Lateral roles:
+ *   - Each passes checks that require MANAGER or below
+ *   - Each passes checks that require itself (e.g. LEGAL passes 'LEGAL')
+ *   - None passes checks that require a DIFFERENT lateral role
+ *   - ADMIN and OWNER pass everything
+ *
+ * This ensures LEGAL cannot see FINANCE data and vice versa,
+ * while both can do anything a MANAGER can do.
+ */
+
+const LATERAL_ROLES: Set<OrgPermission> = new Set(['HR', 'LEGAL', 'FINANCE', 'COMMERCIAL'])
+
+const TIER_MAP: Record<OrgPermission, number> = {
+  VIEWER: 0,
+  MEMBER: 1,
+  MANAGER: 2,
+  HR: 3,
+  LEGAL: 3,
+  FINANCE: 3,
+  COMMERCIAL: 3,
+  ADMIN: 4,
+  OWNER: 5,
+}
 
 export function hasOrgPermission(
   userPermission: OrgPermission,
   requiredPermission: OrgPermission
 ): boolean {
-  const userLevel = ORG_PERMISSION_HIERARCHY.indexOf(userPermission)
-  const requiredLevel = ORG_PERMISSION_HIERARCHY.indexOf(requiredPermission)
-  return userLevel >= requiredLevel
+  const userTier = TIER_MAP[userPermission]
+  const requiredTier = TIER_MAP[requiredPermission]
+
+  // ADMIN and OWNER pass everything
+  if (userTier >= 4) return userTier >= requiredTier
+
+  // If required is a lateral role, user must either:
+  //   - have that exact lateral role, OR
+  //   - be ADMIN/OWNER (handled above)
+  if (LATERAL_ROLES.has(requiredPermission)) {
+    return userPermission === requiredPermission
+  }
+
+  // For non-lateral requirements (MANAGER, MEMBER, VIEWER),
+  // any role at that tier or above passes
+  return userTier >= requiredTier
+}
+
+/**
+ * Check if a role is a lateral (department-scoped) role.
+ */
+export function isLateralRole(permission: OrgPermission): boolean {
+  return LATERAL_ROLES.has(permission)
 }
 
 // ── Project-level checks ────────────────────────────────────
