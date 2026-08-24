@@ -105,6 +105,20 @@ export const TIMESHEET_COLUMNS: ExportColumn[] = [
   { key: 'status', label: 'Status' },
 ]
 
+export const TIMESHEET_ENTRY_COLUMNS: ExportColumn[] = [
+  { key: 'employeeName', label: 'Employee' },
+  { key: 'weekStarting', label: 'Week Starting' },
+  { key: 'date', label: 'Date', format: (v) => v ? new Date(v as string).toISOString().slice(0, 10) : '' },
+  { key: 'projectName', label: 'Project' },
+  { key: 'workStage', label: 'Work Stage' },
+  { key: 'activity', label: 'Activity' },
+  { key: 'description', label: 'Description' },
+  { key: 'hours', label: 'Hours', format: (v) => Number(v).toFixed(1) },
+  { key: 'isBillable', label: 'Billable', format: (v) => v ? 'Yes' : 'No' },
+  { key: 'isOvertime', label: 'Overtime', format: (v) => v ? 'Yes' : 'No' },
+  { key: 'locationType', label: 'Location' },
+]
+
 /**
  * Map of entity type to its export columns.
  */
@@ -114,4 +128,5 @@ export const EXPORT_COLUMNS: Record<string, ExportColumn[]> = {
   leave: LEAVE_COLUMNS,
   assets: ASSET_COLUMNS,
   timesheets: TIMESHEET_COLUMNS,
+  'timesheet-entries': TIMESHEET_ENTRY_COLUMNS,
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   Eye, Loader2, AlertTriangle, RefreshCw, CheckCircle2, XCircle,
   RotateCcw, Clock, ChevronDown, ChevronUp, User,
+  Download, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -93,6 +94,36 @@ export default function TimesheetReviewPage() {
   const [actionType, setActionType] = useState<string | null>(null)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = useCallback(async (format: 'csv' | 'pdf') => {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({ format, role: 'manager' })
+      if (statusFilter !== 'ALL') params.set('status', statusFilter)
+
+      const res = await fetch(`/api/timesheets/export?${params}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Export failed')
+      }
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `timesheets-review.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast(`Timesheet ${format.toUpperCase()} downloaded`, 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Export failed', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }, [statusFilter, toast])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -213,11 +244,31 @@ export default function TimesheetReviewPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────── */}
-      <div>
-        <h1 className="text-[20px] sm:text-[22px] font-semibold text-ink-900">Timesheet Review</h1>
-        <p className="text-[12px] text-ink-400 mt-0.5">
-          {weeks.length} timesheets · {statusCounts.SUBMITTED || 0} pending approval
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-[20px] sm:text-[22px] font-semibold text-ink-900">Timesheet Review</h1>
+          <p className="text-[12px] text-ink-400 mt-0.5">
+            {weeks.length} timesheets · {statusCounts.SUBMITTED || 0} pending approval
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleExport('csv')}
+            disabled={exporting || weeks.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {exporting ? 'Exporting…' : 'Download CSV'}
+          </button>
+          <button
+            onClick={() => handleExport('pdf')}
+            disabled={exporting || weeks.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            {exporting ? 'Exporting…' : 'Download PDF'}
+          </button>
+        </div>
       </div>
 
       {/* ── Filter bar ─────────────────────────────── */}

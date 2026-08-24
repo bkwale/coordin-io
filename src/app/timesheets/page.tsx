@@ -7,6 +7,7 @@ import {
   Users, ShieldCheck, Calendar, LayoutGrid, Sun,
   MapPin, Briefcase, TrendingUp, BarChart3,
   MessageSquare, RotateCcw, Lock, Trash2,
+  Download, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -200,6 +201,9 @@ export default function TimesheetsPage() {
   const [actionWeekId, setActionWeekId] = useState<string | null>(null)
   const [actionReason, setActionReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Export state
+  const [exporting, setExporting] = useState(false)
 
   // Derived
   const weekDates = useMemo(() => getWeekDates(currentMonday), [currentMonday])
@@ -534,6 +538,45 @@ export default function TimesheetsPage() {
 
   const isThisWeek = formatDateISO(getMonday(new Date())) === weekKey
 
+  /* ── Export handlers ─────────────────────────────────── */
+
+  const handleExport = useCallback(async (format: 'csv' | 'pdf', isManagerView: boolean) => {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({ format })
+      if (isManagerView) {
+        params.set('role', 'manager')
+      }
+      // Scope to current week range for focused exports
+      const weekFrom = formatDateISO(currentMonday)
+      const weekEnd = new Date(currentMonday)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      params.set('dateFrom', weekFrom)
+      params.set('dateTo', formatDateISO(weekEnd))
+
+      const res = await fetch(`/api/timesheets/export?${params}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Export failed')
+      }
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `timesheets-${weekFrom}.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast(`Timesheet ${format.toUpperCase()} downloaded`, 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Export failed', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }, [currentMonday, toast])
+
   /* ── Status badge component ──────────────────────────── */
 
   const StatusBadge = ({ status }: { status: string }) => {
@@ -558,8 +601,26 @@ export default function TimesheetsPage() {
           <p className="text-[13px] text-ink-400 mt-1">Track time against projects and tasks</p>
         </div>
 
-        {/* View mode toggle */}
+        {/* View mode toggle + export */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleExport('csv', false)}
+            disabled={exporting}
+            title="Download my timesheet as CSV"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-500 hover:bg-ink-50 transition-colors disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            CSV
+          </button>
+          <button
+            onClick={() => handleExport('pdf', false)}
+            disabled={exporting}
+            title="Download my timesheet as PDF"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-500 hover:bg-ink-50 transition-colors disabled:opacity-50"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            PDF
+          </button>
           <div className="flex bg-ink-50 rounded-lg p-0.5">
             {([
               { key: 'week' as ViewMode, icon: LayoutGrid, label: 'Week' },
@@ -1424,6 +1485,26 @@ export default function TimesheetsPage() {
                 {teamWeeksThisWeek.filter(w => w.status === 'SUBMITTED' || w.status === 'CHANGES_REQUIRED').length}
               </p>
             </div>
+          </div>
+
+          {/* Export buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExport('csv', true)}
+              disabled={exporting || teamWeeks.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exporting ? 'Exporting…' : 'Download CSV'}
+            </button>
+            <button
+              onClick={() => handleExport('pdf', true)}
+              disabled={exporting || teamWeeks.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {exporting ? 'Exporting…' : 'Download PDF'}
+            </button>
           </div>
 
           {/* Team timesheets list */}
