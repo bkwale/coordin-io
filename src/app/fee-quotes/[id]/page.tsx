@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, FileText, Edit, Send, Trash2, Check, X,
-  Loader2, AlertTriangle, RefreshCw, Clock,
+  Loader2, AlertTriangle, RefreshCw, Clock, Download, Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -162,6 +162,58 @@ export default function FeeQuoteDetailPage() {
     }
   }
 
+  /* ── PDF download ─────────────────────────────── */
+
+  const handleDownloadPdf = async () => {
+    setActionLoading('PDF')
+    try {
+      const res = await fetch(`/api/fee-quotes/${id}/pdf`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || body.error || 'Failed to generate PDF')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${quote?.quoteNumber || 'quote'}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast('PDF downloaded', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Something went wrong', 'error')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  /* ── Send quote via email ────────────────────── */
+
+  const handleSendEmail = async () => {
+    if (!quote?.clientEmail) {
+      toast('No client email address on this quote', 'error')
+      return
+    }
+    if (!confirm(`Send this quote to ${quote.clientEmail}? The status will change to Sent.`)) return
+    setActionLoading('SEND_EMAIL')
+    try {
+      const res = await fetch(`/api/fee-quotes/${id}/send`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || body.error || 'Failed to send quote')
+      }
+      const json = await res.json()
+      setQuote(json.data.quote)
+      toast(`Quote sent to ${quote.clientEmail}`, 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Something went wrong', 'error')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   /* ── Loading / Error / Not Found ───────────────── */
 
   if (loading) {
@@ -226,6 +278,16 @@ export default function FeeQuoteDetailPage() {
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 self-start shrink-0 flex-wrap">
+          {/* Download PDF — available in any status */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={actionLoading !== null}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'PDF' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Download PDF
+          </button>
+
           {quote.status === 'DRAFT' && (
             <>
               <Link
@@ -236,12 +298,13 @@ export default function FeeQuoteDetailPage() {
                 Edit
               </Link>
               <button
-                onClick={() => updateStatus('SENT')}
-                disabled={actionLoading !== null}
+                onClick={handleSendEmail}
+                disabled={actionLoading !== null || !quote.clientEmail}
+                title={!quote.clientEmail ? 'Add a client email address before sending' : 'Email this quote to the client'}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-[12px] font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {actionLoading === 'SENT' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                Send
+                {actionLoading === 'SEND_EMAIL' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                Send to Client
               </button>
               <button
                 onClick={handleDelete}
