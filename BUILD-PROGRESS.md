@@ -621,3 +621,45 @@ Purple Team review surfaced 2 fixes, both applied:
 | Vercel env vars (RESEND_API_KEY, RESEND_FROM_EMAIL, NEXT_PUBLIC_APP_URL) | Vercel dashboard | Done |
 
 **Email template:** Branded HTML email with activation button, plain text fallback, expiry date. Non-blocking — invitation creation succeeds even if email fails (status stays PENDING vs SENT). Resend endpoint extends expired invitations automatically.
+
+## Phase 7 — Bug Report 06 Build Plan
+
+### Sprint 0: Permission Foundation (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| Add LEGAL, FINANCE, COMMERCIAL to OrgPermission enum | `prisma/schema.prisma` | Done |
+| Extend canPerform() matrix for 3 new roles (4 features, 3 actions each) | `src/lib/role-permissions.ts` | Done |
+| Lateral role isolation in hasOrgPermission() via TIER_MAP | `src/lib/role-permissions.ts` | Done |
+| Update audit trail HR_VISIBLE_PREFIXES for new roles | `src/app/api/audit/route.ts` | Done |
+| Permission matrix tests for all 9 roles × new features | `src/lib/__tests__/permissions.test.ts` | Done |
+| Crispin QA review (3 issues fixed) | — | Done |
+
+**Architecture:** 9 org roles total: OWNER (Tier 0), ADMIN (Tier 1), HR/LEGAL/FINANCE/COMMERCIAL (Tier 3 — lateral peers), MANAGER (Tier 4), MEMBER (Tier 5), VIEWER (Tier 6). Lateral roles cannot see each other's data. `hasOrgPermission()` uses `TIER_MAP` — lower tier number = more access, but lateral roles at same tier are isolated by `canPerform()` feature checks.
+
+### Sprint 1: Task Workflow Complete (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| TaskDependency model + TaskDependencyType enum | `prisma/schema.prisma` | Done |
+| Task fields: milestoneId, deliverable, sharepointUrl, archivedAt | `prisma/schema.prisma` | Done |
+| ChecklistItem: assigneeId + dueDate | `prisma/schema.prisma` | Done |
+| Task duplicate API (POST /tasks/[id]/duplicate) | `src/app/api/tasks/[id]/duplicate/route.ts` | Done |
+| Task soft-delete archive (DELETE /tasks/[id]) | `src/app/api/tasks/[id]/route.ts` | Done |
+| Task restore (POST /tasks/[id]/restore) | `src/app/api/tasks/[id]/restore/route.ts` | Done |
+| Dependency CRUD (GET/POST/DELETE /tasks/[id]/dependencies) | `src/app/api/tasks/[id]/dependencies/route.ts` | Done |
+| GET/PATCH extended for new fields + includes | `src/app/api/tasks/[id]/route.ts` | Done |
+| Checklist assignee + dueDate support | `src/app/api/tasks/[id]/checklist/route.ts` | Done |
+| Project tasks: archive filter, new field support | `src/app/api/projects/[id]/tasks/route.ts` | Done |
+| Task detail UI: action menu, archived banner, dependencies sidebar | `src/app/tasks/[id]/page.tsx` | Done |
+| Milestone, deliverable, SharePoint link display | `src/app/tasks/[id]/page.tsx` | Done |
+| Checklist assignee names + due dates | `src/app/tasks/[id]/page.tsx` | Done |
+| Cross-org boundary check on dependencies (M1) | `src/app/api/tasks/[id]/dependencies/route.ts` | Done |
+| Permission guard on restore (M2) | `src/app/api/tasks/[id]/restore/route.ts` | Done |
+| Safe JSON.parse for attachments (M3) | `src/app/tasks/[id]/page.tsx` | Done |
+| Optimistic UI preserves dependencies/milestone (S8) | `src/app/tasks/[id]/page.tsx` | Done |
+| Sprint 1 tests (35 tests) | `src/lib/__tests__/sprint1-task-workflow.test.ts` | Done |
+
+**Schema:** TaskDependency model with unique constraint on (taskId, dependsOnId), cascade deletes. Task model extended with milestone relation, deliverable, sharepointUrl, archivedAt for soft-delete. ChecklistItem extended with assignee relation and dueDate.
+
+**Security:** Dependencies endpoint validates target task belongs to same organisation (prevents cross-org data leak). Restore endpoint requires isOwner || isManager. Attachments JSON parsed safely with try/catch fallback.
+
+**Verification:** 0 type errors. 1296 tests passing (35 new). Commit 6a6ab9e pushed.
