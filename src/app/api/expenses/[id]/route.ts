@@ -34,11 +34,17 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     throw new NotFoundError('Expense claim not found')
   }
 
+  // Org boundary — prevent cross-org access
+  if (claim.profile.organisationId !== profile.organisationId) {
+    throw new NotFoundError('Expense claim not found')
+  }
+
   const isOwner = claim.profileId === profile.id
   const isApprover = claim.approverId === profile.id
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const isFinance = profile.orgPermission === 'FINANCE' || isAdmin
 
-  if (!isOwner && !isApprover && !isAdmin) {
+  if (!isOwner && !isApprover && !isAdmin && !isFinance) {
     throw new PermissionError('You do not have access to this expense claim')
   }
 
@@ -86,21 +92,29 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const isOwner = claim.profileId === profile.id
   const isClaimApprover = claim.approverId === profile.id
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const isFinance = profile.orgPermission === 'FINANCE' || isAdmin
 
   if (isRequesterTransition(newStatus) && !isOwner) {
     throw new PermissionError('Only the claimant can perform this action')
   }
 
-  if (isApproverTransition(newStatus) && !isClaimApprover && !isAdmin) {
-    throw new PermissionError('Only the assigned approver or an admin can perform this action')
+  if (isApproverTransition(newStatus) && !isClaimApprover && !isAdmin && !isFinance) {
+    throw new PermissionError('Only the assigned approver, finance, or an admin can perform this action')
   }
 
-  if (isAdminTransition(newStatus) && !isAdmin) {
-    throw new PermissionError('Only an admin can perform this action')
+  if (isAdminTransition(newStatus) && !isAdmin && !isFinance) {
+    throw new PermissionError('Only an admin or finance can perform this action')
   }
 
   // Build update
-  const updateData: Record<string, unknown> = { status: newStatus }
+  const updateData: Record<string, unknown> = {
+    status: newStatus,
+    ...(comment ? { approvalComment: comment } : {}),
+  }
+
+  if (newStatus === 'SUBMITTED') {
+    updateData.submittedAt = new Date()
+  }
 
   if (newStatus === 'APPROVED' || newStatus === 'REJECTED') {
     updateData.approvedAt = new Date()

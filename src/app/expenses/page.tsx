@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Wallet, Plus, Loader2, AlertTriangle, RefreshCw,
-  X, ArrowRight, Ban, Upload, Paperclip, FileCheck, ExternalLink,
+  X, ArrowRight, Ban, Upload, Paperclip, FileCheck, ExternalLink, Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -15,14 +15,18 @@ import { SkeletonRow } from '@/components/Skeleton'
 interface ExpenseClaim {
   id: string
   category: string
+  expenseCategory: string
   description: string
   amount: number
   currency: string
+  costCode: string | null
+  supplier: string | null
   receiptUrl: string | null
   status: string
   projectId: string | null
+  approvalComment: string | null
   createdAt: string
-  profile: { id: string; fullName: string }
+  profile: { id: string; fullName: string; department?: string | null }
   approver: { id: string; fullName: string } | null
 }
 
@@ -52,6 +56,9 @@ const EXPENSE_CATEGORIES: { value: string; label: string }[] = [
   { value: 'TRAINING', label: 'Training' },
   { value: 'PPE', label: 'PPE' },
   { value: 'SITE_EXPENSES', label: 'Site expenses' },
+  { value: 'MATERIALS', label: 'Materials' },
+  { value: 'SUBCONTRACTOR', label: 'Subcontractor' },
+  { value: 'PROFESSIONAL_FEES', label: 'Professional fees' },
   { value: 'OTHER', label: 'Other' },
 ]
 
@@ -109,9 +116,12 @@ export default function ExpensesPage() {
   const [formAmount, setFormAmount] = useState('')
   const [formCurrency, setFormCurrency] = useState('NGN')
   const [formProjectId, setFormProjectId] = useState('')
+  const [formCostCode, setFormCostCode] = useState('')
+  const [formSupplier, setFormSupplier] = useState('')
   const [formReceiptUrl, setFormReceiptUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadedFileName, setUploadedFileName] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const { mutate: createExpense, loading: creating } = useApiMutation<ExpenseClaim>('/api/expenses', 'POST')
 
@@ -193,11 +203,14 @@ export default function ExpensesPage() {
     if (!formDescription.trim() || isNaN(amt) || amt <= 0) return
 
     const result = await createExpense({
+      expenseCategory: formCategory,
       category: formCategory,
       description: formDescription.trim(),
       amount: amt,
       currency: formCurrency,
       ...(formProjectId ? { projectId: formProjectId } : {}),
+      ...(formCostCode.trim() ? { costCode: formCostCode.trim() } : {}),
+      ...(formSupplier.trim() ? { supplier: formSupplier.trim() } : {}),
       ...(formReceiptUrl ? { receiptUrl: formReceiptUrl } : {}),
     })
 
@@ -209,6 +222,8 @@ export default function ExpensesPage() {
       setFormAmount('')
       setFormCurrency('NGN')
       setFormProjectId('')
+      setFormCostCode('')
+      setFormSupplier('')
       setFormReceiptUrl('')
       setUploadedFileName('')
       fetchData()
@@ -224,8 +239,14 @@ export default function ExpensesPage() {
     setFormAmount('')
     setFormCurrency('NGN')
     setFormProjectId('')
+    setFormCostCode('')
+    setFormSupplier('')
     setFormReceiptUrl('')
     setUploadedFileName('')
+  }
+
+  const handleExport = () => {
+    window.open('/api/export?type=expenses', '_blank')
   }
 
   /* ── Quick actions ───────────────────────────────── */
@@ -250,7 +271,9 @@ export default function ExpensesPage() {
 
   /* ── Filter ──────────────────────────────────────── */
 
-  const filtered = statusFilter === 'ALL' ? claims : claims.filter((c) => c.status === statusFilter)
+  const filtered = claims
+    .filter((c) => statusFilter === 'ALL' || c.status === statusFilter)
+    .filter((c) => !categoryFilter || c.expenseCategory === categoryFilter || c.category === categoryFilter)
   const statusCounts = claims.reduce<Record<string, number>>((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1
     return acc
@@ -312,13 +335,22 @@ export default function ExpensesPage() {
           </p>
         </div>
         {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors self-start shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            New expense
-          </button>
+          <div className="flex items-center gap-2 self-start shrink-0">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-ink-200 text-ink-600 text-[12px] font-medium hover:bg-ink-50 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New expense
+            </button>
+          </div>
         )}
       </div>
 
@@ -411,6 +443,32 @@ export default function ExpensesPage() {
             </div>
           )}
 
+          {/* Cost Code + Supplier */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="exp-costcode" className="block text-[11px] font-medium text-ink-500 mb-1">Cost Code</label>
+              <input
+                id="exp-costcode"
+                type="text"
+                value={formCostCode}
+                onChange={(e) => setFormCostCode(e.target.value)}
+                placeholder="e.g. 4200-TRAVEL"
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
+              />
+            </div>
+            <div>
+              <label htmlFor="exp-supplier" className="block text-[11px] font-medium text-ink-500 mb-1">Supplier</label>
+              <input
+                id="exp-supplier"
+                type="text"
+                value={formSupplier}
+                onChange={(e) => setFormSupplier(e.target.value)}
+                placeholder="Supplier name"
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
+              />
+            </div>
+          </div>
+
           {/* Receipt upload */}
           <div>
             <label className="block text-[11px] font-medium text-ink-500 mb-1 uppercase">Receipt</label>
@@ -484,26 +542,38 @@ export default function ExpensesPage() {
       )}
 
       {/* ── Filter bar ─────────────────────────────── */}
-      <div className="flex gap-1 flex-wrap">
-        {STATUS_FILTERS.map((f) => {
-          const count = f.value === 'ALL' ? claims.length : (statusCounts[f.value] || 0)
-          if (f.value !== 'ALL' && count === 0) return null
-          return (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={cn(
-                'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
-                statusFilter === f.value
-                  ? 'bg-ink-900 text-white'
-                  : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
-              )}
-            >
-              {f.label}
-              {count > 0 && <span className={cn('ml-1', statusFilter === f.value ? 'text-ink-300' : 'text-ink-400')}>{count}</span>}
-            </button>
-          )
-        })}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1 flex-wrap">
+          {STATUS_FILTERS.map((f) => {
+            const count = f.value === 'ALL' ? claims.length : (statusCounts[f.value] || 0)
+            if (f.value !== 'ALL' && count === 0) return null
+            return (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                  statusFilter === f.value
+                    ? 'bg-ink-900 text-white'
+                    : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
+                )}
+              >
+                {f.label}
+                {count > 0 && <span className={cn('ml-1', statusFilter === f.value ? 'text-ink-300' : 'text-ink-400')}>{count}</span>}
+              </button>
+            )
+          })}
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-[11px] font-medium border border-ink-200 bg-white text-ink-600 focus:outline-none focus:ring-2 focus:ring-accent-300"
+        >
+          <option value="">All categories</option>
+          {EXPENSE_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* ── Claims list ────────────────────────────── */}
@@ -516,7 +586,7 @@ export default function ExpensesPage() {
       ) : (
         <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
           {filtered.map((claim) => {
-            const catLabel = EXPENSE_CATEGORIES.find((c) => c.value === claim.category)?.label || claim.category
+            const catLabel = EXPENSE_CATEGORIES.find((c) => c.value === (claim.expenseCategory || claim.category))?.label || claim.category
             return (
               <div key={claim.id} className="flex items-center gap-4 px-5 py-4">
                 {/* Category icon */}
@@ -535,6 +605,8 @@ export default function ExpensesPage() {
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <p className="text-[11px] text-ink-400">
                       {catLabel} · {new Date(claim.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {claim.supplier && ` · ${claim.supplier}`}
+                      {claim.costCode && ` · ${claim.costCode}`}
                       {claim.projectId && (() => {
                         const proj = projects.find((p) => p.id === claim.projectId)
                         return proj ? ` · ${proj.name}` : null

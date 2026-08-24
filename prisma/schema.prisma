@@ -67,6 +67,7 @@ model Organisation {
   feeQuotes           FeeQuote[]
   approvalRoutes      ApprovalRoute[]
   approvalInstances   ApprovalInstance[]
+  externalLinks       ExternalLink[]
 
   @@map("organisations")
 }
@@ -245,6 +246,7 @@ model Profile {
   approvalSubmissions        ApprovalInstance[]     @relation("ApprovalSubmitter")
   approvalStepsAsApprover    ApprovalStepInstance[] @relation("ApprovalStepApprover")
   approvalStepsEscalatedTo   ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
+  externalLinksCreated       ExternalLink[]         @relation("ExternalLinkCreator")
 
   @@map("profiles")
 }
@@ -1044,23 +1046,45 @@ enum RequestStatus {
 }
 
 model ExpenseClaim {
-  id          String        @id @default(cuid())
-  profileId   String        @map("profile_id")
-  projectId   String?       @map("project_id")
-  category    String
-  description String
-  amount      Float
-  currency    Currency      @default(NGN)
-  receiptUrl  String?       @map("receipt_url")
-  status      RequestStatus @default(DRAFT)
-  approverId  String?       @map("approver_id")
-  approvedAt  DateTime?     @map("approved_at")
-  createdAt   DateTime      @default(now()) @map("created_at")
+  id              String          @id @default(cuid())
+  profileId       String          @map("profile_id")
+  projectId       String?         @map("project_id")
+  category        String
+  expenseCategory ExpenseCategory @default(OTHER) @map("expense_category")
+  description     String
+  amount          Float
+  currency        Currency        @default(NGN)
+  costCode        String?         @map("cost_code")
+  supplier        String?
+  receiptUrl      String?         @map("receipt_url")
+  status          RequestStatus   @default(DRAFT)
+  approverId      String?         @map("approver_id")
+  approvedAt      DateTime?       @map("approved_at")
+  approvalComment String?         @map("approval_comment")
+  submittedAt     DateTime?       @map("submitted_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
 
   profile  Profile  @relation("ExpenseClaimant", fields: [profileId], references: [id])
   approver Profile? @relation("ExpenseApprover", fields: [approverId], references: [id])
 
   @@map("expense_claims")
+}
+
+enum ExpenseCategory {
+  TRAVEL
+  ACCOMMODATION
+  MEALS
+  EQUIPMENT
+  SOFTWARE
+  PRINTING
+  POSTAGE
+  TRAINING
+  PPE
+  SITE_EXPENSES
+  MATERIALS
+  SUBCONTRACTOR
+  PROFESSIONAL_FEES
+  OTHER
 }
 
 model Asset {
@@ -2455,4 +2479,33 @@ model ApprovalStepInstance {
 
   @@unique([instanceId, stepOrder])
   @@map("approval_step_instances")
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXTERNAL LINKS — Unified SharePoint / URL layer
+// ═══════════════════════════════════════════════════════════
+
+model ExternalLink {
+  id             String           @id @default(cuid())
+  organisationId String           @map("organisation_id")
+  entityType     String           @map("entity_type") // e.g. "project", "task", "expense", "document"
+  entityId       String           @map("entity_id")
+  linkType       ExternalLinkType @default(EXTERNAL_URL) @map("link_type")
+  url            String
+  label          String
+  createdById    String           @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  createdBy    Profile      @relation("ExternalLinkCreator", fields: [createdById], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([organisationId])
+  @@map("external_links")
+}
+
+enum ExternalLinkType {
+  SHAREPOINT_FOLDER
+  SHAREPOINT_DOCUMENT
+  EXTERNAL_URL
 }
