@@ -20,8 +20,14 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const month = parseInt(url.searchParams.get('month') || String(now.getMonth() + 1), 10)
   const year = parseInt(url.searchParams.get('year') || String(now.getFullYear()), 10)
 
+  // BUG-16: Additional filters
+  const departmentFilter = url.searchParams.get('department')
+  const officeIdFilter = url.searchParams.get('officeId')
+  const leaveTypeFilter = url.searchParams.get('leaveType')
+
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isManager = profile.orgPermission === 'MANAGER' || isAdmin
+  const isHR = profile.orgPermission === 'HR'
+  const isManager = profile.orgPermission === 'MANAGER' || isAdmin || isHR
 
   if (!isManager) {
     throw new PermissionError('Only managers and admins can view team leave')
@@ -33,10 +39,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   // Build the where clause
   const where: Record<string, unknown> = {
-    // Leave that overlaps with the requested month
     startDate: { lte: endOfMonth },
     endDate: { gte: startOfMonth },
-    // Only show approved, pending, or in-progress leave
     status: {
       in: [
         'SUBMITTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED',
@@ -45,16 +49,21 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     },
   }
 
-  if (isAdmin) {
-    // Admin sees all org leave
-    where.profile = { organisationId: profile.organisationId }
-  } else {
-    // Manager sees their direct reports' leave
-    where.profile = {
-      managerId: profile.id,
-      organisationId: profile.organisationId,
-    }
+  if (leaveTypeFilter) {
+    where.leaveType = leaveTypeFilter
   }
+
+  // Build profile filters
+  const profileFilters: Record<string, unknown> = {
+    organisationId: profile.organisationId,
+  }
+  if (!isAdmin && !isHR) {
+    profileFilters.managerId = profile.id
+  }
+  if (departmentFilter) profileFilters.department = departmentFilter
+  if (officeIdFilter) profileFilters.officeId = officeIdFilter
+
+  where.profile = profileFilters
 
   const teamLeave = await prisma.leaveRequest.findMany({
     where,
@@ -65,6 +74,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
           fullName: true,
           jobTitle: true,
           avatarUrl: true,
+          department: true,
+          officeId: true,
+          office: { select: { id: true, name: true } },
         },
       },
     },
@@ -72,9 +84,15 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   })
 
   // Also return the team member list for the calendar
-  const teamMembersWhere = isAdmin
-    ? { organisationId: profile.organisationId, status: 'ACTIVE' as const }
-    : { managerId: profile.id, organisationId: profile.organisationId, status: 'ACTIVE' as const }
+  const teamMembersWhere: Record<string, unknown> = {
+    organisationId: profile.organisationId,
+    status: 'ACTIVE' as const,
+  }
+  if (!isAdmin && !isHR) {
+    teamMembersWhere.managerId = profile.id
+  }
+  if (departmentFilter) teamMembersWhere.department = departmentFilter
+  if (officeIdFilter) teamMembersWhere.officeId = officeIdFilter
 
   const teamMembers = await prisma.profile.findMany({
     where: teamMembersWhere,
@@ -83,13 +101,27 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       fullName: true,
       jobTitle: true,
       avatarUrl: true,
+      department: true,
     },
     orderBy: { fullName: 'asc' },
+  })
+
+  // Return public holidays for the month
+  const holidays = await prisma.publicHoliday.findMany({
+    where: {
+      organisationId: profile.organisationId,
+      date: { gte: startOfMonth, lte: endOfMonth },
+    },
+    include: {
+      office: { select: { id: true, name: true } },
+    },
+    orderBy: { date: 'asc' },
   })
 
   return success({
     teamLeave,
     teamMembers,
+    holidays,
     month,
     year,
   })

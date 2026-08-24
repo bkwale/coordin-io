@@ -90,11 +90,12 @@ describe('Leave status state machine (PRD S20)', () => {
     expect(Object.keys(LEAVE_TRANSITIONS)).toHaveLength(11)
   })
 
-  it('SUBMITTED can go to LINE_MANAGER_APPROVED, REJECTED, or WITHDRAWN', () => {
+  it('SUBMITTED can go to LINE_MANAGER_APPROVED, UNDER_REVIEW, REJECTED, or WITHDRAWN', () => {
     expect(LEAVE_TRANSITIONS.SUBMITTED).toContain('LINE_MANAGER_APPROVED')
+    expect(LEAVE_TRANSITIONS.SUBMITTED).toContain('UNDER_REVIEW')
     expect(LEAVE_TRANSITIONS.SUBMITTED).toContain('REJECTED')
     expect(LEAVE_TRANSITIONS.SUBMITTED).toContain('WITHDRAWN')
-    expect(LEAVE_TRANSITIONS.SUBMITTED).toHaveLength(3)
+    expect(LEAVE_TRANSITIONS.SUBMITTED).toHaveLength(4)
   })
 
   it('LINE_MANAGER_APPROVED can go to HR_APPROVED or REJECTED', () => {
@@ -121,7 +122,7 @@ describe('Leave status state machine (PRD S20)', () => {
   })
 
   it('getValidNextLeaveStatuses returns correct leave transitions', () => {
-    expect(getValidNextLeaveStatuses('SUBMITTED')).toEqual(['LINE_MANAGER_APPROVED', 'REJECTED', 'WITHDRAWN'])
+    expect(getValidNextLeaveStatuses('SUBMITTED')).toEqual(['LINE_MANAGER_APPROVED', 'UNDER_REVIEW', 'REJECTED', 'WITHDRAWN'])
     expect(getValidNextLeaveStatuses('APPROVED')).toEqual(['CANCELLED'])
   })
 })

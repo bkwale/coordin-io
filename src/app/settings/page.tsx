@@ -5,7 +5,7 @@ import {
   Building2, Users, CreditCard, Hash, Globe, Puzzle, Shield,
   Save, Plus, Mail, CheckCircle, XCircle, Clock, UserPlus,
   ChevronRight, Loader2, Pencil, X, Trash2, Star,
-  ScrollText, Download, ChevronLeft, Filter,
+  ScrollText, Download, ChevronLeft, Filter, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -66,6 +66,7 @@ const SETTINGS_TABS = [
   { key: 'governance', label: 'AI Governance', icon: Shield, description: 'AI source permissions & audit' },
   { key: 'audit', label: 'Audit Trail', icon: ScrollText, description: 'Activity log & export' },
   { key: 'approvals', label: 'Approval Workflows', icon: CheckCircle, description: 'Configure approval routes' },
+  { key: 'holidays', label: 'Public Holidays', icon: CalendarDays, description: 'Manage public holidays' },
 ] as const
 
 type TabKey = typeof SETTINGS_TABS[number]['key']
@@ -147,6 +148,7 @@ export default function SettingsPage() {
               {activeTab === 'governance' && <GovernanceSection />}
               {activeTab === 'audit' && <AuditSection />}
               {activeTab === 'approvals' && <ApprovalRoutesSection />}
+              {activeTab === 'holidays' && <PublicHolidaysSection />}
             </div>
           </div>
         </div>
@@ -1983,6 +1985,294 @@ function FieldGroup({
       </label>
       {hint && <p className="text-[11px] text-ink-300 mb-2">{hint}</p>}
       {children}
+    </div>
+  )
+}
+
+// ── Public Holidays Section ───────────────────────────────
+
+interface PublicHoliday {
+  id: string
+  name: string
+  date: string
+  country: string
+  isRecurring: boolean
+  officeId: string | null
+  office: { id: string; name: string } | null
+}
+
+function PublicHolidaysSection() {
+  const [holidays, setHolidays] = useState<PublicHoliday[]>([])
+  const [offices, setOffices] = useState<Array<{ id: string; name: string }>>([])
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({
+    name: '', date: '', country: 'GB', isRecurring: false, officeId: '',
+  })
+
+  const fetchHolidays = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [hRes, oRes] = await Promise.all([
+        fetch(`/api/public-holidays?year=${year}`),
+        fetch('/api/settings/org'),
+      ])
+      if (!hRes.ok) throw new Error('Failed to load holidays')
+      const hData = await hRes.json()
+      setHolidays(hData.holidays ?? [])
+      if (oRes.ok) {
+        const oData = await oRes.json()
+        setOffices((oData.organisation?.offices ?? []).map((o: OfficeData) => ({ id: o.id, name: o.name })))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [year])
+
+  useEffect(() => { fetchHolidays() }, [fetchHolidays])
+
+  function resetForm() {
+    setForm({ name: '', date: '', country: 'GB', isRecurring: false, officeId: '' })
+    setShowForm(false)
+    setEditingId(null)
+  }
+
+  function startEdit(h: PublicHoliday) {
+    setEditingId(h.id)
+    setForm({
+      name: h.name,
+      date: h.date.substring(0, 10),
+      country: h.country,
+      isRecurring: h.isRecurring,
+      officeId: h.officeId ?? '',
+    })
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    setBusy(true)
+    setError(null)
+    try {
+      const payload = {
+        name: form.name,
+        date: form.date,
+        country: form.country,
+        isRecurring: form.isRecurring,
+        officeId: form.officeId || null,
+      }
+      const url = editingId ? `/api/public-holidays/${editingId}` : '/api/public-holidays'
+      const method = editingId ? 'PATCH' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const e = await res.json()
+        throw new Error(e.error || 'Failed to save')
+      }
+      resetForm()
+      await fetchHolidays()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this public holiday?')) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/public-holidays/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete')
+      await fetchHolidays()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const currentYear = new Date().getFullYear()
+
+  if (loading) return <LoadingState />
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-ink-900">Public Holidays</h2>
+          <p className="text-[12px] text-ink-400 mt-1">
+            Define public holidays for your organisation. These appear on team calendars and exclude from working-day calculations.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value))}
+            className="px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+          >
+            {[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { resetForm(); setShowForm(true) }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700"
+          >
+            <Plus className="w-4 h-4" /> Add Holiday
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-[13px] text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</div>
+      )}
+
+      {/* Add / Edit Form */}
+      {showForm && (
+        <div className="border border-surface-200 rounded-lg p-4 bg-surface-50 space-y-4">
+          <p className="text-[13px] font-medium text-ink-700">
+            {editingId ? 'Edit Holiday' : 'Add Holiday'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Name *</label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Christmas Day"
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Date *</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Country</label>
+              <input
+                value={form.country}
+                onChange={(e) => setForm({ ...form, country: e.target.value })}
+                placeholder="GB"
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Office (optional)</label>
+              <select
+                value={form.officeId}
+                onChange={(e) => setForm({ ...form, officeId: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+              >
+                <option value="">All offices (global)</option>
+                {offices.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[13px] text-ink-600">
+            <input
+              type="checkbox"
+              checked={form.isRecurring}
+              onChange={(e) => setForm({ ...form, isRecurring: e.target.checked })}
+              className="rounded border-surface-300"
+            />
+            Recurring annually
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={busy || !form.name || !form.date}
+              className="flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {editingId ? 'Update' : 'Save'}
+            </button>
+            <button
+              onClick={resetForm}
+              className="px-4 py-2 text-[13px] text-ink-500 hover:text-ink-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Holiday List */}
+      {holidays.length === 0 ? (
+        <EmptyState icon={CalendarDays} title="No public holidays" description={`No holidays defined for ${year}. Add your first holiday above.`} />
+      ) : (
+        <div className="border border-surface-200 rounded-lg overflow-hidden">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="bg-surface-50 border-b border-surface-200">
+                <th className="text-left px-4 py-3 font-medium text-ink-500">Holiday</th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500">Date</th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500 hidden sm:table-cell">Office</th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500 hidden sm:table-cell">Country</th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500 hidden md:table-cell">Recurring</th>
+                <th className="text-right px-4 py-3 font-medium text-ink-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {holidays.map((h) => (
+                <tr key={h.id} className="border-b border-surface-100 last:border-0 hover:bg-surface-50/50">
+                  <td className="px-4 py-3 text-ink-900 font-medium">{h.name}</td>
+                  <td className="px-4 py-3 text-ink-600">
+                    {new Date(h.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </td>
+                  <td className="px-4 py-3 text-ink-500 hidden sm:table-cell">
+                    {h.office?.name ?? <span className="text-ink-300">All</span>}
+                  </td>
+                  <td className="px-4 py-3 text-ink-500 hidden sm:table-cell">{h.country}</td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    {h.isRecurring ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-600 text-[11px] font-medium">
+                        <CheckCircle className="w-3.5 h-3.5" /> Yes
+                      </span>
+                    ) : (
+                      <span className="text-ink-300 text-[11px]">No</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => startEdit(h)}
+                        className="p-1.5 text-ink-400 hover:text-ink-600 rounded"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(h.id)}
+                        className="p-1.5 text-ink-400 hover:text-red-600 rounded"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

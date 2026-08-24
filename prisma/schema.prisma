@@ -53,6 +53,7 @@ model Organisation {
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
   offices             Office[]
+  publicHolidays      PublicHoliday[]
   profiles            Profile[]
   projects            Project[]
   invitations         Invitation[]
@@ -83,8 +84,26 @@ model Office {
   profiles        Profile[]
   projects        Project[]
   serviceRequests ServiceRequest[] @relation("ServiceRequestOffice")
+  publicHolidays  PublicHoliday[]
 
   @@map("offices")
+}
+
+model PublicHoliday {
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  officeId       String?  @map("office_id") // null = applies to all offices
+  name           String
+  date           DateTime
+  isRecurring    Boolean  @default(false) @map("is_recurring") // repeats annually
+  country        String   @default("GB")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  office       Office?      @relation(fields: [officeId], references: [id])
+
+  @@index([organisationId, date])
+  @@map("public_holidays")
 }
 
 model CorporateRole {

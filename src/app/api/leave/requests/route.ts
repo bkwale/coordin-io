@@ -27,6 +27,14 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const yearParam = url.searchParams.get('year')
   const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear()
 
+  // BUG-16: Additional filters
+  const leaveTypeFilter = url.searchParams.get('leaveType')
+  const departmentFilter = url.searchParams.get('department')
+  const officeIdFilter = url.searchParams.get('officeId')
+  const managerIdFilter = url.searchParams.get('managerId')
+  const dateFromFilter = url.searchParams.get('dateFrom')
+  const dateToFilter = url.searchParams.get('dateTo')
+
   let where: Record<string, unknown>
 
   if (showAll && (profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER')) {
@@ -50,10 +58,38 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     }
   }
 
+  // Apply additional filters (BUG-16)
+  if (leaveTypeFilter) {
+    where.leaveType = leaveTypeFilter
+  }
+  if (dateFromFilter) {
+    where.startDate = { ...(where.startDate as Record<string, unknown> ?? {}), gte: new Date(dateFromFilter) }
+  }
+  if (dateToFilter) {
+    where.endDate = { ...(where.endDate as Record<string, unknown> ?? {}), lte: new Date(dateToFilter) }
+  }
+
+  // Profile-level filters (department, office, manager) — nest into profile where clause
+  const profileFilters: Record<string, unknown> = {}
+  if (departmentFilter) profileFilters.department = departmentFilter
+  if (officeIdFilter) profileFilters.officeId = officeIdFilter
+  if (managerIdFilter) profileFilters.managerId = managerIdFilter
+
+  if (Object.keys(profileFilters).length > 0) {
+    const existing = (where.profile as Record<string, unknown>) ?? {}
+    where.profile = { ...existing, ...profileFilters }
+  }
+
   const requests = await prisma.leaveRequest.findMany({
     where,
     include: {
-      profile: { select: { id: true, fullName: true, jobTitle: true } },
+      profile: {
+        select: {
+          id: true, fullName: true, jobTitle: true,
+          department: true, officeId: true, managerId: true,
+          office: { select: { id: true, name: true } },
+        },
+      },
       approver: { select: { id: true, fullName: true } },
     },
     orderBy: { startDate: 'desc' },

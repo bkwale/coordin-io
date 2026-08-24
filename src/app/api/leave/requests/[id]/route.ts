@@ -92,11 +92,20 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const isOwner = leaveRequest.profileId === profile.id
   const isApproverUser = leaveRequest.approverId === profile.id
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
-  const isHR = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+  const isHR = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR'
   const isLineManager = leaveRequest.profile.managerId === profile.id
 
-  if (isRequesterTransition(newStatus) && !isOwner) {
+  // Re-submission from UNDER_REVIEW is a requester action
+  if (isRequesterTransition(newStatus) && currentStatus !== 'UNDER_REVIEW' && !isOwner) {
     throw new PermissionError('Only the requester can perform this action')
+  }
+  if (newStatus === 'SUBMITTED' && currentStatus === 'UNDER_REVIEW' && !isOwner) {
+    throw new PermissionError('Only the requester can re-submit after info request')
+  }
+
+  // UNDER_REVIEW ("request info") can be done by line manager, approver, or admin
+  if (newStatus === 'UNDER_REVIEW' && !isLineManager && !isApproverUser && !isAdmin) {
+    throw new PermissionError('Only the line manager, approver, or an admin can request more information')
   }
 
   // LINE_MANAGER_APPROVED requires being the line manager or admin
@@ -216,6 +225,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     WITHDRAWN: AuditActions.LEAVE_WITHDRAWN,
     LINE_MANAGER_APPROVED: 'leave.line_manager_approved',
     HR_APPROVED: 'leave.hr_approved',
+    UNDER_REVIEW: 'leave.info_requested',
     CANCELLED: 'leave.cancelled',
   }
   if (actionMap[newStatus]) {
@@ -243,6 +253,16 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       title: `${requesterName} submitted a leave request`,
       body: `${leaveRequest.leaveType} leave — ${leaveRequest.days} day(s)`,
       linkUrl: `/leave?role=approver`,
+    }).catch(() => {})
+  }
+  if (newStatus === 'UNDER_REVIEW') {
+    // Notify the requester that more info is needed
+    await createNotification({
+      profileId: leaveRequest.profileId,
+      type: NOTIFICATION_EVENTS.LEAVE_DECISION,
+      title: 'More information requested for your leave request',
+      body: comment ?? 'Your approver has requested additional information. Please review and re-submit.',
+      linkUrl: `/leave`,
     }).catch(() => {})
   }
   if (['APPROVED', 'REJECTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED', 'CANCELLED'].includes(newStatus)) {

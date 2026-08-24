@@ -49,15 +49,15 @@ const VALID_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
  */
 const LEAVE_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
   DRAFT: ['SUBMITTED', 'WITHDRAWN'],
-  SUBMITTED: ['LINE_MANAGER_APPROVED', 'REJECTED', 'WITHDRAWN'],
-  LINE_MANAGER_APPROVED: ['HR_APPROVED', 'REJECTED'],
+  SUBMITTED: ['LINE_MANAGER_APPROVED', 'UNDER_REVIEW', 'REJECTED', 'WITHDRAWN'],
+  LINE_MANAGER_APPROVED: ['HR_APPROVED', 'UNDER_REVIEW', 'REJECTED'],
   HR_APPROVED: ['APPROVED', 'REJECTED'],
   APPROVED: ['CANCELLED'],
   REJECTED: [],
   CANCELLED: [],
   WITHDRAWN: [],
-  // Not used in leave flow but required by type
-  UNDER_REVIEW: [],
+  // UNDER_REVIEW = "request info" — requester can re-submit
+  UNDER_REVIEW: ['SUBMITTED'],
   FULFILMENT_IN_PROGRESS: [],
   COMPLETED: [],
 }

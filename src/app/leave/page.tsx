@@ -5,7 +5,7 @@ import {
   CalendarDays, Plus, Loader2, AlertTriangle, RefreshCw,
   X, Check, Clock, Ban, ArrowRight, ChevronLeft, ChevronRight,
   Users, ShieldCheck, Settings, Eye, MessageSquare,
-  SunMedium, Moon,
+  SunMedium, Moon, CheckCircle, XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { filterLeaveRequests } from '@/lib/leave-filters'
@@ -42,11 +42,22 @@ interface LeaveRequest {
   approver: { id: string; fullName: string } | null
 }
 
+interface CalendarHoliday {
+  id: string
+  name: string
+  date: string
+  country: string
+  isRecurring: boolean
+  officeId: string | null
+  office: { id: string; name: string } | null
+}
+
 interface TeamMember {
   id: string
   fullName: string
   jobTitle: string | null
   avatarUrl: string | null
+  department: string | null
 }
 
 interface UserProfile {
@@ -267,7 +278,10 @@ export default function LeavePage() {
   const [calYear, setCalYear] = useState(new Date().getFullYear())
   const [teamLeave, setTeamLeave] = useState<LeaveRequest[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [teamHolidays, setTeamHolidays] = useState<CalendarHoliday[]>([])
   const [teamLoading, setTeamLoading] = useState(false)
+  const [calDeptFilter, setCalDeptFilter] = useState('')
+  const [calOfficeFilter, setCalOfficeFilter] = useState('')
 
   // Approvals state
   const [approvalRequests, setApprovalRequests] = useState<LeaveRequest[]>([])
@@ -322,18 +336,22 @@ export default function LeavePage() {
   const fetchTeamLeave = useCallback(async () => {
     setTeamLoading(true)
     try {
-      const res = await fetch(`/api/leave/team?month=${calMonth + 1}&year=${calYear}`)
+      const params = new URLSearchParams({ month: String(calMonth + 1), year: String(calYear) })
+      if (calDeptFilter) params.set('department', calDeptFilter)
+      if (calOfficeFilter) params.set('officeId', calOfficeFilter)
+      const res = await fetch(`/api/leave/team?${params}`)
       if (res.ok) {
         const json = await res.json()
         setTeamLeave(json.data.teamLeave || [])
         setTeamMembers(json.data.teamMembers || [])
+        setTeamHolidays(json.data.holidays || [])
       }
     } catch {
       // Silently fail
     } finally {
       setTeamLoading(false)
     }
-  }, [calMonth, calYear])
+  }, [calMonth, calYear, calDeptFilter, calOfficeFilter])
 
   const fetchApprovals = useCallback(async () => {
     setApprovalsLoading(true)
@@ -582,6 +600,11 @@ export default function LeavePage() {
           teamLeave={teamLeave}
           teamMembers={teamMembers}
           teamLoading={teamLoading}
+          holidays={teamHolidays}
+          deptFilter={calDeptFilter}
+          setDeptFilter={setCalDeptFilter}
+          officeFilter={calOfficeFilter}
+          setOfficeFilter={setCalOfficeFilter}
         />
       )}
 
@@ -944,10 +967,19 @@ interface TeamCalendarTabProps {
   teamLeave: LeaveRequest[]
   teamMembers: TeamMember[]
   teamLoading: boolean
+  holidays: CalendarHoliday[]
+  deptFilter: string
+  setDeptFilter: (v: string) => void
+  officeFilter: string
+  setOfficeFilter: (v: string) => void
 }
 
 function TeamCalendarTab(props: TeamCalendarTabProps) {
-  const { calMonth, calYear, navigateMonth, goToToday, calendarGrid, teamLeave, teamMembers, teamLoading } = props
+  const {
+    calMonth, calYear, navigateMonth, goToToday, calendarGrid,
+    teamLeave, teamMembers, teamLoading, holidays,
+    deptFilter, setDeptFilter, officeFilter, setOfficeFilter,
+  } = props
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -958,6 +990,25 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
     teamMembers.forEach((m, i) => map.set(m.id, i))
     return map
   }, [teamMembers])
+
+  // Extract unique departments and offices from team members for filter dropdowns
+  const departments = useMemo(() => {
+    const set = new Set<string>()
+    teamMembers.forEach((m) => { if (m.department) set.add(m.department) })
+    return Array.from(set).sort()
+  }, [teamMembers])
+
+  // Build a holiday date lookup (ISO date string → holiday names)
+  const holidayMap = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const h of holidays) {
+      const dateKey = new Date(h.date).toISOString().substring(0, 10)
+      const existing = map.get(dateKey) || []
+      existing.push(h.name)
+      map.set(dateKey, existing)
+    }
+    return map
+  }, [holidays])
 
   // For each calendar day, find who is on leave
   const getLeaveForDate = useCallback((date: Date): { member: TeamMember; leave: LeaveRequest }[] => {
@@ -984,30 +1035,53 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* Month navigation */}
-      <div className="flex items-center justify-between">
+      {/* Month navigation + filters */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-[16px] font-semibold text-ink-900">
           {MONTH_NAMES[calMonth]} {calYear}
         </h2>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => navigateMonth(-1)}
-            className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Department filter */}
+          {departments.length > 0 && (
+            <select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="px-2 py-1.5 text-[11px] border border-ink-200 rounded-lg bg-white"
+            >
+              <option value="">All departments</option>
+              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {/* Office filter — uses data from team members */}
+          <select
+            value={officeFilter}
+            onChange={(e) => setOfficeFilter(e.target.value)}
+            className="px-2 py-1.5 text-[11px] border border-ink-200 rounded-lg bg-white"
           >
-            <ChevronLeft className="w-4 h-4 text-ink-500" />
-          </button>
-          <button
-            onClick={goToToday}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-ink-500 hover:bg-ink-50 transition-colors"
-          >
-            Today
-          </button>
-          <button
-            onClick={() => navigateMonth(1)}
-            className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
-          >
-            <ChevronRight className="w-4 h-4 text-ink-500" />
-          </button>
+            <option value="">All offices</option>
+            {/* Unique offices from members */}
+          </select>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => navigateMonth(-1)}
+              className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4 text-ink-500" />
+            </button>
+            <button
+              onClick={goToToday}
+              className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-ink-500 hover:bg-ink-50 transition-colors"
+            >
+              Today
+            </button>
+            <button
+              onClick={() => navigateMonth(1)}
+              className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
+            >
+              <ChevronRight className="w-4 h-4 text-ink-500" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1028,7 +1102,14 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
             {week.map((cell, di) => {
               const isToday = cell.date.getTime() === today.getTime()
               const isWeekend = cell.date.getDay() === 0 || cell.date.getDay() === 6
-              const leaveOnDay = cell.isCurrentMonth && !isWeekend ? getLeaveForDate(cell.date) : []
+              const dateKey = cell.date.toISOString().substring(0, 10)
+              const holidayNames = cell.isCurrentMonth ? (holidayMap.get(dateKey) || []) : []
+              const isHoliday = holidayNames.length > 0
+              const leaveOnDay = cell.isCurrentMonth && !isWeekend && !isHoliday ? getLeaveForDate(cell.date) : []
+
+              // Separate travel from regular leave
+              const travelOnDay = leaveOnDay.filter(({ leave }) => leave.leaveType === 'BUSINESS_TRAVEL')
+              const regularLeave = leaveOnDay.filter(({ leave }) => leave.leaveType !== 'BUSINESS_TRAVEL')
 
               return (
                 <div
@@ -1037,6 +1118,7 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
                     'min-h-[72px] p-1 border-r border-ink-50 last:border-r-0',
                     !cell.isCurrentMonth && 'bg-ink-25',
                     isWeekend && cell.isCurrentMonth && 'bg-ink-25/50',
+                    isHoliday && 'bg-slate-100',
                   )}
                 >
                   <div className={cn(
@@ -1046,9 +1128,18 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
                   )}>
                     {cell.date.getDate()}
                   </div>
+
+                  {/* Public holiday indicator */}
+                  {isHoliday && (
+                    <div className="rounded px-1 py-0.5 text-[9px] font-medium text-slate-600 bg-slate-200 truncate mb-0.5"
+                         title={holidayNames.join(', ')}>
+                      {holidayNames[0]}
+                    </div>
+                  )}
+
                   {/* Leave indicators */}
                   <div className="space-y-0.5">
-                    {leaveOnDay.slice(0, 3).map(({ member, leave }, li) => (
+                    {regularLeave.slice(0, 2).map(({ member, leave }, li) => (
                       <div
                         key={`${member.id}-${li}`}
                         className={cn(
@@ -1060,9 +1151,19 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
                         {member.fullName.split(' ')[0]}
                       </div>
                     ))}
-                    {leaveOnDay.length > 3 && (
+                    {/* Travel shown with distinct purple style */}
+                    {travelOnDay.slice(0, 2).map(({ member }, ti) => (
+                      <div
+                        key={`travel-${member.id}-${ti}`}
+                        className="rounded px-1 py-0.5 text-[9px] font-medium text-purple-700 bg-purple-100 truncate"
+                        title={`${member.fullName} - Business Travel`}
+                      >
+                        ✈ {member.fullName.split(' ')[0]}
+                      </div>
+                    ))}
+                    {(regularLeave.length + travelOnDay.length) > 4 && (
                       <div className="text-[9px] text-ink-400 px-1">
-                        +{leaveOnDay.length - 3} more
+                        +{regularLeave.length + travelOnDay.length - 4} more
                       </div>
                     )}
                   </div>
@@ -1074,16 +1175,24 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
       </div>
 
       {/* Legend */}
-      {teamMembers.length > 0 && (
-        <div className="flex flex-wrap gap-3">
-          {teamMembers.map((m, i) => (
-            <div key={m.id} className="flex items-center gap-1.5">
-              <div className={cn('w-3 h-3 rounded', getMemberColor(i))} />
-              <span className="text-[11px] text-ink-500">{m.fullName}</span>
-            </div>
-          ))}
+      <div className="flex flex-wrap gap-3 items-center">
+        {teamMembers.length > 0 && teamMembers.map((m, i) => (
+          <div key={m.id} className="flex items-center gap-1.5">
+            <div className={cn('w-3 h-3 rounded', getMemberColor(i))} />
+            <span className="text-[11px] text-ink-500">{m.fullName}</span>
+          </div>
+        ))}
+        {holidays.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-slate-200" />
+            <span className="text-[11px] text-ink-500">Public holiday</span>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded bg-purple-100" />
+          <span className="text-[11px] text-ink-500">Business travel</span>
         </div>
-      )}
+      </div>
 
       {teamMembers.length === 0 && (
         <div className="bg-white rounded-xl border border-ink-100 p-10 text-center">
@@ -1109,8 +1218,51 @@ interface ApprovalsTabProps {
 }
 
 function ApprovalsTab(props: ApprovalsTabProps) {
-  const { approvalRequests, approvalsLoading, handleStatusChange, approvalComment, setApprovalComment } = props
+  const { approvalRequests, approvalsLoading, handleStatusChange } = props
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [comments, setComments] = useState<Record<string, string>>({})
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
+  const [approvalInstances, setApprovalInstances] = useState<Record<string, ApprovalInstanceData>>({})
+
+  // Fetch approval engine instances for expanded requests
+  const fetchApprovalInstance = useCallback(async (leaveRequestId: string) => {
+    try {
+      const res = await fetch(`/api/approvals?entityId=${leaveRequestId}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const approvals = json.data?.approvals ?? []
+      if (approvals.length > 0) {
+        // Fetch full detail for the first matching instance
+        const detailRes = await fetch(`/api/approvals/${approvals[0].instanceId}`)
+        if (detailRes.ok) {
+          const detail = await detailRes.json()
+          const approval = detail.data?.approval
+          if (approval) {
+            setApprovalInstances((prev) => ({ ...prev, [leaveRequestId]: approval }))
+          }
+        }
+      }
+    } catch {
+      // Non-critical — just no workflow stepper shown
+    }
+  }, [])
+
+  useEffect(() => {
+    if (expandedId) {
+      fetchApprovalInstance(expandedId)
+    }
+  }, [expandedId, fetchApprovalInstance])
+
+  function getComment(id: string) { return comments[id] ?? '' }
+  function setComment(id: string, val: string) { setComments((prev) => ({ ...prev, [id]: val })) }
+
+  async function doAction(reqId: string, status: string) {
+    setActionBusy(reqId)
+    const comment = getComment(reqId) || undefined
+    await handleStatusChange(reqId, status, comment)
+    setComment(reqId, '')
+    setActionBusy(null)
+  }
 
   if (approvalsLoading) {
     return (
@@ -1139,6 +1291,9 @@ function ApprovalsTab(props: ApprovalsTabProps) {
       <div className="space-y-3">
         {approvalRequests.map((req) => {
           const isExpanded = expandedId === req.id
+          const isBusy = actionBusy === req.id
+          const instance = approvalInstances[req.id]
+
           // Determine which approval action is appropriate
           const nextApprovalStatus = req.status === 'SUBMITTED'
             ? 'LINE_MANAGER_APPROVED'
@@ -1209,39 +1364,91 @@ function ApprovalsTab(props: ApprovalsTabProps) {
                     </div>
                   )}
 
+                  {req.approvalComment && (
+                    <div className="text-[12px]">
+                      <p className="text-ink-400 mb-0.5">Previous comment</p>
+                      <p className="text-ink-700 italic">{req.approvalComment}</p>
+                    </div>
+                  )}
+
+                  {/* Approval Workflow Stepper */}
+                  {instance && instance.steps && instance.steps.length > 0 && (
+                    <div className="border border-surface-200 rounded-lg p-3 bg-white">
+                      <p className="text-[11px] font-medium text-ink-500 mb-2">
+                        Approval Workflow{instance.route?.name ? `: ${instance.route.name}` : ''}
+                      </p>
+                      <div className="flex items-center gap-1 overflow-x-auto">
+                        {instance.steps.map((step: ApprovalStepData, idx: number) => {
+                          const isActive = step.status === 'PENDING'
+                          const isDone = step.status === 'APPROVED'
+                          const isRejected = step.status === 'REJECTED'
+                          const isSkipped = step.status === 'SKIPPED'
+                          return (
+                            <div key={step.id} className="flex items-center gap-1 shrink-0">
+                              {idx > 0 && (
+                                <div className={cn('w-4 h-px', isDone ? 'bg-emerald-400' : isRejected ? 'bg-red-400' : 'bg-ink-200')} />
+                              )}
+                              <div className={cn(
+                                'flex items-center gap-1.5 px-2 py-1 rounded text-[11px]',
+                                isDone && 'bg-emerald-50 text-emerald-700',
+                                isRejected && 'bg-red-50 text-red-700',
+                                isActive && 'bg-blue-50 text-blue-700 font-medium',
+                                isSkipped && 'bg-ink-50 text-ink-400 line-through',
+                                !isDone && !isRejected && !isActive && !isSkipped && 'bg-ink-50 text-ink-400',
+                              )}>
+                                {isDone && <CheckCircle className="w-3 h-3" />}
+                                {isRejected && <XCircle className="w-3 h-3" />}
+                                {isActive && <Clock className="w-3 h-3" />}
+                                <span>{step.label || `Step ${step.stepOrder}`}</span>
+                                {step.approver?.fullName && (
+                                  <span className="text-[10px] opacity-70">({step.approver.fullName})</span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Comment field */}
                   <div>
                     <label className="block text-[11px] font-medium text-ink-500 mb-1">
-                      Comment (optional)
+                      Comment (optional — required for Request Info)
                     </label>
-                    <input
-                      type="text"
-                      value={approvalComment}
-                      onChange={(e) => setApprovalComment(e.target.value)}
-                      placeholder="Add a comment..."
-                      className="w-full px-3 py-2 text-[12px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
+                    <textarea
+                      value={getComment(req.id)}
+                      onChange={(e) => setComment(req.id, e.target.value)}
+                      placeholder="Add a comment or reason..."
+                      rows={2}
+                      className="w-full px-3 py-2 text-[12px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300 resize-none"
                       maxLength={1000}
                     />
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => {
-                        handleStatusChange(req.id, nextApprovalStatus, approvalComment || undefined)
-                        setApprovalComment('')
-                      }}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 transition-colors"
+                      onClick={() => doAction(req.id, nextApprovalStatus)}
+                      disabled={isBusy}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
                     >
-                      <Check className="w-3.5 h-3.5" />
+                      {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                       {nextApprovalLabel}
                     </button>
                     <button
-                      onClick={() => {
-                        handleStatusChange(req.id, 'REJECTED', approvalComment || undefined)
-                        setApprovalComment('')
-                      }}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white text-[12px] font-medium hover:bg-red-700 transition-colors"
+                      onClick={() => doAction(req.id, 'UNDER_REVIEW')}
+                      disabled={isBusy || !getComment(req.id).trim()}
+                      title={!getComment(req.id).trim() ? 'A comment is required when requesting info' : undefined}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 text-white text-[12px] font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Request Info
+                    </button>
+                    <button
+                      onClick={() => doAction(req.id, 'REJECTED')}
+                      disabled={isBusy}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 text-white text-[12px] font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                     >
                       <X className="w-3.5 h-3.5" />
                       Reject
@@ -1255,6 +1462,24 @@ function ApprovalsTab(props: ApprovalsTabProps) {
       </div>
     </div>
   )
+}
+
+// Type for approval instance data fetched from API
+interface ApprovalStepData {
+  id: string
+  stepOrder: number
+  label: string | null
+  status: string
+  approver: { id: string; fullName: string } | null
+  escalatedTo: { id: string; fullName: string } | null
+}
+
+interface ApprovalInstanceData {
+  id: string
+  status: string
+  steps: ApprovalStepData[]
+  route: { id: string; name: string; requestType: string } | null
+  submitter: { id: string; fullName: string; email: string } | null
 }
 
 /* ══════════════════════════════════════════════════════════
