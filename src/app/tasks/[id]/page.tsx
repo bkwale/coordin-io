@@ -7,7 +7,9 @@ import {
   ChevronRight, User, Users, Calendar, Clock,
   MessageSquare, CheckSquare, Send, Plus, Loader2,
   AlertTriangle, RefreshCw, Square, CheckSquare2,
-  Paperclip, FileText, Download, Trash2,
+  Paperclip, FileText, Download, Trash2, Copy,
+  Archive, ArchiveRestore, Link as LinkIcon, Milestone,
+  GitBranch, ArrowRight, MoreHorizontal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -34,6 +36,8 @@ interface ChecklistItem {
   mandatory: boolean
   sortOrder: number
   completedAt: string | null
+  assignee: { id: string; fullName: string } | null
+  dueDate: string | null
 }
 
 interface TaskComment {
@@ -41,6 +45,25 @@ interface TaskComment {
   content: string
   createdAt: string
   author: { id: string; fullName: string }
+}
+
+interface TaskDep {
+  id: string
+  type: string
+  dependsOn: { id: string; title: string; status: string }
+}
+
+interface TaskDepBy {
+  id: string
+  type: string
+  task: { id: string; title: string; status: string }
+}
+
+interface TaskMilestone {
+  id: string
+  title: string
+  status: string
+  dueDate: string
 }
 
 interface TaskDetail {
@@ -57,15 +80,21 @@ interface TaskDetail {
   dueDate: string | null
   estimatedHours: number | null
   completedAt: string | null
+  archivedAt: string | null
+  deliverable: string | null
+  sharepointUrl: string | null
   createdAt: string
   updatedAt: string
   projectId: string
   owner: TaskOwner | null
   reviewer: TaskOwner | null
   project: TaskProject
+  milestone: TaskMilestone | null
   attachments: string | null
   checklistItems: ChecklistItem[]
   comments: TaskComment[]
+  dependsOn: TaskDep[]
+  dependedOnBy: TaskDepBy[]
 }
 
 interface AttachmentFile {
@@ -76,6 +105,16 @@ interface AttachmentFile {
 }
 
 /* ── Helpers ───────────────────────────────────────────── */
+
+function parseAttachments(raw: string | null): AttachmentFile[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -127,6 +166,59 @@ export default function TaskDetailPage() {
   const [newItemLabel, setNewItemLabel] = useState('')
   const [addingItem, setAddingItem] = useState(false)
   const [projectMembers, setProjectMembers] = useState<{id: string; fullName: string}[]>([])
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  /* ── Task actions (duplicate, archive, restore) ─────── */
+
+  async function handleDuplicate() {
+    setActionLoading(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/duplicate`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to duplicate')
+      const json = await res.json()
+      toast('Task duplicated', 'success')
+      window.location.href = `/tasks/${json.data.task.id}`
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to duplicate', 'error')
+    } finally {
+      setActionLoading(false)
+      setActionMenuOpen(false)
+    }
+  }
+
+  async function handleArchive() {
+    setActionLoading(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to archive')
+      }
+      toast('Task archived', 'success')
+      fetchTask()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to archive', 'error')
+    } finally {
+      setActionLoading(false)
+      setActionMenuOpen(false)
+    }
+  }
+
+  async function handleRestore() {
+    setActionLoading(true)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/restore`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to restore')
+      toast('Task restored', 'success')
+      fetchTask()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to restore', 'error')
+    } finally {
+      setActionLoading(false)
+      setActionMenuOpen(false)
+    }
+  }
 
   /* ── Fetch task ──────────────────────────────────────── */
 
@@ -199,7 +291,18 @@ export default function TaskDetailPage() {
       }
       const json = await res.json()
       // Optimistic: update task in state
-      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments } : prev)
+      setTask((prev) => prev ? {
+        ...prev,
+        ...json.data.task,
+        checklistItems: prev.checklistItems,
+        comments: prev.comments,
+        dependsOn: prev.dependsOn,
+        dependedOnBy: prev.dependedOnBy,
+        milestone: prev.milestone,
+        archivedAt: prev.archivedAt,
+        deliverable: prev.deliverable,
+        sharepointUrl: prev.sharepointUrl,
+      } : prev)
       toast('Status updated', 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to update status', 'error')
@@ -350,30 +453,82 @@ export default function TaskDetailPage() {
         <span className="text-ink-600 font-medium truncate max-w-[200px]">{task.title}</span>
       </div>
 
+      {/* ── Archived banner ─────────────────────────────── */}
+      {task.archivedAt && (
+        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <div className="flex items-center gap-2">
+            <Archive className="w-4 h-4 text-amber-600" />
+            <span className="text-[13px] text-amber-700 font-medium">This task is archived</span>
+            <span className="text-[11px] text-amber-500">({formatDate(task.archivedAt)})</span>
+          </div>
+          <button onClick={handleRestore} disabled={actionLoading} className="text-[12px] text-amber-700 font-medium hover:text-amber-800 flex items-center gap-1">
+            <ArchiveRestore className="w-3.5 h-3.5" /> Restore
+          </button>
+        </div>
+      )}
+
       {/* ── Title & meta ─────────────────────────────────── */}
-      <div>
-        <h1 className="text-[22px] font-semibold text-ink-900 leading-tight">{task.title}</h1>
-        <div className="flex items-center gap-3 mt-3 flex-wrap">
-          <PriorityBadge priority={task.priority} />
-          {task.stage && (
-            <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded-full">
-              {task.stage.replace(/_/g, ' ')}
-            </span>
-          )}
-          <span className={cn(
-            'text-[11px] font-medium',
-            dueInfo.overdue ? 'text-red-600' : 'text-ink-400',
-          )}>
-            <Calendar className="w-3 h-3 inline mr-1" />
-            {dueInfo.text}
-          </span>
-          {task.estimatedHours && (
-            <span className="text-[11px] text-ink-400">
-              <Clock className="w-3 h-3 inline mr-1" />
-              {task.estimatedHours}h estimated
-            </span>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-[22px] font-semibold text-ink-900 leading-tight flex-1">{task.title}</h1>
+
+        {/* Action menu */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setActionMenuOpen(!actionMenuOpen)}
+            className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
+          >
+            <MoreHorizontal className="w-5 h-5 text-ink-400" />
+          </button>
+          {actionMenuOpen && (
+            <div className="absolute right-0 top-10 z-20 w-48 bg-white rounded-xl shadow-lg border border-ink-100 py-1">
+              <button
+                onClick={handleDuplicate}
+                disabled={actionLoading}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-ink-700 hover:bg-surface-50 transition-colors"
+              >
+                <Copy className="w-4 h-4 text-ink-400" /> Duplicate
+              </button>
+              {!task.archivedAt ? (
+                <button
+                  onClick={handleArchive}
+                  disabled={actionLoading}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Archive className="w-4 h-4" /> Archive
+                </button>
+              ) : (
+                <button
+                  onClick={handleRestore}
+                  disabled={actionLoading}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-ink-700 hover:bg-surface-50 transition-colors"
+                >
+                  <ArchiveRestore className="w-4 h-4 text-ink-400" /> Restore
+                </button>
+              )}
+            </div>
           )}
         </div>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
+        <PriorityBadge priority={task.priority} />
+        {task.stage && (
+          <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded-full">
+            {task.stage.replace(/_/g, ' ')}
+          </span>
+        )}
+        <span className={cn(
+          'text-[11px] font-medium',
+          dueInfo.overdue ? 'text-red-600' : 'text-ink-400',
+        )}>
+          <Calendar className="w-3 h-3 inline mr-1" />
+          {dueInfo.text}
+        </span>
+        {task.estimatedHours && (
+          <span className="text-[11px] text-ink-400">
+            <Clock className="w-3 h-3 inline mr-1" />
+            {task.estimatedHours}h estimated
+          </span>
+        )}
       </div>
 
       {/* ── Status flow visualization ─────────────────────── */}
@@ -456,12 +611,31 @@ export default function TaskDetailPage() {
                     ) : (
                       <Square className="w-4 h-4 text-ink-300 group-hover:text-ink-500 shrink-0 transition-colors" />
                     )}
-                    <span className={cn(
-                      'text-[13px] flex-1',
-                      item.completed ? 'text-ink-400 line-through' : 'text-ink-700',
-                    )}>
-                      {item.label}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className={cn(
+                        'text-[13px]',
+                        item.completed ? 'text-ink-400 line-through' : 'text-ink-700',
+                      )}>
+                        {item.label}
+                      </span>
+                      {(item.assignee || item.dueDate) && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {item.assignee && (
+                            <span className="text-[10px] text-ink-400 flex items-center gap-0.5">
+                              <User className="w-2.5 h-2.5" /> {item.assignee.fullName}
+                            </span>
+                          )}
+                          {item.dueDate && (
+                            <span className={cn(
+                              'text-[10px] flex items-center gap-0.5',
+                              new Date(item.dueDate) < new Date() && !item.completed ? 'text-red-500' : 'text-ink-400',
+                            )}>
+                              <Calendar className="w-2.5 h-2.5" /> {formatDate(item.dueDate)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     {item.mandatory && !item.completed && (
                       <span className="text-[10px] text-red-500 font-medium shrink-0">Required</span>
                     )}
@@ -569,7 +743,7 @@ export default function TaskDetailPage() {
               <h3 className="text-[13px] font-semibold text-ink-700">
                 Attachments
                 {(() => {
-                  const parsed: AttachmentFile[] = task.attachments ? JSON.parse(task.attachments) : []
+                  const parsed: AttachmentFile[] = parseAttachments(task.attachments)
                   return parsed.length > 0 ? <span className="ml-1.5 text-ink-400 font-normal">{parsed.length}</span> : null
                 })()}
               </h3>
@@ -577,7 +751,7 @@ export default function TaskDetailPage() {
 
             {/* Existing attachments */}
             {(() => {
-              const parsed: AttachmentFile[] = task.attachments ? JSON.parse(task.attachments) : []
+              const parsed: AttachmentFile[] = parseAttachments(task.attachments)
               return parsed.length > 0 ? (
                 <div className="divide-y divide-ink-50">
                   {parsed.map((att, idx) => (
@@ -627,7 +801,7 @@ export default function TaskDetailPage() {
                 onFilesChange={async (files: UploadResult[]) => {
                   const completed = files.filter(f => f.url)
                   if (completed.length === 0) return
-                  const existing: AttachmentFile[] = task.attachments ? JSON.parse(task.attachments) : []
+                  const existing: AttachmentFile[] = parseAttachments(task.attachments)
                   const newAtts: AttachmentFile[] = completed.map(f => ({
                     url: f.url,
                     fileName: f.fileName,
@@ -675,7 +849,7 @@ export default function TaskDetailPage() {
                       })
                       if (!res.ok) throw new Error('Failed to update owner')
                       const json = await res.json()
-                      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments } : prev)
+                      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments, dependsOn: prev.dependsOn, dependedOnBy: prev.dependedOnBy, milestone: prev.milestone, archivedAt: prev.archivedAt, deliverable: prev.deliverable, sharepointUrl: prev.sharepointUrl } : prev)
                       toast('Owner updated', 'success')
                     } catch {
                       toast('Failed to update owner', 'error')
@@ -705,7 +879,7 @@ export default function TaskDetailPage() {
                       })
                       if (!res.ok) throw new Error('Failed to update reviewer')
                       const json = await res.json()
-                      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments } : prev)
+                      setTask((prev) => prev ? { ...prev, ...json.data.task, checklistItems: prev.checklistItems, comments: prev.comments, dependsOn: prev.dependsOn, dependedOnBy: prev.dependedOnBy, milestone: prev.milestone, archivedAt: prev.archivedAt, deliverable: prev.deliverable, sharepointUrl: prev.sharepointUrl } : prev)
                       toast('Reviewer updated', 'success')
                     } catch {
                       toast('Failed to update reviewer', 'error')
@@ -774,8 +948,79 @@ export default function TaskDetailPage() {
                   <span className="text-emerald-600 font-medium">{formatDate(task.completedAt)}</span>
                 </div>
               )}
+              {task.milestone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-400 flex items-center gap-1"><Milestone className="w-3 h-3" /> Milestone</span>
+                  <span className="text-ink-700 text-right max-w-[150px] truncate">{task.milestone.title}</span>
+                </div>
+              )}
+              {task.deliverable && (
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-400">Deliverable</span>
+                  <span className="text-ink-700 text-right max-w-[150px] truncate">{task.deliverable}</span>
+                </div>
+              )}
+              {task.sharepointUrl && (
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-400 flex items-center gap-1"><LinkIcon className="w-3 h-3" /> SharePoint</span>
+                  <a href={task.sharepointUrl} target="_blank" rel="noopener noreferrer" className="text-accent-600 font-medium hover:underline truncate max-w-[150px]">
+                    Open folder
+                  </a>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Dependencies */}
+          {(task.dependsOn.length > 0 || task.dependedOnBy.length > 0) && (
+            <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-3">
+              <h3 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide flex items-center gap-1.5">
+                <GitBranch className="w-3.5 h-3.5" /> Dependencies
+              </h3>
+              {task.dependsOn.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-ink-400 font-medium">Blocked by</p>
+                  {task.dependsOn.map((dep) => (
+                    <Link
+                      key={dep.id}
+                      href={`/tasks/${dep.dependsOn.id}`}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-50 hover:bg-surface-100 transition-colors"
+                    >
+                      <ArrowRight className="w-3 h-3 text-ink-300 rotate-180" />
+                      <span className="text-[12px] text-ink-700 truncate flex-1">{dep.dependsOn.title}</span>
+                      <span className={cn(
+                        'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                        dep.dependsOn.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
+                      )}>
+                        {dep.dependsOn.status.replace(/_/g, ' ')}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {task.dependedOnBy.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-ink-400 font-medium">Blocking</p>
+                  {task.dependedOnBy.map((dep) => (
+                    <Link
+                      key={dep.id}
+                      href={`/tasks/${dep.task.id}`}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-50 hover:bg-surface-100 transition-colors"
+                    >
+                      <ArrowRight className="w-3 h-3 text-ink-300" />
+                      <span className="text-[12px] text-ink-700 truncate flex-1">{dep.task.title}</span>
+                      <span className={cn(
+                        'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                        dep.task.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
+                      )}>
+                        {dep.task.status.replace(/_/g, ' ')}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* What to do now — contextual guidance */}
           <div className="bg-white rounded-xl border border-ink-100 p-5">

@@ -6,11 +6,12 @@ import { PermissionError, ValidationError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { validateTaskTransition, isReviewerTransition } from '@/lib/task-transitions'
 import { withTaskAccess } from '@/lib/with-task-access'
+import { canPerform } from '@/lib/role-permissions'
 import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 import type { TaskStatus } from '@/generated/prisma/client'
 
 /**
- * GET /api/tasks/[id] — Task detail with checklist, comments, and relations.
+ * GET /api/tasks/[id] — Task detail with checklist, comments, dependencies, and relations.
  */
 export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
   const task = await prisma.task.findUnique({
@@ -19,12 +20,22 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
       owner: { select: { id: true, fullName: true } },
       reviewer: { select: { id: true, fullName: true } },
       project: { select: { id: true, name: true } },
-      checklistItems: { orderBy: { sortOrder: 'asc' } },
+      milestone: { select: { id: true, title: true, status: true, dueDate: true } },
+      checklistItems: {
+        orderBy: { sortOrder: 'asc' },
+        include: { assignee: { select: { id: true, fullName: true } } },
+      },
       comments: {
         orderBy: { createdAt: 'asc' },
         include: {
           author: { select: { id: true, fullName: true } },
         },
+      },
+      dependsOn: {
+        include: { dependsOn: { select: { id: true, title: true, status: true } } },
+      },
+      dependedOnBy: {
+        include: { task: { select: { id: true, title: true, status: true } } },
       },
     },
   })
@@ -52,10 +63,13 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
   if ('dueDate' in body) data.dueDate = optionalDate(body.dueDate, 'Due date')
   if ('estimatedHours' in body) data.estimatedHours = optionalNumber(body.estimatedHours, 'Estimated hours', { min: 0, max: 10000 })
   if ('attachments' in body) data.attachments = typeof body.attachments === 'string' ? body.attachments : (body.attachments ? JSON.stringify(body.attachments) : null)
+  if ('deliverable' in body) data.deliverable = optionalString(body.deliverable, 'Deliverable', 500)
+  if ('sharepointUrl' in body) data.sharepointUrl = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
 
   // Validate IDs
   const ownerId = 'ownerId' in body ? optionalId(body.ownerId, 'Owner ID') : undefined
   const reviewerId = 'reviewerId' in body ? optionalId(body.reviewerId, 'Reviewer ID') : undefined
+  const milestoneId = 'milestoneId' in body ? optionalId(body.milestoneId, 'Milestone ID') : undefined
   const status = optionalEnum(body.status, 'Status', ['NOT_STARTED', 'IN_PROGRESS', 'READY_FOR_REVIEW', 'COMPLETED', 'BLOCKED', 'CHANGES_REQUIRED'] as const)
 
   // Validate status transition if changing status
@@ -97,6 +111,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
 
   if (ownerId !== undefined) data.ownerId = ownerId
   if (reviewerId !== undefined) data.reviewerId = reviewerId
+  if (milestoneId !== undefined) data.milestoneId = milestoneId
   if (status) {
     data.status = status
     if (status === 'COMPLETED') {
@@ -177,6 +192,41 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
       }).catch(() => {})
     }
   }
+
+  return success({ task })
+})
+
+/**
+ * DELETE /api/tasks/[id] — Soft-delete (archive) a task.
+ * Sets archivedAt timestamp. Only MANAGER+ or task owner can archive.
+ */
+export const DELETE = withTaskAccess(async (request: NextRequest, { task: currentTask, taskId, profile }) => {
+  // Only task owner, project manager, or MANAGER+ can archive
+  const isOwner = currentTask.ownerId === profile.id
+  const isManager = canPerform(profile.orgPermission, 'tasks', 'create_edit_project')
+
+  if (!isOwner && !isManager) {
+    throw new PermissionError('Only the task owner or a manager can archive tasks')
+  }
+
+  if (currentTask.archivedAt) {
+    throw new ValidationError('Task is already archived')
+  }
+
+  const task = await prisma.task.update({
+    where: { id: taskId },
+    data: { archivedAt: new Date() },
+  })
+
+  await recordAuditEvent({
+    organisationId: profile.organisationId,
+    actorId: profile.id,
+    action: AuditActions.TASK_STATUS_CHANGED,
+    entityType: 'task',
+    entityId: task.id,
+    metadata: { action: 'archived' },
+    ipAddress: request.headers.get('x-forwarded-for') || undefined,
+  })
 
   return success({ task })
 })

@@ -16,10 +16,13 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
   const url = new URL(request.url)
   const showAll = url.searchParams.get('all') === 'true'
 
+  const includeArchived = url.searchParams.get('archived') === 'true'
+
   const where = showAll
-    ? { projectId }
+    ? { projectId, ...(!includeArchived ? { archivedAt: null } : {}) }
     : {
         projectId,
+        ...(!includeArchived ? { archivedAt: null } : {}),
         OR: [
           { ownerId: profile.id },
           { reviewerId: profile.id },
@@ -70,6 +73,9 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
   const priority = optionalEnum(body.priority, 'Priority', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const)
   const dueDate = optionalDate(body.dueDate, 'Due date')
   const estimatedHours = optionalNumber(body.estimatedHours, 'Estimated hours', { min: 0, max: 10000 })
+  const milestoneId = optionalId(body.milestoneId, 'Milestone ID')
+  const deliverable = optionalString(body.deliverable, 'Deliverable', 500)
+  const sharepointUrl = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
 
   const task = await prisma.task.create({
     data: {
@@ -86,6 +92,9 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
       priority: priority || 'MEDIUM',
       dueDate,
       estimatedHours,
+      milestoneId: milestoneId || null,
+      deliverable: deliverable || null,
+      sharepointUrl: sharepointUrl || null,
     },
     include: {
       owner: { select: { id: true, fullName: true } },

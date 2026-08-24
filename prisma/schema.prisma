@@ -156,9 +156,10 @@ model Profile {
   projectMemberships ProjectMembership[]
 
   // Tasks
-  tasksOwned     Task[]        @relation("TaskOwner")
-  tasksReviewing Task[]        @relation("TaskReviewer")
-  taskComments   TaskComment[]
+  tasksOwned             Task[]              @relation("TaskOwner")
+  tasksReviewing         Task[]              @relation("TaskReviewer")
+  taskComments           TaskComment[]
+  checklistAssignments   TaskChecklistItem[] @relation("ChecklistAssignee")
 
   // Documents
   documentsAuthored DocumentRevision[] @relation("DocAuthor")
@@ -696,10 +697,18 @@ model Task {
   priority   TaskPriority  @default(MEDIUM)
   status     TaskStatus    @default(NOT_STARTED)
 
+  // Milestone link
+  milestoneId String? @map("milestone_id")
+
+  // Extended fields (Sprint 1 — BUG-07)
+  deliverable  String? // Expected output / deliverable description
+  sharepointUrl String? @map("sharepoint_url") // Link to SharePoint folder/doc
+
   // Dates
   dueDate        DateTime? @map("due_date")
   estimatedHours Float?    @map("estimated_hours")
   completedAt    DateTime? @map("completed_at")
+  archivedAt     DateTime? @map("archived_at") // Soft-delete archive
 
   // Attachments — JSON array of {url, fileName, fileSize, contentType}
   attachments String? // JSON string
@@ -707,12 +716,15 @@ model Task {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  project  Project  @relation(fields: [projectId], references: [id])
-  owner    Profile? @relation("TaskOwner", fields: [ownerId], references: [id])
-  reviewer Profile? @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  project   Project           @relation(fields: [projectId], references: [id])
+  owner     Profile?          @relation("TaskOwner", fields: [ownerId], references: [id])
+  reviewer  Profile?          @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  milestone ProjectMilestone? @relation(fields: [milestoneId], references: [id])
 
   checklistItems TaskChecklistItem[]
   comments       TaskComment[]
+  dependsOn      TaskDependency[] @relation("DependentTask")
+  dependedOnBy   TaskDependency[] @relation("DependencyTarget")
 
   @@map("tasks")
 }
@@ -742,7 +754,12 @@ model TaskChecklistItem {
   completedAt DateTime? @map("completed_at")
   sortOrder   Int       @default(0) @map("sort_order")
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // Sprint 1 — BUG-08: assignee + due date per checklist item
+  assigneeId String?   @map("assignee_id")
+  dueDate    DateTime? @map("due_date")
+
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee Profile? @relation("ChecklistAssignee", fields: [assigneeId], references: [id])
 
   @@map("task_checklist_items")
 }
@@ -758,6 +775,26 @@ model TaskComment {
   author Profile @relation(fields: [authorId], references: [id])
 
   @@map("task_comments")
+}
+
+// Sprint 1 — BUG-07: Task dependencies
+model TaskDependency {
+  id           String             @id @default(cuid())
+  taskId       String             @map("task_id")
+  dependsOnId  String             @map("depends_on_id")
+  type         TaskDependencyType @default(BLOCKS)
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  task      Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("DependencyTarget", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+  @@map("task_dependencies")
+}
+
+enum TaskDependencyType {
+  BLOCKS   // dependsOn must complete before task can start
+  RELATED  // informational link, no blocking
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2160,6 +2197,7 @@ model ProjectMilestone {
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
 
   @@map("project_milestones")
 }
