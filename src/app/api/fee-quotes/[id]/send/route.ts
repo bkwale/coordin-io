@@ -17,7 +17,7 @@ function getResend(): Resend {
   return _resend
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Coordin.io <onboarding@resend.dev>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Coordin.io <noreply@coordin.io>'
 
 /** Escape HTML entities to prevent injection in email templates. */
 function escapeHtml(str: string): string {

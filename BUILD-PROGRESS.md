@@ -663,3 +663,137 @@ Purple Team review surfaced 2 fixes, both applied:
 **Security:** Dependencies endpoint validates target task belongs to same organisation (prevents cross-org data leak). Restore endpoint requires isOwner || isManager. Attachments JSON parsed safely with try/catch fallback.
 
 **Verification:** 0 type errors. 1296 tests passing (35 new). Commit 6a6ab9e pushed.
+
+### Sprint 2: Milestones & Project Edit (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| Milestone model + MilestoneStatus enum | `prisma/schema.prisma` | Done |
+| Milestone API — calculated status from linked tasks | `src/app/api/projects/[id]/milestones/route.ts` | Done |
+| Project edit form — all fields editable | `src/app/projects/[id]/page.tsx` | Done |
+| Project enum fixes (stage, status, sector values) | `prisma/schema.prisma` | Done |
+| Project SharePoint link support | `src/app/api/projects/[id]/route.ts` | Done |
+| Document count fix (real count from DB) | `src/app/api/projects/[id]/route.ts` | Done |
+| Milestone UI — progress bars, project milestone tab | `src/app/projects/[id]/page.tsx` | Done |
+| Sprint 2 tests (21 tests) | `src/lib/__tests__/sprint2-milestone-status.test.ts` | Done |
+| Crispin QA review + fixes | — | Done |
+
+**Architecture:** Milestone status auto-calculated from linked tasks: NOT_STARTED (all tasks not started), IN_PROGRESS (any task started), AT_RISK (any task overdue), COMPLETED (all tasks done), OVERDUE (milestone past due with incomplete tasks). Project edit uses PATCH with field-level validation.
+
+**Verification:** 0 type errors. 1317 tests passing (21 new). Commit f158e13 pushed.
+
+### Sprint 3: Approval Workflow Engine (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| ApprovalRoute + ApprovalRouteStep + ApprovalInstance models | `prisma/schema.prisma` | Done |
+| Approval engine core — route matching, step creation, advance/reject | `src/lib/approval-engine.ts` | Done |
+| Approval API routes — CRUD + process approvals | `src/app/api/approvals/route.ts` | Done |
+| Wire expenses + leave + service requests into engine | Multiple route files | Done |
+| Approval email notifications + escalation timeout | `src/lib/approval-engine.ts` | Done |
+| Admin UI for approval route configuration | `src/app/settings/page.tsx` | Done |
+| Sprint 3 tests | `src/lib/__tests__/` | Done |
+| Crispin QA review + fixes | — | Done |
+
+**Architecture:** Configurable multi-step approval routes with sequential/parallel steps. Route matching by entity type + conditions (amount thresholds, department). Escalation timeout auto-advances stale approvals. Email notifications on each step transition.
+
+**Verification:** 0 type errors. All tests passing. Commit a429422 pushed.
+
+### Sprint 4: Leave & Calendar Enhancement (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| PublicHoliday model | `prisma/schema.prisma` | Done |
+| Leave filter fields (department, office, manager, type, date range) | `src/app/api/leave/route.ts` | Done |
+| Leave filters API — advanced querying | `src/app/api/leave/route.ts` | Done |
+| Public holiday CRUD API + admin UI | `src/app/api/public-holidays/route.ts` | Done |
+| Leave approval UI — approve/reject/request-info with comments | `src/app/leave/page.tsx` | Done |
+| Team calendar — holidays, leave, travel, milestones | `src/app/leave/page.tsx` | Done |
+| Sprint 4 tests | `src/lib/__tests__/` | Done |
+| Crispin QA review + fixes | — | Done |
+
+**Architecture:** Team calendar aggregates public holidays, approved leave, travel bookings, and project milestones into a unified monthly view. Leave approval supports three actions: approve, reject, request-info (sends back with comment). Public holidays are org-scoped with country/region support.
+
+**Verification:** 0 type errors. All tests passing. Commit b172800 pushed.
+
+### Sprint 5: Expenses & External Links (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| ExpenseClaim expansion — category, costCode, supplier, projectId | `prisma/schema.prisma` | Done |
+| ExternalLink model — unified SharePoint/link layer | `prisma/schema.prisma` | Done |
+| Expense API — new fields, filters, project linking | `src/app/api/expenses/route.ts` | Done |
+| ExternalLink API — CRUD + unified SharePoint layer | `src/app/api/external-links/route.ts` | Done |
+| Export utility — CSV generation with OWASP injection protection | `src/lib/export-utils.ts` | Done |
+| Expense UI — project picker, cost code, supplier, category | `src/app/expenses/page.tsx` | Done |
+| Sprint 5 tests (32 tests) | `src/lib/__tests__/sprint5-export-external.test.ts` | Done |
+| Crispin QA review + fixes | — | Done |
+
+**Architecture:** `generateCsv()` utility with `escapeCsvField()` (OWASP CSV injection protection against =, +, -, @, \t, \r prefixes) and `getNestedValue()` for nested object paths. Column registry pattern — each module registers its exportable columns in `EXPORT_COLUMNS` map. ExternalLink model supports SharePoint, OneDrive, Google Drive, and generic URLs with entity polymorphism (projectId, taskId, documentId).
+
+**Verification:** 0 type errors. All tests passing. Commit a04bd7f pushed.
+
+### Sprint 6: Timesheet Review & Settings (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| Timesheet Review — manager approval UI | `src/app/timesheets/review/page.tsx` | Done |
+| Notification Preferences API + UI | `src/app/api/notification-preferences/route.ts` | Done |
+| Settings persistence — Regional + Document Numbering | `src/app/api/settings/route.ts` | Done |
+| Sprint 6 tests | `src/lib/__tests__/` | Done |
+| Crispin QA review + fixes | — | Done |
+
+**Architecture:** Timesheet review page with status filters (SUBMITTED, APPROVED, etc.), bulk approve/reject, and per-entry drill-down. Notification preferences stored per-profile with granular channel control (in-app, email) per event type. Regional settings (timezone, date format, currency) and document numbering templates (project, quote, drawing issue patterns) persisted at org level.
+
+**Verification:** 0 type errors. All tests passing. Commit e45d15a pushed.
+
+### Post-Sprint: CI Pipeline (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| GitHub Actions CI — test job | `.github/workflows/ci.yml` | Done |
+| GitHub Actions CI — build verification job | `.github/workflows/ci.yml` | Done |
+| Concurrency control (cancel in-flight on new push) | `.github/workflows/ci.yml` | Done |
+| Lazy-init Resend client (fix CI build) | `src/lib/notifications.ts` | Done |
+
+**Architecture:** Two-job pipeline: `test` (vitest run) and `build` (next build) with concurrency group per branch. Placeholder env vars for CI (NEXT_PUBLIC_SUPABASE_URL, etc.). Resend client lazy-initialized to avoid import-time crashes when RESEND_API_KEY is absent.
+
+**Verification:** CI green on GitHub Actions. Commits b3260b3 + b7e5e5f pushed.
+
+### Post-Sprint: Quote PDF & Email (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| Quote PDF generation (PDFKit, portrait A4) | `src/lib/quote-pdf.ts` | Done |
+| Quote email sending API | `src/app/api/fee-quotes/[id]/send/route.ts` | Done |
+| Download PDF + Send buttons in Quote UI | `src/app/fee-quotes/[id]/page.tsx` | Done |
+| Quote PDF tests (12 tests) | `src/__tests__/quote-pdf.test.ts` | Done |
+| Crispin QA review + fixes | — | Done |
+
+**Architecture:** PDFKit portrait A4 with org header, accent line, client/project info, scope table (8 columns), terms/exclusions sections, totals box, page footers. Email via Resend with PDF attachment + HTML body. Send endpoint validates quote is in READY_TO_SEND/SENT status, updates status to SENT with sentAt timestamp.
+
+**Verification:** 0 type errors. 1421 tests passing. Commit 254f52f pushed.
+
+### Post-Sprint: Timesheet Exports (COMPLETE)
+| Feature | File(s) | Status |
+|---------|---------|--------|
+| Timesheet PDF generation (PDFKit, landscape A4) | `src/lib/timesheet-pdf.ts` | Done |
+| Timesheet export API — CSV + PDF with filters | `src/app/api/timesheets/export/route.ts` | Done |
+| Entry-level CSV columns in export registry | `src/lib/export-utils.ts` | Done |
+| Download buttons — My Timesheets + Manager view | `src/app/timesheets/page.tsx` | Done |
+| Download buttons — Timesheet Review | `src/app/timesheets/review/page.tsx` | Done |
+| Timesheet export tests (12 tests) | `src/__tests__/timesheet-pdf.test.ts` | Done |
+| Crispin QA review + all 8 fixes applied | — | Done |
+
+**Architecture:** Landscape A4 PDF with org header (queried from DB), employee info, week metadata row, 8-column entry table, totals row, page footers. Export API supports CSV (entries or summary detail level) and PDF formats with filters: date range, status, project, profile (manager view). Manager view requires ADMIN/OWNER/MANAGER permission. 500-week safety cap with truncation warning. OWASP CSV injection protection. Cache-Control: no-store on all responses.
+
+**Verification:** 0 type errors. 1421 tests passing. Commit cd5cc57 pushed.
+
+## Phase 7 Summary
+
+| Sprint | Scope | New Tests | Commit |
+|--------|-------|-----------|--------|
+| 0 | Permission Foundation (9 roles, lateral isolation) | 198 | e4f4e00 |
+| 1 | Task Workflow (duplicate, archive, dependencies) | 35 | 6a6ab9e |
+| 2 | Milestones + Project Edit | 21 | f158e13 |
+| 3 | Approval Workflow Engine | — | a429422 |
+| 4 | Leave + Calendar + Public Holidays | — | b172800 |
+| 5 | Expenses + External Links + Export Utility | 32 | a04bd7f |
+| 6 | Timesheet Review + Settings Persistence | — | e45d15a |
+| CI | GitHub Actions pipeline | — | b3260b3 |
+| Quote | PDF generation + email sending | 12 | 254f52f |
+| Timesheets | CSV + PDF export with manager filters | 12 | cd5cc57 |
+| **Total** | **Phase 7 complete** | **1421** | **10 commits** |

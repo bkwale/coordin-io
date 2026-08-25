@@ -161,11 +161,11 @@ export async function POST(request: NextRequest) {
 
     const { data } = result
     const apiKey = process.env.RESEND_API_KEY
-    const teamEmail = process.env.TEAM_NOTIFICATION_EMAIL || 'wale@techsanctum.org'
+    const teamEmail = process.env.TEAM_NOTIFICATION_EMAIL || 'team@coordin.io'
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Coordin.io <noreply@coordin.io>'
 
     // If Resend is configured, send emails
-    if (apiKey && apiKey !== 'your-resend-api-key-here') {
+    if (apiKey && apiKey.startsWith('re_')) {
       // Send both emails in parallel
       const [userSent, teamSent] = await Promise.all([
         sendEmail(data.email, 'Thanks for trying Coordin.io — your demo is being prepared', buildUserEmail(data), apiKey, fromEmail),
