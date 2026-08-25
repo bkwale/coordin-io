@@ -1,8 +1,8 @@
 # Coordin.io — Product Brief
 
-**Last updated:** 10 June 2026
+**Last updated:** 25 August 2026
 **Author:** Wale Koleosho
-**Status:** Post-demo, first paying practice confirmed (~£180/month). Building to Ayo's PRD.
+**Status:** Live on Vercel. Full-stack platform — Supabase backend, 50+ API routes, 1421 unit tests, CI green. First paying practice confirmed (~£180/month).
 
 ---
 
@@ -20,65 +20,82 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 
 ## Stage
 
-**Post-demo → building to first paying customer's requirements.**
+**Live platform — building toward first paying customer onboarding.**
 
-- Phases 1–5 complete (core platform, executive dashboard, quote system, timesheets)
-- Demo delivered to beta partner — well received, studio ready to onboard at ~£180/month
-- Landing page live at coordin.io with waitlist form
-- Design system fully refreshed (18-point improvement plan executed)
-- Supabase schema written + applied, services layer v2 live (all 8 entities)
-- Auth pages built (login, signup, forgot-password), awaiting Supabase project creation for credentials
-- RLS policies defined (org-scoped multi-tenancy), awaiting first real data
+- Full-stack application deployed to Vercel with Supabase (PostgreSQL) backend
+- 50+ API routes, all authenticated with org-scoped multi-tenancy
+- 1421 unit tests + 88-case E2E test plan with Playwright suite
+- GitHub Actions CI pipeline (typecheck + test + build verification)
+- Resend email integration (invitations, quotes, notifications, password recovery)
+- 8-role permission system (OWNER, ADMIN, MANAGER, HR, LEGAL, FINANCE, COMMERCIAL, MEMBER, VIEWER)
+- Demo delivered to beta partner — studio ready to onboard at ~£180/month
 
 ## Current State
 
-### What's built (mock data, frontend only)
+### What's Built (Full-Stack — Real Data)
 
 | Area | Routes | Key Features |
 |------|--------|-------------|
-| **Homepage** | `/` | 8-section marketing page per website PRD: hero (architect-first headline, dual CTAs), product proof strip (5 screenshot cards), 5 use cases with problem/solution/CTA, Why Coordin (4 differentiators), Who It's For (7 audience cards), Designed By Architects, demo booking form (name, email, practice, role, size, interest checkboxes, current tools), full footer (3 columns) |
-| **Use Cases** | `/use-cases` | 5 workflows expanded: Quote to Project, Project Health, BRPD Compliance, Timesheets, Executive Dashboard |
-| **BRPD Feature** | `/features/brpd` | Dedicated BRPD feature page: what it does, 6 feature cards, who uses it, CTA |
-| **Quotes Feature** | `/features/quotes` | Quote workflow page: 2 modes, 5 templates, 12-tab builder, lifecycle flow, CTA |
-| **Book a Demo** | `/book-demo` | Dedicated demo booking form with interest checkboxes and current tools field |
-| **Executive Dashboard** | `/dashboard` | 10 widgets, 7 KPI cards, quick-view filters (Today/Week/Practice/Commercial/Staff/BRPD), demo banner |
-| **Projects** | `/projects`, `/projects/new`, `/projects/[id]` + 14 sub-routes | RIBA stage tracking, task management, risk detection engine, 12-step creation wizard, tabbed workspace (6 tabs) |
-| **Quote System** | `/fee-quotes`, `/fee-quotes/new`, `/fee-quotes/[id]`, `/fee-quotes/[id]/edit` | 11 core statuses + 3 optional, linked/standalone modes, 5 templates (Planning, Technical, Full Service, BRPD, CDM PD), 12-tab builder, 12 line item types, commercial assumptions (meetings, mileage, expenses, design freeze, deposit), quote-to-project conversion |
-| **Timesheets** | `/timesheets`, `/timesheets/review` | Weekly timesheet page with task-linked entry, stage grouping (10 categories), week navigation, assigned tasks panel, billable/non-billable indicator, manager review (by project/person/stage) |
-| **Analytics** | 5 routes | Portfolio health, commercial performance, cashflow forecast, drawing issue intelligence, quote performance |
-| **Staffing** | `/staffing` | Team capacity, utilisation, leave management (holiday/sick/CPD/parental), bank holidays, entitlements |
-| **Invoicing** | Data model only | 6 invoices (all statuses), Xero sync status, overdue tracking |
-| **Overheads** | Data model only | 13 entries across 10 categories |
-| **BRPD Compliance** | `/projects/[id]/brpd`, `/projects/[id]/brpd/changelog` | Dutyholder coordination, compliance statements (7), requirements tracker (8), BRPD gateways (3), changelog |
-| **CPD & Training** | `/cpd`, `/cpd/competence`, `/cpd/training` | CPD dashboard, competence matrix, training plans |
-| **Knowledge Base** | `/knowledge`, `/knowledge/[id]` | Article library with detail pages |
-| **AI Teammate** | `/ai`, `/projects/[id]/ai` | Global and project-scoped chat (mock) |
-| **Portal** | `/portal` | External collaboration portal (mock) |
-| **Settings** | 4 routes | Admin controls, role-based visibility, integration hub, numbering templates |
-| **News & Regulations** | Widget only | 8 items across architecture, construction, regulations, planning, company |
-| **FAQ** | `/faq` | 8 accordion items covering product, BRPD, pricing, integrations, security |
-| **Demo Access** | `/demo-access` | Starts 10-minute timed demo trial, sets localStorage timer, auto-redirects to dashboard |
+| **Auth** | `/login`, `/signup`, `/forgot-password`, `/activate/[token]` | Supabase Auth, invitation tokens (crypto.randomBytes), password recovery emails, role-based activation |
+| **Onboarding** | `/onboarding` | Template-driven multi-step wizard (profile, policies, training), progress tracking |
+| **Dashboard** | `/dashboard` | 10 real-data widgets, KPI cards, project health, quick-view filters |
+| **My Work** | `/my-work` | 8 sections + 9 filters, tasks/reviews/approvals aggregated across projects |
+| **Projects** | `/projects`, `/projects/new`, `/projects/[id]` + 14 sub-routes | RIBA stage tracking, 9-step creation wizard, table/Kanban/Gantt views, milestones with calculated status, task dependencies, document revisions |
+| **Tasks** | `/projects/[id]/tasks`, task detail | Edit modal, status stepper, duplicate/archive/delete, dependency CRUD, enhanced checklists |
+| **Documents** | `/projects/[id]/documents` | Drawing register, revision auto-numbering, file upload (PDF/images), Info Out transmittals, Info In |
+| **Fee Quotes** | `/fee-quotes`, `/fee-quotes/new`, `/fee-quotes/[id]` | CRUD + PDF generation + email sending, 11 statuses, linked/standalone modes, 5 RIBA templates, 12-tab builder |
+| **Timesheets** | `/timesheets`, `/timesheets/review` | Weekly entry, task-linked, 10 categories, manager review/approval, CSV + PDF export with filters |
+| **Leave** | `/leave` | Full approval workflow, team calendar (holidays + leave + travel + milestones), public holiday CRUD, department/office/manager filters |
+| **Expenses** | `/expenses` | Project linking, cost codes, supplier, category, receipt upload, approval engine integration |
+| **Staffing** | `/staffing` | Employee table with status badges + onboarding progress, slide-out drawer, HR docs upload, training CRUD, salary audit trail |
+| **Approvals** | `/approvals` | Configurable approval routes (multi-step, escalation timeout), approve/reject with comments, wired into leave + expenses + service requests |
+| **Settings** | `/settings` (unified left-rail) | Organisation profile, team & roles (edit/remove), billing & currency, notification preferences, regional settings, document numbering, audit trail |
+| **Audit Trail** | `/settings` → Audit | HR-scoped filtering, CSV export, org-level event log |
+| **Compliance** | `/projects/[id]/compliance`, `/projects/[id]/brpd` | BRPD dutyholder coordination, compliance statements, building regulations |
+| **Analytics** | 5 routes | Portfolio health, commercial performance, cashflow forecast, drawing issues, quote performance |
+| **Global Search** | `/search` | Cross-module search with Cmd+K command palette |
+| **Notifications** | `/notifications` | Cross-module notifications with email delivery via Resend, user preference controls |
+| **Knowledge Base** | `/knowledge`, `/knowledge/[id]` | Article library with real data |
+| **Marketing** | `/`, `/use-cases`, `/features/brpd`, `/features/quotes`, `/book-demo`, `/faq`, `/demo-access` | 8-section homepage, 5 use case pages, timed demo (10 min), demo signup with Resend emails |
+| **Admin** | `/admin` | Platform admin backoffice (super-admin only) |
 
-| **Demo Timer** | All app routes | 10-minute timed trial: countdown banner, warning at 2 min, full-screen overlay on expiry with signup/book-demo form |
-| **Demo Signup API** | `/api/demo-signup` | POST endpoint: validates payload, sends user confirmation email + team notification email via Resend, graceful fallback when Resend not configured |
+### Backend Infrastructure
 
-**Total: 50+ routes (including 6 marketing pages), 1 API route, 256 unit tests, 0 type errors.**
+| Component | Implementation |
+|-----------|---------------|
+| **Database** | Supabase PostgreSQL (eu-central-1), Prisma ORM, 30+ models |
+| **Auth** | Supabase Auth + withAuth() middleware, invitation token system |
+| **Permissions** | canPerform() matrix — 8 roles, lateral isolation, tier-based hierarchy |
+| **API Routes** | 50+ Next.js API routes, all authenticated + org-scoped |
+| **Email** | Resend integration — invitations, quotes, notifications, password recovery |
+| **File Upload** | Direct upload to Supabase Storage (PDF, images) |
+| **Validation** | Input validation helpers (requireUUID, requireNumber, requireDate, maxLength) |
+| **Rate Limiting** | Applied to auth endpoints + demo signup |
+| **Security Headers** | CSP, X-Frame-Options, HSTS via next.config.js |
+| **Error Reporting** | Structured error handling across all routes |
+| **CI/CD** | GitHub Actions — tsc + vitest + Next.js build verification on every push |
 
-### What's NOT built
+### Test Coverage
+
+| Layer | Count | Framework |
+|-------|-------|-----------|
+| **Unit tests** | 1421 | Vitest |
+| **Integration tests** | 21 (DB) + route-level | Vitest + real Supabase |
+| **E2E test plan** | 88 cases | Documented (E2E-TEST-PLAN.md) |
+| **E2E automated** | 54 specs across 9 files | Playwright (not yet in CI) |
+| **Schema contract** | Validates all Prisma queries | Vitest |
+
+### What's NOT Built
 
 | Gap | Impact | When Needed |
 |-----|--------|-------------|
-| Backend (Supabase) | Schema written, migration SQL ready, clients configured, services layer v2 live — needs Supabase project creation + credentials | **Create Supabase project** |
-| Authentication | Login/signup/forgot-password pages built, middleware ready — needs Supabase credentials | **Create Supabase project** |
-| Multi-tenancy / RLS | RLS policies defined in migration SQL, org-scoped with `get_user_org_id()` helper — needs Supabase auth active | With Supabase project |
-| Integration APIs (Xero, Outlook, SharePoint) | Integrations page is UI only | After backend |
-| CI pipeline (GitHub Actions) | 256 tests run manually only | This week |
-| Quote PDF generation | Builder exists but no PDF export | Ayo's PRD Package B |
-| Quote email sending | Send modal exists but no actual email | Ayo's PRD Package B |
-| Timesheet exports (PDF/CSV) | Download stubs exist, no actual export | Ayo's PRD Package C |
-| Dark mode | Design system structured for it but not implemented | Later |
-| Waitlist email storage | Form captures data client-side only — no backend to store leads | Need Supabase or external form service |
-| Resend email integration | API route built, needs RESEND_API_KEY in .env.local | Create free account at resend.com |
+| Integration APIs (Xero, Outlook, SharePoint) | UI pages exist, no backend connectors | After first customer onboarding |
+| Invoicing backend | Data model only, 6 sample invoices | Phase 7 |
+| AI Teammate | Chat UI exists (mock) | Phase 7 |
+| Client Portal | External collaboration (mock) | Phase 7 |
+| Dark mode | Design system structured for it | Later |
+| Stripe billing | Subscription payments | Before public launch |
+| E2E tests in CI | Playwright suite built, not wired into GitHub Actions | Next sprint |
 
 ## Users
 
@@ -88,7 +105,8 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 ### Secondary personas
 - **Project Lead** — manages 2–5 projects. Needs task tracking, stage progression, document control, drawing issue workflows.
 - **Team Member** — needs timesheet entry, task visibility, document access.
-- **Finance / Admin Lead** — needs invoice tracking, quote pipeline, overhead monitoring, Xero sync.
+- **HR Manager** — needs staffing, onboarding, training, leave management, audit trail.
+- **Finance / Admin Lead** — needs invoice tracking, quote pipeline, expense approvals, overhead monitoring.
 - **BRPD Lead** — needs compliance tracking, dutyholder coordination, gateway readiness.
 
 ### Beta partner
@@ -99,7 +117,6 @@ See `/private/beta-partner.md` for full details (not committed to git).
 ### Commercial context
 - Beta partner also leads a major international hotel development programme ($300M, 10 hotels, 8 cities)
 - Coordin.io could serve as programme-wide project control platform for all consultants on the programme
-- BMS/GRMS specialist requirements flagged — Coordin.io tracks consultant deliverables, doesn't replace specialist systems
 
 ## Constraints
 
@@ -113,86 +130,113 @@ See `/private/beta-partner.md` for full details (not committed to git).
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 14 (App Router), React 18, TypeScript |
-| Styling | Tailwind CSS 3, custom design system (card-premium, card-static, card-interactive, status-pill, stripe-row) |
-| Icons | Lucide React (replaced all inline SVGs) |
+| Frontend | Next.js 16 (App Router + Turbopack), React, TypeScript |
+| Styling | Tailwind CSS, custom design system |
+| Icons | Lucide React |
 | Fonts | DM Sans (body), Instrument Serif (display), JetBrains Mono (data) |
-| Backend | Supabase (PostgreSQL, Auth, RLS, Edge Functions) — schema + services layer v2 |
+| Backend | Supabase (PostgreSQL, Auth, Storage, RLS) |
+| ORM | Prisma |
+| Email | Resend |
 | Deployment | Vercel |
-| Testing | Vitest (256 unit tests) |
+| Testing | Vitest (1421 unit tests) + Playwright (E2E) |
+| CI/CD | GitHub Actions (tsc + test + build) |
 | Repo | github.com/bkwale/coordin-io |
 | Domain | coordin.io |
 
-## Design Direction
+## Permission System
 
-Inspired by Stripe (clean, premium, data-dense), Monday.com (widget modularity), and Programa (landing page style, project visibility). Landing page uses Programa's style — large serif headline, full-width product screenshots, alternating feature sections.
+8 roles with tiered hierarchy and lateral isolation:
 
-### Design system
+| Role | Level | Access |
+|------|-------|--------|
+| OWNER | 100 | Full platform access, all settings |
+| ADMIN | 90 | All features except owner-only settings |
+| MANAGER | 70 | Project management, team review, timesheet approval |
+| HR | 60 | Staffing, onboarding, training, leave, audit trail |
+| LEGAL | 60 | Compliance, contracts (lateral — no HR access) |
+| FINANCE | 60 | Quotes, expenses, invoicing (lateral — no HR access) |
+| COMMERCIAL | 60 | Commercial analytics, quotes (lateral — no HR access) |
+| MEMBER | 30 | Own tasks, timesheets, leave requests |
+| VIEWER | 10 | Read-only access to assigned projects |
 
-**Typography scale (5 named sizes):**
-- `micro` (10px) — pill badges, tertiary labels
-- `caption` (11px) — secondary info, timestamps, metadata
-- `body` (13px) — primary content, table cells, form labels
-- `subtitle` (15px) — section headings
-- `display` (2rem+) — page titles (Instrument Serif)
+## Approval Engine
 
-**Card system (3 variants):**
-- `card-premium` — hover lift + shadow increase. For clickable/linked cards.
-- `card-static` — no hover effect. For display-only containers.
-- `card-interactive` — focus ring on `:focus-within`. For form containers.
+Configurable multi-step approval routes with escalation:
+- Admin-defined routes (matching by type + amount thresholds)
+- Step-by-step advancement with approve/reject/request-info actions
+- Email notifications at each step
+- Timeout-based escalation
+- Wired into: leave requests, expense claims, service requests
 
-**Component patterns:**
-- Status pills standardised to `-50` background / `-600` text
-- Lucide icons throughout
-- EmptyState, NotificationBell, DemoTimerBanner (countdown), DemoExpiredOverlay (signup form), CommandPalette (⌘K), WidgetCard with loading skeletons
-- Collapsible sidebar (72 → 16 units), 14 items across 4 sections
-- Tabbed project workspace (6 tabs covering 14 sub-routes)
-- Dashboard filters dim (opacity 40%) instead of hiding
-- Touch targets: 44px minimum on coarse-pointer devices
-- Page subtitles on all key pages
-
-**Marketing pages:**
-- Separate layout (no sidebar, white background)
-- Programa-style: large serif headlines, full-width product mockups, alternating feature sections
-- Sticky nav with backdrop blur
-
-## Quote System (per Ayo's PRD)
+## Quote System
 
 ### Statuses (11 core + 3 optional)
 Draft → Internal Review → Ready to Send → Sent → Viewed → Revised → Accepted → Declined → Expired → Superseded → Converted to Project
 Optional: Follow-up Required, Awaiting Client Clarification, Awaiting Deposit
 
-### Modes
-- **Linked to existing project** — inherits client, stage scope, project number
-- **Standalone** — captures client/project details, converts to project on acceptance
+### Features
+- **PDF generation** — server-side via PDFKit (portrait A4), download button in UI
+- **Email sending** — via Resend, send modal with recipient/subject/message
+- **Linked or standalone** modes — linked inherits project context, standalone converts on acceptance
+- **5 RIBA templates** — Planning, Technical, Full Service, BRPD, CDM PD
+- **12-tab builder** — Overview → Client & Project → Appointment → Scope → Stage Items → Extras → Meetings → Travel → Design Freeze → Exclusions → Terms → Preview
 
-### Templates (5)
-1. Planning / Pre-App (pre-app, planning application, Stage 2-3)
-2. Technical / Delivery (Stage 4, tender, design coordination, working drawings)
-3. Full Appointment / Multidisciplinary (multi-stage, architecture + interiors + CA)
-4. BRPD Services (Principal Designer, compliance, dutyholder support)
-5. CDM PD Services (design risk coordination, pre-construction information, H&S)
-
-### Quote builder (12 tabs)
-Overview → Client & Project → Appointment Type → Scope → Stage Line Items → Optional Extras → Meetings & Communication → Travel & Expenses → Design Freeze → Exclusions → Terms & Conditions → Preview & Send
-
-### Line item types (12)
-stage_service, additional_service, optional_service, consultant_coordination, travel_mileage, expense_allowance, cgi_render, contract_admin, interior_design, brpd_service, cdm_pd_service, other_custom
-
-## Timesheet System (per Ayo's PRD)
+## Timesheet System
 
 ### Staff page (/timesheets)
-- Weekly view with daily entry support
-- Task-linked: book time against project + task + stage + category
+- Weekly view with daily entry, task-linked (project + task + stage + category)
 - 10 categories: marketing/bid, strategic definition, briefing, concept design, planning/spatial, technical design, tender, construction/CA, handover/use, admin/CPD/office
-- Week navigation (previous/next), assigned tasks panel, recently used tasks
-- Billable/non-billable indicator, missing time alerts
+- Week navigation, assigned tasks panel, billable/non-billable indicator
 
 ### Manager review (/timesheets/review)
 - Review by project, person, or stage
-- Flag high non-billable time
-- Compare actual time vs quote fee assumptions
-- Download/export stubs
+- Approve/reject individual timesheets
+- CSV + PDF export with manager filters (project, person, date range, status)
+- PDF uses landscape A4 via PDFKit with org name header
+
+## Recent Decisions
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 25 Aug 2026 | Playwright E2E suite + test plan | 88 test cases, 9 spec files, page object pattern, role-based auth |
+| 25 Aug 2026 | Hardcoded data audit | Fixed email fallbacks (noreply@coordin.io), API key validation, demo signup |
+| 25 Aug 2026 | Timesheet CSV + PDF exports | Manager-filtered exports with OWASP CSV injection protection |
+| 24 Aug 2026 | Quote PDF + email sending | PDFKit generation, Resend delivery, download/send UI |
+| 24 Aug 2026 | GitHub Actions CI | Two-job pipeline — typecheck+test, then build verification |
+| 23 Aug 2026 | Sprint 6 complete | Notification preferences, regional settings, document numbering |
+| 22 Aug 2026 | Sprint 5 complete | Expense expansion, ExternalLink layer, Excel/PDF export utility |
+| 22 Aug 2026 | Sprint 4 complete | Public holidays, leave filters, team calendar |
+| 21 Aug 2026 | Sprint 3 complete | Approval workflow engine with configurable routes + escalation |
+| 21 Aug 2026 | Sprint 2 complete | Milestones, project edit, SharePoint links |
+| 20 Aug 2026 | Sprint 1 complete | Task workflow — duplicate, archive, dependencies, enhanced checklists |
+| 20 Aug 2026 | Sprint 0 complete | 8-role permission foundation with lateral isolation |
+
+## Where I Want Pressure
+
+- What's the fastest path to onboarding Ayo's team with real data?
+- Integration priority — Xero first or SharePoint first?
+- Pricing strategy for the first 5 design partners
+- How to handle the Accor/Shoreline programme opportunity without over-building
+- E2E test coverage — wire into CI now or wait for integration tests?
+
+## Roadmap
+
+### Next (immediate)
+- Wire Playwright E2E into GitHub Actions CI
+- Onboard beta partner with real org data
+- Xero integration (P1 — invoice sync)
+
+### Phase 7
+- Microsoft 365 integration (Outlook + SharePoint)
+- Invoicing backend + Xero sync
+- Client portal (external collaboration)
+- AI teammate (project status summaries)
+
+### Phase 8
+- Stripe billing for subscriptions
+- Programme-level view (for Shoreline-scale clients)
+- QuickBooks + Google Workspace integrations
+- Public launch
 
 ## 3rd Party Integrations
 
@@ -222,58 +266,7 @@ Slack, HubSpot, BreatheHR/CharlieHR, Google Drive, Dropbox, Google Maps/OS Maps
 
 ### Differentiators
 1. **BRPD compliance engine** — native dutyholder tracking, gateway readiness, compliance statements
-2. **Quote-to-project pipeline** — 5 RIBA-aligned templates, 12-tab builder, conversion rules
-3. **Executive dashboard** — widget-based control centre for practice owners
+2. **Quote-to-project pipeline** — 5 RIBA-aligned templates, PDF generation, email sending
+3. **Executive dashboard** — widget-based control centre with real data
 4. **Built-environment specific** — not generic PM adapted for architects
-
-## Recent Decisions
-
-| Date | Decision | Rationale |
-|------|----------|-----------|
-| 8 Jun 2026 | Timed demo + email notifications | 10-min demo timer (DemoTimerProvider, countdown banner, expired overlay), /api/demo-signup route (Resend), all marketing nav links updated to "Try the Demo" → /demo-access |
-| 6 Jun 2026 | Supabase integration layer built | Schema (12 tables + RLS), client/server/middleware, auth pages (login/signup/forgot-password), useUser hook, demo-mode bypass |
-| 6 Jun 2026 | Website PRD fully implemented | 8-section homepage, 4 new marketing pages (use-cases, BRPD, quotes, book-demo), architect-first positioning, 5 use case structure |
-| 6 Jun 2026 | Landing page redesigned Programa-style | Beta partner (Ayo) requested Programa-style design |
-| 6 Jun 2026 | Routing fixed: `/` = landing page, `/dashboard` = app | coordin.io should show marketing page first, not the app |
-| 6 Jun 2026 | Ayo's PRD implemented (Packages A-D) | Quote system rebuild, timesheet pages, manager review — all requested by paying beta partner |
-| 6 Jun 2026 | FAQ page built | 8 accordion items at /faq |
-| 6 Jun 2026 | Domain purchased: coordin.io | Live on Vercel |
-| 30 May 2026 | 18-point design improvement plan executed | Type scale, card variants, Lucide icons, collapsible sidebar, tabbed workspace, ⌘K, notifications |
-| 30 May 2026 | Rebrand from ArchitectOps to Coordin.io | Multidisciplinary positioning |
-| 30 May 2026 | Executive dashboard with 10 widgets | Spec-driven from Coordin.io dashboard PDF |
-| 30 May 2026 | 3rd party integration roadmap defined | P1: Xero, Outlook/365, SharePoint, Stripe |
-
-## Where I Want Pressure
-
-- What's the fastest path to real data (Supabase) so Ayo's team can start using it?
-- Should the waitlist form store to Supabase or use an external service (Formspree, etc.)?
-- What's the right pricing for the first 5 design partners?
-- How do we handle the Accor/Shoreline programme opportunity without over-building?
-
-## Roadmap
-
-### Next (immediate)
-- Connect waitlist form to backend (Supabase or Formspree)
-- Supabase project setup (auth, database, RLS)
-- Data access layer (services/ folder)
-- 4 core tables: users, projects, tasks, quotes
-- Login / signup flow
-- CI pipeline (GitHub Actions)
-
-### Phase 6
-- Quote PDF generation + email sending
-- Timesheet exports (PDF/CSV)
-- Invoicing backend + Xero integration
-- Dashboard with real data
-
-### Phase 7
-- Microsoft 365 integration (Outlook + SharePoint)
-- AI teammate (project status summaries)
-- Mobile-responsive polish
-- Stripe billing for subscriptions
-
-### Phase 8
-- Multi-tenancy (practice onboarding)
-- Programme-level view (for Shoreline-scale clients)
-- QuickBooks + Google Workspace integrations
-- Public launch
+5. **Approval workflow engine** — configurable multi-step routes with escalation
