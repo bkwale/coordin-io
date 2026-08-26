@@ -765,6 +765,7 @@ function EmploymentContent({
                 options={[
                   { value: '', label: 'Select...' },
                   { value: 'GBP', label: 'GBP' },
+                  { value: 'NGN', label: 'NGN' },
                   { value: 'EUR', label: 'EUR' },
                   { value: 'USD', label: 'USD' },
                 ]}

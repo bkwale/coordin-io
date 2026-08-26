@@ -173,6 +173,13 @@ export default function TaskDetailPage() {
   const [milestones, setMilestones] = useState<{id: string; title: string; status: string}[]>([])
   const [editingSharePoint, setEditingSharePoint] = useState(false)
   const [sharepointDraft, setSharepointDraft] = useState('')
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [editingDueDate, setEditingDueDate] = useState(false)
+  const [dueDateDraft, setDueDateDraft] = useState('')
+  const [fieldSaving, setFieldSaving] = useState(false)
   const [newItemMandatory, setNewItemMandatory] = useState(true)
   const [newItemAssignee, setNewItemAssignee] = useState('')
 
@@ -502,7 +509,80 @@ export default function TaskDetailPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded font-mono shrink-0">{task.taskNumber}</span>
-          <h1 className="text-[22px] font-semibold text-ink-900 leading-tight">{task.title}</h1>
+          {editingTitle ? (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <input
+                type="text"
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                className="flex-1 text-[22px] font-semibold text-ink-900 leading-tight bg-transparent border border-ink-200 rounded-lg px-2 py-1 outline-none focus:border-accent-300 focus:ring-1 focus:ring-accent-200"
+                autoFocus
+                disabled={fieldSaving}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Escape') { setEditingTitle(false); return }
+                  if (e.key === 'Enter') {
+                    const val = titleDraft.trim()
+                    if (!val) return
+                    setFieldSaving(true)
+                    try {
+                      const res = await fetch(`/api/tasks/${taskId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: val }),
+                      })
+                      if (!res.ok) throw new Error('Failed to update title')
+                      setTask(prev => prev ? { ...prev, title: val } : prev)
+                      toast('Title updated', 'success')
+                    } catch {
+                      toast('Failed to update title', 'error')
+                    }
+                    setFieldSaving(false)
+                    setEditingTitle(false)
+                  }
+                }}
+              />
+              <button
+                onClick={async () => {
+                  const val = titleDraft.trim()
+                  if (!val) return
+                  setFieldSaving(true)
+                  try {
+                    const res = await fetch(`/api/tasks/${taskId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ title: val }),
+                    })
+                    if (!res.ok) throw new Error('Failed to update title')
+                    setTask(prev => prev ? { ...prev, title: val } : prev)
+                    toast('Title updated', 'success')
+                  } catch {
+                    toast('Failed to update title', 'error')
+                  }
+                  setFieldSaving(false)
+                  setEditingTitle(false)
+                }}
+                disabled={fieldSaving}
+                className="text-[12px] text-accent-600 font-medium hover:text-accent-700 disabled:opacity-50 shrink-0"
+              >
+                {fieldSaving ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={() => setEditingTitle(false)}
+                disabled={fieldSaving}
+                className="text-[12px] text-ink-400 font-medium hover:text-ink-600 disabled:opacity-50 shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <h1
+              className="text-[22px] font-semibold text-ink-900 leading-tight cursor-pointer hover:text-accent-700 transition-colors"
+              onClick={() => { setTitleDraft(task.title); setEditingTitle(true) }}
+              title="Click to edit title"
+            >
+              {task.title}
+            </h1>
+          )}
         </div>
 
         {/* Action menu */}
@@ -550,13 +630,68 @@ export default function TaskDetailPage() {
             {task.stage.replace(/_/g, ' ')}
           </span>
         )}
-        <span className={cn(
-          'text-[11px] font-medium',
-          dueInfo.overdue ? 'text-red-600' : 'text-ink-400',
-        )}>
-          <Calendar className="w-3 h-3 inline mr-1" />
-          {dueInfo.text}
-        </span>
+        {editingDueDate ? (
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3 h-3 text-ink-400" />
+            <input
+              type="date"
+              value={dueDateDraft}
+              onChange={(e) => setDueDateDraft(e.target.value)}
+              className="text-[11px] border border-ink-200 rounded px-2 py-0.5 outline-none focus:border-accent-300"
+              autoFocus
+              disabled={fieldSaving}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setEditingDueDate(false)
+              }}
+            />
+            <button
+              onClick={async () => {
+                const val = dueDateDraft || null
+                setFieldSaving(true)
+                try {
+                  const res = await fetch(`/api/tasks/${taskId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dueDate: val }),
+                  })
+                  if (!res.ok) throw new Error('Failed to update due date')
+                  setTask(prev => prev ? { ...prev, dueDate: val } : prev)
+                  toast('Due date updated', 'success')
+                } catch {
+                  toast('Failed to update due date', 'error')
+                }
+                setFieldSaving(false)
+                setEditingDueDate(false)
+              }}
+              disabled={fieldSaving}
+              className="text-[11px] text-accent-600 font-medium hover:text-accent-700 disabled:opacity-50"
+            >
+              {fieldSaving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={() => setEditingDueDate(false)}
+              disabled={fieldSaving}
+              className="text-[11px] text-ink-400 font-medium hover:text-ink-600 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <span
+            className={cn(
+              'text-[11px] font-medium cursor-pointer hover:underline',
+              dueInfo.overdue ? 'text-red-600' : 'text-ink-400',
+            )}
+            onClick={() => {
+              setDueDateDraft(task.dueDate ? task.dueDate.slice(0, 10) : '')
+              setEditingDueDate(true)
+            }}
+            title="Click to edit due date"
+          >
+            <Calendar className="w-3 h-3 inline mr-1" />
+            {dueInfo.text}
+          </span>
+        )}
         {task.estimatedHours && (
           <span className="text-[11px] text-ink-400">
             <Clock className="w-3 h-3 inline mr-1" />
@@ -585,22 +720,88 @@ export default function TaskDetailPage() {
         {/* ── Left column (2/3) ─────────────────────────────── */}
         <div className="lg:col-span-2 space-y-6">
           {/* Description */}
-          {(task.description || task.instructions) && (
-            <div className="bg-white rounded-xl border border-ink-100 p-5">
-              {task.description && (
-                <div>
-                  <h3 className="text-[13px] font-semibold text-ink-700 mb-2">Description</h3>
-                  <p className="text-[13px] text-ink-600 whitespace-pre-wrap leading-relaxed">{task.description}</p>
+          <div className="bg-white rounded-xl border border-ink-100 p-5">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[13px] font-semibold text-ink-700">Description</h3>
+                {!editingDescription && (
+                  <button
+                    onClick={() => { setDescriptionDraft(task.description || ''); setEditingDescription(true) }}
+                    className="text-[10px] text-ink-300 hover:text-ink-500"
+                  >
+                    {task.description ? 'Edit' : '+ Add'}
+                  </button>
+                )}
+              </div>
+              {editingDescription ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={descriptionDraft}
+                    onChange={(e) => setDescriptionDraft(e.target.value)}
+                    className="w-full text-[13px] text-ink-600 bg-surface-50 border border-ink-200 rounded-lg px-3 py-2 outline-none focus:border-accent-300 focus:ring-1 focus:ring-accent-200 resize-y min-h-[80px] leading-relaxed placeholder:text-ink-300"
+                    rows={4}
+                    autoFocus
+                    disabled={fieldSaving}
+                    placeholder="Add a description..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        const val = descriptionDraft.trim() || null
+                        setFieldSaving(true)
+                        try {
+                          const res = await fetch(`/api/tasks/${taskId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ description: val }),
+                          })
+                          if (!res.ok) throw new Error('Failed to update description')
+                          setTask(prev => prev ? { ...prev, description: val } : prev)
+                          toast('Description updated', 'success')
+                        } catch {
+                          toast('Failed to update description', 'error')
+                        }
+                        setFieldSaving(false)
+                        setEditingDescription(false)
+                      }}
+                      disabled={fieldSaving}
+                      className="text-[12px] text-accent-600 font-medium hover:text-accent-700 disabled:opacity-50"
+                    >
+                      {fieldSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => setEditingDescription(false)}
+                      disabled={fieldSaving}
+                      className="text-[12px] text-ink-400 font-medium hover:text-ink-600 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              )}
-              {task.instructions && (
-                <div className={task.description ? 'mt-4 pt-4 border-t border-ink-100' : ''}>
-                  <h3 className="text-[13px] font-semibold text-ink-700 mb-2">Instructions</h3>
-                  <p className="text-[13px] text-ink-600 whitespace-pre-wrap leading-relaxed">{task.instructions}</p>
-                </div>
+              ) : task.description ? (
+                <p
+                  className="text-[13px] text-ink-600 whitespace-pre-wrap leading-relaxed cursor-pointer hover:bg-surface-50 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors"
+                  onClick={() => { setDescriptionDraft(task.description || ''); setEditingDescription(true) }}
+                  title="Click to edit description"
+                >
+                  {task.description}
+                </p>
+              ) : (
+                <p
+                  className="text-[13px] text-ink-300 italic cursor-pointer hover:text-ink-500 transition-colors"
+                  onClick={() => { setDescriptionDraft(''); setEditingDescription(true) }}
+                >
+                  No description. Click to add one.
+                </p>
               )}
             </div>
-          )}
+            {task.instructions && (
+              <div className={task.description || editingDescription ? 'mt-4 pt-4 border-t border-ink-100' : ''}>
+                <h3 className="text-[13px] font-semibold text-ink-700 mb-2">Instructions</h3>
+                <p className="text-[13px] text-ink-600 whitespace-pre-wrap leading-relaxed">{task.instructions}</p>
+              </div>
+            )}
+          </div>
 
           {/* ── Checklist ────────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-ink-100">

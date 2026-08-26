@@ -6,9 +6,10 @@ import {
   Calendar, Clock, FileText, ChevronDown, ChevronRight, Search,
   Building2, Shield, GraduationCap, ClipboardList, TrendingUp,
   UserPlus, Mail, X, AlertCircle, CheckCircle2, Timer,
-  CalendarDays, BookOpen, Wrench, ChevronLeft, Eye,
+  CalendarDays, BookOpen, Wrench, ChevronLeft, Eye, Download,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
+import { generateCsv, STAFFING_COLUMNS } from '@/lib/export-utils'
 
 /* ================================================================
    TYPES
@@ -221,6 +222,10 @@ export default function StaffingPage() {
   const [probationReviews, setProbationReviews] = useState<ProbationReview[]>([])
   const [probationLoading, setProbationLoading] = useState(false)
 
+  // Office holidays state
+  const [officeHolidays, setOfficeHolidays] = useState<Record<string, { id: string; name: string; date: string }[]>>({})
+  const [officeHolidaysLoading, setOfficeHolidaysLoading] = useState(false)
+
   /* ── Data fetching ─────────────────────────────────────────── */
 
   const fetchData = useCallback(async () => {
@@ -285,6 +290,27 @@ export default function StaffingPage() {
     }
   }, [])
 
+  const fetchOfficeHolidays = useCallback(async () => {
+    setOfficeHolidaysLoading(true)
+    try {
+      const res = await fetch('/api/public-holidays')
+      if (!res.ok) throw new Error('Failed to load holidays')
+      const json = await res.json()
+      const holidays = json.data?.holidays ?? []
+      const grouped: Record<string, { id: string; name: string; date: string }[]> = {}
+      for (const h of holidays) {
+        const officeName = h.office?.name ?? '_all'
+        if (!grouped[officeName]) grouped[officeName] = []
+        grouped[officeName].push({ id: h.id, name: h.name, date: h.date })
+      }
+      setOfficeHolidays(grouped)
+    } catch {
+      setOfficeHolidays({})
+    } finally {
+      setOfficeHolidaysLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchData()
   }, [fetchData])
@@ -317,6 +343,12 @@ export default function StaffingPage() {
       fetchProbationReviews()
     }
   }, [activeTab, fetchProbationReviews])
+
+  useEffect(() => {
+    if (activeTab === 'leave-admin') {
+      fetchOfficeHolidays()
+    }
+  }, [activeTab, fetchOfficeHolidays])
 
   /* ── Filtered employees ────────────────────────────────────── */
 
@@ -878,19 +910,30 @@ export default function StaffingPage() {
               </div>
             </div>
             <div className="space-y-2 text-[12px]">
-              {data!.byOffice.length > 0 ? (
-                data!.byOffice.map((o) => (
-                  <div key={o.name} className="flex justify-between py-1 border-b border-ink-50">
-                    <span className="text-ink-600">{o.name}</span>
-                    <span className="text-ink-400">Calendar not set</span>
-                  </div>
-                ))
+              {officeHolidaysLoading ? (
+                <div className="h-6 bg-ink-100 animate-pulse rounded" />
+              ) : data!.byOffice.length > 0 ? (
+                data!.byOffice.map((o) => {
+                  const officeSpecific = officeHolidays[o.name] ?? []
+                  const orgWide = officeHolidays['_all'] ?? []
+                  const total = officeSpecific.length + orgWide.length
+                  return (
+                    <div key={o.name} className="flex justify-between py-1 border-b border-ink-50">
+                      <span className="text-ink-600">{o.name}</span>
+                      {total > 0 ? (
+                        <span className="text-emerald-600 font-medium">{total} holiday{total !== 1 ? 's' : ''}</span>
+                      ) : (
+                        <a href="/settings" className="text-blue-600 hover:underline">No holidays assigned</a>
+                      )}
+                    </div>
+                  )
+                })
               ) : (
                 <p className="text-ink-400">No offices configured. Add offices in Settings.</p>
               )}
             </div>
             <p className="text-[11px] text-ink-400 mt-3">
-              Configure holiday calendars in Settings &gt; Offices
+              Manage public holidays in <a href="/settings" className="text-blue-600 hover:underline">Settings &gt; Public Holidays</a>
             </p>
           </div>
         </div>
@@ -1209,11 +1252,27 @@ export default function StaffingPage() {
           </div>
         </div>
 
-        {/* ── Export placeholder ──────────────────────────────── */}
+        {/* ── Export ──────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-ink-100 p-5 text-center">
-          <Wrench className="w-8 h-8 text-ink-200 mx-auto mb-3" />
+          <FileText className="w-8 h-8 text-ink-200 mx-auto mb-3" />
           <p className="text-[13px] font-medium text-ink-700">Report Export</p>
-          <p className="text-[11px] text-ink-400 mt-1">CSV and PDF export for capacity, utilisation, and skills reports will be available in a future release.</p>
+          <p className="text-[11px] text-ink-400 mt-1 mb-4">Export staffing data as CSV for reporting and analysis.</p>
+          <button
+            onClick={() => {
+              if (!data) return
+              const csv = generateCsv(STAFFING_COLUMNS, filteredEmployees as unknown as Record<string, unknown>[])
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `staffing-report-${new Date().toISOString().slice(0, 10)}.csv`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
+          >
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
         </div>
       </div>
     )

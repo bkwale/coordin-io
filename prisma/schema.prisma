@@ -333,6 +333,7 @@ model EmployeeProfile {
   noticePeriod        String?   @map("notice_period") // e.g. "1 month", "3 months"
   probationEndDate    DateTime? @map("probation_end_date")
   availabilityStatus  String?   @map("availability_status") // AVAILABLE, ON_LEAVE, ON_SITE, UNAVAILABLE
+  grade               String?   // Staff grade: Senior Management, Management, Senior Staff, Staff, etc.
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
