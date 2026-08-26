@@ -32,6 +32,9 @@ export const GET = withAuth(async (_request, { profile }) => {
   const used = balance?.used ?? 0
   const carriedForward = balance?.carriedForward ?? 0
 
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   // Count pending days (any in-progress approval stage for ANNUAL leave)
   const pendingRequests = await prisma.leaveRequest.findMany({
     where: {
@@ -50,10 +53,34 @@ export const GET = withAuth(async (_request, { profile }) => {
 
   const pendingDays = pendingRequests.reduce((sum, r) => sum + r.days, 0)
 
+  // Split approved leave into taken (past) vs approved future
+  const approvedRequests = await prisma.leaveRequest.findMany({
+    where: {
+      profileId: profile.id,
+      leaveType: 'ANNUAL',
+      status: 'APPROVED',
+      startDate: { gte: new Date(`${year}-01-01`) },
+      endDate: { lte: new Date(`${year}-12-31`) },
+    },
+    select: { days: true, startDate: true, endDate: true },
+  })
+
+  // "Taken" = approved requests already started (startDate < today)
+  // "Approved Future" = approved requests not yet started (startDate >= today)
+  const takenDays = approvedRequests
+    .filter((r) => new Date(r.startDate) < today)
+    .reduce((sum, r) => sum + r.days, 0)
+
+  const approvedFutureDays = approvedRequests
+    .filter((r) => new Date(r.startDate) >= today)
+    .reduce((sum, r) => sum + r.days, 0)
+
   const summary = calculateLeaveBalance(allocation, used, carriedForward, pendingDays)
 
   return success({
     year,
     ...summary,
+    taken: takenDays,
+    approvedFuture: approvedFutureDays,
   })
 })

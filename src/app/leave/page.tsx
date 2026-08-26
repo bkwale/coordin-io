@@ -23,6 +23,8 @@ interface LeaveBalance {
   carriedForward: number
   pending: number
   available: number
+  taken: number
+  approvedFuture: number
 }
 
 interface LeaveRequest {
@@ -241,15 +243,25 @@ function isDateInLeaveRange(date: Date, start: string, end: string): boolean {
   return d >= s && d <= e
 }
 
-/** Assign stable colors to team members for the calendar */
-const MEMBER_COLORS = [
-  'bg-blue-200', 'bg-emerald-200', 'bg-amber-200', 'bg-rose-200',
-  'bg-violet-200', 'bg-cyan-200', 'bg-orange-200', 'bg-lime-200',
-  'bg-pink-200', 'bg-teal-200',
-]
+/** Colors by leave type for team calendar */
+const LEAVE_TYPE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  ANNUAL:          { bg: 'bg-blue-100',    text: 'text-blue-700',    label: 'Annual' },
+  SICK:            { bg: 'bg-red-100',     text: 'text-red-700',     label: 'Sick' },
+  COMPASSIONATE:   { bg: 'bg-purple-100',  text: 'text-purple-700',  label: 'Compassionate' },
+  MATERNITY:       { bg: 'bg-teal-100',    text: 'text-teal-700',    label: 'Maternity' },
+  PATERNITY:       { bg: 'bg-teal-100',    text: 'text-teal-700',    label: 'Paternity' },
+  PARENTAL:        { bg: 'bg-teal-100',    text: 'text-teal-700',    label: 'Parental' },
+  STUDY:           { bg: 'bg-indigo-100',  text: 'text-indigo-700',  label: 'Study' },
+  CPD_TRAINING:    { bg: 'bg-amber-100',   text: 'text-amber-700',   label: 'Training' },
+  UNPAID:          { bg: 'bg-stone-100',   text: 'text-stone-700',   label: 'Unpaid' },
+  TOIL:            { bg: 'bg-lime-100',    text: 'text-lime-700',    label: 'TOIL' },
+  BUSINESS_TRAVEL: { bg: 'bg-violet-100',  text: 'text-violet-700',  label: 'Travel' },
+  PUBLIC_HOLIDAY:  { bg: 'bg-slate-200',   text: 'text-slate-600',   label: 'Public holiday' },
+  OTHER:           { bg: 'bg-gray-100',    text: 'text-gray-700',    label: 'Other' },
+}
 
-function getMemberColor(index: number): string {
-  return MEMBER_COLORS[index % MEMBER_COLORS.length]
+function getLeaveTypeColor(leaveType: string): { bg: string; text: string; label: string } {
+  return LEAVE_TYPE_COLORS[leaveType] || LEAVE_TYPE_COLORS.OTHER
 }
 
 /* ── Page ──────────────────────────────────────────────── */
@@ -292,6 +304,9 @@ export default function LeavePage() {
   const [teamLoading, setTeamLoading] = useState(false)
   const [calDeptFilter, setCalDeptFilter] = useState('')
   const [calOfficeFilter, setCalOfficeFilter] = useState('')
+  const [calEmployeeFilter, setCalEmployeeFilter] = useState('')
+  const [calLeaveTypeFilter, setCalLeaveTypeFilter] = useState('')
+  const [calStatusFilter, setCalStatusFilter] = useState('')
 
   // Approvals state
   const [approvalRequests, setApprovalRequests] = useState<LeaveRequest[]>([])
@@ -495,8 +510,8 @@ export default function LeavePage() {
     return (
       <div className="space-y-6">
         <div className="h-8 w-40 bg-ink-100 animate-pulse rounded" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-24 bg-ink-100 animate-pulse rounded-xl" />
           ))}
         </div>
@@ -615,6 +630,12 @@ export default function LeavePage() {
           setDeptFilter={setCalDeptFilter}
           officeFilter={calOfficeFilter}
           setOfficeFilter={setCalOfficeFilter}
+          employeeFilter={calEmployeeFilter}
+          setEmployeeFilter={setCalEmployeeFilter}
+          leaveTypeFilter={calLeaveTypeFilter}
+          setLeaveTypeFilter={setCalLeaveTypeFilter}
+          statusFilter={calStatusFilter}
+          setStatusFilter={setCalStatusFilter}
         />
       )}
 
@@ -692,9 +713,10 @@ function MyLeaveTab(props: MyLeaveTabProps) {
     <div className="space-y-6">
       {/* ── Balance cards ──────────────────────────── */}
       {balance && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <BalanceCard label="Entitlement" value={balance.allocation} icon={CalendarDays} accent="bg-blue-50 text-blue-600" />
-          <BalanceCard label="Used" value={balance.used} icon={Check} accent="bg-ink-50 text-ink-500" />
+          <BalanceCard label="Taken" value={balance.taken} icon={Check} accent="bg-ink-50 text-ink-500" />
+          <BalanceCard label="Approved Future" value={balance.approvedFuture} icon={CheckCircle} accent="bg-cyan-50 text-cyan-600" />
           <BalanceCard label="Pending" value={balance.pending} icon={Clock} accent="bg-amber-50 text-amber-600" />
           <BalanceCard
             label="Remaining"
@@ -982,6 +1004,12 @@ interface TeamCalendarTabProps {
   setDeptFilter: (v: string) => void
   officeFilter: string
   setOfficeFilter: (v: string) => void
+  employeeFilter: string
+  setEmployeeFilter: (v: string) => void
+  leaveTypeFilter: string
+  setLeaveTypeFilter: (v: string) => void
+  statusFilter: string
+  setStatusFilter: (v: string) => void
 }
 
 function TeamCalendarTab(props: TeamCalendarTabProps) {
@@ -989,24 +1017,48 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
     calMonth, calYear, navigateMonth, goToToday, calendarGrid,
     teamLeave, teamMembers, teamLoading, holidays,
     deptFilter, setDeptFilter, officeFilter, setOfficeFilter,
+    employeeFilter, setEmployeeFilter, leaveTypeFilter, setLeaveTypeFilter,
+    statusFilter, setStatusFilter,
   } = props
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // Build a map of member index for stable colors
-  const memberIndexMap = useMemo(() => {
-    const map = new Map<string, number>()
-    teamMembers.forEach((m, i) => map.set(m.id, i))
-    return map
-  }, [teamMembers])
-
-  // Extract unique departments and offices from team members for filter dropdowns
+  // Extract unique departments from team members for filter dropdowns
   const departments = useMemo(() => {
     const set = new Set<string>()
     teamMembers.forEach((m) => { if (m.department) set.add(m.department) })
     return Array.from(set).sort()
   }, [teamMembers])
+
+  // Extract unique leave types present in current data
+  const activeLeaveTypes = useMemo(() => {
+    const set = new Set<string>()
+    teamLeave.forEach((l) => set.add(l.leaveType))
+    return Array.from(set).sort()
+  }, [teamLeave])
+
+  // Extract unique statuses present in current data
+  const activeStatuses = useMemo(() => {
+    const set = new Set<string>()
+    teamLeave.forEach((l) => set.add(l.status))
+    return Array.from(set).sort()
+  }, [teamLeave])
+
+  // Client-side filtered leave (employee, leave type, status)
+  const filteredTeamLeave = useMemo(() => {
+    let filtered = teamLeave
+    if (employeeFilter) {
+      filtered = filtered.filter((l) => l.profile.id === employeeFilter)
+    }
+    if (leaveTypeFilter) {
+      filtered = filtered.filter((l) => l.leaveType === leaveTypeFilter)
+    }
+    if (statusFilter) {
+      filtered = filtered.filter((l) => l.status === statusFilter)
+    }
+    return filtered
+  }, [teamLeave, employeeFilter, leaveTypeFilter, statusFilter])
 
   // Build a holiday date lookup (ISO date string → holiday names)
   const holidayMap = useMemo(() => {
@@ -1020,10 +1072,10 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
     return map
   }, [holidays])
 
-  // For each calendar day, find who is on leave
+  // For each calendar day, find who is on leave (using filtered data)
   const getLeaveForDate = useCallback((date: Date): { member: TeamMember; leave: LeaveRequest }[] => {
     const results: { member: TeamMember; leave: LeaveRequest }[] = []
-    for (const leave of teamLeave) {
+    for (const leave of filteredTeamLeave) {
       if (isDateInLeaveRange(date, leave.startDate, leave.endDate)) {
         const member = teamMembers.find((m) => m.id === leave.profile.id)
         if (member) {
@@ -1032,7 +1084,7 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
       }
     }
     return results
-  }, [teamLeave, teamMembers])
+  }, [filteredTeamLeave, teamMembers])
 
   if (teamLoading) {
     return (
@@ -1070,6 +1122,42 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
           >
             <option value="">All offices</option>
             {/* Unique offices from members */}
+          </select>
+
+          {/* Employee filter */}
+          {teamMembers.length > 0 && (
+            <select
+              value={employeeFilter}
+              onChange={(e) => setEmployeeFilter(e.target.value)}
+              className="px-2 py-1.5 text-[11px] border border-ink-200 rounded-lg bg-white"
+            >
+              <option value="">All employees</option>
+              {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+            </select>
+          )}
+
+          {/* Leave Type filter */}
+          <select
+            value={leaveTypeFilter}
+            onChange={(e) => setLeaveTypeFilter(e.target.value)}
+            className="px-2 py-1.5 text-[11px] border border-ink-200 rounded-lg bg-white"
+          >
+            <option value="">All leave types</option>
+            {activeLeaveTypes.map((t) => (
+              <option key={t} value={t}>{getLeaveTypeLabel(t)}</option>
+            ))}
+          </select>
+
+          {/* Status filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-2 py-1.5 text-[11px] border border-ink-200 rounded-lg bg-white"
+          >
+            <option value="">All statuses</option>
+            {activeStatuses.map((s) => (
+              <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>
+            ))}
           </select>
 
           <div className="flex items-center gap-1">
@@ -1117,10 +1205,6 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
               const isHoliday = holidayNames.length > 0
               const leaveOnDay = cell.isCurrentMonth && !isWeekend && !isHoliday ? getLeaveForDate(cell.date) : []
 
-              // Separate travel from regular leave
-              const travelOnDay = leaveOnDay.filter(({ leave }) => leave.leaveType === 'BUSINESS_TRAVEL')
-              const regularLeave = leaveOnDay.filter(({ leave }) => leave.leaveType !== 'BUSINESS_TRAVEL')
-
               return (
                 <div
                   key={di}
@@ -1147,33 +1231,26 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
                     </div>
                   )}
 
-                  {/* Leave indicators */}
+                  {/* Leave indicators — colored by leave type, employee name inside */}
                   <div className="space-y-0.5">
-                    {regularLeave.slice(0, 2).map(({ member, leave }, li) => (
-                      <div
-                        key={`${member.id}-${li}`}
-                        className={cn(
-                          'rounded px-1 py-0.5 text-[9px] font-medium text-ink-700 truncate',
-                          getMemberColor(memberIndexMap.get(member.id) ?? li),
-                        )}
-                        title={`${member.fullName} - ${getLeaveTypeLabel(leave.leaveType)}`}
-                      >
-                        {member.fullName.split(' ')[0]}
-                      </div>
-                    ))}
-                    {/* Travel shown with distinct purple style */}
-                    {travelOnDay.slice(0, 2).map(({ member }, ti) => (
-                      <div
-                        key={`travel-${member.id}-${ti}`}
-                        className="rounded px-1 py-0.5 text-[9px] font-medium text-purple-700 bg-purple-100 truncate"
-                        title={`${member.fullName} - Business Travel`}
-                      >
-                        ✈ {member.fullName.split(' ')[0]}
-                      </div>
-                    ))}
-                    {(regularLeave.length + travelOnDay.length) > 4 && (
+                    {leaveOnDay.slice(0, 3).map(({ member, leave }, li) => {
+                      const ltColor = getLeaveTypeColor(leave.leaveType)
+                      return (
+                        <div
+                          key={`${member.id}-${leave.id}-${li}`}
+                          className={cn(
+                            'rounded px-1 py-0.5 text-[9px] font-medium truncate',
+                            ltColor.bg, ltColor.text,
+                          )}
+                          title={`${member.fullName} - ${getLeaveTypeLabel(leave.leaveType)} (${STATUS_META[leave.status]?.label || leave.status})`}
+                        >
+                          {member.fullName.split(' ')[0]}
+                        </div>
+                      )
+                    })}
+                    {leaveOnDay.length > 3 && (
                       <div className="text-[9px] text-ink-400 px-1">
-                        +{regularLeave.length + travelOnDay.length - 4} more
+                        +{leaveOnDay.length - 3} more
                       </div>
                     )}
                   </div>
@@ -1184,12 +1261,14 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
         ))}
       </div>
 
-      {/* Legend */}
+      {/* Legend — leave types only */}
       <div className="flex flex-wrap gap-3 items-center">
-        {teamMembers.length > 0 && teamMembers.map((m, i) => (
-          <div key={m.id} className="flex items-center gap-1.5">
-            <div className={cn('w-3 h-3 rounded', getMemberColor(i))} />
-            <span className="text-[11px] text-ink-500">{m.fullName}</span>
+        {Object.entries(LEAVE_TYPE_COLORS)
+          .filter(([key]) => key !== 'OTHER' && key !== 'PUBLIC_HOLIDAY')
+          .map(([key, val]) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <div className={cn('w-3 h-3 rounded', val.bg)} />
+            <span className="text-[11px] text-ink-500">{val.label}</span>
           </div>
         ))}
         {holidays.length > 0 && (
@@ -1198,10 +1277,6 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
             <span className="text-[11px] text-ink-500">Public holiday</span>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-purple-100" />
-          <span className="text-[11px] text-ink-500">Business travel</span>
-        </div>
       </div>
 
       {teamMembers.length === 0 && (
@@ -1316,6 +1391,18 @@ function ApprovalsTab(props: ApprovalsTabProps) {
               ? 'Approve (HR)'
               : 'Final Approve'
 
+          // Derive the current approval stage label
+          const approvalStageLabel = req.status === 'SUBMITTED'
+            ? 'Awaiting Line Manager'
+            : req.status === 'LINE_MANAGER_APPROVED'
+              ? 'Awaiting HR'
+              : req.status === 'HR_APPROVED'
+                ? 'Awaiting Final'
+                : null
+
+          // Is this pending action from the viewer?
+          const needsAction = ['SUBMITTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED'].includes(req.status)
+
           return (
             <div key={req.id} className="bg-white rounded-xl border border-ink-100 overflow-hidden">
               {/* Summary row */}
@@ -1323,16 +1410,34 @@ function ApprovalsTab(props: ApprovalsTabProps) {
                 className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-ink-25 transition-colors"
                 onClick={() => setExpandedId(isExpanded ? null : req.id)}
               >
-                <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[12px] font-semibold text-blue-600">
+                <div className="relative w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-[12px] font-semibold text-blue-600">
                   {req.profile.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  {needsAction && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-ink-900">{req.profile.fullName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-medium text-ink-900">{req.profile.fullName}</p>
+                    {needsAction && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 whitespace-nowrap">
+                        Action Required
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-ink-400 mt-0.5">
                     {getLeaveTypeLabel(req.leaveType)} &middot; {formatDateRange(req.startDate, req.endDate)} &middot; {req.days} {req.days === 1 || req.days === 0.5 ? 'day' : 'days'}
                   </p>
                 </div>
+
+                {/* Approval stage indicator */}
+                {approvalStageLabel && (
+                  <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-blue-50 text-blue-600 whitespace-nowrap hidden sm:inline-flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {approvalStageLabel}
+                  </span>
+                )}
 
                 <StatusBadge status={req.status} />
 
@@ -1381,38 +1486,79 @@ function ApprovalsTab(props: ApprovalsTabProps) {
                     </div>
                   )}
 
-                  {/* Approval Workflow Stepper */}
+                  {/* Approval Workflow Stepper with audit trail */}
                   {instance && instance.steps && instance.steps.length > 0 && (
                     <div className="border border-surface-200 rounded-lg p-3 bg-white">
-                      <p className="text-[11px] font-medium text-ink-500 mb-2">
+                      <p className="text-[11px] font-medium text-ink-500 mb-3">
                         Approval Workflow{instance.route?.name ? `: ${instance.route.name}` : ''}
                       </p>
-                      <div className="flex items-center gap-1 overflow-x-auto">
+                      <div className="space-y-0">
                         {instance.steps.map((step: ApprovalStepData, idx: number) => {
                           const isActive = step.status === 'PENDING'
                           const isDone = step.status === 'APPROVED'
                           const isRejected = step.status === 'REJECTED'
                           const isSkipped = step.status === 'SKIPPED'
+                          const isActioned = isDone || isRejected || isSkipped
                           return (
-                            <div key={step.id} className="flex items-center gap-1 shrink-0">
+                            <div key={step.id}>
+                              {/* Connector line */}
                               {idx > 0 && (
-                                <div className={cn('w-4 h-px', isDone ? 'bg-emerald-400' : isRejected ? 'bg-red-400' : 'bg-ink-200')} />
+                                <div className="flex ml-[15px]">
+                                  <div className={cn('w-px h-3', isDone ? 'bg-emerald-300' : isRejected ? 'bg-red-300' : 'bg-ink-200')} />
+                                </div>
                               )}
-                              <div className={cn(
-                                'flex items-center gap-1.5 px-2 py-1 rounded text-[11px]',
-                                isDone && 'bg-emerald-50 text-emerald-700',
-                                isRejected && 'bg-red-50 text-red-700',
-                                isActive && 'bg-blue-50 text-blue-700 font-medium',
-                                isSkipped && 'bg-ink-50 text-ink-400 line-through',
-                                !isDone && !isRejected && !isActive && !isSkipped && 'bg-ink-50 text-ink-400',
-                              )}>
-                                {isDone && <CheckCircle className="w-3 h-3" />}
-                                {isRejected && <XCircle className="w-3 h-3" />}
-                                {isActive && <Clock className="w-3 h-3" />}
-                                <span>{step.label || `Step ${step.stepOrder}`}</span>
-                                {step.approver?.fullName && (
-                                  <span className="text-[10px] opacity-70">({step.approver.fullName})</span>
-                                )}
+                              {/* Step row */}
+                              <div className="flex items-start gap-2.5">
+                                {/* Status icon */}
+                                <div className={cn(
+                                  'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
+                                  isDone && 'bg-emerald-100 text-emerald-600',
+                                  isRejected && 'bg-red-100 text-red-600',
+                                  isActive && 'bg-blue-100 text-blue-600',
+                                  isSkipped && 'bg-ink-100 text-ink-400',
+                                  !isDone && !isRejected && !isActive && !isSkipped && 'bg-ink-50 text-ink-300',
+                                )}>
+                                  {isDone && <CheckCircle className="w-4 h-4" />}
+                                  {isRejected && <XCircle className="w-4 h-4" />}
+                                  {isActive && <Clock className="w-4 h-4" />}
+                                  {isSkipped && <Ban className="w-3.5 h-3.5" />}
+                                  {!isDone && !isRejected && !isActive && !isSkipped && (
+                                    <span className="text-[10px] font-medium">{idx + 1}</span>
+                                  )}
+                                </div>
+                                {/* Step content */}
+                                <div className="flex-1 min-w-0 pb-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={cn(
+                                      'text-[12px] font-medium',
+                                      isDone && 'text-emerald-700',
+                                      isRejected && 'text-red-700',
+                                      isActive && 'text-blue-700',
+                                      isSkipped && 'text-ink-400 line-through',
+                                      !isDone && !isRejected && !isActive && !isSkipped && 'text-ink-400',
+                                    )}>
+                                      {step.label || `Step ${step.stepOrder}`}
+                                    </span>
+                                    {step.approver?.fullName && (
+                                      <span className="text-[10px] text-ink-400">({step.approver.fullName})</span>
+                                    )}
+                                  </div>
+                                  {/* Timestamp for actioned steps */}
+                                  {isActioned && step.actionedAt && (
+                                    <p className="text-[10px] text-ink-400 mt-0.5">
+                                      {isDone ? 'Approved' : isRejected ? 'Rejected' : 'Skipped'}{' '}
+                                      {new Date(step.actionedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
+                                      at {new Date(step.actionedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  )}
+                                  {/* Per-step comment */}
+                                  {step.comment && (
+                                    <div className="mt-1 flex items-start gap-1">
+                                      <MessageSquare className="w-3 h-3 text-ink-300 mt-0.5 shrink-0" />
+                                      <p className="text-[11px] text-ink-500 italic">{step.comment}</p>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )
@@ -1480,6 +1626,8 @@ interface ApprovalStepData {
   stepOrder: number
   label: string | null
   status: string
+  comment: string | null
+  actionedAt: string | null
   approver: { id: string; fullName: string } | null
   escalatedTo: { id: string; fullName: string } | null
 }
