@@ -797,3 +797,19 @@ Purple Team review surfaced 2 fixes, both applied:
 | Quote | PDF generation + email sending | 12 | 254f52f |
 | Timesheets | CSV + PDF export with manager filters | 12 | cd5cc57 |
 | **Total** | **Phase 7 complete** | **1421** | **10 commits** |
+
+### Post-Sprint: Beta Feedback UI Fixes (COMPLETE)
+| Fix | Feature | File(s) | Status |
+|-----|---------|---------|--------|
+| 1 | LEGAL, FINANCE, COMMERCIAL in role dropdown + invitation form | `src/app/settings/page.tsx` | Done |
+| 2 | Task detail — milestone selector, SharePoint URL inline edit, enhanced checklist | `src/app/tasks/[id]/page.tsx` | Done |
+| 3 | Milestone editing via modal | `src/app/projects/[id]/page.tsx` | Done |
+| 4 | Approval route inline editing | `src/app/settings/page.tsx` | Done |
+| 5 | Leave admin — blackout dates CRUD + individual allowance editing | `src/app/leave/page.tsx`, `src/app/api/blackout-dates/` | Done |
+| 6 | External links management UI (full CRUD) | `src/app/settings/page.tsx` | Done |
+| 7 | Task list CSV export + timesheet review dept/employee filters | `src/app/projects/[id]/tasks/page.tsx`, `src/app/timesheets/review/page.tsx` | Done |
+| 8 | Task numbering — server-computed stable {code}-{num} | `src/app/api/projects/[id]/tasks/route.ts`, `src/app/api/tasks/[id]/route.ts` | Done |
+
+**Architecture:** 18 UI gaps identified from beta partner (Ayo) feedback — features were built API-first but missing UI controls. BlackoutDate model added to Prisma schema with API routes. Task numbering computed server-side from creation order within project (no schema migration needed). All fixes follow ship-vertically pattern: API + UI control + Crispin QA verification.
+
+**Verification:** 0 type errors. 1421 tests passing. Schema pushed to Supabase. Commit a041769 pushed.
