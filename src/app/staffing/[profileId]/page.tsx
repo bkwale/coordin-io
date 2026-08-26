@@ -37,6 +37,9 @@ interface EmployeeProfileData {
   employment: {
     contractType: string | null
     employmentType: string | null
+    probationLength: number | null
+    probationStatus: string | null
+    probationStartDate: string | null
     probationEndDate: string | null
     salary: number | null
     salaryFrequency: string | null
@@ -281,6 +284,11 @@ export default function EmployeeProfilePage() {
             workingPattern: employment?.workingPattern ?? '',
             workingHours: employment?.workingHours ?? '',
             noticePeriod: employment?.noticePeriod ?? '',
+            probationLength: employment?.probationLength ?? '',
+            probationStatus: employment?.probationStatus ?? '',
+            probationStartDate: employment?.probationStartDate
+              ? new Date(employment.probationStartDate).toISOString().split('T')[0]
+              : '',
             probationEndDate: employment?.probationEndDate
               ? new Date(employment.probationEndDate).toISOString().split('T')[0]
               : '',
@@ -303,7 +311,7 @@ export default function EmployeeProfilePage() {
       for (const [key, value] of Object.entries(editForm)) {
         if (value !== '' && value !== null) {
           // Convert numeric fields
-          if (['salary', 'dependants', 'pensionContribution', 'workingHours'].includes(key)) {
+          if (['salary', 'dependants', 'pensionContribution', 'workingHours', 'probationLength'].includes(key)) {
             const num = Number(value)
             if (!isNaN(num)) {
               payload[key] = num
@@ -742,6 +750,26 @@ function EmploymentContent({
           })}
           {renderField('Probation end', 'probationEndDate', formatDate(employment.probationEndDate), { type: 'date' })}
           {renderField('Notice period', 'noticePeriod', displayValue(employment.noticePeriod))}
+        </div>
+      </div>
+
+      {/* Probation */}
+      <div>
+        <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Probation</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {renderField('Status', 'probationStatus', displayValue(employment.probationStatus), {
+            type: 'select',
+            options: [
+              { value: '', label: 'Select...' },
+              { value: 'PROBATION', label: 'Probation' },
+              { value: 'CONFIRMED', label: 'Confirmed' },
+              { value: 'EXTENDED', label: 'Extended' },
+              { value: 'COMPLETED', label: 'Completed' },
+            ],
+          })}
+          {renderField('Length (months)', 'probationLength', employment.probationLength !== null && employment.probationLength !== undefined ? `${employment.probationLength} months` : 'Not provided', { type: 'number' })}
+          {renderField('Start date', 'probationStartDate', formatDate(employment.probationStartDate), { type: 'date' })}
+          {renderField('End date', 'probationEndDate', formatDate(employment.probationEndDate), { type: 'date' })}
         </div>
       </div>
 

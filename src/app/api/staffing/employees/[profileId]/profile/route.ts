@@ -219,6 +219,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       ? {
           contractType: ep?.contractType ?? null,
           employmentType: ep?.employmentType ?? null,
+          probationLength: ep?.probationLength ?? null,
+          probationStatus: ep?.probationStatus ?? null,
+          probationStartDate: ep?.probationStartDate ?? null,
           probationEndDate: ep?.probationEndDate ?? null,
           salary: ep?.salary ?? null,
           salaryFrequency: ep?.salaryFrequency ?? null,
@@ -382,6 +385,15 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
     const noticePeriod = optionalString(body.noticePeriod as unknown, 'noticePeriod', 100)
     if (noticePeriod !== null) empData.noticePeriod = noticePeriod
+
+    const probationLength = optionalNumber(body.probationLength as unknown, 'probationLength', { min: 0, max: 60 })
+    if (probationLength !== null) empData.probationLength = probationLength
+
+    const probationStatus = optionalString(body.probationStatus as unknown, 'probationStatus', 50)
+    if (probationStatus !== null) empData.probationStatus = probationStatus
+
+    const probationStartDate = optionalDate(body.probationStartDate as unknown, 'probationStartDate')
+    if (probationStartDate !== null) empData.probationStartDate = probationStartDate
 
     const probationEndDate = optionalDate(body.probationEndDate as unknown, 'probationEndDate')
     if (probationEndDate !== null) empData.probationEndDate = probationEndDate

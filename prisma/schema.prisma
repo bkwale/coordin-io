@@ -331,6 +331,9 @@ model EmployeeProfile {
   workingPattern      String?   @map("working_pattern") // FULL_WEEK, PART_WEEK, COMPRESSED, FLEXIBLE
   workingHours        Float?    @map("working_hours") // hours per week
   noticePeriod        String?   @map("notice_period") // e.g. "1 month", "3 months"
+  probationLength     Int?      @map("probation_length") // length in months
+  probationStatus     String?   @map("probation_status") // PROBATION, CONFIRMED, EXTENDED, COMPLETED
+  probationStartDate  DateTime? @map("probation_start_date")
   probationEndDate    DateTime? @map("probation_end_date")
   availabilityStatus  String?   @map("availability_status") // AVAILABLE, ON_LEAVE, ON_SITE, UNAVAILABLE
   grade               String?   // Staff grade: Senior Management, Management, Senior Staff, Staff, etc.

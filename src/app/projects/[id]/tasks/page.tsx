@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   Plus, Filter, ArrowUpDown, Loader2,
   AlertTriangle, RefreshCw, Calendar, X,
-  Download,
+  Download, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -210,6 +210,36 @@ export default function ProjectTasksPage() {
     URL.revokeObjectURL(url)
   }
 
+  /* ── PDF export ─────────────────────────────────────── */
+
+  const [exportingPdf, setExportingPdf] = useState(false)
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true)
+    try {
+      const params = new URLSearchParams({ projectId })
+      if (statusFilter !== 'ALL') params.set('status', statusFilter)
+      const res = await fetch(`/api/tasks/export-pdf?${params.toString()}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || `Export failed (${res.status})`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tasks-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'PDF export failed', 'error')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   /* ── Stats ──────────────────────────────────────────── */
 
   const statusCounts = tasks.reduce<Record<string, number>>((acc, t) => {
@@ -263,13 +293,28 @@ export default function ProjectTasksPage() {
         </div>
         <div className="flex items-center gap-2">
           {filtered.length > 0 && (
-            <button
-              onClick={handleExportCsv}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-ink-200 text-ink-600 text-[12px] font-medium hover:bg-ink-50 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export CSV
-            </button>
+            <>
+              <button
+                onClick={handleExportCsv}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-ink-200 text-ink-600 text-[12px] font-medium hover:bg-ink-50 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                CSV
+              </button>
+              <button
+                onClick={handleExportPdf}
+                disabled={exportingPdf}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-ink-200 text-[12px] font-medium transition-colors',
+                  exportingPdf
+                    ? 'text-ink-300 cursor-not-allowed'
+                    : 'text-ink-600 hover:bg-ink-50',
+                )}
+              >
+                {exportingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                PDF
+              </button>
+            </>
           )}
           {!showCreateForm && (
             <button
