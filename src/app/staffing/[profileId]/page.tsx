@@ -7,7 +7,7 @@ import {
   Wrench, FileText, ChevronDown, ChevronRight, AlertTriangle,
   RefreshCw, Mail, Phone, MapPin, Shield, Clock, Heart,
   Building2, Users, Pencil, X, Save, Loader2, Plus, ExternalLink,
-  Upload, Lock, Award, AlertCircle,
+  Upload, Lock, Award, AlertCircle, Link2, Send,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -221,6 +221,7 @@ export default function EmployeeProfilePage() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, string | number | null>>({})
+  const [sendingOnboardingEmail, setSendingOnboardingEmail] = useState(false)
 
   const fetchProfile = useCallback(async () => {
     setLoading(true)
@@ -344,6 +345,24 @@ export default function EmployeeProfilePage() {
     }
   }
 
+  const sendOnboardingEmail = async () => {
+    setSendingOnboardingEmail(true)
+    try {
+      const res = await fetch(`/api/staffing/employees/${profileId}/onboarding-email`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Failed to send onboarding email')
+      }
+      toast('Onboarding email sent successfully', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to send email', 'error')
+    } finally {
+      setSendingOnboardingEmail(false)
+    }
+  }
+
   /* ── Loading ──────────────────────────────────────────────── */
 
   if (loading) {
@@ -414,6 +433,16 @@ export default function EmployeeProfilePage() {
           <ArrowLeft className="w-4 h-4" /> Back to staffing
         </button>
         <div className="flex items-center gap-2">
+          {isAdmin && (emp.status === 'ONBOARDING' || emp.status === 'INVITED') && !editing && (
+            <button
+              onClick={sendOnboardingEmail}
+              disabled={sendingOnboardingEmail}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-[13px] font-medium hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              {sendingOnboardingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {sendingOnboardingEmail ? 'Sending...' : 'Send Onboarding Email'}
+            </button>
+          )}
           {canEdit && !editing && (
             <button
               onClick={startEditing}
@@ -1389,12 +1418,14 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
   const [uploading, setUploading] = useState(false)
 
   // Upload form state
+  const [docInputMode, setDocInputMode] = useState<'upload' | 'link'>('upload')
   const [docType, setDocType] = useState('CONTRACT')
   const [docTitle, setDocTitle] = useState('')
   const [docExpiryDate, setDocExpiryDate] = useState('')
   const [docConfidential, setDocConfidential] = useState(false)
   const [uploadedFileUrl, setUploadedFileUrl] = useState('')
   const [uploadedFileName, setUploadedFileName] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
 
   const entries = Object.entries(hrDocumentCounts)
   const totalDocs = entries.reduce((sum, [, count]) => sum + count, 0)
@@ -1456,15 +1487,24 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
       toast('Title is required', 'error')
       return
     }
+    if (docInputMode === 'link' && !linkUrl.trim()) {
+      toast('URL is required when linking a document', 'error')
+      return
+    }
     setSubmitting(true)
     try {
       const payload: Record<string, unknown> = {
         profileId,
         documentType: docType,
         title: docTitle,
-        fileUrl: uploadedFileUrl || undefined,
         expiryDate: docExpiryDate || undefined,
         isConfidential: docConfidential,
+      }
+      if (docInputMode === 'link') {
+        payload.type = 'LINK'
+        payload.url = linkUrl
+      } else {
+        payload.fileUrl = uploadedFileUrl || undefined
       }
       const res = await fetch('/api/staffing/hr-documents', {
         method: 'POST',
@@ -1487,12 +1527,14 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
   }
 
   const resetDocForm = () => {
+    setDocInputMode('upload')
     setDocType('CONTRACT')
     setDocTitle('')
     setDocExpiryDate('')
     setDocConfidential(false)
     setUploadedFileUrl('')
     setUploadedFileName('')
+    setLinkUrl('')
   }
 
   const DOC_TYPE_OPTIONS = [
@@ -1528,14 +1570,14 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
         </div>
       )}
 
-      {/* Upload button */}
+      {/* Add document button */}
       {isAdmin && (
         <div className="flex justify-end">
           <button
             onClick={() => setShowUploadForm(!showUploadForm)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
           >
-            <Upload className="w-3.5 h-3.5" /> Upload Document
+            <Plus className="w-3.5 h-3.5" /> Add Document
           </button>
         </div>
       )}
@@ -1543,7 +1585,31 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
       {/* Upload form */}
       {showUploadForm && (
         <div className="bg-ink-25 border border-ink-100 rounded-xl p-4 space-y-4">
-          <h4 className="text-[13px] font-semibold text-ink-900">Upload HR Document</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-[13px] font-semibold text-ink-900">Add HR Document</h4>
+            <div className="flex items-center bg-ink-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setDocInputMode('upload')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  docInputMode === 'upload'
+                    ? 'bg-white text-ink-900 shadow-sm'
+                    : 'text-ink-500 hover:text-ink-700'
+                }`}
+              >
+                <Upload className="w-3 h-3" /> Upload File
+              </button>
+              <button
+                onClick={() => setDocInputMode('link')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  docInputMode === 'link'
+                    ? 'bg-white text-ink-900 shadow-sm'
+                    : 'text-ink-500 hover:text-ink-700'
+                }`}
+              >
+                <Link2 className="w-3 h-3" /> Link URL
+              </button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] text-ink-400 mb-1">Document type *</label>
@@ -1563,7 +1629,7 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
                 type="text"
                 value={docTitle}
                 onChange={(e) => setDocTitle(e.target.value)}
-                placeholder="e.g. Employment Contract 2024"
+                placeholder={docInputMode === 'link' ? 'e.g. Employment Contract (SharePoint)' : 'e.g. Employment Contract 2024'}
                 className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
               />
             </div>
@@ -1576,26 +1642,39 @@ function DocumentsContent({ data }: { data: EmployeeProfileData }) {
                 className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
               />
             </div>
-            <div>
-              <label className="block text-[11px] text-ink-400 mb-1">File</label>
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] text-ink-600 hover:bg-ink-50 transition-colors cursor-pointer">
-                  {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                  {uploading ? 'Uploading...' : 'Choose file'}
-                  <input
-                    type="file"
-                    onChange={handleFileUpload}
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                    className="hidden"
-                  />
-                </label>
-                {uploadedFileName && (
-                  <span className="text-[11px] text-emerald-600 truncate max-w-[200px]">
-                    {uploadedFileName}
-                  </span>
-                )}
+            {docInputMode === 'upload' ? (
+              <div>
+                <label className="block text-[11px] text-ink-400 mb-1">File</label>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] text-ink-600 hover:bg-ink-50 transition-colors cursor-pointer">
+                    {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    {uploading ? 'Uploading...' : 'Choose file'}
+                    <input
+                      type="file"
+                      onChange={handleFileUpload}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                      className="hidden"
+                    />
+                  </label>
+                  {uploadedFileName && (
+                    <span className="text-[11px] text-emerald-600 truncate max-w-[200px]">
+                      {uploadedFileName}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="block text-[11px] text-ink-400 mb-1">URL *</label>
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://company.sharepoint.com/..."
+                  className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
+                />
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"

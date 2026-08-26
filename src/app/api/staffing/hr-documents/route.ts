@@ -91,8 +91,16 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const documentType = requireEnum(body.documentType, 'documentType', HR_DOCUMENT_TYPES)
   const title = requireString(body.title, 'title', 500)
   const description = optionalString(body.description, 'description', 2000)
-  const fileUrl = optionalString(body.fileUrl, 'fileUrl', 2000)
   const isConfidential = body.isConfidential === true
+
+  // Support both file upload (fileUrl) and external link (type: 'LINK', url)
+  let fileUrl: string | undefined
+  if (body.type === 'LINK') {
+    const url = requireString(body.url, 'url')
+    fileUrl = url
+  } else {
+    fileUrl = optionalString(body.fileUrl, 'fileUrl', 2000) ?? undefined
+  }
 
   // Verify profile is in same org
   const targetProfile = await modulesPrisma.profile.findUnique({

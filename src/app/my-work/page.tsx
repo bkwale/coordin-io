@@ -7,7 +7,7 @@ import {
   FolderOpen, Loader2, RefreshCw, Bell, CalendarDays,
   Wallet, ChevronDown, ArrowUpDown, SlidersHorizontal,
   ClipboardList, FileCheck, ShieldCheck, MapPin, Bug,
-  X, Filter, Calendar,
+  X, Filter, Calendar, BookOpen, ClipboardCheck, ArrowRight, FileWarning,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonRow, SkeletonStats } from '@/components/Skeleton'
@@ -151,6 +151,22 @@ interface NotificationItem {
   read: boolean
   createdAt: string
   link: string | null
+}
+
+interface PendingActionsData {
+  totalCount: number
+  policies: {
+    count: number
+    items: { id: string; title: string; category: string }[]
+  }
+  onboarding: {
+    count: number
+    items: { id: string; title: string; stage: string; status: string; dueDate: string | null }[]
+  }
+  approvals: {
+    count: number
+    items: { id: string; type: string; entityId: string; submitterName: string; label: string }[]
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -837,6 +853,9 @@ export default function MyWorkPage() {
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState<string | null>(null)
 
+  // ── Pending actions ────────────────────────────────────
+  const [pendingActions, setPendingActions] = useState<PendingActionsData | null>(null)
+
   // ── Dashboard fetch ─────────────────────────────────────
 
   const fetchDashboard = useCallback(async () => {
@@ -857,9 +876,22 @@ export default function MyWorkPage() {
     }
   }, [])
 
+  const fetchPendingActions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/dashboard/pending-actions')
+      if (res.ok) {
+        const json = await res.json()
+        setPendingActions(json.data)
+      }
+    } catch {
+      // Non-critical — silently skip
+    }
+  }, [])
+
   useEffect(() => {
     fetchDashboard()
-  }, [fetchDashboard])
+    fetchPendingActions()
+  }, [fetchDashboard, fetchPendingActions])
 
   // ── Lazy loaders for each section ───────────────────────
 
@@ -1522,6 +1554,79 @@ export default function MyWorkPage() {
           accent="bg-violet-50 text-violet-600"
         />
       </div>
+
+      {/* ── Pending actions banner ────────────────────── */}
+      {pendingActions && pendingActions.totalCount > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[14px] font-semibold text-ink-900 flex items-center gap-2">
+              <FileWarning className="w-4 h-4 text-amber-500" />
+              Pending actions
+              <span className="text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                {pendingActions.totalCount}
+              </span>
+            </h2>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {pendingActions.policies.count > 0 && (
+              <Link href="/onboarding" className="flex items-start gap-3 p-3 rounded-lg bg-red-50/50 hover:bg-red-50 transition-colors group">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-4 h-4 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-ink-900">{pendingActions.policies.count}</p>
+                  <p className="text-[11px] text-ink-400">Policies to acknowledge</p>
+                  {pendingActions.policies.items.length > 0 && (
+                    <p className="text-[11px] text-ink-500 mt-1 truncate">{pendingActions.policies.items[0].title}</p>
+                  )}
+                  <p className="text-[11px] text-accent-600 font-medium mt-1 group-hover:text-accent-700 flex items-center gap-0.5">
+                    Review <ArrowRight className="w-3 h-3" />
+                  </p>
+                </div>
+              </Link>
+            )}
+            {pendingActions.onboarding.count > 0 && (
+              <Link href="/onboarding" className="flex items-start gap-3 p-3 rounded-lg bg-amber-50/50 hover:bg-amber-50 transition-colors group">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <ClipboardCheck className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-ink-900">{pendingActions.onboarding.count}</p>
+                  <p className="text-[11px] text-ink-400">Onboarding tasks</p>
+                  {pendingActions.onboarding.items.length > 0 && (
+                    <p className="text-[11px] text-ink-500 mt-1 truncate">{pendingActions.onboarding.items[0].title}</p>
+                  )}
+                  <p className="text-[11px] text-accent-600 font-medium mt-1 group-hover:text-accent-700 flex items-center gap-0.5">
+                    Continue <ArrowRight className="w-3 h-3" />
+                  </p>
+                </div>
+              </Link>
+            )}
+            {pendingActions.approvals.count > 0 && (
+              <button
+                onClick={() => handleTabChange('approvals')}
+                className="flex items-start gap-3 p-3 rounded-lg bg-violet-50/50 hover:bg-violet-50 transition-colors group text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4 text-violet-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-ink-900">{pendingActions.approvals.count}</p>
+                  <p className="text-[11px] text-ink-400">Pending approvals</p>
+                  {pendingActions.approvals.items.length > 0 && (
+                    <p className="text-[11px] text-ink-500 mt-1 truncate">
+                      {pendingActions.approvals.items[0].label} — {pendingActions.approvals.items[0].submitterName}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-accent-600 font-medium mt-1 group-hover:text-accent-700 flex items-center gap-0.5">
+                    Review <ArrowRight className="w-3 h-3" />
+                  </p>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Tab navigation ─────────────────────────────── */}
       <div className="border-b border-ink-100 -mx-1 overflow-x-auto">

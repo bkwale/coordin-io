@@ -23,6 +23,14 @@ interface InvitationEmailParams {
   expiresAt: Date
 }
 
+interface OnboardingEmailParams {
+  to: string
+  employeeName: string
+  organisationName: string
+  senderName: string
+  outstandingItems?: string[]
+}
+
 // ── Send Invitation Email ─────────────────────────────────
 
 export async function sendInvitationEmail(params: InvitationEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
@@ -162,6 +170,138 @@ Accept your invitation here: ${activationUrl}
 This link expires on ${expiryDate}.
 
 If you weren't expecting this email, you can safely ignore it.
+
+— Coordin.io`
+}
+
+// ── Send Onboarding Email ────────────────────────────────
+
+export async function sendOnboardingEmail(params: OnboardingEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { to, employeeName, organisationName, senderName, outstandingItems } = params
+  const onboardingUrl = `${APP_URL}/onboarding`
+
+  try {
+    const { data, error } = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: `Complete your onboarding at ${organisationName}`,
+      html: buildOnboardingHtml({ employeeName, organisationName, senderName, onboardingUrl, outstandingItems }),
+      text: buildOnboardingText({ employeeName, organisationName, senderName, onboardingUrl, outstandingItems }),
+    })
+
+    if (error) {
+      console.error('[EMAIL] Resend error:', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, messageId: data?.id }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown email error'
+    console.error('[EMAIL] Send failed:', message)
+    return { success: false, error: message }
+  }
+}
+
+// ── Onboarding HTML Template ─────────────────────────────
+
+function buildOnboardingHtml(params: {
+  employeeName: string
+  organisationName: string
+  senderName: string
+  onboardingUrl: string
+  outstandingItems?: string[]
+}): string {
+  const { employeeName, organisationName, senderName, onboardingUrl, outstandingItems } = params
+
+  const itemsHtml = outstandingItems && outstandingItems.length > 0
+    ? `<p style="margin:0 0 16px;color:#3f3f46;font-size:15px;line-height:1.6;">
+        You have the following outstanding requirements:
+      </p>
+      <ul style="margin:0 0 24px;padding-left:20px;color:#3f3f46;font-size:14px;line-height:1.8;">
+        ${outstandingItems.map((item) => `<li>${item}</li>`).join('')}
+      </ul>`
+    : `<p style="margin:0 0 24px;color:#3f3f46;font-size:15px;line-height:1.6;">
+        Please log in to review and complete any outstanding onboarding requirements.
+      </p>`
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;">
+        <!-- Header -->
+        <tr>
+          <td style="background:#18181b;padding:32px 40px;">
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;">Coordin.io</h1>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px;">
+            <p style="margin:0 0 16px;color:#18181b;font-size:16px;line-height:1.6;">
+              Hi ${employeeName},
+            </p>
+            <p style="margin:0 0 16px;color:#3f3f46;font-size:15px;line-height:1.6;">
+              ${senderName} from ${organisationName} has sent you a reminder to complete your onboarding on Coordin.io.
+            </p>
+            ${itemsHtml}
+            <!-- CTA -->
+            <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+              <tr>
+                <td style="background:#18181b;border-radius:8px;padding:14px 32px;">
+                  <a href="${onboardingUrl}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;display:inline-block;">
+                    Complete Onboarding
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;color:#71717a;font-size:13px;line-height:1.5;">
+              If the button doesn't work, copy and paste this link into your browser:
+            </p>
+            <p style="margin:4px 0 0;word-break:break-all;">
+              <a href="${onboardingUrl}" style="color:#2563eb;font-size:13px;">${onboardingUrl}</a>
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="padding:24px 40px;border-top:1px solid #e4e4e7;">
+            <p style="margin:0;color:#a1a1aa;font-size:12px;line-height:1.5;">
+              You received this email because you are completing onboarding at ${organisationName}.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+// ── Onboarding Plain Text Fallback ───────────────────────
+
+function buildOnboardingText(params: {
+  employeeName: string
+  organisationName: string
+  senderName: string
+  onboardingUrl: string
+  outstandingItems?: string[]
+}): string {
+  const { employeeName, organisationName, senderName, onboardingUrl, outstandingItems } = params
+
+  const itemsText = outstandingItems && outstandingItems.length > 0
+    ? `Outstanding requirements:\n${outstandingItems.map((item) => `- ${item}`).join('\n')}\n`
+    : 'Please log in to review and complete any outstanding onboarding requirements.\n'
+
+  return `Hi ${employeeName},
+
+${senderName} from ${organisationName} has sent you a reminder to complete your onboarding on Coordin.io.
+
+${itemsText}
+Complete your onboarding here: ${onboardingUrl}
 
 — Coordin.io`
 }

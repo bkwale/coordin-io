@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   LayoutDashboard, FolderOpen, CheckCircle2, AlertTriangle,
   Clock, Eye, ArrowRight, Loader2, RefreshCw,
+  BookOpen, ShieldCheck, ClipboardCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,22 @@ interface DashboardData {
   stats: { totalTasks: number; overdueTasks: number; inReviewTasks: number; completedThisWeek: number }
 }
 
+interface PendingActionsData {
+  totalCount: number
+  policies: {
+    count: number
+    items: { id: string; title: string; category: string }[]
+  }
+  onboarding: {
+    count: number
+    items: { id: string; title: string; stage: string; status: string; dueDate: string | null }[]
+  }
+  approvals: {
+    count: number
+    items: { id: string; type: string; entityId: string; submitterName: string; label: string }[]
+  }
+}
+
 const HEALTH_COLORS: Record<string, string> = {
   GREEN: 'bg-emerald-400',
   AMBER: 'bg-amber-400',
@@ -31,6 +48,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [pendingActions, setPendingActions] = useState<PendingActionsData | null>(null)
 
   async function fetchData() {
     setLoading(true)
@@ -47,7 +65,19 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  async function fetchPendingActions() {
+    try {
+      const res = await fetch('/api/dashboard/pending-actions')
+      if (res.ok) {
+        const json = await res.json()
+        setPendingActions(json.data)
+      }
+    } catch {
+      // Non-critical — silently skip
+    }
+  }
+
+  useEffect(() => { fetchData(); fetchPendingActions() }, [])
 
   if (loading) {
     return (
@@ -100,6 +130,96 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Pending actions */}
+      {pendingActions && pendingActions.totalCount > 0 && (
+        <section>
+          <h2 className="text-[15px] font-semibold text-ink-900 mb-3">
+            Pending actions
+            <span className="ml-2 text-[12px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+              {pendingActions.totalCount}
+            </span>
+          </h2>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {/* Unacknowledged policies */}
+            {pendingActions.policies.count > 0 && (
+              <Link href="/onboarding" className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                    <BookOpen className="w-4.5 h-4.5 text-red-500" />
+                  </div>
+                  <div>
+                    <p className="text-[22px] font-semibold text-ink-900 leading-tight">{pendingActions.policies.count}</p>
+                    <p className="text-[11px] text-ink-400">Policies to acknowledge</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {pendingActions.policies.items.map((p) => (
+                    <p key={p.id} className="text-[12px] text-ink-500 truncate">{p.title}</p>
+                  ))}
+                  {pendingActions.policies.count > 3 && (
+                    <p className="text-[11px] text-accent-600 font-medium group-hover:text-accent-700">
+                      +{pendingActions.policies.count - 3} more
+                    </p>
+                  )}
+                </div>
+              </Link>
+            )}
+
+            {/* Incomplete onboarding */}
+            {pendingActions.onboarding.count > 0 && (
+              <Link href="/onboarding" className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                    <ClipboardCheck className="w-4.5 h-4.5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-[22px] font-semibold text-ink-900 leading-tight">{pendingActions.onboarding.count}</p>
+                    <p className="text-[11px] text-ink-400">Onboarding tasks</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {pendingActions.onboarding.items.map((t) => (
+                    <p key={t.id} className="text-[12px] text-ink-500 truncate">{t.title}</p>
+                  ))}
+                  {pendingActions.onboarding.count > 3 && (
+                    <p className="text-[11px] text-accent-600 font-medium group-hover:text-accent-700">
+                      +{pendingActions.onboarding.count - 3} more
+                    </p>
+                  )}
+                </div>
+              </Link>
+            )}
+
+            {/* Pending approvals */}
+            {pendingActions.approvals.count > 0 && (
+              <Link href="/my-work" className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-4.5 h-4.5 text-violet-500" />
+                  </div>
+                  <div>
+                    <p className="text-[22px] font-semibold text-ink-900 leading-tight">{pendingActions.approvals.count}</p>
+                    <p className="text-[11px] text-ink-400">Pending approvals</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  {pendingActions.approvals.items.map((a) => (
+                    <p key={a.id} className="text-[12px] text-ink-500 truncate">
+                      {a.label} — {a.submitterName}
+                    </p>
+                  ))}
+                  {pendingActions.approvals.count > 3 && (
+                    <p className="text-[11px] text-accent-600 font-medium group-hover:text-accent-700">
+                      +{pendingActions.approvals.count - 3} more
+                    </p>
+                  )}
+                </div>
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Projects at risk */}
       <section>
