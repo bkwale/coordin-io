@@ -6,18 +6,21 @@ import Link from 'next/link'
 import {
   Plus, Filter, ArrowUpDown, Loader2,
   AlertTriangle, RefreshCw, Calendar, X,
+  Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
 import { TaskStatusBadge, PriorityBadge } from '@/components/StatusFlow'
 import { SkeletonRow } from '@/components/Skeleton'
+import { generateCsv, TASK_COLUMNS } from '@/lib/export-utils'
 
 /* ── Types ─────────────────────────────────────────────── */
 
 interface TaskListItem {
   id: string
   title: string
+  taskNumber: string
   status: string
   priority: string
   dueDate: string | null
@@ -183,6 +186,30 @@ export default function ProjectTasksPage() {
     }
   })
 
+  /* ── CSV export ─────────────────────────────────────── */
+
+  const handleExportCsv = () => {
+    const rows = filtered.map((t) => ({
+      taskNumber: t.taskNumber,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      owner: t.owner ? { fullName: t.owner.fullName } : null,
+      dueDate: t.dueDate,
+      deliverable: t.stage ?? '',
+    }))
+    const csv = generateCsv(TASK_COLUMNS, rows)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tasks-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   /* ── Stats ──────────────────────────────────────────── */
 
   const statusCounts = tasks.reduce<Record<string, number>>((acc, t) => {
@@ -234,15 +261,26 @@ export default function ProjectTasksPage() {
             {tasks.length} total · {statusCounts['IN_PROGRESS'] || 0} in progress · {statusCounts['BLOCKED'] || 0} blocked
           </p>
         </div>
-        {!showCreateForm && (
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            New task
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {filtered.length > 0 && (
+            <button
+              onClick={handleExportCsv}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-ink-200 text-ink-600 text-[12px] font-medium hover:bg-ink-50 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export CSV
+            </button>
+          )}
+          {!showCreateForm && (
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New task
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Create task form ───────────────────────────── */}
@@ -426,6 +464,11 @@ export default function ProjectTasksPage() {
               >
                 {/* Priority dot */}
                 <PriorityBadge priority={task.priority} />
+
+                {/* Task number */}
+                <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded shrink-0 font-mono">
+                  {task.taskNumber}
+                </span>
 
                 {/* Title + owner */}
                 <div className="flex-1 min-w-0">

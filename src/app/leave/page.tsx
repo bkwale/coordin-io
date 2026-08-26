@@ -5,7 +5,7 @@ import {
   CalendarDays, Plus, Loader2, AlertTriangle, RefreshCw,
   X, Check, Clock, Ban, ArrowRight, ChevronLeft, ChevronRight,
   Users, ShieldCheck, Settings, Eye, MessageSquare,
-  SunMedium, Moon, CheckCircle, XCircle,
+  SunMedium, Moon, CheckCircle, XCircle, Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { filterLeaveRequests } from '@/lib/leave-filters'
@@ -50,6 +50,16 @@ interface CalendarHoliday {
   isRecurring: boolean
   officeId: string | null
   office: { id: string; name: string } | null
+}
+
+interface BlackoutDate {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  reason: string | null
+  createdBy: { id: string; fullName: string } | null
+  createdAt: string
 }
 
 interface TeamMember {
@@ -1487,7 +1497,141 @@ interface ApprovalInstanceData {
    ══════════════════════════════════════════════════════════ */
 
 function AdminRulesPanel() {
+  const { toast } = useToast()
   const [defaultEntitlement, setDefaultEntitlement] = useState(25)
+
+  // Blackout dates state
+  const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>([])
+  const [blackoutLoading, setBlackoutLoading] = useState(true)
+  const [showBlackoutForm, setShowBlackoutForm] = useState(false)
+  const [boName, setBoName] = useState('')
+  const [boStart, setBoStart] = useState('')
+  const [boEnd, setBoEnd] = useState('')
+  const [boReason, setBoReason] = useState('')
+  const [boSaving, setBoSaving] = useState(false)
+  const [boDeleting, setBoDeleting] = useState<string | null>(null)
+
+  // Individual allowance editing state
+  const [allowanceMembers, setAllowanceMembers] = useState<{ id: string; fullName: string; jobTitle: string | null; leaveAllocation: number }[]>([])
+  const [allowanceLoading, setAllowanceLoading] = useState(true)
+  const [editingAllowance, setEditingAllowance] = useState<string | null>(null)
+  const [editAllowanceValue, setEditAllowanceValue] = useState(25)
+  const [allowanceSaving, setAllowanceSaving] = useState(false)
+
+  // Fetch blackout dates
+  const fetchBlackoutDates = useCallback(async () => {
+    setBlackoutLoading(true)
+    try {
+      const res = await fetch('/api/blackout-dates')
+      if (res.ok) {
+        const json = await res.json()
+        setBlackoutDates(json.data.blackoutDates || [])
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setBlackoutLoading(false)
+    }
+  }, [])
+
+  // Fetch org members for allowance editing
+  const fetchAllowanceMembers = useCallback(async () => {
+    setAllowanceLoading(true)
+    try {
+      const res = await fetch('/api/staffing')
+      if (res.ok) {
+        const json = await res.json()
+        // staffing API returns employees with leaveAllocation at top level (via mapStaffingEmployee)
+        const employees = json.data.employees || []
+        const members = employees.map((e: { id: string; fullName: string; jobTitle: string | null; leaveAllocation?: number }) => ({
+          id: e.id,
+          fullName: e.fullName,
+          jobTitle: e.jobTitle,
+          leaveAllocation: e.leaveAllocation ?? 25,
+        }))
+        setAllowanceMembers(members)
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setAllowanceLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchBlackoutDates()
+    fetchAllowanceMembers()
+  }, [fetchBlackoutDates, fetchAllowanceMembers])
+
+  // Create blackout date
+  const handleCreateBlackout = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!boName || !boStart || !boEnd) return
+    setBoSaving(true)
+    try {
+      const res = await fetch('/api/blackout-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: boName, startDate: boStart, endDate: boEnd, reason: boReason || undefined }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to create blackout date')
+      }
+      toast('Blackout date created', 'success')
+      setShowBlackoutForm(false)
+      setBoName('')
+      setBoStart('')
+      setBoEnd('')
+      setBoReason('')
+      fetchBlackoutDates()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create', 'error')
+    } finally {
+      setBoSaving(false)
+    }
+  }
+
+  // Delete blackout date
+  const handleDeleteBlackout = async (id: string) => {
+    setBoDeleting(id)
+    try {
+      const res = await fetch(`/api/blackout-dates/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to delete')
+      }
+      toast('Blackout date removed', 'success')
+      fetchBlackoutDates()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete', 'error')
+    } finally {
+      setBoDeleting(null)
+    }
+  }
+
+  // Save individual allowance
+  const handleSaveAllowance = async (profileId: string) => {
+    setAllowanceSaving(true)
+    try {
+      const res = await fetch(`/api/staffing/employees/${profileId}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ annualLeaveAllocation: editAllowanceValue }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to update allocation')
+      }
+      toast('Leave allocation updated', 'success')
+      setEditingAllowance(null)
+      fetchAllowanceMembers()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to update', 'error')
+    } finally {
+      setAllowanceSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1497,7 +1641,7 @@ function AdminRulesPanel() {
       <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
         <h3 className="text-[14px] font-semibold text-ink-900">Default Annual Entitlement</h3>
         <p className="text-[12px] text-ink-400">
-          Set the default annual leave allocation for new employees. Individual allocations can be overridden on the employee profile.
+          Set the default annual leave allocation for new employees. Individual allocations can be overridden below.
         </p>
         <div className="flex items-center gap-3">
           <input
@@ -1510,6 +1654,76 @@ function AdminRulesPanel() {
           />
           <span className="text-[12px] text-ink-500">days per year</span>
         </div>
+      </div>
+
+      {/* Individual leave allowances */}
+      <div className="bg-white rounded-xl border border-ink-100 p-5 space-y-4">
+        <h3 className="text-[14px] font-semibold text-ink-900">Individual Leave Allowances</h3>
+        <p className="text-[12px] text-ink-400">
+          Override the default allocation for individual employees. Changes take effect immediately.
+        </p>
+        {allowanceLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-10 bg-ink-50 animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : allowanceMembers.length === 0 ? (
+          <div className="bg-ink-25 rounded-lg p-6 text-center">
+            <Users className="w-8 h-8 text-ink-200 mx-auto mb-2" />
+            <p className="text-[12px] text-ink-400">No employees found</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-50 max-h-[320px] overflow-y-auto">
+            {allowanceMembers.map((member) => (
+              <div key={member.id} className="flex items-center justify-between py-2.5 px-1 gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-ink-900 truncate">{member.fullName}</p>
+                  {member.jobTitle && (
+                    <p className="text-[11px] text-ink-400 truncate">{member.jobTitle}</p>
+                  )}
+                </div>
+                {editingAllowance === member.id ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="number"
+                      value={editAllowanceValue}
+                      onChange={(e) => setEditAllowanceValue(Number(e.target.value))}
+                      min={0}
+                      max={365}
+                      className="w-16 px-2 py-1 text-[12px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 text-center"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleSaveAllowance(member.id)}
+                      disabled={allowanceSaving}
+                      className="p-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                    >
+                      {allowanceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => setEditingAllowance(null)}
+                      className="p-1 rounded-lg bg-ink-50 text-ink-400 hover:bg-ink-100 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingAllowance(member.id)
+                      setEditAllowanceValue(member.leaveAllocation)
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-ink-50 text-ink-600 text-[12px] font-medium hover:bg-ink-100 transition-colors shrink-0"
+                  >
+                    {member.leaveAllocation} days
+                    <Settings className="w-3 h-3 text-ink-400" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Approval chain configuration */}
@@ -1542,15 +1756,113 @@ function AdminRulesPanel() {
               Periods when leave cannot be requested. Useful for project deadlines, audits, or peak periods.
             </p>
           </div>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[11px] font-medium hover:bg-ink-800 transition-colors">
-            <Plus className="w-3 h-3" />
-            Add blackout
+          <button
+            onClick={() => setShowBlackoutForm(!showBlackoutForm)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ink-900 text-white text-[11px] font-medium hover:bg-ink-800 transition-colors"
+          >
+            {showBlackoutForm ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+            {showBlackoutForm ? 'Cancel' : 'Add blackout'}
           </button>
         </div>
-        <div className="bg-ink-25 rounded-lg p-6 text-center">
-          <Ban className="w-8 h-8 text-ink-200 mx-auto mb-2" />
-          <p className="text-[12px] text-ink-400">No blackout dates configured</p>
-        </div>
+
+        {/* Create form */}
+        {showBlackoutForm && (
+          <form onSubmit={handleCreateBlackout} className="bg-ink-25 rounded-lg p-4 space-y-3">
+            <div>
+              <label className="block text-[11px] font-medium text-ink-600 mb-1">Name</label>
+              <input
+                type="text"
+                value={boName}
+                onChange={(e) => setBoName(e.target.value)}
+                placeholder="e.g. Year-end close"
+                required
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-ink-600 mb-1">Start date</label>
+                <input
+                  type="date"
+                  value={boStart}
+                  onChange={(e) => setBoStart(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-ink-600 mb-1">End date</label>
+                <input
+                  type="date"
+                  value={boEnd}
+                  onChange={(e) => setBoEnd(e.target.value)}
+                  required
+                  min={boStart || undefined}
+                  className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-ink-600 mb-1">Reason (optional)</label>
+              <input
+                type="text"
+                value={boReason}
+                onChange={(e) => setBoReason(e.target.value)}
+                placeholder="e.g. Regulatory audit period"
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={boSaving || !boName || !boStart || !boEnd}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800 transition-colors disabled:opacity-50"
+              >
+                {boSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Create blackout date
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Blackout dates list */}
+        {blackoutLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="h-12 bg-ink-50 animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : blackoutDates.length === 0 ? (
+          <div className="bg-ink-25 rounded-lg p-6 text-center">
+            <Ban className="w-8 h-8 text-ink-200 mx-auto mb-2" />
+            <p className="text-[12px] text-ink-400">No blackout dates configured</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-50">
+            {blackoutDates.map((bd) => (
+              <div key={bd.id} className="flex items-center justify-between py-3 px-1 gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Ban className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <p className="text-[13px] font-medium text-ink-900 truncate">{bd.name}</p>
+                  </div>
+                  <p className="text-[11px] text-ink-400 mt-0.5 ml-[22px]">
+                    {formatDate(bd.startDate)} – {formatDate(bd.endDate)}
+                    {bd.reason && <span className="ml-2 text-ink-300">· {bd.reason}</span>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDeleteBlackout(bd.id)}
+                  disabled={boDeleting === bd.id}
+                  className="p-1.5 rounded-lg text-ink-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
+                  title="Remove blackout date"
+                >
+                  {boDeleting === bd.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Leave types configuration */}

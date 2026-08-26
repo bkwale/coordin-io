@@ -56,6 +56,7 @@ model Organisation {
 
   offices             Office[]
   publicHolidays      PublicHoliday[]
+  blackoutDates       BlackoutDate[]
   profiles            Profile[]
   projects            Project[]
   invitations         Invitation[]
@@ -107,6 +108,23 @@ model PublicHoliday {
 
   @@index([organisationId, date])
   @@map("public_holidays")
+}
+
+model BlackoutDate {
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  name           String   // e.g. "Year-end close", "Audit week"
+  startDate      DateTime @map("start_date")
+  endDate        DateTime @map("end_date")
+  reason         String?  // optional extended description
+  createdById    String?  @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  createdBy    Profile?     @relation("BlackoutDateCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organisationId, startDate])
+  @@map("blackout_dates")
 }
 
 model CorporateRole {
@@ -249,6 +267,7 @@ model Profile {
   approvalStepsAsApprover    ApprovalStepInstance[] @relation("ApprovalStepApprover")
   approvalStepsEscalatedTo   ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
   externalLinksCreated       ExternalLink[]         @relation("ExternalLinkCreator")
+  blackoutDatesCreated       BlackoutDate[]         @relation("BlackoutDateCreatedBy")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")

@@ -89,6 +89,12 @@ export default function TimesheetReviewPage() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('SUBMITTED')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  // Export filter state
+  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL')
+  const [employeeFilter, setEmployeeFilter] = useState<string>('ALL')
+  const [departments, setDepartments] = useState<string[]>([])
+  const [profileDeptMap, setProfileDeptMap] = useState<Record<string, string>>({})
+
   // Action state
   const [actionId, setActionId] = useState<string | null>(null)
   const [actionType, setActionType] = useState<string | null>(null)
@@ -101,6 +107,7 @@ export default function TimesheetReviewPage() {
     try {
       const params = new URLSearchParams({ format, role: 'manager' })
       if (statusFilter !== 'ALL') params.set('status', statusFilter)
+      if (employeeFilter !== 'ALL') params.set('profileId', employeeFilter)
 
       const res = await fetch(`/api/timesheets/export?${params}`)
       if (!res.ok) {
@@ -123,7 +130,31 @@ export default function TimesheetReviewPage() {
     } finally {
       setExporting(false)
     }
-  }, [statusFilter, toast])
+  }, [statusFilter, employeeFilter, toast])
+
+  // Fetch departments from staffing for export filters
+  useEffect(() => {
+    fetch('/api/staffing')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!json?.data) return
+        const people: { id: string; fullName: string; department?: string | null }[] =
+          json.data.employees ?? json.data.directory ?? []
+
+        // Build profileId -> department map
+        const deptMap: Record<string, string> = {}
+        const deptSet = new Set<string>()
+        for (const p of people) {
+          if (p.department) {
+            deptMap[p.id] = p.department
+            deptSet.add(p.department)
+          }
+        }
+        setProfileDeptMap(deptMap)
+        setDepartments([...deptSet].sort())
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -209,6 +240,21 @@ export default function TimesheetReviewPage() {
       .map(([date, data]) => ({ date, ...data }))
   }
 
+  /* ── Client-side department + employee filters ───── */
+
+  let filteredWeeks = weeks
+  if (departmentFilter !== 'ALL') {
+    filteredWeeks = filteredWeeks.filter((w) => profileDeptMap[w.profile.id] === departmentFilter)
+  }
+  if (employeeFilter !== 'ALL') {
+    filteredWeeks = filteredWeeks.filter((w) => w.profile.id === employeeFilter)
+  }
+
+  // Unique employees from weeks (for the employee dropdown)
+  const uniqueEmployees = Array.from(
+    new Map(weeks.map((w) => [w.profile.id, { id: w.profile.id, fullName: w.profile.fullName }])).values(),
+  ).sort((a, b) => a.fullName.localeCompare(b.fullName))
+
   /* ── Summary ─────────────────────────────────────── */
 
   const statusCounts = weeks.reduce<Record<string, number>>((acc, w) => {
@@ -248,13 +294,16 @@ export default function TimesheetReviewPage() {
         <div>
           <h1 className="text-[20px] sm:text-[22px] font-semibold text-ink-900">Timesheet Review</h1>
           <p className="text-[12px] text-ink-400 mt-0.5">
-            {weeks.length} timesheets · {statusCounts.SUBMITTED || 0} pending approval
+            {filteredWeeks.length === weeks.length
+              ? `${weeks.length} timesheets`
+              : `${filteredWeeks.length} of ${weeks.length} timesheets`}
+            {' · '}{statusCounts.SUBMITTED || 0} pending approval
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleExport('csv')}
-            disabled={exporting || weeks.length === 0}
+            disabled={exporting || filteredWeeks.length === 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
           >
             <Download className="w-3.5 h-3.5" />
@@ -262,7 +311,7 @@ export default function TimesheetReviewPage() {
           </button>
           <button
             onClick={() => handleExport('pdf')}
-            disabled={exporting || weeks.length === 0}
+            disabled={exporting || filteredWeeks.length === 0}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-ink-200 rounded-lg text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors disabled:opacity-50"
           >
             <FileText className="w-3.5 h-3.5" />
@@ -272,37 +321,65 @@ export default function TimesheetReviewPage() {
       </div>
 
       {/* ── Filter bar ─────────────────────────────── */}
-      <div className="flex gap-1 flex-wrap">
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setStatusFilter(f.value)}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
-              statusFilter === f.value
-                ? 'bg-ink-900 text-white'
-                : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
-            )}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1 flex-wrap">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                statusFilter === f.value
+                  ? 'bg-ink-900 text-white'
+                  : 'bg-ink-50 text-ink-500 hover:bg-ink-100',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {departments.length > 0 && (
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="text-[11px] text-ink-600 bg-white border border-ink-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-accent-300"
           >
-            {f.label}
-          </button>
-        ))}
+            <option value="ALL">All departments</option>
+            {departments.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        )}
+
+        {uniqueEmployees.length > 1 && (
+          <select
+            value={employeeFilter}
+            onChange={(e) => setEmployeeFilter(e.target.value)}
+            className="text-[11px] text-ink-600 bg-white border border-ink-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-accent-300"
+          >
+            <option value="ALL">All employees</option>
+            {uniqueEmployees.map((e) => (
+              <option key={e.id} value={e.id}>{e.fullName}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* ── List ───────────────────────────────────── */}
-      {weeks.length === 0 ? (
+      {filteredWeeks.length === 0 ? (
         <div className="bg-white rounded-xl border border-ink-100 p-12 text-center">
           <Eye className="w-12 h-12 text-ink-200 mx-auto mb-4" />
           <p className="text-[15px] font-medium text-ink-700">No timesheets to review</p>
           <p className="text-[12px] text-ink-400 mt-2">
             {statusFilter === 'SUBMITTED'
               ? 'No timesheets are waiting for your approval.'
-              : 'No timesheets match the current filter.'}
+              : 'No timesheets match the current filters.'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {weeks.map((week) => {
+          {filteredWeeks.map((week) => {
             const isExpanded = expandedId === week.id
             const days = getDayBreakdown(week.entries)
             const totalHours = week.totalHours ?? week.entries.reduce((s, e) => s + e.hours, 0)

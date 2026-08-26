@@ -18,6 +18,21 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
 
   const includeArchived = url.searchParams.get('archived') === 'true'
 
+  // Fetch stable numbering data: all task IDs in creation order + project code
+  const [allTaskIds, projectData] = await Promise.all([
+    prisma.task.findMany({
+      where: { projectId },
+      select: { id: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { code: true },
+    }),
+  ])
+  const numberMap = new Map(allTaskIds.map((t, i) => [t.id, i + 1]))
+  const prefix = projectData?.code || 'T'
+
   const where = showAll
     ? { projectId, ...(!includeArchived ? { archivedAt: null } : {}) }
     : {
@@ -42,9 +57,10 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
     ],
   })
 
-  // Shape checklist counts for the response
+  // Shape checklist counts + task numbers for the response
   const shaped = tasks.map(({ checklistItems, ...task }) => ({
     ...task,
+    taskNumber: `${prefix}-${String(numberMap.get(task.id) || 0).padStart(3, '0')}`,
     checklist: {
       total: checklistItems.length,
       completed: checklistItems.filter((item) => item.completed).length,

@@ -14,27 +14,28 @@ const VALID_ENTITY_TYPES = [
 ] as const
 
 /**
- * GET /api/external-links — List external links for an entity.
+ * GET /api/external-links — List external links.
  *
- * Query params:
- *   entityType: required — e.g. "project", "task", "expense"
- *   entityId: required — the ID of the linked entity
+ * Query params (both optional — omit to list all org links):
+ *   entityType: e.g. "project", "task", "expense"
+ *   entityId: the ID of the linked entity
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const entityType = url.searchParams.get('entityType')
   const entityId = url.searchParams.get('entityId')
 
-  if (!entityType || !entityId) {
-    throw new ValidationError('entityType and entityId are required')
+  const where: { organisationId: string; entityType?: string; entityId?: string } = {
+    organisationId: profile.organisationId,
+  }
+
+  if (entityType && entityId) {
+    where.entityType = entityType
+    where.entityId = entityId
   }
 
   const links = await prisma.externalLink.findMany({
-    where: {
-      organisationId: profile.organisationId,
-      entityType,
-      entityId,
-    },
+    where,
     include: {
       createdBy: { select: { id: true, fullName: true } },
     },

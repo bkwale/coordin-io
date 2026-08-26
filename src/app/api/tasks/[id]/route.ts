@@ -19,7 +19,7 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
     include: {
       owner: { select: { id: true, fullName: true } },
       reviewer: { select: { id: true, fullName: true } },
-      project: { select: { id: true, name: true } },
+      project: { select: { id: true, name: true, code: true } },
       milestone: { select: { id: true, title: true, status: true, dueDate: true } },
       checklistItems: {
         orderBy: { sortOrder: 'asc' },
@@ -39,6 +39,22 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
       },
     },
   })
+
+  // Compute stable task number within its project
+  if (task) {
+    const taskPosition = await prisma.task.count({
+      where: {
+        projectId: task.projectId,
+        OR: [
+          { createdAt: { lt: task.createdAt } },
+          { createdAt: task.createdAt, id: { lt: task.id } },
+        ],
+      },
+    })
+    const prefix = task.project.code || 'T'
+    const taskNumber = `${prefix}-${String(taskPosition + 1).padStart(3, '0')}`
+    return success({ task: { ...task, taskNumber } })
+  }
 
   return success({ task })
 })

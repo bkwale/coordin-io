@@ -6,6 +6,7 @@ import {
   Save, Plus, Mail, CheckCircle, XCircle, Clock, UserPlus,
   ChevronRight, Loader2, Pencil, X, Trash2, Star,
   ScrollText, Download, ChevronLeft, Filter, CalendarDays,
+  Link2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +68,7 @@ const SETTINGS_TABS = [
   { key: 'notifications', label: 'Notifications', icon: Mail, description: 'Email & in-app preferences' },
   { key: 'audit', label: 'Audit Trail', icon: ScrollText, description: 'Activity log & export' },
   { key: 'approvals', label: 'Approval Workflows', icon: CheckCircle, description: 'Configure approval routes' },
+  { key: 'externalLinks', label: 'External Links', icon: Link2, description: 'Manage external link shortcuts' },
   { key: 'holidays', label: 'Public Holidays', icon: CalendarDays, description: 'Manage public holidays' },
 ] as const
 
@@ -150,6 +152,7 @@ export default function SettingsPage() {
               {activeTab === 'notifications' && <NotificationPreferencesSection />}
               {activeTab === 'audit' && <AuditSection />}
               {activeTab === 'approvals' && <ApprovalRoutesSection />}
+              {activeTab === 'externalLinks' && <ExternalLinksSection />}
               {activeTab === 'holidays' && <PublicHolidaysSection />}
             </div>
           </div>
@@ -501,6 +504,7 @@ function TeamSection() {
   const [invEmail, setInvEmail] = useState('')
   const [invName, setInvName] = useState('')
   const [invJob, setInvJob] = useState('')
+  const [invRole, setInvRole] = useState('MEMBER')
   const [invSending, setInvSending] = useState(false)
   const [invError, setInvError] = useState<string | null>(null)
   const [invSuccess, setInvSuccess] = useState(false)
@@ -540,6 +544,7 @@ function TeamSection() {
           email: invEmail.trim(),
           fullName: invName.trim(),
           jobTitle: invJob.trim() || undefined,
+          orgPermission: invRole,
         }),
       })
       if (!res.ok) {
@@ -550,6 +555,7 @@ function TeamSection() {
       setInvEmail('')
       setInvName('')
       setInvJob('')
+      setInvRole('MEMBER')
       fetchTeam()
       setTimeout(() => {
         setInvSuccess(false)
@@ -579,6 +585,9 @@ function TeamSection() {
       case 'OWNER': return 'Practice Principal'
       case 'ADMIN': return 'Practice Manager'
       case 'HR': return 'HR Manager'
+      case 'LEGAL': return 'Legal'
+      case 'FINANCE': return 'Finance'
+      case 'COMMERCIAL': return 'Commercial'
       case 'MANAGER': return 'Project Lead'
       case 'MEMBER': return 'Team Member'
       case 'VIEWER': return 'External'
@@ -595,11 +604,15 @@ function TeamSection() {
       { value: 'OWNER', label: 'Practice Principal' },
       { value: 'ADMIN', label: 'Practice Manager' },
       { value: 'HR', label: 'HR Manager' },
+      { value: 'LEGAL', label: 'Legal' },
+      { value: 'FINANCE', label: 'Finance' },
+      { value: 'COMMERCIAL', label: 'Commercial' },
       { value: 'MANAGER', label: 'Project Lead' },
       { value: 'MEMBER', label: 'Team Member' },
       { value: 'VIEWER', label: 'External' },
     ]
     if (viewerPermission === 'OWNER') return all
+    if (['ADMIN', 'HR'].includes(viewerPermission)) return all.filter((o) => !['OWNER'].includes(o.value))
     return all.filter((o) => ['MANAGER', 'MEMBER', 'VIEWER'].includes(o.value))
   })()
 
@@ -719,15 +732,29 @@ function TeamSection() {
                 />
               </div>
             </div>
-            <div>
-              <label className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold block mb-1.5">Job Title</label>
-              <input
-                type="text"
-                value={invJob}
-                onChange={(e) => setInvJob(e.target.value)}
-                placeholder="e.g. Project Architect"
-                className="w-full px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold block mb-1.5">Job Title</label>
+                <input
+                  type="text"
+                  value={invJob}
+                  onChange={(e) => setInvJob(e.target.value)}
+                  placeholder="e.g. Project Architect"
+                  className="w-full px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold block mb-1.5">Role</label>
+                <select
+                  value={invRole}
+                  onChange={(e) => setInvRole(e.target.value)}
+                  className="w-full px-3 py-2 border border-surface-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                >
+                  {permissionOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="flex justify-end">
               <button
@@ -1756,6 +1783,12 @@ function ApprovalRoutesSection() {
   const [showCreate, setShowCreate] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Edit route state
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
+  const [editRouteForm, setEditRouteForm] = useState({ name: '', isDefault: false, isActive: true, priority: 0 })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
   // New route form state
   const [newRoute, setNewRoute] = useState({
     name: '',
@@ -1804,6 +1837,51 @@ function ApprovalRoutesSection() {
       }
       fetchRoutes()
     } catch { /* silent */ }
+  }
+
+  const startEditRoute = (route: ApprovalRoute) => {
+    setEditingRouteId(route.id)
+    setEditRouteForm({
+      name: route.name,
+      isDefault: route.isDefault,
+      isActive: route.isActive,
+      priority: route.priority,
+    })
+    setEditError(null)
+    setExpandedId(route.id)
+  }
+
+  const cancelEditRoute = () => {
+    setEditingRouteId(null)
+    setEditError(null)
+  }
+
+  const saveEditRoute = async () => {
+    if (!editingRouteId || !editRouteForm.name.trim()) return
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      const res = await fetch(`/api/approval-routes/${editingRouteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editRouteForm.name,
+          isDefault: editRouteForm.isDefault,
+          isActive: editRouteForm.isActive,
+          priority: editRouteForm.priority,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error?.message || 'Failed to update route')
+      }
+      setEditingRouteId(null)
+      fetchRoutes()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setEditSaving(false)
+    }
   }
 
   const createRoute = async () => {
@@ -2048,7 +2126,9 @@ function ApprovalRoutesSection() {
               {REQUEST_TYPE_LABELS[type] || type}
             </h3>
 
-            {typeRoutes.map(route => (
+            {typeRoutes.map(route => {
+              const isEditing = editingRouteId === route.id
+              return (
               <div key={route.id} className="border border-surface-200 rounded-lg overflow-hidden">
                 <div
                   className="flex items-center justify-between px-4 py-3 bg-white cursor-pointer hover:bg-surface-25"
@@ -2076,6 +2156,13 @@ function ApprovalRoutesSection() {
                       {route.isActive ? 'Active' : 'Inactive'}
                     </button>
                     <button
+                      onClick={e => { e.stopPropagation(); startEditRoute(route) }}
+                      className="p-1 text-ink-300 hover:text-accent-600"
+                      title="Edit route"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={e => { e.stopPropagation(); deleteRoute(route) }}
                       className="p-1 text-red-300 hover:text-red-500"
                     >
@@ -2086,37 +2173,430 @@ function ApprovalRoutesSection() {
 
                 {expandedId === route.id && (
                   <div className="border-t border-surface-100 px-4 py-3 bg-surface-25 space-y-2">
-                    <div className="text-xs text-ink-400">
-                      Priority: {route.priority} | Conditions: {route.conditions ? JSON.stringify(route.conditions) : 'None'}
-                    </div>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-ink-400 border-b border-surface-100">
-                          <th className="text-left py-1 font-medium">#</th>
-                          <th className="text-left py-1 font-medium">Label</th>
-                          <th className="text-left py-1 font-medium">Approver Type</th>
-                          <th className="text-left py-1 font-medium">Skip if Same</th>
-                          <th className="text-left py-1 font-medium">Escalation</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {route.steps.map(step => (
-                          <tr key={step.id} className="border-b border-surface-50 text-ink-600">
-                            <td className="py-1.5">{step.stepOrder}</td>
-                            <td className="py-1.5">{step.label}</td>
-                            <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}</td>
-                            <td className="py-1.5">{step.canSkipIfSameAsPrevious ? 'Yes' : 'No'}</td>
-                            <td className="py-1.5">{step.escalationDays ? `${step.escalationDays} days` : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {/* Inline edit form */}
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        {editError && (
+                          <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">{editError}</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-ink-500 uppercase mb-1">Name</label>
+                            <input
+                              value={editRouteForm.name}
+                              onChange={e => setEditRouteForm(prev => ({ ...prev, name: e.target.value }))}
+                              className="w-full px-3 py-1.5 border border-surface-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                              placeholder="Route name"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-ink-500 uppercase mb-1">Priority</label>
+                            <input
+                              type="number"
+                              value={editRouteForm.priority}
+                              onChange={e => setEditRouteForm(prev => ({ ...prev, priority: parseInt(e.target.value) || 0 }))}
+                              className="w-full px-3 py-1.5 border border-surface-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                              min={0} max={100}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-4 items-center">
+                          <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editRouteForm.isDefault}
+                              onChange={e => setEditRouteForm(prev => ({ ...prev, isDefault: e.target.checked }))}
+                              className="rounded border-surface-300 text-accent-600 focus:ring-accent-500"
+                            />
+                            Default route
+                          </label>
+                          <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editRouteForm.isActive}
+                              onChange={e => setEditRouteForm(prev => ({ ...prev, isActive: e.target.checked }))}
+                              className="rounded border-surface-300 text-accent-600 focus:ring-accent-500"
+                            />
+                            Active
+                          </label>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={saveEditRoute}
+                            disabled={editSaving || !editRouteForm.name.trim()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-ink-900 text-white text-[11px] font-medium rounded-md hover:bg-ink-800 disabled:opacity-50 transition-colors"
+                          >
+                            {editSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditRoute}
+                            disabled={editSaving}
+                            className="px-3 py-1.5 text-[11px] text-ink-500 hover:text-ink-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-xs text-ink-400">
+                          Priority: {route.priority} | Conditions: {route.conditions ? JSON.stringify(route.conditions) : 'None'}
+                        </div>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-ink-400 border-b border-surface-100">
+                              <th className="text-left py-1 font-medium">#</th>
+                              <th className="text-left py-1 font-medium">Label</th>
+                              <th className="text-left py-1 font-medium">Approver Type</th>
+                              <th className="text-left py-1 font-medium">Skip if Same</th>
+                              <th className="text-left py-1 font-medium">Escalation</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {route.steps.map(step => (
+                              <tr key={step.id} className="border-b border-surface-50 text-ink-600">
+                                <td className="py-1.5">{step.stepOrder}</td>
+                                <td className="py-1.5">{step.label}</td>
+                                <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}</td>
+                                <td className="py-1.5">{step.canSkipIfSameAsPrevious ? 'Yes' : 'No'}</td>
+                                <td className="py-1.5">{step.escalationDays ? `${step.escalationDays} days` : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         ))
+      )}
+    </div>
+  )
+}
+
+// ── External Links Section ──────────────────────────────
+
+interface ExternalLinkData {
+  id: string
+  entityType: string
+  entityId: string
+  linkType: string
+  url: string
+  label: string
+  createdBy: { id: string; fullName: string } | null
+  createdAt: string
+}
+
+const LINK_TYPE_OPTIONS = [
+  { value: 'EXTERNAL_URL', label: 'External URL' },
+  { value: 'SHAREPOINT_FOLDER', label: 'SharePoint Folder' },
+  { value: 'SHAREPOINT_DOCUMENT', label: 'SharePoint Document' },
+]
+
+const ENTITY_TYPE_OPTIONS = [
+  { value: 'project', label: 'Project' },
+  { value: 'task', label: 'Task' },
+  { value: 'expense', label: 'Expense' },
+  { value: 'document', label: 'Document' },
+  { value: 'leave_request', label: 'Leave Request' },
+  { value: 'service_request', label: 'Service Request' },
+  { value: 'asset', label: 'Asset' },
+  { value: 'drawing', label: 'Drawing' },
+  { value: 'compliance_item', label: 'Compliance Item' },
+  { value: 'planning_application', label: 'Planning Application' },
+  { value: 'fee_quote', label: 'Fee Quote' },
+  { value: 'milestone', label: 'Milestone' },
+]
+
+const LINK_TYPE_LABELS: Record<string, string> = {
+  EXTERNAL_URL: 'External URL',
+  SHAREPOINT_FOLDER: 'SharePoint Folder',
+  SHAREPOINT_DOCUMENT: 'SharePoint Document',
+}
+
+function ExternalLinksSection() {
+  const [links, setLinks] = useState<ExternalLinkData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({
+    label: '', url: '', linkType: 'EXTERNAL_URL', entityType: 'project', entityId: '',
+  })
+
+  const fetchLinks = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/external-links')
+      if (!res.ok) throw new Error('Failed to load external links')
+      const data = await res.json()
+      setLinks(data.links ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchLinks() }, [fetchLinks])
+
+  function resetForm() {
+    setForm({ label: '', url: '', linkType: 'EXTERNAL_URL', entityType: 'project', entityId: '' })
+    setShowForm(false)
+    setEditingId(null)
+  }
+
+  function startEdit(link: ExternalLinkData) {
+    setEditingId(link.id)
+    setForm({
+      label: link.label,
+      url: link.url,
+      linkType: link.linkType,
+      entityType: link.entityType,
+      entityId: link.entityId,
+    })
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    setBusy(true)
+    setError(null)
+    try {
+      if (editingId) {
+        const res = await fetch(`/api/external-links/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            label: form.label,
+            url: form.url,
+            linkType: form.linkType,
+          }),
+        })
+        if (!res.ok) {
+          const e = await res.json()
+          throw new Error(e.error || 'Failed to update')
+        }
+      } else {
+        const res = await fetch('/api/external-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            label: form.label,
+            url: form.url,
+            linkType: form.linkType,
+            entityType: form.entityType,
+            entityId: form.entityId,
+          }),
+        })
+        if (!res.ok) {
+          const e = await res.json()
+          throw new Error(e.error || 'Failed to create')
+        }
+      }
+      resetForm()
+      await fetchLinks()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this external link?')) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/external-links/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const e = await res.json()
+        throw new Error(e.error || 'Failed to delete')
+      }
+      await fetchLinks()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (loading) return <LoadingState />
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-ink-900">External Links</h2>
+          <p className="text-[12px] text-ink-400 mt-1">
+            Manage external link shortcuts attached to projects, tasks, and other entities across your organisation.
+          </p>
+        </div>
+        <button
+          onClick={() => { resetForm(); setShowForm(true) }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700 transition-colors"
+        >
+          <Plus className="w-4 h-4" /> Add Link
+        </button>
+      </div>
+
+      {error && (
+        <div className="text-[13px] text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</div>
+      )}
+
+      {/* Add / Edit Form */}
+      {showForm && (
+        <div className="border border-surface-200 rounded-lg p-4 bg-surface-50 space-y-4">
+          <p className="text-[13px] font-medium text-ink-700">
+            {editingId ? 'Edit Link' : 'Add Link'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Title *</label>
+              <input
+                value={form.label}
+                onChange={(e) => setForm({ ...form, label: e.target.value })}
+                placeholder="e.g. Project Specifications"
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">URL *</label>
+              <input
+                type="url"
+                value={form.url}
+                onChange={(e) => setForm({ ...form, url: e.target.value })}
+                placeholder="https://example.com/resource"
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Link Type</label>
+              <select
+                value={form.linkType}
+                onChange={(e) => setForm({ ...form, linkType: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              >
+                {LINK_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            {!editingId && (
+              <>
+                <div>
+                  <label className="block text-[12px] text-ink-500 mb-1">Entity Type *</label>
+                  <select
+                    value={form.entityType}
+                    onChange={(e) => setForm({ ...form, entityType: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                  >
+                    {ENTITY_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[12px] text-ink-500 mb-1">Entity ID *</label>
+                  <input
+                    value={form.entityId}
+                    onChange={(e) => setForm({ ...form, entityId: e.target.value })}
+                    placeholder="Entity identifier"
+                    className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={busy || !form.label || !form.url || (!editingId && !form.entityId)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700 disabled:opacity-50 transition-colors"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {editingId ? 'Update' : 'Save'}
+            </button>
+            <button
+              onClick={resetForm}
+              className="px-4 py-2 text-[13px] text-ink-500 hover:text-ink-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Links Table */}
+      {links.length === 0 ? (
+        <EmptyState icon={Link2} title="No external links" description="Add your first external link to get started." />
+      ) : (
+        <div className="border border-surface-200 rounded-lg overflow-hidden">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="bg-surface-50 border-b border-surface-200">
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Title</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">URL</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hidden md:table-cell">Entity</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hidden lg:table-cell">Created By</th>
+                <th className="text-right px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {links.map((link) => (
+                <tr key={link.id} className="border-b border-surface-100 last:border-0 hover:bg-surface-50/50 transition-colors">
+                  <td className="px-4 py-3 text-[13px] text-ink-900 font-medium">{link.label}</td>
+                  <td className="px-4 py-3 max-w-[200px] truncate">
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[12px] text-accent-600 hover:text-accent-700 hover:underline"
+                    >
+                      {link.url}
+                    </a>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface-100 text-ink-500">
+                      {LINK_TYPE_LABELS[link.linkType] || link.linkType}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-ink-500 hidden md:table-cell">
+                    <span className="text-[12px]">{link.entityType}</span>
+                    <span className="text-ink-300 ml-1 font-mono text-[10px]">{link.entityId.slice(0, 8)}</span>
+                  </td>
+                  <td className="px-4 py-3 text-ink-500 hidden lg:table-cell text-[12px]">
+                    {link.createdBy?.fullName || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => startEdit(link)}
+                        className="p-1.5 text-ink-400 hover:text-ink-600 rounded"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(link.id)}
+                        className="p-1.5 text-ink-400 hover:text-red-600 rounded"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )

@@ -237,6 +237,7 @@ export default function ProjectDashboard() {
   // Modal state
   const [showProjectEdit, setShowProjectEdit] = useState(false)
   const [showMilestoneForm, setShowMilestoneForm] = useState(false)
+  const [editingMilestone, setEditingMilestone] = useState<{id: string; title: string; description?: string; dueDate: string; category?: string} | null>(null)
   const [showUpdateForm, setShowUpdateForm] = useState(false)
 
   // Add member state
@@ -558,24 +559,39 @@ export default function ProjectDashboard() {
                           <p className="text-[11px] text-ink-400 truncate mt-0.5">{ms.description}</p>
                         )}
                       </div>
-                      <div className="text-right shrink-0 space-y-1">
-                        <span className={cn(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium',
-                          meta.bgColor, meta.color,
-                        )}>
-                          {meta.label}
-                        </span>
-                        <p className="text-[10px] text-ink-400">
-                          {ms.status === 'COMPLETED' ? formatDate(ms.completedDate) : formatDate(ms.dueDate)}
-                        </p>
-                        {ms.taskSummary && ms.taskSummary.total > 0 && (
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-16 h-1.5 bg-ink-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${ms.taskSummary.percentage}%` }} />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right space-y-1">
+                          <span className={cn(
+                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium',
+                            meta.bgColor, meta.color,
+                          )}>
+                            {meta.label}
+                          </span>
+                          <p className="text-[10px] text-ink-400">
+                            {ms.status === 'COMPLETED' ? formatDate(ms.completedDate) : formatDate(ms.dueDate)}
+                          </p>
+                          {ms.taskSummary && ms.taskSummary.total > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-16 h-1.5 bg-ink-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${ms.taskSummary.percentage}%` }} />
+                              </div>
+                              <span className="text-[9px] text-ink-400">{ms.taskSummary.completed}/{ms.taskSummary.total}</span>
                             </div>
-                            <span className="text-[9px] text-ink-400">{ms.taskSummary.completed}/{ms.taskSummary.total}</span>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setEditingMilestone({
+                            id: ms.id,
+                            title: ms.title,
+                            description: ms.description || undefined,
+                            dueDate: ms.dueDate ? new Date(ms.dueDate).toISOString().slice(0, 10) : '',
+                            category: ms.category || undefined,
+                          })}
+                          className="p-1.5 rounded-lg hover:bg-ink-100 text-ink-300 hover:text-ink-600 transition-colors"
+                          title="Edit milestone"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   )
@@ -956,7 +972,7 @@ export default function ProjectDashboard() {
         />
       )}
 
-      {/* ── Add Milestone Modal ─────────────────────── */}
+      {/* ── Add/Edit Milestone Modal ──────────────────── */}
       {showMilestoneForm && (
         <MilestoneFormModal
           projectId={projectId}
@@ -964,6 +980,18 @@ export default function ProjectDashboard() {
           onSuccess={() => {
             setShowMilestoneForm(false)
             toast('Milestone added', 'success')
+            fetchOverview()
+          }}
+        />
+      )}
+      {editingMilestone && (
+        <MilestoneFormModal
+          projectId={projectId}
+          milestone={editingMilestone}
+          onClose={() => setEditingMilestone(null)}
+          onSuccess={() => {
+            setEditingMilestone(null)
+            toast('Milestone updated', 'success')
             fetchOverview()
           }}
         />
@@ -1028,33 +1056,59 @@ function Row({ label, value }: { label: string; value: string }) {
 
 /* ── Milestone Form Modal ─────────────────────────────── */
 
-function MilestoneFormModal({ projectId, onClose, onSuccess }: {
+function MilestoneFormModal({ projectId, milestone, onClose, onSuccess }: {
   projectId: string
+  milestone?: { id: string; title: string; description?: string; dueDate: string; category?: string }
   onClose: () => void
   onSuccess: () => void
 }) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [category, setCategory] = useState('')
-  const { mutate, loading } = useApiMutation(`/api/projects/${projectId}/milestones`, 'POST')
+  const isEdit = !!milestone
+  const [title, setTitle] = useState(milestone?.title || '')
+  const [description, setDescription] = useState(milestone?.description || '')
+  const [dueDate, setDueDate] = useState(milestone?.dueDate || '')
+  const [category, setCategory] = useState(milestone?.category || '')
+  const { mutate: createMutate, loading: createLoading } = useApiMutation(`/api/projects/${projectId}/milestones`, 'POST')
+  const [editLoading, setEditLoading] = useState(false)
+  const loading = isEdit ? editLoading : createLoading
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const result = await mutate({
-      title,
-      description: description || undefined,
-      dueDate,
-      category: category || undefined,
-    })
-    if (result) onSuccess()
+    if (isEdit) {
+      setEditLoading(true)
+      try {
+        const res = await fetch(`/api/projects/${projectId}/milestones/${milestone.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            description: description || null,
+            dueDate,
+            category: category || null,
+          }),
+        })
+        if (!res.ok) throw new Error('Failed to update milestone')
+        onSuccess()
+      } catch {
+        // error handled by toast in parent
+      } finally {
+        setEditLoading(false)
+      }
+    } else {
+      const result = await createMutate({
+        title,
+        description: description || undefined,
+        dueDate,
+        category: category || undefined,
+      })
+      if (result) onSuccess()
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
-          <h3 className="text-[14px] font-semibold text-ink-900">Add Milestone</h3>
+          <h3 className="text-[14px] font-semibold text-ink-900">{isEdit ? 'Edit Milestone' : 'Add Milestone'}</h3>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-600"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -1116,7 +1170,7 @@ function MilestoneFormModal({ projectId, onClose, onSuccess }: {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Add milestone
+              {isEdit ? 'Save changes' : 'Add milestone'}
             </button>
           </div>
         </form>

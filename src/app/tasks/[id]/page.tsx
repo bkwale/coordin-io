@@ -27,6 +27,7 @@ interface TaskOwner {
 interface TaskProject {
   id: string
   name: string
+  code: string | null
 }
 
 interface ChecklistItem {
@@ -69,6 +70,7 @@ interface TaskMilestone {
 interface TaskDetail {
   id: string
   title: string
+  taskNumber: string
   description: string | null
   instructions: string | null
   status: string
@@ -168,6 +170,11 @@ export default function TaskDetailPage() {
   const [projectMembers, setProjectMembers] = useState<{id: string; fullName: string}[]>([])
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [milestones, setMilestones] = useState<{id: string; title: string; status: string}[]>([])
+  const [editingSharePoint, setEditingSharePoint] = useState(false)
+  const [sharepointDraft, setSharepointDraft] = useState('')
+  const [newItemMandatory, setNewItemMandatory] = useState(true)
+  const [newItemAssignee, setNewItemAssignee] = useState('')
 
   /* ── Task actions (duplicate, archive, restore) ─────── */
 
@@ -257,6 +264,23 @@ export default function TaskDetailPage() {
     fetchTask()
     fetchProfile()
   }, [fetchTask, fetchProfile])
+
+  // Fetch milestones for the task's project
+  useEffect(() => {
+    if (!task?.projectId) return
+    fetch(`/api/projects/${task.projectId}/milestones`)
+      .then(res => res.ok ? res.json() : null)
+      .then(json => {
+        if (json?.data?.milestones) {
+          setMilestones(json.data.milestones.map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            title: m.title as string,
+            status: (m.status as string) || '',
+          })))
+        }
+      })
+      .catch(() => {})
+  }, [task?.projectId])
 
   // Fetch org members for owner/reviewer selects
   useEffect(() => {
@@ -385,7 +409,11 @@ export default function TaskDetailPage() {
       const res = await fetch(`/api/tasks/${taskId}/checklist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label: newItemLabel.trim() }),
+        body: JSON.stringify({
+          label: newItemLabel.trim(),
+          mandatory: newItemMandatory,
+          ...(newItemAssignee ? { assigneeId: newItemAssignee } : {}),
+        }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -397,6 +425,8 @@ export default function TaskDetailPage() {
         checklistItems: [...prev.checklistItems, json.data.item],
       } : prev)
       setNewItemLabel('')
+      setNewItemMandatory(true)
+      setNewItemAssignee('')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to add item', 'error')
     } finally {
@@ -450,6 +480,7 @@ export default function TaskDetailPage() {
           {task.project.name}
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
+        <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded font-mono">{task.taskNumber}</span>
         <span className="text-ink-600 font-medium truncate max-w-[200px]">{task.title}</span>
       </div>
 
@@ -469,7 +500,10 @@ export default function TaskDetailPage() {
 
       {/* ── Title & meta ─────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
-        <h1 className="text-[22px] font-semibold text-ink-900 leading-tight flex-1">{task.title}</h1>
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded font-mono shrink-0">{task.taskNumber}</span>
+          <h1 className="text-[22px] font-semibold text-ink-900 leading-tight">{task.title}</h1>
+        </div>
 
         {/* Action menu */}
         <div className="relative shrink-0">
@@ -645,24 +679,49 @@ export default function TaskDetailPage() {
             )}
 
             {/* Add item form */}
-            <form onSubmit={handleAddChecklistItem} className="flex items-center gap-2 px-5 py-3 border-t border-ink-50">
-              <Plus className="w-4 h-4 text-ink-300 shrink-0" />
-              <input
-                type="text"
-                value={newItemLabel}
-                onChange={(e) => setNewItemLabel(e.target.value)}
-                placeholder="Add an item..."
-                className="flex-1 text-[13px] bg-transparent border-none outline-none placeholder:text-ink-300"
-                maxLength={500}
-              />
+            <form onSubmit={handleAddChecklistItem} className="border-t border-ink-50 px-5 py-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Plus className="w-4 h-4 text-ink-300 shrink-0" />
+                <input
+                  type="text"
+                  value={newItemLabel}
+                  onChange={(e) => setNewItemLabel(e.target.value)}
+                  placeholder="Add an item..."
+                  className="flex-1 text-[13px] bg-transparent border-none outline-none placeholder:text-ink-300"
+                  maxLength={500}
+                />
+                {newItemLabel.trim() && (
+                  <button
+                    type="submit"
+                    disabled={addingItem}
+                    className="text-[12px] text-accent-600 font-medium hover:text-accent-700 transition-colors disabled:opacity-50"
+                  >
+                    {addingItem ? 'Adding...' : 'Add'}
+                  </button>
+                )}
+              </div>
               {newItemLabel.trim() && (
-                <button
-                  type="submit"
-                  disabled={addingItem}
-                  className="text-[12px] text-accent-600 font-medium hover:text-accent-700 transition-colors disabled:opacity-50"
-                >
-                  {addingItem ? 'Adding...' : 'Add'}
-                </button>
+                <div className="flex items-center gap-3 ml-6">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newItemMandatory}
+                      onChange={(e) => setNewItemMandatory(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-ink-300 text-accent-600 focus:ring-accent-300"
+                    />
+                    <span className="text-[11px] text-ink-500">Required</span>
+                  </label>
+                  <select
+                    value={newItemAssignee}
+                    onChange={(e) => setNewItemAssignee(e.target.value)}
+                    className="text-[11px] text-ink-500 bg-transparent border border-ink-200 rounded px-1.5 py-0.5 cursor-pointer"
+                  >
+                    <option value="">Unassigned</option>
+                    {projectMembers.map(m => (
+                      <option key={m.id} value={m.id}>{m.fullName}</option>
+                    ))}
+                  </select>
+                </div>
               )}
             </form>
           </div>
@@ -948,26 +1007,120 @@ export default function TaskDetailPage() {
                   <span className="text-emerald-600 font-medium">{formatDate(task.completedAt)}</span>
                 </div>
               )}
-              {task.milestone && (
-                <div className="flex items-center justify-between">
-                  <span className="text-ink-400 flex items-center gap-1"><Milestone className="w-3 h-3" /> Milestone</span>
-                  <span className="text-ink-700 text-right max-w-[150px] truncate">{task.milestone.title}</span>
-                </div>
-              )}
+              {/* Milestone selector */}
+              <div className="flex items-center justify-between">
+                <span className="text-ink-400 flex items-center gap-1"><Milestone className="w-3 h-3" /> Milestone</span>
+                <select
+                  value={task.milestone?.id || ''}
+                  onChange={async (e) => {
+                    const val = e.target.value
+                    try {
+                      const res = await fetch(`/api/tasks/${taskId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ milestoneId: val || null }),
+                      })
+                      if (!res.ok) throw new Error('Failed to update milestone')
+                      const selected = milestones.find(m => m.id === val)
+                      setTask(prev => prev ? {
+                        ...prev,
+                        milestone: val ? { id: val, title: selected?.title || '', status: selected?.status || '', dueDate: '' } : null,
+                      } : prev)
+                      toast('Milestone updated', 'success')
+                    } catch {
+                      toast('Failed to update milestone', 'error')
+                    }
+                  }}
+                  className="text-[13px] font-medium text-ink-700 bg-transparent border-0 cursor-pointer text-right appearance-none max-w-[150px]"
+                >
+                  <option value="">None</option>
+                  {milestones.map(m => (
+                    <option key={m.id} value={m.id}>{m.title}</option>
+                  ))}
+                </select>
+              </div>
               {task.deliverable && (
                 <div className="flex items-center justify-between">
                   <span className="text-ink-400">Deliverable</span>
                   <span className="text-ink-700 text-right max-w-[150px] truncate">{task.deliverable}</span>
                 </div>
               )}
-              {task.sharepointUrl && (
-                <div className="flex items-center justify-between">
-                  <span className="text-ink-400 flex items-center gap-1"><LinkIcon className="w-3 h-3" /> SharePoint</span>
-                  <a href={task.sharepointUrl} target="_blank" rel="noopener noreferrer" className="text-accent-600 font-medium hover:underline truncate max-w-[150px]">
-                    Open folder
-                  </a>
-                </div>
-              )}
+              {/* SharePoint URL — editable */}
+              <div className="flex items-center justify-between">
+                <span className="text-ink-400 flex items-center gap-1"><LinkIcon className="w-3 h-3" /> SharePoint</span>
+                {editingSharePoint ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="url"
+                      value={sharepointDraft}
+                      onChange={(e) => setSharepointDraft(e.target.value)}
+                      className="text-[12px] border border-ink-200 rounded px-2 py-1 w-[140px] outline-none focus:border-accent-300"
+                      placeholder="https://..."
+                      autoFocus
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Escape') { setEditingSharePoint(false); return }
+                        if (e.key === 'Enter') {
+                          const val = sharepointDraft.trim() || null
+                          try {
+                            const res = await fetch(`/api/tasks/${taskId}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ sharepointUrl: val }),
+                            })
+                            if (!res.ok) throw new Error('Failed to update')
+                            setTask(prev => prev ? { ...prev, sharepointUrl: val } : prev)
+                            toast('SharePoint URL updated', 'success')
+                          } catch {
+                            toast('Failed to update SharePoint URL', 'error')
+                          }
+                          setEditingSharePoint(false)
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={async () => {
+                        const val = sharepointDraft.trim() || null
+                        try {
+                          const res = await fetch(`/api/tasks/${taskId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sharepointUrl: val }),
+                          })
+                          if (!res.ok) throw new Error('Failed to update')
+                          setTask(prev => prev ? { ...prev, sharepointUrl: val } : prev)
+                          toast('SharePoint URL updated', 'success')
+                        } catch {
+                          toast('Failed to update SharePoint URL', 'error')
+                        }
+                        setEditingSharePoint(false)
+                      }}
+                      className="text-[11px] text-accent-600 font-medium hover:text-accent-700"
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : task.sharepointUrl ? (
+                  <div className="flex items-center gap-1.5">
+                    <a href={task.sharepointUrl} target="_blank" rel="noopener noreferrer" className="text-accent-600 font-medium hover:underline truncate max-w-[120px] text-[13px]">
+                      Open folder
+                    </a>
+                    <button
+                      onClick={() => { setSharepointDraft(task.sharepointUrl || ''); setEditingSharePoint(true) }}
+                      className="text-[10px] text-ink-300 hover:text-ink-500"
+                      title="Edit URL"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setSharepointDraft(''); setEditingSharePoint(true) }}
+                    className="text-[12px] text-accent-600 hover:text-accent-700 font-medium"
+                  >
+                    + Add link
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
