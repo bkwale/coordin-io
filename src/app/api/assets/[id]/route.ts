@@ -76,6 +76,11 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (body.purchaseDate !== undefined) updateData.purchaseDate = optionalDate(body.purchaseDate, 'Purchase date')
   if (body.warrantyExpiry !== undefined) updateData.warrantyExpiry = optionalDate(body.warrantyExpiry, 'Warranty expiry')
 
+  // Capture previous condition before update for history tracking
+  const previousAsset = newCondition
+    ? await prisma.asset.findUnique({ where: { id }, select: { condition: true } })
+    : null
+
   const updated = await prisma.asset.update({
     where: { id },
     data: updateData,
@@ -90,13 +95,24 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     },
   })
 
+  // Auto-create condition history entry when condition changes
+  if (newCondition && previousAsset && previousAsset.condition !== newCondition) {
+    await modulesPrisma.assetConditionHistory.create({
+      data: {
+        assetId: id,
+        condition: newCondition,
+        changedBy: profile.id,
+      },
+    })
+  }
+
   await recordAuditEvent({
     organisationId: profile.organisationId,
     actorId: profile.id,
     action: AuditActions.ASSET_UPDATED,
     entityType: 'asset',
     entityId: id,
-    metadata: { ...(newCondition ? { condition: newCondition } : {}) },
+    metadata: { ...(newCondition ? { condition: newCondition, previousCondition: previousAsset?.condition } : {}) },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
 

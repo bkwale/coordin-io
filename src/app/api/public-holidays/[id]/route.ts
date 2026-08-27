@@ -38,6 +38,12 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
   if ('country' in body) data.country = optionalString(body.country, 'Country', 10) ?? existing.country
   if ('isRecurring' in body) data.isRecurring = body.isRecurring === true
+  if ('type' in body) {
+    const validTypes = ['PUBLIC_HOLIDAY', 'BLACKOUT_DATE', 'COMPANY_CLOSURE']
+    if (typeof body.type === 'string' && validTypes.includes(body.type)) {
+      data.type = body.type
+    }
+  }
   if ('officeId' in body) {
     const newOfficeId = body.officeId as string | null
     if (newOfficeId) {

@@ -16,22 +16,26 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const year = parseInt(url.searchParams.get('year') || String(new Date().getFullYear()), 10)
   const officeIdFilter = url.searchParams.get('officeId')
+  const typeFilter = url.searchParams.get('type')
 
   const startOfYear = new Date(year, 0, 1)
   const endOfYear = new Date(year, 11, 31, 23, 59, 59)
 
-  const where = officeIdFilter
-    ? {
-        AND: [
-          { organisationId: profile.organisationId },
-          { date: { gte: startOfYear, lte: endOfYear } },
-          { OR: [{ officeId: officeIdFilter }, { officeId: null }] },
-        ],
-      }
-    : {
-        organisationId: profile.organisationId,
-        date: { gte: startOfYear, lte: endOfYear },
-      }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conditions: any[] = [
+    { organisationId: profile.organisationId },
+    { date: { gte: startOfYear, lte: endOfYear } },
+  ]
+
+  if (officeIdFilter) {
+    conditions.push({ OR: [{ officeId: officeIdFilter }, { officeId: null }] })
+  }
+
+  if (typeFilter && ['PUBLIC_HOLIDAY', 'BLACKOUT_DATE', 'COMPANY_CLOSURE'].includes(typeFilter)) {
+    conditions.push({ type: typeFilter })
+  }
+
+  const where = conditions.length > 1 ? { AND: conditions } : conditions[0]
 
   const holidays = await prisma.publicHoliday.findMany({
     where,
@@ -63,6 +67,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const country = optionalString(body.country, 'Country', 10) ?? 'GB'
   const officeId = optionalString(body.officeId, 'Office ID', 50) ?? null
   const isRecurring = body.isRecurring === true
+  const validTypes = ['PUBLIC_HOLIDAY', 'BLACKOUT_DATE', 'COMPANY_CLOSURE'] as const
+  const type = (typeof body.type === 'string' && validTypes.includes(body.type as typeof validTypes[number]))
+    ? (body.type as typeof validTypes[number])
+    : 'PUBLIC_HOLIDAY'
 
   // If officeId provided, verify it belongs to the org
   if (officeId) {
@@ -80,6 +88,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       date,
       isRecurring,
       country,
+      type,
     },
     include: {
       office: { select: { id: true, name: true } },

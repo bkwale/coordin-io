@@ -6,7 +6,8 @@ import {
   Save, Plus, Mail, CheckCircle, XCircle, Clock, UserPlus,
   ChevronRight, Loader2, Pencil, X, Trash2, Star,
   ScrollText, Download, ChevronLeft, Filter, CalendarDays,
-  Link2,
+  Link2, Copy, Ban, LockKeyhole, FileText, ClipboardList,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -70,6 +71,8 @@ const SETTINGS_TABS = [
   { key: 'approvals', label: 'Approval Workflows', icon: CheckCircle, description: 'Configure approval routes' },
   { key: 'externalLinks', label: 'External Links', icon: Link2, description: 'Manage external link shortcuts' },
   { key: 'holidays', label: 'Public Holidays', icon: CalendarDays, description: 'Manage public holidays' },
+  { key: 'leavePolicies', label: 'Leave Policies', icon: FileText, description: 'Entitlement rules by grade & type' },
+  { key: 'onboarding', label: 'Onboarding', icon: ClipboardList, description: 'Templates & task options' },
 ] as const
 
 type TabKey = typeof SETTINGS_TABS[number]['key']
@@ -154,6 +157,8 @@ export default function SettingsPage() {
               {activeTab === 'approvals' && <ApprovalRoutesSection />}
               {activeTab === 'externalLinks' && <ExternalLinksSection />}
               {activeTab === 'holidays' && <PublicHolidaysSection />}
+              {activeTab === 'leavePolicies' && <LeavePoliciesSection />}
+              {activeTab === 'onboarding' && <OnboardingSection />}
             </div>
           </div>
         </div>
@@ -2621,6 +2626,8 @@ function FieldGroup({
 
 // ── Public Holidays Section ───────────────────────────────
 
+type HolidayType = 'PUBLIC_HOLIDAY' | 'BLACKOUT_DATE' | 'COMPANY_CLOSURE'
+
 interface PublicHoliday {
   id: string
   name: string
@@ -2629,6 +2636,7 @@ interface PublicHoliday {
   isRecurring: boolean
   officeId: string | null
   office: { id: string; name: string } | null
+  type: HolidayType
 }
 
 // ── Notification Preferences Section ─────────────────────
@@ -2868,7 +2876,412 @@ function NotificationPreferencesSection() {
   )
 }
 
+// ── Leave Policies Section ───────────────────────────────
+
+interface LeavePolicyData {
+  id: string
+  name: string
+  leaveType: string
+  entitlementDays: number
+  carryOverDays: number
+  grade: string | null
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+const LEAVE_TYPE_OPTIONS = [
+  { value: 'ANNUAL', label: 'Annual' },
+  { value: 'SICK', label: 'Sick' },
+  { value: 'COMPASSIONATE', label: 'Compassionate' },
+  { value: 'PARENTAL', label: 'Parental' },
+  { value: 'MATERNITY', label: 'Maternity' },
+  { value: 'PATERNITY', label: 'Paternity' },
+  { value: 'STUDY', label: 'Study' },
+  { value: 'CPD_TRAINING', label: 'CPD / Training' },
+  { value: 'UNPAID', label: 'Unpaid' },
+  { value: 'TOIL', label: 'TOIL' },
+  { value: 'BUSINESS_TRAVEL', label: 'Business Travel' },
+  { value: 'OTHER', label: 'Other' },
+]
+
+const LEAVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  LEAVE_TYPE_OPTIONS.map((o) => [o.value, o.label])
+)
+
+function LeavePoliciesSection() {
+  const [policies, setPolicies] = useState<LeavePolicyData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [filterType, setFilterType] = useState('')
+  const [form, setForm] = useState({
+    name: '', leaveType: 'ANNUAL', entitlementDays: 25, carryOverDays: 0, grade: '', isDefault: false,
+  })
+
+  const fetchPolicies = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (filterType) params.set('leaveType', filterType)
+      const res = await fetch(`/api/leave-policies?${params}`)
+      if (!res.ok) throw new Error('Failed to load leave policies')
+      const data = await res.json()
+      setPolicies(data.data?.policies ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [filterType])
+
+  useEffect(() => { fetchPolicies() }, [fetchPolicies])
+
+  function resetForm() {
+    setForm({ name: '', leaveType: 'ANNUAL', entitlementDays: 25, carryOverDays: 0, grade: '', isDefault: false })
+    setShowForm(false)
+    setEditingId(null)
+  }
+
+  function startEdit(p: LeavePolicyData) {
+    setEditingId(p.id)
+    setForm({
+      name: p.name,
+      leaveType: p.leaveType,
+      entitlementDays: p.entitlementDays,
+      carryOverDays: p.carryOverDays,
+      grade: p.grade ?? '',
+      isDefault: p.isDefault,
+    })
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    setBusy(true)
+    setError(null)
+    try {
+      const payload = {
+        name: form.name,
+        leaveType: form.leaveType,
+        entitlementDays: form.entitlementDays,
+        carryOverDays: form.carryOverDays,
+        grade: form.grade || null,
+        isDefault: form.isDefault,
+      }
+      const url = editingId ? `/api/leave-policies/${editingId}` : '/api/leave-policies'
+      const method = editingId ? 'PATCH' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const e = await res.json()
+        throw new Error(e.data?.error || e.error || 'Failed to save')
+      }
+      resetForm()
+      await fetchPolicies()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this leave policy?')) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/leave-policies/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const e = await res.json()
+        throw new Error(e.data?.error || e.error || 'Failed to delete')
+      }
+      await fetchPolicies()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleToggleDefault(p: LeavePolicyData) {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/leave-policies/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: !p.isDefault }),
+      })
+      if (!res.ok) {
+        const e = await res.json()
+        throw new Error(e.data?.error || e.error || 'Failed to update')
+      }
+      await fetchPolicies()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (loading) return <LoadingState />
+
+  // Group by leave type for display
+  const grouped = policies.reduce<Record<string, LeavePolicyData[]>>((acc, p) => {
+    const key = p.leaveType
+    if (!acc[key]) acc[key] = []
+    acc[key].push(p)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-ink-900">Leave Policies</h2>
+          <p className="text-[12px] text-ink-400 mt-1">
+            Define entitlement rules by leave type and grade. Policies resolve: individual override, then grade match, then org default.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+          >
+            <option value="">All types</option>
+            {LEAVE_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { resetForm(); setShowForm(true) }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700"
+          >
+            <Plus className="w-4 h-4" /> Add Policy
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-[13px] text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</div>
+      )}
+
+      {/* Add / Edit Form */}
+      {showForm && (
+        <div className="border border-surface-200 rounded-lg p-4 bg-surface-50 space-y-4">
+          <p className="text-[13px] font-medium text-ink-700">
+            {editingId ? 'Edit Policy' : 'Create Policy'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Name *</label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Senior Staff, Probation, Default"
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Leave Type *</label>
+              <select
+                value={form.leaveType}
+                onChange={(e) => setForm({ ...form, leaveType: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              >
+                {LEAVE_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Entitlement Days *</label>
+              <input
+                type="number"
+                value={form.entitlementDays}
+                onChange={(e) => setForm({ ...form, entitlementDays: parseInt(e.target.value) || 0 })}
+                min={0}
+                max={365}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Carry-Over Days</label>
+              <input
+                type="number"
+                value={form.carryOverDays}
+                onChange={(e) => setForm({ ...form, carryOverDays: parseInt(e.target.value) || 0 })}
+                min={0}
+                max={365}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1">Grade (optional)</label>
+              <input
+                value={form.grade}
+                onChange={(e) => setForm({ ...form, grade: e.target.value })}
+                placeholder="e.g. Senior Management, Staff"
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+              />
+              <p className="text-[10px] text-ink-300 mt-1">If set, applies only to employees with this grade</p>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[13px] text-ink-600">
+            <input
+              type="checkbox"
+              checked={form.isDefault}
+              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+              className="rounded border-surface-300"
+            />
+            Default policy for this leave type (one per type)
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={busy || !form.name || !form.leaveType || form.entitlementDays < 0}
+              className="flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {editingId ? 'Update' : 'Save'}
+            </button>
+            <button
+              onClick={resetForm}
+              className="px-4 py-2 text-[13px] text-ink-500 hover:text-ink-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Policies Table */}
+      {policies.length === 0 ? (
+        <EmptyState icon={FileText} title="No leave policies" description="Create your first leave policy to define entitlement rules." />
+      ) : (
+        Object.entries(grouped).map(([type, typePolicies]) => (
+          <div key={type} className="space-y-2">
+            <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wider">
+              {LEAVE_TYPE_LABELS[type] || type}
+            </h3>
+            <div className="border border-surface-200 rounded-lg overflow-hidden">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="bg-surface-50 border-b border-surface-200">
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Name</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Entitlement</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hidden sm:table-cell">Carry-Over</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hidden sm:table-cell">Grade</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Default</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {typePolicies.map((p) => (
+                    <tr key={p.id} className="border-b border-surface-100 last:border-0 hover:bg-surface-50/50 transition-colors">
+                      <td className="px-4 py-3 text-ink-900 font-medium">{p.name}</td>
+                      <td className="px-4 py-3 text-ink-600">{p.entitlementDays} days</td>
+                      <td className="px-4 py-3 text-ink-500 hidden sm:table-cell">{p.carryOverDays} days</td>
+                      <td className="px-4 py-3 text-ink-500 hidden sm:table-cell">
+                        {p.grade ? (
+                          <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface-100 text-ink-600">{p.grade}</span>
+                        ) : (
+                          <span className="text-ink-300">All grades</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleToggleDefault(p)}
+                          disabled={busy}
+                          className={cn(
+                            'px-2 py-0.5 rounded text-[10px] font-medium transition-colors',
+                            p.isDefault
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                              : 'bg-surface-100 text-ink-400 hover:bg-surface-200'
+                          )}
+                        >
+                          {p.isDefault ? 'Default' : 'Set default'}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => startEdit(p)}
+                            className="p-1.5 text-ink-400 hover:text-ink-600 rounded"
+                            title="Edit"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(p.id)}
+                            className="p-1.5 text-ink-400 hover:text-red-600 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* Resolution info */}
+      <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+        <p className="text-[12px] font-medium text-blue-800 mb-2">How policies resolve</p>
+        <ol className="list-decimal list-inside text-[11px] text-blue-700 space-y-1">
+          <li>Individual override: employee has a specific policy assigned on their profile</li>
+          <li>Grade match: employee's grade matches a policy for that leave type</li>
+          <li>Org default: the default policy for that leave type applies to everyone else</li>
+        </ol>
+      </div>
+    </div>
+  )
+}
+
 // ── Public Holidays Section ──────────────────────────────
+
+function HolidayTypeBadge({ type }: { type: HolidayType }) {
+  switch (type) {
+    case 'PUBLIC_HOLIDAY':
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-medium">
+          <CalendarDays className="w-3 h-3" /> Public Holiday
+        </span>
+      )
+    case 'BLACKOUT_DATE':
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-[11px] font-medium">
+          <Ban className="w-3 h-3" /> Blackout Date
+        </span>
+      )
+    case 'COMPANY_CLOSURE':
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] font-medium">
+          <LockKeyhole className="w-3 h-3" /> Company Closure
+        </span>
+      )
+    default:
+      return null
+  }
+}
+
+const HOLIDAY_TYPE_OPTIONS: Array<{ value: HolidayType; label: string }> = [
+  { value: 'PUBLIC_HOLIDAY', label: 'Public Holiday' },
+  { value: 'BLACKOUT_DATE', label: 'Blackout Date' },
+  { value: 'COMPANY_CLOSURE', label: 'Company Closure' },
+]
 
 function PublicHolidaysSection() {
   const [holidays, setHolidays] = useState<PublicHoliday[]>([])
@@ -2880,15 +3293,29 @@ function PublicHolidaysSection() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
-    name: '', date: '', country: 'GB', isRecurring: false, officeId: '',
+    name: '', date: '', country: 'GB', isRecurring: false, officeId: '', type: 'PUBLIC_HOLIDAY' as HolidayType,
   })
+
+  // Filters
+  const [officeFilter, setOfficeFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+
+  // Bulk copy state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showCopyDialog, setShowCopyDialog] = useState(false)
+  const [copyTargetOffice, setCopyTargetOffice] = useState('')
+  const [copying, setCopying] = useState(false)
 
   const fetchHolidays = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
+      const params = new URLSearchParams({ year: String(year) })
+      if (officeFilter) params.set('officeId', officeFilter)
+      if (typeFilter) params.set('type', typeFilter)
+
       const [hRes, oRes] = await Promise.all([
-        fetch(`/api/public-holidays?year=${year}`),
+        fetch(`/api/public-holidays?${params}`),
         fetch('/api/settings/org'),
       ])
       if (!hRes.ok) throw new Error('Failed to load holidays')
@@ -2903,12 +3330,12 @@ function PublicHolidaysSection() {
     } finally {
       setLoading(false)
     }
-  }, [year])
+  }, [year, officeFilter, typeFilter])
 
   useEffect(() => { fetchHolidays() }, [fetchHolidays])
 
   function resetForm() {
-    setForm({ name: '', date: '', country: 'GB', isRecurring: false, officeId: '' })
+    setForm({ name: '', date: '', country: 'GB', isRecurring: false, officeId: '', type: 'PUBLIC_HOLIDAY' })
     setShowForm(false)
     setEditingId(null)
   }
@@ -2921,8 +3348,61 @@ function PublicHolidaysSection() {
       country: h.country,
       isRecurring: h.isRecurring,
       officeId: h.officeId ?? '',
+      type: h.type ?? 'PUBLIC_HOLIDAY',
     })
     setShowForm(true)
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === holidays.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(holidays.map((h) => h.id)))
+    }
+  }
+
+  async function handleBulkCopy() {
+    if (!copyTargetOffice || selectedIds.size === 0) return
+    setCopying(true)
+    setError(null)
+    try {
+      const toCopy = holidays.filter((h) => selectedIds.has(h.id))
+      for (const h of toCopy) {
+        const res = await fetch('/api/public-holidays', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: h.name,
+            date: h.date.substring(0, 10),
+            country: h.country,
+            isRecurring: h.isRecurring,
+            officeId: copyTargetOffice,
+            type: h.type ?? 'PUBLIC_HOLIDAY',
+          }),
+        })
+        if (!res.ok) {
+          const e = await res.json()
+          throw new Error(e.error || `Failed to copy "${h.name}"`)
+        }
+      }
+      setShowCopyDialog(false)
+      setCopyTargetOffice('')
+      setSelectedIds(new Set())
+      await fetchHolidays()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to copy holidays')
+    } finally {
+      setCopying(false)
+    }
   }
 
   async function handleSave() {
@@ -2935,6 +3415,7 @@ function PublicHolidaysSection() {
         country: form.country,
         isRecurring: form.isRecurring,
         officeId: form.officeId || null,
+        type: form.type,
       }
       const url = editingId ? `/api/public-holidays/${editingId}` : '/api/public-holidays'
       const method = editingId ? 'PATCH' : 'POST'
@@ -2957,11 +3438,12 @@ function PublicHolidaysSection() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this public holiday?')) return
+    if (!confirm('Delete this entry?')) return
     setBusy(true)
     try {
       const res = await fetch(`/api/public-holidays/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next })
       await fetchHolidays()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete')
@@ -2976,11 +3458,11 @@ function PublicHolidaysSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-ink-900">Public Holidays</h2>
+          <h2 className="text-lg font-semibold text-ink-900">Holidays & Closures</h2>
           <p className="text-[12px] text-ink-400 mt-1">
-            Define public holidays for your organisation. These appear on team calendars and exclude from working-day calculations.
+            Manage public holidays, blackout dates, and company closures. These affect team calendars and working-day calculations.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -2997,10 +3479,102 @@ function PublicHolidaysSection() {
             onClick={() => { resetForm(); setShowForm(true) }}
             className="flex items-center gap-1.5 px-3 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700"
           >
-            <Plus className="w-4 h-4" /> Add Holiday
+            <Plus className="w-4 h-4" /> Add Entry
           </button>
         </div>
       </div>
+
+      {/* Filters Row */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <Filter className="w-4 h-4 text-ink-300" />
+          <span className="text-[12px] text-ink-400 font-medium">Filters:</span>
+        </div>
+        <select
+          value={officeFilter}
+          onChange={(e) => setOfficeFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-surface-200 text-[12px] bg-white"
+        >
+          <option value="">All Offices</option>
+          {offices.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-lg border border-surface-200 text-[12px] bg-white"
+        >
+          <option value="">All Types</option>
+          {HOLIDAY_TYPE_OPTIONS.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+        {(officeFilter || typeFilter) && (
+          <button
+            onClick={() => { setOfficeFilter(''); setTypeFilter('') }}
+            className="text-[11px] text-accent-600 hover:text-accent-700 font-medium"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-accent-50 border border-accent-200 rounded-lg">
+          <span className="text-[12px] font-medium text-accent-700">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={() => setShowCopyDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-600 text-white text-[12px] rounded-lg hover:bg-accent-700"
+          >
+            <Copy className="w-3.5 h-3.5" /> Copy to Another Office
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-[12px] text-ink-500 hover:text-ink-700"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {/* Copy Dialog */}
+      {showCopyDialog && (
+        <div className="border border-surface-200 rounded-lg p-4 bg-surface-50 space-y-3">
+          <p className="text-[13px] font-medium text-ink-700">
+            Copy {selectedIds.size} holiday{selectedIds.size > 1 ? 's' : ''} to another office
+          </p>
+          <select
+            value={copyTargetOffice}
+            onChange={(e) => setCopyTargetOffice(e.target.value)}
+            className="w-full max-w-xs px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+          >
+            <option value="">Select target office...</option>
+            {offices.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBulkCopy}
+              disabled={copying || !copyTargetOffice}
+              className="flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white text-[13px] rounded-lg hover:bg-accent-700 disabled:opacity-50"
+            >
+              {copying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+              Copy
+            </button>
+            <button
+              onClick={() => { setShowCopyDialog(false); setCopyTargetOffice('') }}
+              className="px-4 py-2 text-[13px] text-ink-500 hover:text-ink-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="text-[13px] text-red-600 bg-red-50 px-4 py-2 rounded-lg">{error}</div>
@@ -3010,8 +3584,38 @@ function PublicHolidaysSection() {
       {showForm && (
         <div className="border border-surface-200 rounded-lg p-4 bg-surface-50 space-y-4">
           <p className="text-[13px] font-medium text-ink-700">
-            {editingId ? 'Edit Holiday' : 'Add Holiday'}
+            {editingId ? 'Edit Entry' : 'Add Entry'}
           </p>
+
+          {/* Type + Office — prominent top row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1 font-semibold">Type *</label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value as HolidayType })}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+              >
+                {HOLIDAY_TYPE_OPTIONS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[12px] text-ink-500 mb-1 font-semibold">Office *</label>
+              <select
+                value={form.officeId}
+                onChange={(e) => setForm({ ...form, officeId: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
+              >
+                <option value="">All offices (global)</option>
+                {offices.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[12px] text-ink-500 mb-1">Name *</label>
@@ -3039,19 +3643,6 @@ function PublicHolidaysSection() {
                 placeholder="GB"
                 className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
               />
-            </div>
-            <div>
-              <label className="block text-[12px] text-ink-500 mb-1">Office (optional)</label>
-              <select
-                value={form.officeId}
-                onChange={(e) => setForm({ ...form, officeId: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px]"
-              >
-                <option value="">All offices (global)</option>
-                {offices.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
-                ))}
-              </select>
             </div>
           </div>
           <label className="flex items-center gap-2 text-[13px] text-ink-600">
@@ -3084,31 +3675,55 @@ function PublicHolidaysSection() {
 
       {/* Holiday List */}
       {holidays.length === 0 ? (
-        <EmptyState icon={CalendarDays} title="No public holidays" description={`No holidays defined for ${year}. Add your first holiday above.`} />
+        <EmptyState icon={CalendarDays} title="No entries found" description={`No holidays, closures, or blackout dates for ${year}${officeFilter || typeFilter ? ' with current filters' : ''}. Add your first entry above.`} />
       ) : (
         <div className="border border-surface-200 rounded-lg overflow-hidden">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-surface-50 border-b border-surface-200">
-                <th className="text-left px-4 py-3 font-medium text-ink-500">Holiday</th>
+                <th className="w-10 px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === holidays.length && holidays.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-surface-300"
+                    title="Select all"
+                  />
+                </th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500">Name</th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500 hidden sm:table-cell">Type</th>
                 <th className="text-left px-4 py-3 font-medium text-ink-500">Date</th>
                 <th className="text-left px-4 py-3 font-medium text-ink-500 hidden sm:table-cell">Office</th>
-                <th className="text-left px-4 py-3 font-medium text-ink-500 hidden sm:table-cell">Country</th>
+                <th className="text-left px-4 py-3 font-medium text-ink-500 hidden md:table-cell">Country</th>
                 <th className="text-left px-4 py-3 font-medium text-ink-500 hidden md:table-cell">Recurring</th>
                 <th className="text-right px-4 py-3 font-medium text-ink-500">Actions</th>
               </tr>
             </thead>
             <tbody>
               {holidays.map((h) => (
-                <tr key={h.id} className="border-b border-surface-100 last:border-0 hover:bg-surface-50/50">
+                <tr key={h.id} className={cn(
+                  'border-b border-surface-100 last:border-0 transition-colors',
+                  selectedIds.has(h.id) ? 'bg-accent-50/40' : 'hover:bg-surface-50/50'
+                )}>
+                  <td className="w-10 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(h.id)}
+                      onChange={() => toggleSelect(h.id)}
+                      className="rounded border-surface-300"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-ink-900 font-medium">{h.name}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <HolidayTypeBadge type={h.type ?? 'PUBLIC_HOLIDAY'} />
+                  </td>
                   <td className="px-4 py-3 text-ink-600">
                     {new Date(h.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </td>
                   <td className="px-4 py-3 text-ink-500 hidden sm:table-cell">
-                    {h.office?.name ?? <span className="text-ink-300">All</span>}
+                    {h.office?.name ?? <span className="text-ink-300">All offices</span>}
                   </td>
-                  <td className="px-4 py-3 text-ink-500 hidden sm:table-cell">{h.country}</td>
+                  <td className="px-4 py-3 text-ink-500 hidden md:table-cell">{h.country}</td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     {h.isRecurring ? (
                       <span className="inline-flex items-center gap-1 text-emerald-600 text-[11px] font-medium">
@@ -3140,6 +3755,504 @@ function PublicHolidaysSection() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Onboarding Section ────────────────────────────────────
+
+interface OnboardingTemplate {
+  id: string
+  name: string
+  roleLevel: string | null
+  description: string | null
+  isDefault: boolean
+  isActive: boolean
+  totalItems: number
+  stageCounts: Record<string, number>
+}
+
+interface OnboardingTemplateItem {
+  id: string
+  stage: string
+  category: string | null
+  title: string
+  description: string | null
+  responsibleRole: string | null
+  daysFromStart: number
+  requiresEvidence: boolean
+  requiresApproval: boolean
+  notifyEmployee: boolean
+  actionRequired: boolean
+  acknowledgementRequired: boolean
+  dueDate: string | null
+  sortOrder: number
+}
+
+interface OnboardingTemplateDetail {
+  id: string
+  name: string
+  items: OnboardingTemplateItem[]
+}
+
+const ONBOARDING_STAGES = [
+  { value: 'BEFORE_START', label: 'Before Start' },
+  { value: 'DAY_ONE', label: 'Day One' },
+  { value: 'ROLE_SPECIFIC', label: 'Role Specific' },
+  { value: 'PROBATION', label: 'Probation' },
+]
+
+const RESPONSIBLE_ROLES = [
+  { value: 'HR', label: 'HR' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'IT', label: 'IT' },
+  { value: 'EMPLOYEE', label: 'Employee' },
+]
+
+function OnboardingSection() {
+  const [templates, setTemplates] = useState<OnboardingTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<OnboardingTemplateDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [showItemForm, setShowItemForm] = useState(false)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [itemForm, setItemForm] = useState({
+    stage: 'BEFORE_START',
+    title: '',
+    description: '',
+    category: '',
+    responsibleRole: '',
+    daysFromStart: 0,
+    requiresEvidence: false,
+    requiresApproval: false,
+    notifyEmployee: false,
+    actionRequired: false,
+    acknowledgementRequired: false,
+    dueDate: '',
+    sortOrder: 0,
+  })
+
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/onboarding/templates')
+      if (!res.ok) throw new Error('Failed to load templates')
+      const data = await res.json()
+      setTemplates(data.data?.templates ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load templates')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchTemplates() }, [fetchTemplates])
+
+  async function fetchDetail(templateId: string) {
+    setDetailLoading(true)
+    try {
+      const res = await fetch(`/api/onboarding/templates/${templateId}`)
+      if (!res.ok) throw new Error('Failed to load template')
+      const data = await res.json()
+      setDetail(data.data?.template ?? null)
+    } catch {
+      setError('Failed to load template details')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  function toggleExpand(templateId: string) {
+    if (expandedId === templateId) {
+      setExpandedId(null)
+      setDetail(null)
+      setShowItemForm(false)
+      setEditingItemId(null)
+    } else {
+      setExpandedId(templateId)
+      fetchDetail(templateId)
+      setShowItemForm(false)
+      setEditingItemId(null)
+    }
+  }
+
+  function resetItemForm() {
+    setItemForm({
+      stage: 'BEFORE_START', title: '', description: '', category: '',
+      responsibleRole: '', daysFromStart: 0, requiresEvidence: false,
+      requiresApproval: false, notifyEmployee: false, actionRequired: false,
+      acknowledgementRequired: false, dueDate: '', sortOrder: 0,
+    })
+    setShowItemForm(false)
+    setEditingItemId(null)
+  }
+
+  function startEditItem(item: OnboardingTemplateItem) {
+    setEditingItemId(item.id)
+    setShowItemForm(true)
+    setItemForm({
+      stage: item.stage,
+      title: item.title,
+      description: item.description ?? '',
+      category: item.category ?? '',
+      responsibleRole: item.responsibleRole ?? '',
+      daysFromStart: item.daysFromStart,
+      requiresEvidence: item.requiresEvidence,
+      requiresApproval: item.requiresApproval,
+      notifyEmployee: item.notifyEmployee,
+      actionRequired: item.actionRequired,
+      acknowledgementRequired: item.acknowledgementRequired,
+      dueDate: item.dueDate ? item.dueDate.slice(0, 10) : '',
+      sortOrder: item.sortOrder,
+    })
+  }
+
+  async function handleSaveItem() {
+    if (!expandedId || !itemForm.title.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      if (editingItemId) {
+        // Update existing item
+        const res = await fetch(`/api/onboarding/templates/${expandedId}/items`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itemId: editingItemId,
+            stage: itemForm.stage,
+            title: itemForm.title,
+            description: itemForm.description || null,
+            category: itemForm.category || null,
+            responsibleRole: itemForm.responsibleRole || null,
+            daysFromStart: itemForm.daysFromStart,
+            requiresEvidence: itemForm.requiresEvidence,
+            requiresApproval: itemForm.requiresApproval,
+            notifyEmployee: itemForm.notifyEmployee,
+            actionRequired: itemForm.actionRequired,
+            acknowledgementRequired: itemForm.acknowledgementRequired,
+            dueDate: itemForm.dueDate || null,
+            sortOrder: itemForm.sortOrder,
+          }),
+        })
+        if (!res.ok) throw new Error('Failed to update item')
+      } else {
+        // Create new item
+        const res = await fetch(`/api/onboarding/templates/${expandedId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stage: itemForm.stage,
+            title: itemForm.title,
+            description: itemForm.description || null,
+            category: itemForm.category || null,
+            responsibleRole: itemForm.responsibleRole || null,
+            daysFromStart: itemForm.daysFromStart,
+            requiresEvidence: itemForm.requiresEvidence,
+            requiresApproval: itemForm.requiresApproval,
+            notifyEmployee: itemForm.notifyEmployee,
+            actionRequired: itemForm.actionRequired,
+            acknowledgementRequired: itemForm.acknowledgementRequired,
+            dueDate: itemForm.dueDate || null,
+            sortOrder: itemForm.sortOrder,
+          }),
+        })
+        if (!res.ok) throw new Error('Failed to create item')
+      }
+      resetItemForm()
+      await fetchDetail(expandedId)
+      await fetchTemplates()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save item')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDeleteItem(itemId: string) {
+    if (!expandedId) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/onboarding/templates/${expandedId}/items`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId }),
+      })
+      if (!res.ok) throw new Error('Failed to delete item')
+      await fetchDetail(expandedId)
+      await fetchTemplates()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete item')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (loading) return <LoadingState />
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Onboarding Templates"
+        description="Manage onboarding templates and task options for new employees."
+      />
+
+      {error && (
+        <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-[12px] text-red-700">
+          {error}
+          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+        </div>
+      )}
+
+      {templates.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="No onboarding templates" description="Templates are created from the onboarding management page." />
+      ) : (
+        <div className="space-y-3">
+          {templates.map((t) => (
+            <div key={t.id} className="border border-surface-200 rounded-lg overflow-hidden">
+              {/* Template header row */}
+              <button
+                onClick={() => toggleExpand(t.id)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <ClipboardList className="w-4 h-4 text-ink-300 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-ink-900 truncate">
+                      {t.name}
+                      {t.isDefault && (
+                        <span className="ml-2 inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-accent-50 text-accent-700">Default</span>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-ink-400">{t.totalItems} items &middot; {t.roleLevel ?? 'All roles'}</p>
+                  </div>
+                </div>
+                {expandedId === t.id ? (
+                  <ChevronUp className="w-4 h-4 text-ink-300 shrink-0" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-ink-300 shrink-0" />
+                )}
+              </button>
+
+              {/* Expanded detail */}
+              {expandedId === t.id && (
+                <div className="border-t border-surface-200 px-4 py-4 bg-surface-50/50">
+                  {detailLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-ink-300" /></div>
+                  ) : detail ? (
+                    <div className="space-y-4">
+                      {/* Items grouped by stage */}
+                      {ONBOARDING_STAGES.map(({ value: stageVal, label: stageLabel }) => {
+                        const stageItems = detail.items.filter((i) => i.stage === stageVal)
+                        if (stageItems.length === 0) return null
+                        return (
+                          <div key={stageVal}>
+                            <h4 className="text-[11px] font-semibold text-ink-500 uppercase tracking-wider mb-2">{stageLabel}</h4>
+                            <div className="space-y-1">
+                              {stageItems.map((item) => (
+                                <div key={item.id} className="flex items-start justify-between gap-2 px-3 py-2 bg-white rounded border border-surface-100">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[13px] text-ink-900 font-medium">{item.title}</p>
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                      {item.responsibleRole && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-100 text-ink-500">{item.responsibleRole}</span>
+                                      )}
+                                      {item.notifyEmployee && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">Notify</span>
+                                      )}
+                                      {item.actionRequired && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Action Required</span>
+                                      )}
+                                      {item.acknowledgementRequired && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">Ack Required</span>
+                                      )}
+                                      {item.dueDate && (
+                                        <span className="text-[10px] text-ink-400">Due: {new Date(item.dueDate).toLocaleDateString()}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button onClick={() => startEditItem(item)} className="p-1 text-ink-400 hover:text-ink-600 rounded" title="Edit">
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => handleDeleteItem(item.id)} disabled={busy} className="p-1 text-ink-400 hover:text-red-600 rounded" title="Delete">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                      {detail.items.length === 0 && (
+                        <p className="text-[12px] text-ink-400 text-center py-4">No items in this template yet.</p>
+                      )}
+
+                      {/* Add / Edit item form */}
+                      {!showItemForm ? (
+                        <button
+                          onClick={() => { resetItemForm(); setShowItemForm(true) }}
+                          className="flex items-center gap-1.5 text-[12px] text-accent-600 hover:text-accent-700 font-medium"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add Item
+                        </button>
+                      ) : (
+                        <div className="mt-3 p-4 bg-white rounded-lg border border-surface-200 space-y-3">
+                          <p className="text-[12px] font-semibold text-ink-700">{editingItemId ? 'Edit Item' : 'New Item'}</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] text-ink-500 mb-1">Title *</label>
+                              <input
+                                value={itemForm.title}
+                                onChange={(e) => setItemForm({ ...itemForm, title: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                                placeholder="e.g. IT equipment setup"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-ink-500 mb-1">Stage</label>
+                              <select
+                                value={itemForm.stage}
+                                onChange={(e) => setItemForm({ ...itemForm, stage: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                              >
+                                {ONBOARDING_STAGES.map((s) => (
+                                  <option key={s.value} value={s.value}>{s.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-ink-500 mb-1">Responsible Role</label>
+                              <select
+                                value={itemForm.responsibleRole}
+                                onChange={(e) => setItemForm({ ...itemForm, responsibleRole: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                              >
+                                <option value="">None</option>
+                                {RESPONSIBLE_ROLES.map((r) => (
+                                  <option key={r.value} value={r.value}>{r.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-ink-500 mb-1">Category</label>
+                              <input
+                                value={itemForm.category}
+                                onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                                placeholder="e.g. IT, HR, Safety"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-[11px] text-ink-500 mb-1">Description</label>
+                              <textarea
+                                value={itemForm.description}
+                                onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                                rows={2}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white resize-none"
+                                placeholder="Optional description"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-ink-500 mb-1">Days from Start</label>
+                              <input
+                                type="number"
+                                value={itemForm.daysFromStart}
+                                onChange={(e) => setItemForm({ ...itemForm, daysFromStart: parseInt(e.target.value) || 0 })}
+                                min={0}
+                                max={365}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-ink-500 mb-1">Due Date</label>
+                              <input
+                                type="date"
+                                value={itemForm.dueDate}
+                                onChange={(e) => setItemForm({ ...itemForm, dueDate: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-surface-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Checkbox options */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-surface-100">
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600">
+                              <input
+                                type="checkbox"
+                                checked={itemForm.notifyEmployee}
+                                onChange={(e) => setItemForm({ ...itemForm, notifyEmployee: e.target.checked })}
+                                className="rounded border-surface-300"
+                              />
+                              Notify Employee
+                            </label>
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600">
+                              <input
+                                type="checkbox"
+                                checked={itemForm.actionRequired}
+                                onChange={(e) => setItemForm({ ...itemForm, actionRequired: e.target.checked })}
+                                className="rounded border-surface-300"
+                              />
+                              Action Required
+                            </label>
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600">
+                              <input
+                                type="checkbox"
+                                checked={itemForm.acknowledgementRequired}
+                                onChange={(e) => setItemForm({ ...itemForm, acknowledgementRequired: e.target.checked })}
+                                className="rounded border-surface-300"
+                              />
+                              Acknowledgement Required
+                            </label>
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600">
+                              <input
+                                type="checkbox"
+                                checked={itemForm.requiresEvidence}
+                                onChange={(e) => setItemForm({ ...itemForm, requiresEvidence: e.target.checked })}
+                                className="rounded border-surface-300"
+                              />
+                              Requires Evidence
+                            </label>
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600">
+                              <input
+                                type="checkbox"
+                                checked={itemForm.requiresApproval}
+                                onChange={(e) => setItemForm({ ...itemForm, requiresApproval: e.target.checked })}
+                                className="rounded border-surface-300"
+                              />
+                              Requires Approval
+                            </label>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-2">
+                            <button
+                              onClick={handleSaveItem}
+                              disabled={busy || !itemForm.title.trim()}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white text-[12px] rounded-lg hover:bg-accent-700 disabled:opacity-50"
+                            >
+                              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              {editingItemId ? 'Update' : 'Save'}
+                            </button>
+                            <button
+                              onClick={resetItemForm}
+                              className="px-4 py-2 text-[12px] text-ink-500 hover:text-ink-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

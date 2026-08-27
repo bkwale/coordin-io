@@ -109,6 +109,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     daysFromStart: typeof item.daysFromStart === 'number' ? item.daysFromStart : 0,
     requiresEvidence: item.requiresEvidence === true,
     requiresApproval: item.requiresApproval === true,
+    notifyEmployee: item.notifyEmployee === true,
+    actionRequired: item.actionRequired === true,
+    acknowledgementRequired: item.acknowledgementRequired === true,
+    dueDate: item.dueDate ? new Date(item.dueDate as string) : null,
     sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
   }))
 

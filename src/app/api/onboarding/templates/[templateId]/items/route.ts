@@ -56,6 +56,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const daysFromStart = optionalNumber(body.daysFromStart, 'daysFromStart', { min: 0, max: 365 }) ?? 0
   const requiresEvidence = body.requiresEvidence === true
   const requiresApproval = body.requiresApproval === true
+  const notifyEmployee = body.notifyEmployee === true
+  const actionRequired = body.actionRequired === true
+  const acknowledgementRequired = body.acknowledgementRequired === true
+  const dueDate = body.dueDate ? new Date(body.dueDate as string) : null
   const sortOrder = optionalNumber(body.sortOrder, 'sortOrder', { min: 0, max: 999 }) ?? 0
 
   const item = await modulesPrisma.onboardingTemplateItem.create({
@@ -69,6 +73,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       daysFromStart,
       requiresEvidence,
       requiresApproval,
+      notifyEmployee,
+      actionRequired,
+      acknowledgementRequired,
+      dueDate,
       sortOrder,
     },
   })
@@ -141,6 +149,18 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
   if (typeof body.requiresApproval === 'boolean') {
     updateData.requiresApproval = body.requiresApproval
+  }
+  if (typeof body.notifyEmployee === 'boolean') {
+    updateData.notifyEmployee = body.notifyEmployee
+  }
+  if (typeof body.actionRequired === 'boolean') {
+    updateData.actionRequired = body.actionRequired
+  }
+  if (typeof body.acknowledgementRequired === 'boolean') {
+    updateData.acknowledgementRequired = body.acknowledgementRequired
+  }
+  if (body.dueDate !== undefined) {
+    updateData.dueDate = body.dueDate ? new Date(body.dueDate as string) : null
   }
   if (body.sortOrder !== undefined) {
     updateData.sortOrder = optionalNumber(body.sortOrder, 'sortOrder', { min: 0, max: 999 }) ?? 0

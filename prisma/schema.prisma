@@ -94,20 +94,27 @@ model Office {
 }
 
 model PublicHoliday {
-  id             String   @id @default(cuid())
-  organisationId String   @map("organisation_id")
-  officeId       String?  @map("office_id") // null = applies to all offices
+  id             String      @id @default(cuid())
+  organisationId String      @map("organisation_id")
+  officeId       String?     @map("office_id") // null = applies to all offices
   name           String
   date           DateTime
-  isRecurring    Boolean  @default(false) @map("is_recurring") // repeats annually
-  country        String   @default("GB")
-  createdAt      DateTime @default(now()) @map("created_at")
+  isRecurring    Boolean     @default(false) @map("is_recurring") // repeats annually
+  country        String      @default("GB")
+  type           HolidayType @default(PUBLIC_HOLIDAY)
+  createdAt      DateTime    @default(now()) @map("created_at")
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
   office       Office?      @relation(fields: [officeId], references: [id])
 
   @@index([organisationId, date])
   @@map("public_holidays")
+}
+
+enum HolidayType {
+  PUBLIC_HOLIDAY
+  BLACKOUT_DATE
+  COMPANY_CLOSURE
 }
 
 model BlackoutDate {
@@ -337,6 +344,9 @@ model EmployeeProfile {
   probationEndDate    DateTime? @map("probation_end_date")
   availabilityStatus  String?   @map("availability_status") // AVAILABLE, ON_LEAVE, ON_SITE, UNAVAILABLE
   grade               String?   // Staff grade: Senior Management, Management, Senior Staff, Staff, etc.
+
+  // Leave policy override — if set, this employee uses this specific policy instead of grade/default
+  leavePolicyId       String?   @map("leave_policy_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -980,6 +990,22 @@ enum LeaveType {
   OTHER
 }
 
+model LeavePolicy {
+  id                String   @id @default(cuid())
+  organisationId    String   @map("organisation_id")
+  name              String   // e.g., "Default", "Senior Staff", "Probation"
+  leaveType         String   @map("leave_type") // ANNUAL, SICK, etc.
+  entitlementDays   Int      @map("entitlement_days")
+  carryOverDays     Int      @default(0) @map("carry_over_days")
+  grade             String?  // If set, applies to employees with this grade
+  isDefault         Boolean  @default(false) @map("is_default")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([organisationId, leaveType])
+  @@map("leave_policies")
+}
+
 model ServiceRequest {
   id             String  @id @default(cuid())
   requestNumber  String? @unique @map("request_number") // Auto-generated SR-001
@@ -1168,6 +1194,18 @@ model AssetAssignment {
   profile Profile @relation(fields: [profileId], references: [id])
 
   @@map("asset_assignments")
+}
+
+model AssetConditionHistory {
+  id        String   @id @default(cuid())
+  assetId   String   @map("asset_id")
+  condition String   // NEW, GOOD, REPAIR_REQUIRED, DAMAGED, LOST, RETIRED
+  changedBy String   @map("changed_by")
+  changedAt DateTime @default(now()) @map("changed_at")
+  notes     String?
+
+  @@index([assetId, changedAt])
+  @@map("asset_condition_history")
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2199,10 +2237,14 @@ model OnboardingTemplateItem {
   description      String?
   responsibleRole  String?  @map("responsible_role") // HR, MANAGER, IT, EMPLOYEE
   daysFromStart    Int      @default(0) @map("days_from_start") // Offset from employee start date
-  requiresEvidence Boolean  @default(false) @map("requires_evidence")
-  requiresApproval Boolean  @default(false) @map("requires_approval")
-  sortOrder        Int      @default(0) @map("sort_order")
-  createdAt        DateTime @default(now()) @map("created_at")
+  requiresEvidence        Boolean   @default(false) @map("requires_evidence")
+  requiresApproval        Boolean   @default(false) @map("requires_approval")
+  notifyEmployee          Boolean   @default(false) @map("notify_employee")
+  actionRequired          Boolean   @default(false) @map("action_required")
+  acknowledgementRequired Boolean   @default(false) @map("acknowledgement_required")
+  dueDate                 DateTime? @map("due_date")
+  sortOrder               Int       @default(0) @map("sort_order")
+  createdAt               DateTime  @default(now()) @map("created_at")
 
   template OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   tasks    OnboardingTask[]
@@ -2232,25 +2274,28 @@ model OnboardingAssignment {
 }
 
 model OnboardingTask {
-  id             String    @id @default(cuid())
-  assignmentId   String    @map("assignment_id")
-  templateItemId String    @map("template_item_id")
-  assigneeId     String?   @map("assignee_id") // Who should complete this task
-  title          String
-  stage          String // BEFORE_START, DAY_ONE, ROLE_SPECIFIC, PROBATION
-  category       String?
-  dueDate        DateTime? @map("due_date")
-  status         String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, OVERDUE, WAIVED
-  completedAt    DateTime? @map("completed_at")
-  completedById  String?   @map("completed_by_id")
-  evidenceUrl    String?   @map("evidence_url")
-  evidenceNote   String?   @map("evidence_note")
-  approvedById   String?   @map("approved_by_id")
-  approvedAt     DateTime? @map("approved_at")
-  comment        String?
-  sortOrder      Int       @default(0) @map("sort_order")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                      String    @id @default(cuid())
+  assignmentId            String    @map("assignment_id")
+  templateItemId          String    @map("template_item_id")
+  assigneeId              String?   @map("assignee_id") // Who should complete this task
+  title                   String
+  stage                   String // BEFORE_START, DAY_ONE, ROLE_SPECIFIC, PROBATION
+  category                String?
+  dueDate                 DateTime? @map("due_date")
+  status                  String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, OVERDUE, WAIVED
+  completedAt             DateTime? @map("completed_at")
+  completedById           String?   @map("completed_by_id")
+  evidenceUrl             String?   @map("evidence_url")
+  evidenceNote            String?   @map("evidence_note")
+  approvedById            String?   @map("approved_by_id")
+  approvedAt              DateTime? @map("approved_at")
+  notifyEmployee          Boolean   @default(false) @map("notify_employee")
+  actionRequired          Boolean   @default(false) @map("action_required")
+  acknowledgementRequired Boolean   @default(false) @map("acknowledgement_required")
+  comment                 String?
+  sortOrder               Int       @default(0) @map("sort_order")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   assignment   OnboardingAssignment   @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   templateItem OnboardingTemplateItem @relation(fields: [templateItemId], references: [id])
