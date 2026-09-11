@@ -813,3 +813,26 @@ Purple Team review surfaced 2 fixes, both applied:
 **Architecture:** 18 UI gaps identified from beta partner (Ayo) feedback — features were built API-first but missing UI controls. BlackoutDate model added to Prisma schema with API routes. Task numbering computed server-side from creation order within project (no schema migration needed). All fixes follow ship-vertically pattern: API + UI control + Crispin QA verification.
 
 **Verification:** 0 type errors. 1421 tests passing. Schema pushed to Supabase. Commit a041769 pushed.
+
+### Post-Sprint: Bug Report 7 — 20 Fixes (COMPLETE)
+| Batch | Bugs | Scope | Status |
+|-------|------|-------|--------|
+| 1 | BUG-01,03,05,07,08,09,11 | Task creation form — milestone selector, deliverable, SharePoint URL, priority, checklist with assignee/due date | Done |
+| 2 | BUG-02,12,13 | Milestone priority field, progress display, calculated status from linked tasks | Done |
+| 3 | BUG-04,10 | Inline checklist on task creation, task numbering per project | Done |
+| 4 | BUG-14,15,16,20 | Approval engine REQUEST_CHANGES action, CHANGES_REQUESTED step status, force-approve, dashboard link fix | Done |
+| 5 | BUG-17,18,19 | Leave submission email via Resend, approvals page filter tabs + search, Vercel cron for escalation (15 min) | Done |
+
+**Key changes:**
+- `src/lib/email.ts` — new `sendLeaveSubmissionEmail()` with HTML + text templates
+- `src/app/approvals/page.tsx` — filter tabs (All/Leave/Expenses/Workflow) with counts + search, engine approval filtering by requestType
+- `vercel.json` — Vercel Cron config for `/api/cron/escalations` every 15 minutes
+- `src/lib/approval-engine.ts` — REQUEST_CHANGES action handler + CHANGES_REQUESTED step status
+- `src/app/api/approvals/[id]/route.ts` — REQUEST_CHANGES in allowed actions
+- `src/lib/audit.ts` — `approval.step_changes_requested` label
+- `src/app/api/leave/requests/[id]/route.ts` — stale approval instance cancellation on re-submit, email notification fire-and-forget
+- `prisma/schema.prisma` — CHANGES_REQUESTED enum value, priority field on Milestone
+- Legacy "Request changes" button fixed to send UNDER_REVIEW (correct for leave state machine)
+- Checklist createMany aligned to schema field names (label/mandatory)
+
+**Verification:** 0 type errors. 1421 tests passing. Commit a6e2605 pushed.
