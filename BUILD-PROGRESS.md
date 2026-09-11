@@ -836,3 +836,15 @@ Purple Team review surfaced 2 fixes, both applied:
 - Checklist createMany aligned to schema field names (label/mandatory)
 
 **Verification:** 0 type errors. 1421 tests passing. Commit a6e2605 pushed.
+
+### Post-Sprint: Purple Team Recommendations — 6 Improvements (COMPLETE)
+| # | Recommendation | What Changed | Status |
+|---|---------------|-------------|--------|
+| 1 | Extract leave PATCH route into service functions | New `src/lib/leave-service.ts` with 4 extracted functions (balance, audit, notifications, approval engine). Route slimmed from 327→160 lines. | Done |
+| 2 | Omit reason from sick leave emails (GDPR) | `leave-service.ts` conditionally omits `reason` when `leaveType === 'SICK'` — sensitive health data stays in-app only | Done |
+| 3 | Add cron observability logging | `src/app/api/cron/escalations/route.ts` logs `[CRON] Escalations: N processed, N escalated, N errors` | Done |
+| 4 | Add stale instance cancellation test | New test in `smoke-workflows.test.ts` verifies `approvalInstance.updateMany` cancels IN_PROGRESS instances on re-submit | Done |
+| 5 | BUG-06 completion gating (owner + reviewer + checklist) | `src/app/api/tasks/[id]/route.ts` — owner required before READY_FOR_REVIEW, all mandatory checklist items required before COMPLETED | Done |
+| 6 | Parallelize approvals page fetches | `src/app/approvals/page.tsx` — three sequential fetches replaced with `Promise.allSettled` | Done |
+
+**Verification:** 0 type errors. 1422 tests passing. Commit 23ba933 pushed.
