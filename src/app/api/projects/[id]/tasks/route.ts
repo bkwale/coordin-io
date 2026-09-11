@@ -5,6 +5,13 @@ import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import {
+  buildProjectTaskNumberMap,
+  buildMilestoneNumberMap,
+  buildMilestoneTaskPositionMap,
+  formatProjectTaskNumber,
+  formatMilestoneTaskNumber,
+} from '@/lib/task-numbering'
 
 /**
  * GET /api/projects/[id]/tasks — List tasks for a project.
@@ -18,8 +25,8 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
 
   const includeArchived = url.searchParams.get('archived') === 'true'
 
-  // Fetch stable numbering data: all task IDs in creation order + project code
-  const [allTaskIds, projectData] = await Promise.all([
+  // Fetch stable numbering data: all task IDs, milestones, and project code in creation order
+  const [allTaskIds, projectData, allMilestones, allMilestoneTasks] = await Promise.all([
     prisma.task.findMany({
       where: { projectId },
       select: { id: true },
@@ -29,8 +36,20 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
       where: { id: projectId },
       select: { code: true },
     }),
+    prisma.projectMilestone.findMany({
+      where: { projectId },
+      select: { id: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
+    prisma.task.findMany({
+      where: { projectId, milestoneId: { not: null } },
+      select: { id: true, milestoneId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    }),
   ])
-  const numberMap = new Map(allTaskIds.map((t, i) => [t.id, i + 1]))
+  const numberMap = buildProjectTaskNumberMap(allTaskIds)
+  const milestoneNumberMap = buildMilestoneNumberMap(allMilestones)
+  const milestoneTaskPositionMap = buildMilestoneTaskPositionMap(allMilestoneTasks)
   const prefix = projectData?.code || 'T'
 
   const where = showAll
@@ -62,7 +81,14 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
   const shaped = tasks.map(({ checklistItems, milestone, ...task }) => ({
     ...task,
     milestone: milestone ?? null,
-    taskNumber: `${prefix}-${String(numberMap.get(task.id) || 0).padStart(3, '0')}`,
+    taskNumber: formatProjectTaskNumber(prefix, numberMap.get(task.id) || 0),
+    milestoneTaskNumber: task.milestoneId
+      ? formatMilestoneTaskNumber(
+          prefix,
+          milestoneNumberMap.get(task.milestoneId),
+          milestoneTaskPositionMap.get(task.id),
+        )
+      : null,
     checklist: {
       total: checklistItems.length,
       completed: checklistItems.filter((item) => item.completed).length,

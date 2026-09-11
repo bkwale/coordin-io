@@ -9,6 +9,7 @@ import { withTaskAccess } from '@/lib/with-task-access'
 import { canPerform } from '@/lib/role-permissions'
 import { hasOrgPermission } from '@/lib/permissions'
 import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { formatMilestoneTaskNumber } from '@/lib/task-numbering'
 import type { TaskStatus, OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -21,7 +22,7 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
       owner: { select: { id: true, fullName: true } },
       reviewer: { select: { id: true, fullName: true } },
       project: { select: { id: true, name: true, code: true } },
-      milestone: { select: { id: true, title: true, status: true, dueDate: true } },
+      milestone: { select: { id: true, title: true, status: true, dueDate: true, createdAt: true } },
       checklistItems: {
         orderBy: { sortOrder: 'asc' },
         include: { assignee: { select: { id: true, fullName: true } } },
@@ -41,8 +42,11 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
     },
   })
 
-  // Compute stable task number within its project
+  // Compute stable task number within its project + milestone-scoped reference
   if (task) {
+    const prefix = task.project.code || 'T'
+
+    // Project-wide number
     const taskPosition = await prisma.task.count({
       where: {
         projectId: task.projectId,
@@ -52,9 +56,37 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
         ],
       },
     })
-    const prefix = task.project.code || 'T'
     const taskNumber = `${prefix}-${String(taskPosition + 1).padStart(3, '0')}`
-    return success({ task: { ...task, taskNumber } })
+
+    // Milestone-scoped number (if linked to a milestone)
+    let milestoneTaskNumber: string | null = null
+    if (task.milestoneId && task.milestone) {
+      const milestoneCreatedAt = task.milestone.createdAt
+      const [milestonePosition, taskPositionInMilestone] = await Promise.all([
+        prisma.projectMilestone.count({
+          where: {
+            projectId: task.projectId,
+            OR: [
+              { createdAt: { lt: milestoneCreatedAt } },
+              { createdAt: milestoneCreatedAt, id: { lt: task.milestoneId } },
+            ],
+          },
+        }),
+        prisma.task.count({
+          where: {
+            projectId: task.projectId,
+            milestoneId: task.milestoneId,
+            OR: [
+              { createdAt: { lt: task.createdAt } },
+              { createdAt: task.createdAt, id: { lt: task.id } },
+            ],
+          },
+        }),
+      ])
+      milestoneTaskNumber = formatMilestoneTaskNumber(prefix, milestonePosition + 1, taskPositionInMilestone + 1)
+    }
+
+    return success({ task: { ...task, taskNumber, milestoneTaskNumber } })
   }
 
   return success({ task })

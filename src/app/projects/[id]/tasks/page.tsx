@@ -21,6 +21,7 @@ interface TaskListItem {
   id: string
   title: string
   taskNumber: string
+  milestoneTaskNumber: string | null
   status: string
   priority: string
   dueDate: string | null
@@ -240,6 +241,7 @@ export default function ProjectTasksPage() {
   const handleExportCsv = () => {
     const rows = filtered.map((t) => ({
       taskNumber: t.taskNumber,
+      milestoneTaskNumber: t.milestoneTaskNumber ?? '',
       title: t.title,
       status: t.status,
       priority: t.priority,
@@ -711,10 +713,17 @@ export default function ProjectTasksPage() {
                 {/* Priority dot */}
                 <PriorityBadge priority={task.priority} />
 
-                {/* Task number */}
-                <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded shrink-0 font-mono">
-                  {task.taskNumber}
-                </span>
+                {/* Task numbers */}
+                <div className="flex flex-col items-end shrink-0 gap-0.5">
+                  <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded font-mono">
+                    {task.taskNumber}
+                  </span>
+                  {task.milestoneTaskNumber && (
+                    <span className="text-[10px] text-accent-500 bg-accent-50 px-1.5 py-0.5 rounded font-mono">
+                      {task.milestoneTaskNumber}
+                    </span>
+                  )}
+                </div>
 
                 {/* Title + owner + milestone */}
                 <div className="flex-1 min-w-0">

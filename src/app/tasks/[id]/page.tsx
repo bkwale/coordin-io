@@ -71,6 +71,7 @@ interface TaskDetail {
   id: string
   title: string
   taskNumber: string
+  milestoneTaskNumber: string | null
   description: string | null
   instructions: string | null
   status: string
@@ -492,6 +493,9 @@ export default function TaskDetailPage() {
         </Link>
         <ChevronRight className="w-3.5 h-3.5" />
         <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded font-mono">{task.taskNumber}</span>
+        {task.milestoneTaskNumber && (
+          <span className="text-[10px] text-accent-500 bg-accent-50 px-1.5 py-0.5 rounded font-mono">{task.milestoneTaskNumber}</span>
+        )}
         <span className="text-ink-600 font-medium truncate max-w-[200px]">{task.title}</span>
       </div>
 
@@ -513,6 +517,9 @@ export default function TaskDetailPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded font-mono shrink-0">{task.taskNumber}</span>
+          {task.milestoneTaskNumber && (
+            <span className="text-[10px] text-accent-500 bg-accent-50 px-1.5 py-0.5 rounded font-mono shrink-0">{task.milestoneTaskNumber}</span>
+          )}
           {editingTitle ? (
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <input
