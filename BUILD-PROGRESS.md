@@ -848,3 +848,22 @@ Purple Team review surfaced 2 fixes, both applied:
 | 6 | Parallelize approvals page fetches | `src/app/approvals/page.tsx` — three sequential fetches replaced with `Promise.allSettled` | Done |
 
 **Verification:** 0 type errors. 1422 tests passing. Commit 23ba933 pushed.
+
+### BUG-04 Follow-Up: Milestone-Scoped Task References (COMPLETE)
+
+Tasks linked to milestones now display a **dual reference** format:
+- **Project-wide:** `CWA-003` (existing, unchanged)
+- **Milestone-scoped:** `CWA-M05-T03` (new — project code + milestone position + task position within milestone)
+
+Both numbering schemes use stable creation-order positioning (ordered by `createdAt ASC, id ASC`). Tasks without a milestone show only the project-wide reference.
+
+| Component | File | Change |
+|-----------|------|--------|
+| Shared utility | `src/lib/task-numbering.ts` | New — 5 pure functions for building number maps and formatting references |
+| Task list API | `src/app/api/projects/[id]/tasks/route.ts` | Fetches milestone ordering, returns `milestoneTaskNumber` per task |
+| Task detail API | `src/app/api/tasks/[id]/route.ts` | Computes milestone-scoped reference via count queries |
+| Task list UI | `src/app/projects/[id]/tasks/page.tsx` | Displays both references (accent badge for milestone ref) |
+| Task detail UI | `src/app/tasks/[id]/page.tsx` | Displays both references in breadcrumb + heading |
+| Tests | `src/lib/__tests__/task-numbering.test.ts` | 13 unit tests covering all utility functions |
+
+**Verification:** 0 type errors. 1435 tests passing. Commit 2dfa553 pushed.
