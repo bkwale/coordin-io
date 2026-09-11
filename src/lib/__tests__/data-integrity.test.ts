@@ -237,8 +237,8 @@ describe('Task state machine integrity', () => {
       expect(() => validateTaskTransition('BLOCKED', 'COMPLETED')).toThrow(ValidationError)
     })
 
-    it('COMPLETED -> IN_PROGRESS (leave terminal)', () => {
-      expect(() => validateTaskTransition('COMPLETED', 'IN_PROGRESS')).toThrow(ValidationError)
+    it('COMPLETED -> READY_FOR_REVIEW (can only reopen to IN_PROGRESS)', () => {
+      expect(() => validateTaskTransition('COMPLETED', 'READY_FOR_REVIEW')).toThrow(ValidationError)
     })
 
     it('READY_FOR_REVIEW -> NOT_STARTED (backwards)', () => {
@@ -260,11 +260,11 @@ describe('Task state machine integrity', () => {
       }
     })
 
-    it('terminal state error message says "none"', () => {
+    it('invalid transition error message includes valid options', () => {
       try {
         validateTaskTransition('COMPLETED', 'NOT_STARTED')
       } catch (err) {
-        expect((err as ValidationError).message).toContain('none (terminal state)')
+        expect((err as ValidationError).message).toContain('IN_PROGRESS')
       }
     })
   })
@@ -292,8 +292,8 @@ describe('Task state machine integrity', () => {
   })
 
   describe('Terminal status checks', () => {
-    it('COMPLETED is terminal', () => {
-      expect(isTerminalStatus('COMPLETED')).toBe(true)
+    it('COMPLETED is not terminal (can be reopened)', () => {
+      expect(isTerminalStatus('COMPLETED')).toBe(false)
     })
 
     it('NOT_STARTED is not terminal', () => {
@@ -314,8 +314,8 @@ describe('Task state machine integrity', () => {
       expect(getValidNextStatuses('IN_PROGRESS')).toEqual(['READY_FOR_REVIEW', 'BLOCKED'])
     })
 
-    it('COMPLETED -> [] (empty)', () => {
-      expect(getValidNextStatuses('COMPLETED')).toEqual([])
+    it('COMPLETED -> [IN_PROGRESS] (reopen)', () => {
+      expect(getValidNextStatuses('COMPLETED')).toEqual(['IN_PROGRESS'])
     })
   })
 })

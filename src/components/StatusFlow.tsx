@@ -30,7 +30,7 @@ const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   BLOCKED: ['IN_PROGRESS'],
   READY_FOR_REVIEW: ['COMPLETED', 'CHANGES_REQUIRED'],
   CHANGES_REQUIRED: ['IN_PROGRESS'],
-  COMPLETED: [],
+  COMPLETED: ['IN_PROGRESS'],
 }
 
 /* ── StatusFlow component ──────────────────────────────── */

@@ -16,7 +16,7 @@ const SERVER_TRANSITIONS: Record<string, string[]> = {
   BLOCKED: ['IN_PROGRESS'],
   READY_FOR_REVIEW: ['COMPLETED', 'CHANGES_REQUIRED'],
   CHANGES_REQUIRED: ['IN_PROGRESS'],
-  COMPLETED: [],
+  COMPLETED: ['IN_PROGRESS'],
 }
 
 describe('StatusFlow state machine', () => {
@@ -57,8 +57,8 @@ describe('StatusFlow state machine', () => {
     expect(VALID_TRANSITIONS.CHANGES_REQUIRED).toEqual(['IN_PROGRESS'])
   })
 
-  it('COMPLETED is a terminal state with no transitions', () => {
-    expect(VALID_TRANSITIONS.COMPLETED).toEqual([])
+  it('COMPLETED can be reopened to IN_PROGRESS', () => {
+    expect(VALID_TRANSITIONS.COMPLETED).toEqual(['IN_PROGRESS'])
   })
 })
 

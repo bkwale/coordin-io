@@ -10,6 +10,7 @@ import { ValidationError } from '@/lib/errors'
  *   BLOCKED → IN_PROGRESS
  *   READY_FOR_REVIEW → COMPLETED | CHANGES_REQUIRED
  *   CHANGES_REQUIRED → IN_PROGRESS
+ *   COMPLETED → IN_PROGRESS (reopen)
  *
  * Invalid transitions throw ValidationError.
  */
@@ -20,7 +21,7 @@ const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   BLOCKED: ['IN_PROGRESS'],
   READY_FOR_REVIEW: ['COMPLETED', 'CHANGES_REQUIRED'],
   CHANGES_REQUIRED: ['IN_PROGRESS'],
-  COMPLETED: [], // Terminal state — no transitions out
+  COMPLETED: ['IN_PROGRESS'], // Can reopen a completed task
 }
 
 /**

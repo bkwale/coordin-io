@@ -37,6 +37,10 @@ describe('validateTaskTransition — valid transitions', () => {
   it('CHANGES_REQUIRED -> IN_PROGRESS', () => {
     expect(() => validateTaskTransition('CHANGES_REQUIRED', 'IN_PROGRESS')).not.toThrow()
   })
+
+  it('COMPLETED -> IN_PROGRESS (reopen)', () => {
+    expect(() => validateTaskTransition('COMPLETED', 'IN_PROGRESS')).not.toThrow()
+  })
 })
 
 // ── Invalid transitions ────────────────────────────────────
@@ -49,11 +53,7 @@ describe('validateTaskTransition — invalid transitions', () => {
     expect(() => validateTaskTransition('NOT_STARTED', 'READY_FOR_REVIEW')).toThrow(ValidationError)
   })
 
-  it('COMPLETED -> IN_PROGRESS (terminal state)', () => {
-    expect(() => validateTaskTransition('COMPLETED', 'IN_PROGRESS')).toThrow(ValidationError)
-  })
-
-  it('COMPLETED -> NOT_STARTED (terminal state)', () => {
+  it('COMPLETED -> NOT_STARTED (can only reopen to IN_PROGRESS)', () => {
     expect(() => validateTaskTransition('COMPLETED', 'NOT_STARTED')).toThrow(ValidationError)
   })
 
@@ -76,7 +76,7 @@ describe('isValidTransition', () => {
 
   it('returns false for invalid transitions', () => {
     expect(isValidTransition('NOT_STARTED', 'COMPLETED')).toBe(false)
-    expect(isValidTransition('COMPLETED', 'IN_PROGRESS')).toBe(false)
+    expect(isValidTransition('COMPLETED', 'NOT_STARTED')).toBe(false)
   })
 
   it('returns false for same-status transitions', () => {
@@ -86,8 +86,8 @@ describe('isValidTransition', () => {
 
 // ── getValidNextStatuses ───────────────────────────────────
 describe('getValidNextStatuses', () => {
-  it('COMPLETED returns empty array', () => {
-    expect(getValidNextStatuses('COMPLETED')).toEqual([])
+  it('COMPLETED returns IN_PROGRESS (reopen)', () => {
+    expect(getValidNextStatuses('COMPLETED')).toEqual(['IN_PROGRESS'])
   })
 
   it('IN_PROGRESS returns READY_FOR_REVIEW and BLOCKED', () => {
@@ -116,8 +116,8 @@ describe('isReviewerTransition', () => {
 
 // ── isTerminalStatus ───────────────────────────────────────
 describe('isTerminalStatus', () => {
-  it('COMPLETED -> true', () => {
-    expect(isTerminalStatus('COMPLETED')).toBe(true)
+  it('COMPLETED -> false (can be reopened)', () => {
+    expect(isTerminalStatus('COMPLETED')).toBe(false)
   })
 
   it('IN_PROGRESS -> false', () => {

@@ -154,6 +154,10 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
     if (status === 'COMPLETED') {
       data.completedAt = new Date()
     }
+    // Clear completedAt when reopening a completed task
+    if (currentTask.status === 'COMPLETED' && status === 'IN_PROGRESS') {
+      data.completedAt = null
+    }
   }
 
   const task = await prisma.task.update({

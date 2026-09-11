@@ -44,8 +44,8 @@ describe('Sprint 1: Task Workflow', () => {
       expect(() => validateTaskTransition('NOT_STARTED', 'COMPLETED')).toThrow('Cannot transition')
     })
 
-    it('rejects COMPLETED → IN_PROGRESS (terminal)', () => {
-      expect(() => validateTaskTransition('COMPLETED', 'IN_PROGRESS')).toThrow('Cannot transition')
+    it('allows COMPLETED → IN_PROGRESS (reopen)', () => {
+      expect(() => validateTaskTransition('COMPLETED', 'IN_PROGRESS')).not.toThrow()
     })
 
     it('rejects same-status (no-op)', () => {
@@ -85,7 +85,7 @@ describe('Sprint 1: Task Workflow', () => {
       expect(getValidNextStatuses('BLOCKED')).toEqual(['IN_PROGRESS'])
       expect(getValidNextStatuses('READY_FOR_REVIEW')).toEqual(['COMPLETED', 'CHANGES_REQUIRED'])
       expect(getValidNextStatuses('CHANGES_REQUIRED')).toEqual(['IN_PROGRESS'])
-      expect(getValidNextStatuses('COMPLETED')).toEqual([])
+      expect(getValidNextStatuses('COMPLETED')).toEqual(['IN_PROGRESS'])
     })
   })
 
@@ -104,13 +104,13 @@ describe('Sprint 1: Task Workflow', () => {
   })
 
   describe('isTerminalStatus', () => {
-    it('COMPLETED is terminal', () => {
-      expect(isTerminalStatus('COMPLETED')).toBe(true)
+    it('COMPLETED is not terminal (can be reopened)', () => {
+      expect(isTerminalStatus('COMPLETED')).toBe(false)
     })
 
-    it('other statuses are not terminal', () => {
-      const nonTerminal: TaskStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'READY_FOR_REVIEW', 'CHANGES_REQUIRED']
-      for (const s of nonTerminal) {
+    it('no status is currently terminal', () => {
+      const allStatuses: TaskStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'READY_FOR_REVIEW', 'CHANGES_REQUIRED', 'COMPLETED']
+      for (const s of allStatuses) {
         expect(isTerminalStatus(s)).toBe(false)
       }
     })
