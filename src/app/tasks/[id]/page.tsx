@@ -159,6 +159,7 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserPermission, setCurrentUserPermission] = useState<string | null>(null)
 
   // Mutation states
   const [transitionLoading, setTransitionLoading] = useState(false)
@@ -261,6 +262,7 @@ export default function TaskDetailPage() {
       if (res.ok) {
         const json = await res.json()
         setCurrentUserId(json.data?.profile?.id || null)
+        setCurrentUserPermission(json.data?.profile?.orgPermission || null)
       }
     } catch {
       // non-critical — reviewer detection just won't work
@@ -471,7 +473,8 @@ export default function TaskDetailPage() {
   /* ── Computed values ─────────────────────────────────── */
 
   const dueInfo = formatDueDate(task.dueDate)
-  const isReviewer = currentUserId === task.reviewer?.id
+  const isAdmin = currentUserPermission === 'ADMIN' || currentUserPermission === 'OWNER'
+  const isReviewer = currentUserId === task.reviewer?.id || isAdmin
   const checklistCompleted = task.checklistItems.filter((i) => i.completed).length
   const checklistTotal = task.checklistItems.length
 

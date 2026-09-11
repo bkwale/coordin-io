@@ -7,8 +7,9 @@ import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { validateTaskTransition, isReviewerTransition } from '@/lib/task-transitions'
 import { withTaskAccess } from '@/lib/with-task-access'
 import { canPerform } from '@/lib/role-permissions'
+import { hasOrgPermission } from '@/lib/permissions'
 import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
-import type { TaskStatus } from '@/generated/prisma/client'
+import type { TaskStatus, OrgPermission } from '@/generated/prisma/client'
 
 /**
  * GET /api/tasks/[id] — Task detail with checklist, comments, dependencies, and relations.
@@ -119,9 +120,11 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
     }
 
     // Reviewer transitions require the current user to be the task's reviewer
+    // ADMIN/OWNER can bypass this check
     if (isReviewerTransition(status as TaskStatus)) {
-      if (currentTask.reviewerId !== profile.id) {
-        throw new PermissionError('Only the assigned reviewer can complete or request changes')
+      const isAdmin = hasOrgPermission(profile.orgPermission as OrgPermission, 'ADMIN')
+      if (currentTask.reviewerId !== profile.id && !isAdmin) {
+        throw new PermissionError('Only the assigned reviewer or an admin can complete or request changes')
       }
     }
   }

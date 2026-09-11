@@ -174,9 +174,11 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   // ── Assemble response ────────────────────────────────────
   return success({
     profile: {
+      id: profile.id,
       fullName: profile.fullName,
       jobTitle: profile.jobTitle,
       status: profile.status,
+      orgPermission: profile.orgPermission,
       organisationName: profile.organisation.name,
     },
     projects: projectSummaries,

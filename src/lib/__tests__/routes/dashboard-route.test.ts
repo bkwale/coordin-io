@@ -131,9 +131,11 @@ describe('GET /api/dashboard', () => {
 
     expect(res.status).toBe(200)
     expect(json.data.profile).toEqual({
+      id: 'profile-1',
       fullName: 'Test User',
       jobTitle: 'Architect',
       status: 'ACTIVE',
+      orgPermission: 'MEMBER',
       organisationName: 'Test Org',
     })
   })
