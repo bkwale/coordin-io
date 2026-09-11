@@ -221,7 +221,7 @@ export async function createApprovalInstance(
 
 // ── Process Approval Step ────────────────────────────────────
 
-export type ApprovalAction = 'APPROVE' | 'REJECT'
+export type ApprovalAction = 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES'
 
 export interface ProcessResult {
   instanceStatus: string
@@ -280,6 +280,25 @@ export async function processApprovalStep(
     }
 
     const now = new Date()
+
+    if (action === 'REQUEST_CHANGES') {
+      // Mark step as changes requested — instance stays IN_PROGRESS so
+      // the submitter can resubmit and the same step re-evaluates.
+      await tx.approvalStepInstance.update({
+        where: { id: effectiveStep.id },
+        data: { status: 'CHANGES_REQUESTED', comment, actionedAt: now },
+      })
+
+      return {
+        instanceStatus: 'IN_PROGRESS' as const,
+        stepStatus: 'CHANGES_REQUESTED' as ApprovalStepStatus,
+        nextStepOrder: effectiveStep.stepOrder, // stays on same step
+        isComplete: false,
+        _submitterId: instance.submitterId,
+        _requestType: instance.requestType,
+        _nextApproverId: null as string | null,
+      }
+    }
 
     if (action === 'REJECT') {
       await tx.approvalStepInstance.update({
@@ -356,6 +375,16 @@ export async function processApprovalStep(
       type: NOTIFICATION_EVENTS.APPROVAL_REQUESTED,
       title: `Approval required (step ${result.nextStepOrder})`,
       body: `A ${result._requestType.toLowerCase().replace('_', ' ')} request needs your approval.`,
+      linkUrl: `/approvals`,
+    }).catch(() => {})
+  }
+
+  if (result.stepStatus === 'CHANGES_REQUESTED') {
+    await createNotification({
+      profileId: result._submitterId,
+      type: NOTIFICATION_EVENTS.APPROVAL_REQUESTED,
+      title: `Changes requested`,
+      body: `Your ${result._requestType.toLowerCase().replace('_', ' ')} request needs changes before it can be approved.`,
       linkUrl: `/approvals`,
     }).catch(() => {})
   }

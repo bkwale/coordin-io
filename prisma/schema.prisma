@@ -2313,6 +2313,7 @@ model ProjectMilestone {
   title         String
   description   String?
   category      String? // DESIGN_FREEZE, PLANNING, CONSTRUCTION, OPERATOR_REVIEW, STAGE_GATE, HANDOVER, CUSTOM
+  priority      String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
   dueDate       DateTime  @map("due_date")
   completedDate DateTime? @map("completed_date")
   status        String    @default("UPCOMING") // UPCOMING, DUE, OVERDUE, COMPLETED, CANCELLED
@@ -2462,6 +2463,7 @@ enum ApprovalStepStatus {
   PENDING
   APPROVED
   REJECTED
+  CHANGES_REQUESTED
   SKIPPED
   ESCALATED
 }

@@ -49,7 +49,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const id = extractId(request.url)
   const body = await parseBody(request)
 
-  const action = requireEnum(body.action, 'Action', ['APPROVE', 'REJECT', 'FORCE_APPROVE'] as const)
+  const action = requireEnum(body.action, 'Action', ['APPROVE', 'REJECT', 'REQUEST_CHANGES', 'FORCE_APPROVE'] as const)
   const comment = optionalString(body.comment, 'Comment', 2000) ?? undefined
 
   // Verify instance belongs to this org
@@ -78,7 +78,11 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   await recordAuditEvent({
     organisationId: profile.organisationId,
     actorId: profile.id,
-    action: action === 'APPROVE' ? AuditActions.APPROVAL_STEP_APPROVED : AuditActions.APPROVAL_STEP_REJECTED,
+    action: action === 'APPROVE'
+      ? AuditActions.APPROVAL_STEP_APPROVED
+      : action === 'REQUEST_CHANGES'
+        ? AuditActions.APPROVAL_STEP_CHANGES_REQUESTED
+        : AuditActions.APPROVAL_STEP_REJECTED,
     entityType: 'ApprovalInstance',
     entityId: id,
     metadata: {

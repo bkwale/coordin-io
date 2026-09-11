@@ -193,7 +193,7 @@ export default function DashboardPage() {
 
             {/* Pending approvals */}
             {pendingActions.approvals.count > 0 && (
-              <Link href="/my-work" className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+              <Link href="/approvals" className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-9 h-9 rounded-lg bg-violet-50 flex items-center justify-center shrink-0">
                     <ShieldCheck className="w-4.5 h-4.5 text-violet-500" />

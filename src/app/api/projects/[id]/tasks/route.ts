@@ -49,6 +49,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
     include: {
       owner: { select: { id: true, fullName: true } },
       reviewer: { select: { id: true, fullName: true } },
+      milestone: { select: { id: true, title: true } },
       checklistItems: { select: { id: true, completed: true } },
     },
     orderBy: [
@@ -58,8 +59,9 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
   })
 
   // Shape checklist counts + task numbers for the response
-  const shaped = tasks.map(({ checklistItems, ...task }) => ({
+  const shaped = tasks.map(({ checklistItems, milestone, ...task }) => ({
     ...task,
+    milestone: milestone ?? null,
     taskNumber: `${prefix}-${String(numberMap.get(task.id) || 0).padStart(3, '0')}`,
     checklist: {
       total: checklistItems.length,
@@ -93,29 +95,60 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
   const deliverable = optionalString(body.deliverable, 'Deliverable', 500)
   const sharepointUrl = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
 
-  const task = await prisma.task.create({
-    data: {
-      projectId,
-      title,
-      description,
-      instructions,
-      ownerId,
-      reviewerId,
-      stage: stage || null,
-      discipline: discipline || null,
-      block: block || null,
-      floor: floor || null,
-      priority: priority || 'MEDIUM',
-      dueDate,
-      estimatedHours,
-      milestoneId: milestoneId || null,
-      deliverable: deliverable || null,
-      sharepointUrl: sharepointUrl || null,
-    },
-    include: {
-      owner: { select: { id: true, fullName: true } },
-      reviewer: { select: { id: true, fullName: true } },
-    },
+  // Parse optional inline checklist items
+  const checklistItems: { title: string; required: boolean }[] = []
+  if (Array.isArray(body.checklistItems)) {
+    for (const item of body.checklistItems) {
+      if (typeof item === 'string' && item.trim()) {
+        checklistItems.push({ title: item.trim(), required: false })
+      } else if (item && typeof item === 'object' && typeof item.title === 'string' && item.title.trim()) {
+        checklistItems.push({
+          title: item.title.trim(),
+          required: item.required === true,
+        })
+      }
+    }
+  }
+
+  const task = await prisma.$transaction(async (tx) => {
+    const created = await tx.task.create({
+      data: {
+        projectId,
+        title,
+        description,
+        instructions,
+        ownerId,
+        reviewerId,
+        stage: stage || null,
+        discipline: discipline || null,
+        block: block || null,
+        floor: floor || null,
+        priority: priority || 'MEDIUM',
+        dueDate,
+        estimatedHours,
+        milestoneId: milestoneId || null,
+        deliverable: deliverable || null,
+        sharepointUrl: sharepointUrl || null,
+      },
+      include: {
+        owner: { select: { id: true, fullName: true } },
+        reviewer: { select: { id: true, fullName: true } },
+      },
+    })
+
+    // Create inline checklist items if provided
+    if (checklistItems.length > 0) {
+      await tx.taskChecklistItem.createMany({
+        data: checklistItems.map((item, idx) => ({
+          taskId: created.id,
+          label: item.title,
+          mandatory: item.required,
+          sortOrder: idx,
+        })),
+      })
+    }
+
+    return created
   })
 
   await recordAuditEvent({

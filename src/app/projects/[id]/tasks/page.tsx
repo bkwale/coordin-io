@@ -25,9 +25,17 @@ interface TaskListItem {
   priority: string
   dueDate: string | null
   stage: string | null
+  milestoneId: string | null
+  milestone: { id: string; title: string } | null
   owner: { id: string; fullName: string } | null
   reviewer: { id: string; fullName: string } | null
   checklist: { total: number; completed: number }
+}
+
+interface MilestoneOption {
+  id: string
+  title: string
+  status: string
 }
 
 type FilterStatus = 'ALL' | 'NOT_STARTED' | 'IN_PROGRESS' | 'BLOCKED' | 'READY_FOR_REVIEW' | 'CHANGES_REQUIRED' | 'COMPLETED'
@@ -76,12 +84,37 @@ export default function ProjectTasksPage() {
   /* ── Create task form ──────────────────────────────── */
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [newPriority, setNewPriority] = useState('MEDIUM')
   const [newDueDate, setNewDueDate] = useState('')
   const [newOwner, setNewOwner] = useState('')
+  const [newReviewer, setNewReviewer] = useState('')
+  const [newMilestone, setNewMilestone] = useState('')
+  const [newSharepointUrl, setNewSharepointUrl] = useState('')
+  const [newDiscipline, setNewDiscipline] = useState('')
+  const [newBlock, setNewBlock] = useState('')
+  const [newChecklistItems, setNewChecklistItems] = useState<string[]>([])
+  const [newChecklistInput, setNewChecklistInput] = useState('')
   const [projectMembers, setProjectMembers] = useState<{id: string; fullName: string}[]>([])
+  const [milestones, setMilestones] = useState<MilestoneOption[]>([])
   const { mutate: createTask, loading: creating, error: createError, clearError: clearCreateError } =
     useApiMutation<TaskListItem>(`/api/projects/${projectId}/tasks`, 'POST')
+
+  const resetCreateForm = () => {
+    setNewTitle('')
+    setNewDescription('')
+    setNewPriority('MEDIUM')
+    setNewDueDate('')
+    setNewOwner('')
+    setNewReviewer('')
+    setNewMilestone('')
+    setNewSharepointUrl('')
+    setNewDiscipline('')
+    setNewBlock('')
+    setNewChecklistItems([])
+    setNewChecklistInput('')
+    clearCreateError()
+  }
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,18 +122,21 @@ export default function ProjectTasksPage() {
     if (!trimmed) return
 
     const body: Record<string, unknown> = { title: trimmed, priority: newPriority }
+    if (newDescription.trim()) body.description = newDescription.trim()
     if (newDueDate) body.dueDate = newDueDate
     if (newOwner) body.ownerId = newOwner
+    if (newReviewer) body.reviewerId = newReviewer
+    if (newMilestone) body.milestoneId = newMilestone
+    if (newSharepointUrl.trim()) body.sharepointUrl = newSharepointUrl.trim()
+    if (newDiscipline.trim()) body.discipline = newDiscipline.trim()
+    if (newBlock.trim()) body.block = newBlock.trim()
+    if (newChecklistItems.length > 0) body.checklistItems = newChecklistItems
 
     const result = await createTask(body)
     if (result) {
       toast(`Task "${trimmed}" created`, 'success')
-      setNewTitle('')
-      setNewPriority('MEDIUM')
-      setNewDueDate('')
-      setNewOwner('')
+      resetCreateForm()
       setShowCreateForm(false)
-      clearCreateError()
       fetchTasks()
     } else {
       toast(createError || 'Failed to create task', 'error')
@@ -109,11 +145,7 @@ export default function ProjectTasksPage() {
 
   const cancelCreate = () => {
     setShowCreateForm(false)
-    setNewTitle('')
-    setNewPriority('MEDIUM')
-    setNewDueDate('')
-    setNewOwner('')
-    clearCreateError()
+    resetCreateForm()
   }
 
   const fetchTasks = useCallback(async () => {
@@ -139,7 +171,7 @@ export default function ProjectTasksPage() {
     fetchTasks()
   }, [fetchTasks])
 
-  // Fetch org members for owner dropdown
+  // Fetch org members for owner/reviewer dropdowns
   useEffect(() => {
     fetch('/api/staffing')
       .then(res => res.ok ? res.json() : null)
@@ -153,6 +185,23 @@ export default function ProjectTasksPage() {
       })
       .catch(() => {})
   }, [])
+
+  // Fetch milestones for milestone dropdown
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/milestones`)
+      .then(res => res.ok ? res.json() : null)
+      .then(json => {
+        if (!json?.data?.milestones) return
+        setMilestones(
+          json.data.milestones.map((m: Record<string, unknown>) => ({
+            id: m.id as string,
+            title: m.title as string,
+            status: m.status as string,
+          }))
+        )
+      })
+      .catch(() => {})
+  }, [projectId])
 
   /* ── Filter & sort ──────────────────────────────────── */
 
@@ -363,9 +412,43 @@ export default function ProjectTasksPage() {
             />
           </div>
 
+          {/* Description */}
+          <div>
+            <label htmlFor="task-desc" className="block text-[11px] font-medium text-ink-500 mb-1">
+              Description
+            </label>
+            <textarea
+              id="task-desc"
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              placeholder="Purpose, deliverable, and completion criteria"
+              rows={3}
+              maxLength={5000}
+              className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300 resize-none"
+            />
+          </div>
+
+          {/* Milestone */}
+          <div>
+            <label htmlFor="task-milestone" className="block text-[11px] font-medium text-ink-500 mb-1">
+              Milestone
+            </label>
+            <select
+              id="task-milestone"
+              value={newMilestone}
+              onChange={(e) => setNewMilestone(e.target.value)}
+              className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+            >
+              <option value="">No milestone</option>
+              {milestones.map((m) => (
+                <option key={m.id} value={m.id}>{m.title}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Priority + Due date row */}
-          <div className="flex gap-4">
-            <div className="flex-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label htmlFor="task-priority" className="block text-[11px] font-medium text-ink-500 mb-1">
                 Priority
               </label>
@@ -381,7 +464,7 @@ export default function ProjectTasksPage() {
                 <option value="CRITICAL">Critical</option>
               </select>
             </div>
-            <div className="flex-1">
+            <div>
               <label htmlFor="task-due" className="block text-[11px] font-medium text-ink-500 mb-1">
                 Due date
               </label>
@@ -395,22 +478,140 @@ export default function ProjectTasksPage() {
             </div>
           </div>
 
-          {/* Owner */}
+          {/* Owner + Reviewer row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="task-owner" className="block text-[11px] font-medium text-ink-500 mb-1">
+                Owner
+              </label>
+              <select
+                id="task-owner"
+                value={newOwner}
+                onChange={(e) => setNewOwner(e.target.value)}
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+              >
+                <option value="">Unassigned</option>
+                {projectMembers.map((m) => (
+                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="task-reviewer" className="block text-[11px] font-medium text-ink-500 mb-1">
+                Reviewer
+              </label>
+              <select
+                id="task-reviewer"
+                value={newReviewer}
+                onChange={(e) => setNewReviewer(e.target.value)}
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
+              >
+                <option value="">No reviewer</option>
+                {projectMembers.map((m) => (
+                  <option key={m.id} value={m.id}>{m.fullName}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Discipline + Block row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="task-discipline" className="block text-[11px] font-medium text-ink-500 mb-1">
+                Discipline / Tag
+              </label>
+              <input
+                id="task-discipline"
+                type="text"
+                value={newDiscipline}
+                onChange={(e) => setNewDiscipline(e.target.value)}
+                placeholder="e.g. Structural, M&E, Architecture"
+                maxLength={100}
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
+              />
+            </div>
+            <div>
+              <label htmlFor="task-block" className="block text-[11px] font-medium text-ink-500 mb-1">
+                Block / Building
+              </label>
+              <input
+                id="task-block"
+                type="text"
+                value={newBlock}
+                onChange={(e) => setNewBlock(e.target.value)}
+                placeholder="e.g. Block A, Phase 2"
+                maxLength={100}
+                className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
+              />
+            </div>
+          </div>
+
+          {/* Checklist */}
           <div>
-            <label htmlFor="task-owner" className="block text-[11px] font-medium text-ink-500 mb-1">
-              Owner
+            <label className="block text-[11px] font-medium text-ink-500 mb-1">
+              Checklist
             </label>
-            <select
-              id="task-owner"
-              value={newOwner}
-              onChange={(e) => setNewOwner(e.target.value)}
-              className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 bg-white"
-            >
-              <option value="">Unassigned</option>
-              {projectMembers.map((m) => (
-                <option key={m.id} value={m.id}>{m.fullName}</option>
-              ))}
-            </select>
+            {newChecklistItems.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {newChecklistItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-ink-50 px-3 py-1.5 rounded-lg">
+                    <span className="text-[12px] text-ink-700 flex-1">{item}</span>
+                    <button
+                      type="button"
+                      onClick={() => setNewChecklistItems((prev) => prev.filter((_, i) => i !== idx))}
+                      className="text-ink-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newChecklistInput}
+                onChange={(e) => setNewChecklistInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newChecklistInput.trim()) {
+                    e.preventDefault()
+                    setNewChecklistItems((prev) => [...prev, newChecklistInput.trim()])
+                    setNewChecklistInput('')
+                  }
+                }}
+                placeholder="Type item and press Enter"
+                maxLength={500}
+                className="flex-1 px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newChecklistInput.trim()) {
+                    setNewChecklistItems((prev) => [...prev, newChecklistInput.trim()])
+                    setNewChecklistInput('')
+                  }
+                }}
+                className="px-3 py-2 text-[12px] font-medium bg-ink-100 text-ink-600 rounded-lg hover:bg-ink-200 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          {/* SharePoint / Document Link */}
+          <div>
+            <label htmlFor="task-sharepoint" className="block text-[11px] font-medium text-ink-500 mb-1">
+              SharePoint / Document Link
+            </label>
+            <input
+              id="task-sharepoint"
+              type="url"
+              value={newSharepointUrl}
+              onChange={(e) => setNewSharepointUrl(e.target.value)}
+              placeholder="https://yourcompany.sharepoint.com/..."
+              maxLength={2000}
+              className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-300"
+            />
           </div>
 
           {/* Error */}
@@ -515,13 +716,16 @@ export default function ProjectTasksPage() {
                   {task.taskNumber}
                 </span>
 
-                {/* Title + owner */}
+                {/* Title + owner + milestone */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-medium text-ink-900 truncate group-hover:text-accent-700 transition-colors">
                     {task.title}
                   </p>
                   <p className="text-[11px] text-ink-400 mt-0.5">
                     {task.owner?.fullName || 'Unassigned'}
+                    {task.milestone && (
+                      <span className="text-accent-600"> · {task.milestone.title}</span>
+                    )}
                     {task.stage && <span> · {task.stage.replace(/_/g, ' ')}</span>}
                   </p>
                 </div>

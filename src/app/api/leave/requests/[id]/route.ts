@@ -8,6 +8,7 @@ import { validateLeaveTransition, isRequesterTransition, isApproverTransition, i
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { createApprovalInstance } from '@/lib/approval-engine'
+import { sendLeaveSubmissionEmail } from '@/lib/email'
 import type { RequestStatus } from '@/generated/prisma/client'
 
 const REQUEST_STATUSES = [
@@ -254,6 +255,31 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       body: `${leaveRequest.leaveType} leave — ${leaveRequest.days} day(s)`,
       linkUrl: `/leave?role=approver`,
     }).catch(() => {})
+
+    // BUG-17: Send email notification to the approver/manager
+    prisma.profile.findUnique({
+      where: { id: leaveRequest.approverId },
+      select: {
+        fullName: true,
+        email: true,
+        organisation: { select: { name: true } },
+      },
+    }).then(async (approver: { fullName: string; email: string; organisation: { name: string } | null } | null) => {
+      if (!approver?.email) return
+      const startStr = leaveRequest.startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      const endStr = leaveRequest.endDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      await sendLeaveSubmissionEmail({
+        to: approver.email,
+        managerName: approver.fullName ?? 'Manager',
+        employeeName: requesterName,
+        leaveType: leaveRequest.leaveType,
+        startDate: startStr,
+        endDate: endStr,
+        days: leaveRequest.days,
+        reason: leaveRequest.reason,
+        organisationName: approver.organisation?.name ?? 'your organisation',
+      })
+    }).catch((err: unknown) => console.error('[LEAVE] Email notification failed:', err))
   }
   if (newStatus === 'UNDER_REVIEW') {
     // Notify the requester that more info is needed
@@ -277,6 +303,14 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // ── Approval Engine: create approval instance on SUBMITTED ──
   if (newStatus === 'SUBMITTED') {
+    // Cancel any existing IN_PROGRESS instance for this entity (e.g. re-submit after REQUEST_CHANGES)
+    try {
+      await prisma.approvalInstance.updateMany({
+        where: { entityId: id, status: 'IN_PROGRESS' },
+        data: { status: 'CANCELLED' },
+      })
+    } catch { /* non-critical — table may not exist yet */ }
+
     const approvalRequestType = leaveRequest.leaveType === 'BUSINESS_TRAVEL' ? 'TRAVEL' : 'LEAVE'
     await createApprovalInstance({
       organisationId: profile.organisationId,

@@ -106,6 +106,10 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
     ] as const)
     data.category = category ?? null
   }
+  if ('priority' in body) {
+    const priority = optionalEnum(body.priority, 'Priority', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const)
+    if (priority !== undefined) data.priority = priority
+  }
   if ('stage' in body) data.stage = optionalString(body.stage, 'Stage', 100)
   if ('ownerId' in body) data.ownerId = optionalId(body.ownerId, 'Owner ID')
 

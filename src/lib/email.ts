@@ -31,6 +31,86 @@ interface OnboardingEmailParams {
   outstandingItems?: string[]
 }
 
+interface LeaveSubmissionEmailParams {
+  to: string
+  managerName: string
+  employeeName: string
+  leaveType: string
+  startDate: string
+  endDate: string
+  days: number
+  reason?: string | null
+  organisationName: string
+}
+
+// ── Send Leave Submission Email ──────────────────────────
+
+export async function sendLeaveSubmissionEmail(params: LeaveSubmissionEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { to, managerName, employeeName, leaveType, startDate, endDate, days, reason, organisationName } = params
+
+  try {
+    const { data, error } = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: `Leave request from ${employeeName} — ${leaveType.replace(/_/g, ' ').toLowerCase()}`,
+      html: buildLeaveSubmissionHtml({ managerName, employeeName, leaveType, startDate, endDate, days, reason, organisationName }),
+      text: buildLeaveSubmissionText({ managerName, employeeName, leaveType, startDate, endDate, days, reason, organisationName }),
+    })
+
+    if (error) {
+      console.error('[EMAIL] Resend error (leave):', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, messageId: data?.id }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown email error'
+    console.error('[EMAIL] Send failed (leave):', message)
+    return { success: false, error: message }
+  }
+}
+
+function buildLeaveSubmissionHtml(params: {
+  managerName: string; employeeName: string; leaveType: string
+  startDate: string; endDate: string; days: number; reason?: string | null; organisationName: string
+}): string {
+  const { managerName, employeeName, leaveType, startDate, endDate, days, reason, organisationName } = params
+  const typeLabel = leaveType.replace(/_/g, ' ').toLowerCase()
+  const approveUrl = `${APP_URL}/approvals`
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #1a1a2e;">
+<p style="font-size: 15px; line-height: 1.6;">Hi ${managerName},</p>
+<p style="font-size: 15px; line-height: 1.6;"><strong>${employeeName}</strong> has submitted a <strong>${typeLabel}</strong> request on ${organisationName}.</p>
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px;">
+<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5; color: #666; width: 120px;">Dates</td><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">${startDate} – ${endDate}</td></tr>
+<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5; color: #666;">Duration</td><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">${days} day${days !== 1 ? 's' : ''}</td></tr>
+${reason ? `<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5; color: #666;">Reason</td><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">${reason}</td></tr>` : ''}
+</table>
+<a href="${approveUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 14px;">Review request</a>
+<p style="font-size: 12px; color: #999; margin-top: 24px;">— Coordin.io</p>
+</body></html>`
+}
+
+function buildLeaveSubmissionText(params: {
+  managerName: string; employeeName: string; leaveType: string
+  startDate: string; endDate: string; days: number; reason?: string | null; organisationName: string
+}): string {
+  const { managerName, employeeName, leaveType, startDate, endDate, days, reason, organisationName } = params
+  const typeLabel = leaveType.replace(/_/g, ' ').toLowerCase()
+
+  return `Hi ${managerName},
+
+${employeeName} has submitted a ${typeLabel} request on ${organisationName}.
+
+Dates: ${startDate} – ${endDate}
+Duration: ${days} day${days !== 1 ? 's' : ''}${reason ? `\nReason: ${reason}` : ''}
+
+Review the request: ${APP_URL}/approvals
+
+— Coordin.io`
+}
+
 // ── Send Invitation Email ─────────────────────────────────
 
 export async function sendInvitationEmail(params: InvitationEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {

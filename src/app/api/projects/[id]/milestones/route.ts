@@ -42,6 +42,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
       title: m.title,
       description: m.description,
       category: m.category,
+      priority: (m as Record<string, unknown>).priority ?? 'MEDIUM',
       dueDate: m.dueDate,
       completedDate: m.completedDate,
       status: calculatedStatus,
@@ -73,6 +74,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
     'DESIGN_FREEZE', 'PLANNING', 'CONSTRUCTION', 'OPERATOR_REVIEW',
     'STAGE_GATE', 'HANDOVER', 'CUSTOM',
   ] as const)
+  const priority = optionalEnum(body.priority, 'Priority', ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const)
   const stage = optionalString(body.stage, 'Stage', 100)
   const ownerId = optionalId(body.ownerId, 'Owner ID')
 
@@ -90,6 +92,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
       description,
       dueDate,
       category: category ?? null,
+      priority: priority || 'MEDIUM',
       stage: stage ?? undefined,
       ownerId: ownerId ?? undefined,
       sortOrder: (lastMilestone?.sortOrder ?? 0) + 1,
