@@ -241,5 +241,5 @@ export function PriorityBadge({ priority }: { priority: string }) {
 
 /* ── Export helpers ─────────────────────────────────────── */
 
-export { STATUS_META, VALID_TRANSITIONS }
+export { STATUS_META, VALID_TRANSITIONS, PRIORITY_META }
 export type { TaskStatus }

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
-import { StatusFlow, StatusTransitionDropdown, PriorityBadge } from '@/components/StatusFlow'
+import { StatusFlow, StatusTransitionDropdown, PriorityBadge, PRIORITY_META } from '@/components/StatusFlow'
 import { SkeletonTaskDetail } from '@/components/Skeleton'
 import FileUpload, { type UploadResult } from '@/components/FileUpload'
 
@@ -181,6 +181,7 @@ export default function TaskDetailPage() {
   const [editingDueDate, setEditingDueDate] = useState(false)
   const [dueDateDraft, setDueDateDraft] = useState('')
   const [fieldSaving, setFieldSaving] = useState(false)
+  const [priorityOpen, setPriorityOpen] = useState(false)
   const [newItemMandatory, setNewItemMandatory] = useState(true)
   const [newItemAssignee, setNewItemAssignee] = useState('')
 
@@ -627,7 +628,55 @@ export default function TaskDetailPage() {
         </div>
       </div>
       <div className="flex items-center gap-3 flex-wrap">
-        <PriorityBadge priority={task.priority} />
+        <div className="relative group">
+          <button
+            onClick={() => setPriorityOpen(prev => !prev)}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+            title="Click to change priority"
+            disabled={fieldSaving}
+          >
+            <PriorityBadge priority={task.priority} />
+          </button>
+          {priorityOpen && (
+            <div className="absolute top-full left-0 mt-1 bg-white border border-ink-200 rounded-lg shadow-lg z-20 py-1 min-w-[120px]">
+              {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((p) => {
+                const meta = PRIORITY_META[p]
+                return (
+                  <button
+                    key={p}
+                    onClick={async () => {
+                      if (p === task.priority) { setPriorityOpen(false); return }
+                      setFieldSaving(true)
+                      try {
+                        const res = await fetch(`/api/tasks/${taskId}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ priority: p }),
+                        })
+                        if (!res.ok) throw new Error('Failed to update priority')
+                        setTask(prev => prev ? { ...prev, priority: p } : prev)
+                        toast('Priority updated', 'success')
+                      } catch {
+                        toast('Failed to update priority', 'error')
+                      }
+                      setFieldSaving(false)
+                      setPriorityOpen(false)
+                    }}
+                    disabled={fieldSaving}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium hover:bg-ink-50 transition-colors text-left',
+                      meta?.color,
+                      p === task.priority && 'bg-ink-50',
+                    )}
+                  >
+                    <span className={cn('w-1.5 h-1.5 rounded-full', meta?.dotColor)} />
+                    {meta?.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
         {task.stage && (
           <span className="text-[11px] text-ink-400 bg-ink-50 px-2 py-0.5 rounded-full">
             {task.stage.replace(/_/g, ' ')}
