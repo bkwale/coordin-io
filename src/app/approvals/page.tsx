@@ -125,37 +125,27 @@ export default function ApprovalsPage() {
     setLoading(true)
     setError(null)
     try {
-      // Fetch leave requests pending this user's approval
-      const leaveRes = await fetch('/api/leave/requests?role=approver')
-      const leaveData = await leaveRes.json()
+      // Fetch all three sources in parallel — they're independent
+      const [leaveRes, expResult, engineResult] = await Promise.allSettled([
+        fetch('/api/leave/requests?role=approver').then(r => r.json()),
+        fetch('/api/expenses?role=approver').then(r => r.json()),
+        fetch('/api/approvals').then(r => r.json()),
+      ])
 
-      const leaveItems: ApprovalRequest[] = (leaveData?.data?.requests ?? []).map(
-        (r: ApprovalRequest) => ({ ...r, type: 'leave' as const })
-      )
+      const leaveItems: ApprovalRequest[] =
+        leaveRes.status === 'fulfilled'
+          ? (leaveRes.value?.data?.requests ?? []).map((r: ApprovalRequest) => ({ ...r, type: 'leave' as const }))
+          : []
 
-      // Fetch expense claims pending approval
-      let expenseItems: ApprovalRequest[] = []
-      try {
-        const expRes = await fetch('/api/expenses?role=approver')
-        const expData = await expRes.json()
-        expenseItems = (expData?.data?.claims ?? []).map(
-          (r: ApprovalRequest) => ({ ...r, type: 'expense' as const })
-        )
-      } catch {
-        // Expense approver endpoint may not exist yet — skip
-      }
+      const expenseItems: ApprovalRequest[] =
+        expResult.status === 'fulfilled'
+          ? (expResult.value?.data?.claims ?? []).map((r: ApprovalRequest) => ({ ...r, type: 'expense' as const }))
+          : []
 
       setRequests([...leaveItems, ...expenseItems])
 
-      // Also fetch approval engine items (BUG-20: unified data source)
-      try {
-        const engineRes = await fetch('/api/approvals')
-        if (engineRes.ok) {
-          const engineData = await engineRes.json()
-          setEngineApprovals(engineData?.data?.approvals ?? [])
-        }
-      } catch {
-        // Non-critical — engine approvals may not exist yet
+      if (engineResult.status === 'fulfilled') {
+        setEngineApprovals(engineResult.value?.data?.approvals ?? [])
       }
     } catch {
       setError('Failed to load approvals')

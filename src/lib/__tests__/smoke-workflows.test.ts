@@ -53,6 +53,7 @@ const ctx = vi.hoisted(() => {
       organisation: m(),
       asset: m(),
       assetAssignment: m(),
+      approvalInstance: m(),
       $transaction: vi.fn().mockImplementation(async (fn: any) => {
         if (typeof fn === 'function') return fn(ctx.prisma)
         return Promise.all(fn)
@@ -712,6 +713,51 @@ describe('Smoke Workflows', () => {
           type: 'leave.requested',
         }),
       )
+    })
+
+    it('PATCH to SUBMITTED cancels stale IN_PROGRESS approval instances', async () => {
+      const profile = createMockProfile({ id: 'profile-1' })
+      ctx.profileRef.current = profile
+
+      const leaveRequest = createMockLeaveRequest({
+        id: 'leave-1',
+        profileId: 'profile-1',
+        status: 'UNDER_REVIEW',
+        approverId: 'manager-1',
+        leaveType: 'ANNUAL',
+        days: 3,
+        profile: { organisationId: 'org-1', managerId: 'manager-1' },
+      })
+
+      ctx.prisma.leaveRequest.findUnique.mockResolvedValue(leaveRequest)
+      ctx.prisma.leaveRequest.update.mockResolvedValue({
+        ...leaveRequest,
+        status: 'SUBMITTED',
+        profile: { id: 'profile-1', fullName: 'Test User' },
+        approver: { id: 'manager-1', fullName: 'Manager' },
+      })
+      ctx.prisma.approvalInstance.updateMany.mockResolvedValue({ count: 1 })
+
+      // isRequesterTransition returns false for SUBMITTED normally,
+      // but the route has a special case for UNDER_REVIEW → SUBMITTED
+      const { isRequesterTransition } = await import('@/lib/request-transitions')
+      ;(isRequesterTransition as any).mockReturnValue(false)
+
+      const { PATCH } = await import('@/app/api/leave/requests/[id]/route')
+      const req = createMockRequest({
+        method: 'PATCH',
+        url: 'http://localhost/api/leave/requests/leave-1',
+        body: { status: 'SUBMITTED' },
+      })
+
+      const res = await PATCH(req)
+      expect(res.status).toBe(200)
+
+      // Verify stale IN_PROGRESS instances were cancelled
+      expect(ctx.prisma.approvalInstance.updateMany).toHaveBeenCalledWith({
+        where: { entityId: 'leave-1', status: 'IN_PROGRESS' },
+        data: { status: 'CANCELLED' },
+      })
     })
 
     it('PATCH to APPROVED decrements balance for annual leave', async () => {

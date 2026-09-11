@@ -92,11 +92,29 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
   if (status && status !== currentTask.status) {
     validateTaskTransition(currentTask.status as TaskStatus, status as TaskStatus)
 
-    // Moving to READY_FOR_REVIEW requires a reviewer to be assigned
+    // Moving to READY_FOR_REVIEW requires owner + reviewer to be assigned
     if (status === 'READY_FOR_REVIEW') {
+      const effectiveOwnerId = ownerId !== undefined ? ownerId : currentTask.ownerId
+      if (!effectiveOwnerId) {
+        throw new ValidationError('An owner must be assigned before submitting for review')
+      }
       const effectiveReviewerId = reviewerId !== undefined ? reviewerId : currentTask.reviewerId
       if (!effectiveReviewerId) {
         throw new ValidationError('A reviewer must be assigned before submitting for review')
+      }
+    }
+
+    // Moving to COMPLETED requires all mandatory checklist items to be done
+    if (status === 'COMPLETED') {
+      const checklistItems = await prisma.taskChecklistItem.findMany({
+        where: { taskId: taskId },
+        select: { mandatory: true, completed: true },
+      })
+      const incomplete = checklistItems.filter(ci => ci.mandatory && !ci.completed)
+      if (incomplete.length > 0) {
+        throw new ValidationError(
+          `Cannot complete task: ${incomplete.length} mandatory checklist item(s) are not done`,
+        )
       }
     }
 

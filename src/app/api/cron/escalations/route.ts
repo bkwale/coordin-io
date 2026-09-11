@@ -22,6 +22,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await processEscalations()
+
+    console.log(
+      `[CRON] Escalations: ${result.processed} processed, ${result.escalated} escalated, ${result.errors} errors`,
+    )
+
     return NextResponse.json({
       ok: true,
       ...result,
