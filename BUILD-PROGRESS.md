@@ -867,3 +867,18 @@ Both numbering schemes use stable creation-order positioning (ordered by `create
 | Tests | `src/lib/__tests__/task-numbering.test.ts` | 13 unit tests covering all utility functions |
 
 **Verification:** 0 type errors. 1435 tests passing. Commit 2dfa553 pushed.
+
+---
+
+### HR Project Creation Permission (COMPLETE)
+
+**Problem:** HR users could not create projects — the `canPerform` matrix excluded HR from `projects:create` and `projects:edit_own`, even though the API route's `hasOrgPermission` hierarchy already allowed it (HR tier 3 ≥ MANAGER tier 2).
+
+**Fix:** Added `'HR'` to both `projects:create` and `projects:edit_own` Sets in the canPerform matrix. Updated permission matrix test to expect HR=true for project creation.
+
+| Component | File | Change |
+|-----------|------|--------|
+| Permission matrix | `src/lib/role-permissions.ts` | Added HR to `projects:create` and `projects:edit_own` |
+| Tests | `src/lib/__tests__/permission-matrix.test.ts` | Updated HR expectation from false → true |
+
+**Verification:** 0 type errors. 198 permission tests passing. Commit d78a4f4 pushed.
