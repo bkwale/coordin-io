@@ -501,7 +501,7 @@ describe('Permission Matrix', () => {
     it.each([
       ['OWNER', true],
       ['ADMIN', true],
-      ['HR', false],
+      ['HR', true],
       ['LEGAL', false],
       ['FINANCE', false],
       ['COMMERCIAL', false],

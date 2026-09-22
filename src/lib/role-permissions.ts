@@ -137,8 +137,8 @@ const MATRIX: PermissionMatrix = {
   // All lateral roles can view assigned projects; view_all for those who need cross-project visibility
   'projects:view_assigned':       new Set(['MEMBER', 'MANAGER', 'HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
   'projects:view_all':            new Set(['HR', 'LEGAL', 'FINANCE', 'COMMERCIAL', 'ADMIN', 'OWNER']),
-  'projects:create':              new Set(['MANAGER', 'ADMIN', 'OWNER']),
-  'projects:edit_own':            new Set(['MANAGER', 'ADMIN', 'OWNER']),
+  'projects:create':              new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
+  'projects:edit_own':            new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'projects:edit':                new Set(['ADMIN', 'OWNER']),
   'projects:archive':             new Set(['ADMIN', 'OWNER']),
   'projects:delete':              new Set(['OWNER']),
