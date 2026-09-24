@@ -197,6 +197,19 @@ const MILESTONE_STATUS_META: Record<string, { label: string; color: string; bgCo
   CANCELLED: { label: 'Cancelled', color: 'text-ink-400', bgColor: 'bg-ink-50', dotColor: 'bg-ink-300' },
 }
 
+const PROJECT_TYPE_LABELS: Record<string, string> = {
+  HOTEL: 'Hotel',
+  RESIDENTIAL: 'Residential',
+  MIXED_USE: 'Mixed Use',
+  RESORT: 'Resort',
+  REFURBISHMENT: 'Refurbishment',
+  OFFICE_FIT_OUT: 'Office Fit-Out',
+  RELIGIOUS_BUILDING: 'Religious Building',
+  MASTER_PLAN: 'Master Plan',
+  TRANSPORT: 'Transport',
+  OTHER: 'Other',
+}
+
 const DEV_TYPE_LABELS: Record<string, string> = {
   NEW_BUILD: 'New Build',
   CONVERSION: 'Conversion',
@@ -1276,6 +1289,7 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
     siteCity: project.siteCity || '',
     siteCountry: project.siteCountry || '',
     clientBrand: project.clientBrand || '',
+    projectType: project.projectType,
     stage: project.stage,
     status: project.status,
     developmentType: project.developmentType || '',
@@ -1309,6 +1323,7 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
       if (form.siteCity !== (project.siteCity || '')) body.siteCity = form.siteCity || null
       if (form.siteCountry !== (project.siteCountry || '')) body.siteCountry = form.siteCountry || null
       if (form.clientBrand !== (project.clientBrand || '')) body.clientBrand = form.clientBrand || null
+      if (form.projectType !== project.projectType) body.projectType = form.projectType
       if (form.stage !== project.stage) body.stage = form.stage
       if (form.status !== project.status) body.status = form.status
       if (form.developmentType !== (project.developmentType || '')) body.developmentType = form.developmentType || null
@@ -1373,6 +1388,25 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
             <div>
               <label className="block text-[12px] font-medium text-ink-600 mb-1">Description</label>
               <textarea value={form.description} onChange={set('description')} rows={3} className={cn(inputClass, 'resize-none')} />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Project type</label>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const pti = getProjectTypeIcon(form.projectType)
+                  const PtIcon = pti.icon
+                  return (
+                    <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', pti.bg)}>
+                      <PtIcon className={cn('w-4 h-4', pti.fg)} />
+                    </div>
+                  )
+                })()}
+                <select value={form.projectType} onChange={set('projectType')} className={cn(inputClass, 'flex-1')}>
+                  {Object.entries(PROJECT_TYPE_LABELS).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-[12px] font-medium text-ink-600 mb-1">Client / Brand</label>
