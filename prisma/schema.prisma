@@ -596,6 +596,10 @@ enum ProjectType {
   RESORT
   REFURBISHMENT
   OFFICE_FIT_OUT
+  RELIGIOUS_BUILDING
+  MASTER_PLAN
+  TRANSPORT
+  OTHER
 }
 
 enum ProjectStage {

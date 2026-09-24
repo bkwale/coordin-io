@@ -444,7 +444,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       stages: ['BRIEF', 'CONCEPT', 'SPATIAL_COORDINATION', 'WORKING_DRAWINGS', 'CONSTRUCTION', 'HANDOVER', 'OPERATIONS'],
       statuses: ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'],
       healthStatuses: ['GREEN', 'AMBER', 'RED'],
-      sectors: ['HOTEL', 'RESIDENTIAL', 'MIXED_USE', 'RESORT', 'REFURBISHMENT', 'OFFICE_FIT_OUT'],
+      sectors: ['HOTEL', 'RESIDENTIAL', 'MIXED_USE', 'RESORT', 'REFURBISHMENT', 'OFFICE_FIT_OUT', 'RELIGIOUS_BUILDING', 'MASTER_PLAN', 'TRANSPORT', 'OTHER'],
     },
   })
 })

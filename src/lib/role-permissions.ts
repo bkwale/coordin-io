@@ -140,7 +140,7 @@ const MATRIX: PermissionMatrix = {
   'projects:create':              new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'projects:edit_own':            new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'projects:edit':                new Set(['ADMIN', 'OWNER']),
-  'projects:archive':             new Set(['ADMIN', 'OWNER']),
+  'projects:archive':             new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'projects:delete':              new Set(['OWNER']),
 
   // ── Tasks ──

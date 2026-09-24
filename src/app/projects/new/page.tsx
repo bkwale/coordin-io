@@ -39,6 +39,10 @@ const PROJECT_TYPES = [
   { value: 'RESORT', label: 'Resort' },
   { value: 'REFURBISHMENT', label: 'Refurbishment' },
   { value: 'OFFICE_FIT_OUT', label: 'Office Fit-Out' },
+  { value: 'RELIGIOUS_BUILDING', label: 'Religious Building' },
+  { value: 'MASTER_PLAN', label: 'Master Plan' },
+  { value: 'TRANSPORT', label: 'Transport' },
+  { value: 'OTHER', label: 'Other' },
 ]
 
 const CURRENCIES = [

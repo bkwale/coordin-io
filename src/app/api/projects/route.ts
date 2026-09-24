@@ -53,7 +53,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const code = optionalString(body.code, 'Project code', 50)
   const description = optionalString(body.description, 'Description', 5000)
   const projectType = optionalEnum(body.projectType, 'Project type', [
-    'HOTEL', 'RESIDENTIAL', 'MIXED_USE', 'RESORT', 'REFURBISHMENT', 'OFFICE_FIT_OUT',
+    'HOTEL', 'RESIDENTIAL', 'MIXED_USE', 'RESORT', 'REFURBISHMENT', 'OFFICE_FIT_OUT', 'RELIGIOUS_BUILDING', 'MASTER_PLAN', 'TRANSPORT', 'OTHER',
   ] as const)
   const clientBrand = optionalString(body.clientBrand, 'Client name', 200)
   const clientType = optionalString(body.clientType, 'Client type', 50)

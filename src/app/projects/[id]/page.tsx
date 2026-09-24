@@ -9,8 +9,9 @@ import {
   CheckCircle2, Clock, Eye, PauseCircle,
   Plus, X, Loader2, Building2, Shield,
   Milestone, MessageSquare, Target, CalendarDays,
-  Pencil, ExternalLink, BarChart3,
+  Pencil, ExternalLink, BarChart3, Archive, Trash2,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
 import { TaskStatusBadge } from '@/components/StatusFlow'
@@ -240,6 +241,11 @@ export default function ProjectDashboard() {
   const [editingMilestone, setEditingMilestone] = useState<{id: string; title: string; description?: string; dueDate: string; category?: string} | null>(null)
   const [showUpdateForm, setShowUpdateForm] = useState(false)
 
+  // Archive / delete state
+  const router = useRouter()
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+
   // Add member state
   const [showAddMember, setShowAddMember] = useState(false)
   const [newMemberId, setNewMemberId] = useState('')
@@ -406,13 +412,74 @@ export default function ProjectDashboard() {
             )}
           </div>
         </div>
-        <button
-          onClick={() => setShowProjectEdit(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors"
-        >
-          <Pencil className="w-3.5 h-3.5" /> Edit project
-        </button>
+        <div className="flex items-center gap-2">
+          {project.status !== 'ARCHIVED' && (
+            <button
+              onClick={() => setShowArchiveConfirm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 text-[12px] font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              <Archive className="w-3.5 h-3.5" /> Archive
+            </button>
+          )}
+          <button
+            onClick={() => setShowProjectEdit(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-200 text-[12px] font-medium text-ink-600 hover:bg-ink-50 transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" /> Edit project
+          </button>
+        </div>
       </div>
+
+      {/* ── Archive Confirmation Modal ──────────────────── */}
+      {showArchiveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Archive className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-[16px] font-semibold text-ink-900">Archive project</h3>
+                <p className="text-[12px] text-ink-500">This will hide the project from active views</p>
+              </div>
+            </div>
+            <p className="text-[13px] text-ink-600 mb-6">
+              Are you sure you want to archive <strong>{project.name}</strong>? The project and its data will be preserved but moved to archived status. You can restore it later by changing its status back to Active.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowArchiveConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-ink-200 text-[13px] font-medium text-ink-600 hover:bg-ink-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setArchiving(true)
+                  try {
+                    const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+                    if (!res.ok) {
+                      const err = await res.json().catch(() => ({}))
+                      throw new Error(err.error || 'Failed to archive project')
+                    }
+                    toast('Project archived', 'success')
+                    router.push('/projects')
+                  } catch (err: any) {
+                    toast(err.message || 'Failed to archive project', 'error')
+                  } finally {
+                    setArchiving(false)
+                    setShowArchiveConfirm(false)
+                  }
+                }}
+                disabled={archiving}
+                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-[13px] font-medium hover:bg-amber-700 disabled:opacity-50"
+              >
+                {archiving ? 'Archiving...' : 'Archive project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Project Summary Card ────────────────────────── */}
       <div className="bg-white rounded-xl border border-ink-100 p-5">
