@@ -17,6 +17,7 @@ import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
 import { TaskStatusBadge } from '@/components/StatusFlow'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
+import { getProjectTypeIcon } from '@/lib/project-icons'
 
 /* ── Types ────────────────────────────────────────────── */
 
@@ -375,7 +376,18 @@ export default function ProjectDashboard() {
     <div className="space-y-6">
       {/* ── Project header ──────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
+        <div className="flex items-start gap-3">
+          {/* Project type icon */}
+          {(() => {
+            const pti = getProjectTypeIcon(project.projectType)
+            const PtIcon = pti.icon
+            return (
+              <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5', pti.bg)}>
+                <PtIcon className={cn('w-5 h-5', pti.fg)} />
+              </div>
+            )
+          })()}
+          <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-[20px] font-semibold text-ink-900">{project.name}</h1>
             <span className={cn(
@@ -410,6 +422,7 @@ export default function ProjectDashboard() {
                 </a>
               </>
             )}
+          </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

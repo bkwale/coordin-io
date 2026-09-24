@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { FolderOpen, Plus, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getProjectTypeIcon } from '@/lib/project-icons'
 
 interface Project {
   id: string
@@ -12,6 +13,7 @@ interface Project {
   stage: string
   healthStatus: string
   status: string
+  projectType: string
   client: string | null
   createdAt: string
 }
@@ -117,11 +119,22 @@ export default function ProjectsPage() {
               className="bg-white rounded-xl border border-ink-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all group"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-ink-900 truncate group-hover:text-accent-700 transition-colors">
-                    {project.name}
-                  </p>
-                  <p className="text-[11px] text-ink-400 mt-0.5">{project.code}</p>
+                <div className="flex items-start gap-3 min-w-0">
+                  {(() => {
+                    const pti = getProjectTypeIcon(project.projectType)
+                    const PtIcon = pti.icon
+                    return (
+                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', pti.bg)}>
+                        <PtIcon className={cn('w-4 h-4', pti.fg)} />
+                      </div>
+                    )
+                  })()}
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-semibold text-ink-900 truncate group-hover:text-accent-700 transition-colors">
+                      {project.name}
+                    </p>
+                    <p className="text-[11px] text-ink-400 mt-0.5">{project.code}</p>
+                  </div>
                 </div>
                 <span className={cn(
                   'w-2.5 h-2.5 rounded-full shrink-0 mt-1',

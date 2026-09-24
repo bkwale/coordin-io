@@ -10,6 +10,7 @@ import {
   ArrowUpRight, X, Layers, Info,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getProjectTypeIcon } from '@/lib/project-icons'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -528,11 +529,22 @@ export default function PortfolioAnalyticsPage() {
                     {/* Project name */}
                     <td className="px-5 py-3 sticky left-0 bg-white z-10">
                       <div className="flex items-center gap-2.5">
-                        <span className={cn('w-2 h-2 rounded-full shrink-0', ragDot(project.rag.overall))} />
+                        {(() => {
+                          const pti = getProjectTypeIcon(project.projectType)
+                          const PtIcon = pti.icon
+                          return (
+                            <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', pti.bg)}>
+                              <PtIcon className={cn('w-3.5 h-3.5', pti.fg)} />
+                            </div>
+                          )
+                        })()}
                         <div className="min-w-0">
-                          <p className="text-[12px] font-medium text-ink-800 truncate max-w-[200px]">
-                            {project.code ? `${project.code} - ` : ''}{project.name}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', ragDot(project.rag.overall))} />
+                            <p className="text-[12px] font-medium text-ink-800 truncate max-w-[200px]">
+                              {project.code ? `${project.code} - ` : ''}{project.name}
+                            </p>
+                          </div>
                           <p className="text-[10px] text-ink-400">
                             {stageLabel(project.stage)}
                             {project.officeName ? ` | ${project.officeName}` : ''}

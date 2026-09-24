@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
+import { getProjectTypeIcon } from '@/lib/project-icons'
 
 // ═══════════════════════════════════════════════════════
 // Static configuration — dropdown options & step metadata
@@ -990,7 +991,21 @@ export default function NewProjectPage() {
               {form.code && <Row label="Code" value={form.code} />}
               {form.clientBrand && <Row label="Client" value={form.clientBrand} />}
               {form.clientType && <Row label="Client Type" value={CLIENT_TYPES.find(t => t.value === form.clientType)?.label || form.clientType} />}
-              {form.projectType && <Row label="Project Type" value={PROJECT_TYPES.find(t => t.value === form.projectType)?.label || form.projectType} />}
+              {form.projectType && (() => {
+                const pti = getProjectTypeIcon(form.projectType)
+                const PtIcon = pti.icon
+                return (
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-[12px] text-ink-500">Project Type</span>
+                    <span className="flex items-center gap-2 text-[12px] text-ink-800 font-medium">
+                      <span className={cn('w-5 h-5 rounded flex items-center justify-center', pti.bg)}>
+                        <PtIcon className={cn('w-3 h-3', pti.fg)} />
+                      </span>
+                      {PROJECT_TYPES.find(t => t.value === form.projectType)?.label || form.projectType}
+                    </span>
+                  </div>
+                )
+              })()}
               {form.currency && <Row label="Currency" value={form.currency} />}
               {form.startDate && <Row label="Start Date" value={new Date(form.startDate).toLocaleDateString('en-GB')} />}
               {form.targetCompletion && <Row label="Target Completion" value={new Date(form.targetCompletion).toLocaleDateString('en-GB')} />}
