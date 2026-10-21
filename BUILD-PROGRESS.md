@@ -904,3 +904,12 @@ Focused release series addressing data integrity gaps, permission model consiste
 **TR-9 Architecture:** `ConfidentialEmployeeData` model in Prisma with `@unique` profileId. API reads prefer new table with fallback to legacy `EmployeeProfile` fields. PATCH handler dual-writes to both tables. Bare `catch {}` blocks narrowed to only swallow "relation does not exist" errors (P2021) — all other errors propagate. Audit log checks both data sources. Supabase migration: table + data copy + RLS + `updated_at` trigger.
 
 **Verification:** 0 type errors. All tests passing. Trust Releases committed and deployed across multiple commits through cc6cd3c.
+
+### Trust Release 10 — Auth Hardening: Block Deactivated Users
+| Feature | File | Status |
+|---------|------|--------|
+| Block DEACTIVATED users in withAuth middleware | `src/lib/with-auth.ts` | DONE |
+
+**What:** Added status check after profile lookup in `withAuth`. If `profile.status === 'DEACTIVATED'`, the request is rejected with 403 "Your account has been deactivated." This closes the gap where flipping a user to DEACTIVATED did not actually prevent API access.
+
+**Why:** Offboarding requirement — setting an employee to Inactive/Deactivated must block all access. Previously, `withAuth` only checked session validity and permissions, not employment status.

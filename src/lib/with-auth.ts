@@ -79,6 +79,14 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
         )
       }
 
+      // 3b. Block deactivated accounts
+      if (profile.status === 'DEACTIVATED') {
+        throw new AuthError(
+          'Your account has been deactivated. Please contact your administrator.',
+          'AUTH_REQUIRED',
+        )
+      }
+
       // 4. Check permissions — prefer capability check, fall back to tier check
       if (options.requiredCapability) {
         const { feature, action } = options.requiredCapability
