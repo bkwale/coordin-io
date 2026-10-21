@@ -882,3 +882,25 @@ Both numbering schemes use stable creation-order positioning (ordered by `create
 | Tests | `src/lib/__tests__/permission-matrix.test.ts` | Updated HR expectation from false → true |
 
 **Verification:** 0 type errors. 198 permission tests passing. Commit d78a4f4 pushed.
+
+### Trust Release Series — Data Integrity & UX Hardening (COMPLETE)
+
+Focused release series addressing data integrity gaps, permission model consistency, and UX trust signals. Each release ships vertically: API + UI + Crispin QA verification.
+
+| Release | Scope | Key Changes | Status |
+|---------|-------|-------------|--------|
+| TR-1 | Profile discoverability | My Profile link in sidebar + clickable names throughout staffing/team views | Done |
+| TR-2 | Checklist deletion | DELETE endpoint for checklist items + trash icon in task detail UI | Done |
+| TR-3 | Leave → availability sync | Approved leave auto-reflects in team calendar availability view | Done |
+| TR-4 | Location field validation | City/state/country separation — structured address fields replace freetext | Done |
+| TR-5 | Milestone date validation | Milestone dates validated against parent project start/end dates | Done |
+| TR-6 | Re-approval guard | Approved records (leave, expenses) cannot be re-submitted through approval engine | Done |
+| TR-7 | Archive pre-check | Project archive blocked when open tasks, pending approvals, or unresolved snags exist | Done |
+| TR-8 | Unify permission model | `hasOrgPermission` made internal-only; `canPerform` is the single public API for all route-level checks. `withAuth` supports `requiredCapability: { feature, action }` alongside deprecated `requiredPermission` | Done |
+| TR-9 | HR data separation | New `ConfidentialEmployeeData` table isolates salary/benefits/pension/HMO. Three-layer protection: (1) separate table, (2) application-level `showConfidential` checks, (3) Supabase RLS `service_role_only` policy. Dual-write for backward compatibility. | Done |
+
+**TR-8 Architecture:** Two permission systems consolidated. `hasOrgPermission()` uses tier-based hierarchy (useful for "is this role at least as powerful as X?" checks) but is now internal to `with-auth.ts`. All route handlers use `canPerform(role, feature, action)` via `requiredCapability` in `withAuth()` options. `hasFullStaffingAccess()` and other staffing utils already used `canPerform` — no change needed there.
+
+**TR-9 Architecture:** `ConfidentialEmployeeData` model in Prisma with `@unique` profileId. API reads prefer new table with fallback to legacy `EmployeeProfile` fields. PATCH handler dual-writes to both tables. Bare `catch {}` blocks narrowed to only swallow "relation does not exist" errors (P2021) — all other errors propagate. Audit log checks both data sources. Supabase migration: table + data copy + RLS + `updated_at` trigger.
+
+**Verification:** 0 type errors. All tests passing. Trust Releases committed and deployed across multiple commits through cc6cd3c.
