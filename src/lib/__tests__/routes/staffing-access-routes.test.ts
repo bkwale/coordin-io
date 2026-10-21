@@ -46,6 +46,7 @@ const ctx = vi.hoisted(() => {
       auditEvent: m(),
       cPDRecord: m(),
       assetAssignment: m(),
+      confidentialEmployeeData: m(),
       $transaction: vi.fn(),
     },
     profileRef: { current: null as any },

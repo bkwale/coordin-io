@@ -553,9 +553,9 @@ describe('Permission Matrix', () => {
       },
     )
 
-    it('only OWNER can edit org settings', () => {
+    it('only OWNER and ADMIN can edit org settings', () => {
       expect(canPerform('OWNER', 'settings', 'edit_org_settings')).toBe(true)
-      expect(canPerform('ADMIN', 'settings', 'edit_org_settings')).toBe(false)
+      expect(canPerform('ADMIN', 'settings', 'edit_org_settings')).toBe(true)
       for (const role of [...LATERAL_ROLES, 'MANAGER', 'MEMBER', 'VIEWER'] as OrgPermission[]) {
         expect(canPerform(role, 'settings', 'edit_org_settings')).toBe(false)
       }
