@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
-import { hasOrgPermission } from '@/lib/permissions'
+import { canPerform } from '@/lib/role-permissions'
 import { computeEffectiveHealth } from '@/lib/dashboard-health'
 import type { TaskStatus } from '@/generated/prisma/client'
 
@@ -15,7 +15,7 @@ import type { TaskStatus } from '@/generated/prisma/client'
  */
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   const orgId = profile.organisationId
-  const isAdmin = hasOrgPermission(profile.orgPermission, 'ADMIN')
+  const isAdmin = canPerform(profile.orgPermission, 'projects', 'view_all')
   const now = new Date()
 
   // ── Start of current week (Monday 00:00:00 UTC) ──────────

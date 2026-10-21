@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getProfileByAuthId, hasOrgPermission } from '@/lib/permissions'
+import { canPerform, type Feature, type Action } from '@/lib/role-permissions'
 import { AuthError, PermissionError, formatAPIError } from '@/lib/errors'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -16,8 +17,13 @@ export interface AuthContext {
 }
 
 interface WithAuthOptions {
-  /** Minimum org permission required (default: any authenticated user) */
+  /**
+   * @deprecated Use requiredCapability instead for feature:action checks.
+   * Kept for backward compatibility — falls back to tier-based hierarchy check.
+   */
   requiredPermission?: OrgPermission
+  /** Feature:action capability check using the unified canPerform matrix */
+  requiredCapability?: { feature: Feature; action: Action }
   /** Skip rate limiting for this route (default: false) */
   skipRateLimit?: boolean
 }
@@ -73,8 +79,15 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
         )
       }
 
-      // 4. Check org-level permission if required
-      if (options.requiredPermission) {
+      // 4. Check permissions — prefer capability check, fall back to tier check
+      if (options.requiredCapability) {
+        const { feature, action } = options.requiredCapability
+        if (!canPerform(profile.orgPermission, feature, action)) {
+          throw new PermissionError(
+            `You do not have permission to perform ${feature}:${action}`,
+          )
+        }
+      } else if (options.requiredPermission) {
         if (!hasOrgPermission(profile.orgPermission, options.requiredPermission)) {
           throw new PermissionError(
             `This action requires ${options.requiredPermission} permission or above`,

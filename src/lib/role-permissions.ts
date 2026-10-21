@@ -122,6 +122,7 @@ export type Action =
   | 'assign_assets'
   // Audit
   | 'view_audit'
+  | 'view_all'    // audit:view_all — unfiltered access (ADMIN + OWNER only)
   | 'export_audit'
 
 // ── Permission Matrix ──────────────────────────────────────
@@ -216,6 +217,7 @@ const MATRIX: PermissionMatrix = {
 
   // ── Audit Trail ──
   'audit:view_audit':             new Set(['HR', 'LEGAL', 'FINANCE', 'ADMIN', 'OWNER']),
+  'audit:view_all':               new Set(['ADMIN', 'OWNER']),  // Unfiltered — all events, not domain-scoped
   'audit:export_audit':           new Set(['HR', 'LEGAL', 'FINANCE', 'ADMIN', 'OWNER']),
 
   // ── Knowledge Base ──
@@ -225,7 +227,7 @@ const MATRIX: PermissionMatrix = {
 
   // ── Settings ── (no lateral role gets system settings)
   'settings:view_org_settings':   new Set(['ADMIN', 'OWNER']),
-  'settings:edit_org_settings':   new Set(['OWNER']),
+  'settings:edit_org_settings':   new Set(['ADMIN', 'OWNER']),
   'settings:manage_team':         new Set(['HR', 'ADMIN', 'OWNER']),
   'settings:billing_currency':    new Set(['OWNER']),
   'settings:integrations':        new Set(['ADMIN', 'OWNER']),

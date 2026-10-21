@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
-import { hasOrgPermission } from '@/lib/permissions'
+
 import { canPerform } from '@/lib/role-permissions'
 import { HR_VISIBLE_PREFIXES, AUDIT_ACTION_LABELS, getAuditPrefixesForRole } from '@/lib/audit'
 import { PermissionError } from '@/lib/errors'
@@ -40,7 +40,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 100)
   const offset = parseInt(url.searchParams.get('offset') || '0', 10)
 
-  const isFullAccess = hasOrgPermission(profile.orgPermission, 'ADMIN')
+  const isFullAccess = canPerform(profile.orgPermission, 'audit', 'view_all')
   const rolePrefixes = getAuditPrefixesForRole(profile.orgPermission)
 
   // Build where clause

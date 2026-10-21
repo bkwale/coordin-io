@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
-import { hasOrgPermission } from '@/lib/permissions'
+import { canPerform } from '@/lib/role-permissions'
 import { modulesPrisma } from '@/lib/prisma-modules'
 
 /**
@@ -20,7 +20,7 @@ import { modulesPrisma } from '@/lib/prisma-modules'
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const orgId = profile.organisationId
-  const isAdmin = hasOrgPermission(profile.orgPermission, 'ADMIN')
+  const isAdmin = canPerform(profile.orgPermission, 'projects', 'view_all')
   const url = new URL(request.url)
   const now = new Date()
 

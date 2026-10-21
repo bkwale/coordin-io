@@ -5,7 +5,7 @@ import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, optionalString, optionalEnum } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
-import { hasOrgPermission } from '@/lib/permissions'
+import { canPerform } from '@/lib/role-permissions'
 // TODO: Add createNotification when Budget model gets createdById field
 
 const BUDGET_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'SUPERSEDED'] as const
@@ -71,7 +71,7 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
 
     // Approval requires MANAGER+ permission
     if (newStatus === 'APPROVED') {
-      if (!hasOrgPermission(profile.orgPermission, 'MANAGER')) {
+      if (!canPerform(profile.orgPermission, 'commercial', 'manage_budgets')) {
         throw new PermissionError('Budget approval requires Manager permission or above')
       }
       data.status = 'APPROVED'

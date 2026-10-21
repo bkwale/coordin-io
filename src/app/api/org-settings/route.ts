@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError } from '@/lib/errors'
-import { hasOrgPermission } from '@/lib/permissions'
+import { canPerform } from '@/lib/role-permissions'
 
 /**
  * Organisation settings shape stored in the `settings` JSON column:
@@ -90,7 +90,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 // ── PATCH /api/org-settings ────────────────────────────
 // Requires ADMIN or OWNER
 export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
-  if (!hasOrgPermission(profile.orgPermission, 'ADMIN')) {
+  if (!canPerform(profile.orgPermission, 'settings', 'edit_org_settings')) {
     throw new ValidationError('Only admins can update organisation settings')
   }
 

@@ -5,7 +5,7 @@ import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { parseBody, optionalString, optionalEnum, optionalNumber, optionalId } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
-import { hasOrgPermission } from '@/lib/permissions'
+import { canPerform } from '@/lib/role-permissions'
 // TODO: Add createNotification when Variation model gets createdById field
 
 const VARIATION_REASONS = [
@@ -83,7 +83,7 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
     const newStatus = optionalEnum(body.status, 'Status', VARIATION_STATUSES)
 
     if (newStatus === 'APPROVED') {
-      if (!hasOrgPermission(profile.orgPermission, 'MANAGER')) {
+      if (!canPerform(profile.orgPermission, 'commercial', 'approve_commercial')) {
         throw new PermissionError('Variation approval requires Manager permission or above')
       }
       data.status = 'APPROVED'

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { withAuth } from '@/lib/with-auth'
-import { hasOrgPermission } from '@/lib/permissions'
+
 import { canPerform } from '@/lib/role-permissions'
 import { HR_VISIBLE_PREFIXES, AUDIT_ACTION_LABELS, recordAuditEvent, AuditActions, getAuditPrefixesForRole } from '@/lib/audit'
 import { RateLimitedError, ValidationError, PermissionError } from '@/lib/errors'
@@ -60,7 +60,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   // Set rate-limit timestamp immediately to prevent concurrent exports
   exportTimestamps.set(profile.id, Date.now())
 
-  const isFullAccess = hasOrgPermission(profile.orgPermission, 'ADMIN')
+  const isFullAccess = canPerform(profile.orgPermission, 'audit', 'view_all')
   const rolePrefixes = getAuditPrefixesForRole(profile.orgPermission)
 
   // Build where clause

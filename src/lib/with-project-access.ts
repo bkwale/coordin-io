@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getProfileByAuthId, getProjectMembership, hasOrgPermission } from '@/lib/permissions'
+import { getProfileByAuthId, getProjectMembership } from '@/lib/permissions'
 import { canPerform } from '@/lib/role-permissions'
 import { AuthError, PermissionError, NotFoundError, formatAPIError } from '@/lib/errors'
 import { prisma } from '@/lib/prisma'
@@ -100,10 +100,9 @@ export function withProjectAccess(handler: ProjectAccessHandler, options: WithPr
       // 5. Check project membership (admins + users with view_all bypass)
       let membership: Awaited<ReturnType<typeof getProjectMembership>> = null
 
-      const isAdmin = hasOrgPermission(profile.orgPermission, 'ADMIN')
       const hasViewAll = canPerform(profile.orgPermission, 'projects', 'view_all')
 
-      if (isAdmin || hasViewAll) {
+      if (hasViewAll) {
         // Admins, HR, and other view-all roles can access all org projects — no membership needed
         membership = null
       } else {
