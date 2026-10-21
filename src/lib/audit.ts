@@ -58,6 +58,7 @@ export const AuditActions = {
   TASK_ASSIGNED: 'task.assigned',
   TASK_STATUS_CHANGED: 'task.status_changed',
   TASK_REVIEWED: 'task.reviewed',
+  TASK_CHECKLIST_MODIFIED: 'task.checklist_modified',
 
   // Documents
   DOCUMENT_UPLOADED: 'document.uploaded',
@@ -295,6 +296,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'task.assigned': 'Assigned task',
   'task.status_changed': 'Changed task status',
   'task.reviewed': 'Reviewed task',
+  'task.checklist_modified': 'Modified task checklist',
 
   // Documents
   'document.uploaded': 'Uploaded document',

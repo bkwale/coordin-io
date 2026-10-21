@@ -106,7 +106,7 @@ export const DELETE = withTaskAccess(async (request: NextRequest, { taskId, prof
     await recordAuditEvent({
       organisationId: profile.organisationId,
       actorId: profile.id,
-      action: AuditActions.TASK_STATUS_CHANGED,
+      action: AuditActions.TASK_CHECKLIST_MODIFIED,
       entityType: 'TaskChecklistItem',
       entityId: taskId,
       metadata: { action: 'checklist_cleared', count },
@@ -133,7 +133,7 @@ export const DELETE = withTaskAccess(async (request: NextRequest, { taskId, prof
   await recordAuditEvent({
     organisationId: profile.organisationId,
     actorId: profile.id,
-    action: AuditActions.TASK_STATUS_CHANGED,
+    action: AuditActions.TASK_CHECKLIST_MODIFIED,
     entityType: 'TaskChecklistItem',
     entityId: itemId,
     metadata: { action: 'checklist_item_deleted', label: existing.label },
