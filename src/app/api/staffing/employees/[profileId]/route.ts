@@ -7,6 +7,7 @@ import { optionalString, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { hasFullStaffingAccess, canManageHR, toDirectoryEntry } from '@/lib/staffing-utils'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { cached, invalidateCache, cacheKey, CACHE_TTL } from '@/lib/cache'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -19,6 +20,29 @@ import type { OrgPermission } from '@/generated/prisma/client'
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const profileId = request.url.match(/\/employees\/([^/?]+)/)?.[1]
   if (!profileId) throw new NotFoundError('Employee not found')
+
+  const role = profile.orgPermission as OrgPermission
+  const hasHRAccess = hasFullStaffingAccess(role)
+  const isSelf = profileId === profile.id
+  const tier = hasHRAccess ? 'hr' : isSelf ? 'self' : 'member'
+
+  const data = await cached(
+    cacheKey.staffingDetail(profile.organisationId, profileId, tier),
+    () => fetchEmployeeDetail(profileId, profile.organisationId, profile.id, role),
+    CACHE_TTL.STAFFING_DETAIL,
+  )
+  return success(data)
+})
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchEmployeeDetail(
+  profileId: string,
+  viewerOrgId: string,
+  viewerId: string,
+  viewerRole: OrgPermission,
+) {
+  const hasHRAccess = hasFullStaffingAccess(viewerRole)
+  const isSelf = profileId === viewerId
 
   const employee = await modulesPrisma.profile.findUnique({
     where: { id: profileId },
@@ -67,17 +91,13 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   // Must be in same org
-  if (employee.organisationId !== profile.organisationId) {
+  if (employee.organisationId !== viewerOrgId) {
     throw new PermissionError('You do not have access to this employee')
   }
 
-  const role = profile.orgPermission as OrgPermission
-  const hasHRAccess = hasFullStaffingAccess(role)
-  const isSelf = profileId === profile.id
-
   // MEMBER viewing someone else → directory-only response
   if (!hasHRAccess && !isSelf) {
-    return success({
+    return {
       employee: toDirectoryEntry({
         id: employee.id,
         fullName: employee.fullName,
@@ -87,7 +107,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
         corporateRole: employee.corporateRole,
       }),
       directoryOnly: true,
-    })
+    }
   }
 
   // ── HR Documents (non-confidential, or HR+/self) ──────────
@@ -131,7 +151,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     // Table may not exist yet
   }
 
-  return success({
+  return {
     employee: {
       id: employee.id,
       fullName: employee.fullName,
@@ -173,8 +193,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     hrDocuments,
     allocations,
     probationReviews,
-  })
-})
+  }
+}
 
 /**
  * PATCH /api/staffing/employees/[profileId] — Update employee fields.
@@ -283,6 +303,12 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       update: emergencyFields,
     })
   }
+
+  // Invalidate cached staffing data for this employee + the org list
+  await invalidateCache(
+    cacheKey.staffingAll(profile.organisationId),
+    cacheKey.dashboard(profileId),
+  )
 
   await recordAuditEvent({
     organisationId: profile.organisationId,

@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { canPerform } from '@/lib/role-permissions'
 import { computeEffectiveHealth } from '@/lib/dashboard-health'
+import { cached, cacheKey, CACHE_TTL } from '@/lib/cache'
 import type { TaskStatus } from '@/generated/prisma/client'
 
 /**
@@ -14,6 +15,16 @@ import type { TaskStatus } from '@/generated/prisma/client'
  * one call post-login.
  */
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
+  const data = await cached(
+    cacheKey.dashboard(profile.id),
+    () => fetchDashboard(profile),
+    CACHE_TTL.DASHBOARD,
+  )
+  return success(data)
+})
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchDashboard(profile: any) {
   const orgId = profile.organisationId
   const isAdmin = canPerform(profile.orgPermission, 'projects', 'view_all')
   const now = new Date()
@@ -172,7 +183,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     ])
 
   // ── Assemble response ────────────────────────────────────
-  return success({
+  return {
     profile: {
       id: profile.id,
       fullName: profile.fullName,
@@ -190,5 +201,5 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
       completedThisWeek,
       allProjectsHealthy,
     },
-  })
-})
+  }
+}

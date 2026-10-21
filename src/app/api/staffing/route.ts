@@ -8,6 +8,7 @@ import {
   hasStaffingDashboardAccess,
   canViewUtilisation,
 } from '@/lib/staffing-utils'
+import { cached, cacheKey, CACHE_TTL } from '@/lib/cache'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -24,6 +25,24 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 
   const showDashboard = hasStaffingDashboardAccess(role)  // MANAGER+
   const showUtilisation = canViewUtilisation(role)          // HR+
+
+  // Cache tier: member | manager | hr (determines response shape)
+  const tier = showUtilisation ? 'hr' : showDashboard ? 'manager' : 'member'
+  const data = await cached(
+    cacheKey.staffingList(orgId, tier),
+    () => fetchStaffingDashboard(orgId, role, showDashboard, showUtilisation),
+    CACHE_TTL.STAFFING_LIST,
+  )
+  return success(data)
+})
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchStaffingDashboard(
+  orgId: string,
+  role: OrgPermission,
+  showDashboard: boolean,
+  showUtilisation: boolean,
+) {
 
   // ── Active employees ───────────────────────────────────────
   // Query includes office city/country for directory entries
@@ -104,7 +123,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 
   // ── MEMBER: directory-only response ───────────────────────
   if (!showDashboard) {
-    return success({
+    return {
       directory: allProfiles
         .filter((p) => p.status === 'ACTIVE')
         .map((p) => toDirectoryEntry({
@@ -116,7 +135,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
           corporateRole: p.corporateRole,
         })),
       directoryOnly: true,
-    })
+    }
   }
 
   // ── MANAGER+ continues with full dashboard ────────────────
@@ -248,7 +267,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     } catch { /* Table may not exist yet */ }
   }
 
-  return success({
+  return {
     metrics: {
       totalEmployees: allProfiles.length,
       activeEmployees: activeEmployees.length,
@@ -269,5 +288,5 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     byDepartment,
     expiringDocs: showUtilisation ? expiringDocs : [],
     employees: allProfiles.map(mapStaffingEmployee),
-  })
-})
+  }
+}
