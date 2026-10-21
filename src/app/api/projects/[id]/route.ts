@@ -179,7 +179,7 @@ export const DELETE = withProjectAccess(async (request: NextRequest, { projectId
   if (!confirmArchive) {
     const [openTaskCount, activeMilestoneCount] = await Promise.all([
       prisma.task.count({
-        where: { projectId, status: { notIn: ['COMPLETED', 'CANCELLED'] }, archivedAt: null },
+        where: { projectId, status: { notIn: ['COMPLETED'] }, archivedAt: null },
       }),
       prisma.projectMilestone.count({
         where: { projectId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
