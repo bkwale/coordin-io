@@ -94,7 +94,22 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
   }
   if ('siteAddress' in body) data.siteAddress = optionalString(body.siteAddress, 'Site address', 500)
   if ('siteCity' in body) data.siteCity = optionalString(body.siteCity, 'Site city', 200)
+  if ('siteRegion' in body) data.siteRegion = optionalString(body.siteRegion, 'Site region', 200)
   if ('siteCountry' in body) data.siteCountry = optionalString(body.siteCountry, 'Site country', 200)
+  if ('sitePostcode' in body) data.sitePostcode = optionalString(body.sitePostcode, 'Postcode', 20)
+  if ('mapLatitude' in body) data.mapLatitude = optionalNumber(body.mapLatitude, 'Latitude', { min: -90, max: 90 })
+  if ('mapLongitude' in body) data.mapLongitude = optionalNumber(body.mapLongitude, 'Longitude', { min: -180, max: 180 })
+  if ('planningAuthority' in body) data.planningAuthority = optionalString(body.planningAuthority, 'Planning authority', 300)
+  if ('buildingControlAuthority' in body) data.buildingControlAuthority = optionalString(body.buildingControlAuthority, 'Building control authority', 300)
+
+  // Auto-compose location summary from structured fields
+  if ('siteCity' in body || 'siteRegion' in body || 'siteCountry' in body) {
+    const city = (data.siteCity as string) ?? body.siteCity ?? null
+    const region = (data.siteRegion as string) ?? body.siteRegion ?? null
+    const country = (data.siteCountry as string) ?? body.siteCountry ?? null
+    const locationParts = [city, region, country].filter(Boolean)
+    data.location = locationParts.length > 0 ? locationParts.join(', ') : null
+  }
   if ('buildingType' in body) data.buildingType = optionalString(body.buildingType, 'Building type', 100)
   if ('jurisdiction' in body) data.jurisdiction = optionalString(body.jurisdiction, 'Jurisdiction', 200)
   if ('feeBasis' in body) data.feeBasis = optionalEnum(body.feeBasis, 'Fee basis', ['PERCENTAGE', 'LUMP_SUM', 'TIME_CHARGE'] as const)

@@ -1305,9 +1305,9 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
     name: project.name,
     code: project.code || '',
     description: project.description || '',
-    location: project.location || '',
     siteAddress: project.siteAddress || '',
     siteCity: project.siteCity || '',
+    siteRegion: project.siteRegion || '',
     siteCountry: project.siteCountry || '',
     clientBrand: project.clientBrand || '',
     projectType: project.projectType,
@@ -1339,9 +1339,9 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
       if (form.name !== project.name) body.name = form.name
       if (form.code !== (project.code || '')) body.code = form.code || null
       if (form.description !== (project.description || '')) body.description = form.description || null
-      if (form.location !== (project.location || '')) body.location = form.location || null
       if (form.siteAddress !== (project.siteAddress || '')) body.siteAddress = form.siteAddress || null
       if (form.siteCity !== (project.siteCity || '')) body.siteCity = form.siteCity || null
+      if (form.siteRegion !== (project.siteRegion || '')) body.siteRegion = form.siteRegion || null
       if (form.siteCountry !== (project.siteCountry || '')) body.siteCountry = form.siteCountry || null
       if (form.clientBrand !== (project.clientBrand || '')) body.clientBrand = form.clientBrand || null
       if (form.projectType !== project.projectType) body.projectType = form.projectType
@@ -1494,6 +1494,10 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
               <div>
                 <label className="block text-[12px] font-medium text-ink-600 mb-1">City</label>
                 <input type="text" value={form.siteCity} onChange={set('siteCity')} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">State / Region</label>
+                <input type="text" value={form.siteRegion} onChange={set('siteRegion')} className={inputClass} placeholder="e.g. Lagos, Essex" />
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-ink-600 mb-1">Country</label>
