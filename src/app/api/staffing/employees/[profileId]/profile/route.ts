@@ -72,6 +72,27 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   // hasFullStaffingAccess replaces inline isAdmin — gives HR, ADMIN, OWNER access
   const hasHRAccess = hasFullStaffingAccess(profile.orgPermission as OrgPermission)
   const isSelf = profileId === profile.id
+  const showConfidential = hasHRAccess || isSelf
+
+  // Fetch confidential data separately — only when authorized
+  let confidential: {
+    salary: number | null; salaryFrequency: string | null; salaryCurrency: string | null;
+    benefits: string | null; hmoProvider: string | null; hmoPlan: string | null;
+    dependants: number | null; pensionProvider: string | null; pensionContribution: number | null;
+    noticePeriod: string | null;
+  } | null = null
+
+  if (showConfidential) {
+    try {
+      confidential = await modulesPrisma.confidentialEmployeeData.findUnique({
+        where: { profileId },
+      })
+    } catch (err: unknown) {
+      // Swallow only "relation does not exist" (table not migrated yet)
+      const msg = err instanceof Error ? err.message : ''
+      if (!msg.includes('does not exist') && !msg.includes('P2021')) throw err
+    }
+  }
 
   // HR documents count by type
   let hrDocumentCounts: Record<string, number> = {}
@@ -170,10 +191,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   // Build the employee profile fields - only show confidential (salary, etc.) to HR+/self
   const ep = employee.employeeProfile
-  const showConfidential = hasHRAccess || isSelf
 
   // Audit event: log salary data access (PT recommendation)
-  if (showConfidential && !isSelf && ep?.salary) {
+  if (showConfidential && !isSelf && (confidential?.salary ?? ep?.salary)) {
     await recordAuditEvent({
       organisationId: profile.organisationId,
       actorId: profile.id,
@@ -223,18 +243,19 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
           probationStatus: ep?.probationStatus ?? null,
           probationStartDate: ep?.probationStartDate ?? null,
           probationEndDate: ep?.probationEndDate ?? null,
-          salary: ep?.salary ?? null,
-          salaryFrequency: ep?.salaryFrequency ?? null,
-          salaryCurrency: ep?.salaryCurrency ?? null,
-          benefits: ep?.benefits ?? null,
-          hmoProvider: ep?.hmoProvider ?? null,
-          hmoPlan: ep?.hmoPlan ?? null,
-          dependants: ep?.dependants ?? null,
-          pensionProvider: ep?.pensionProvider ?? null,
-          pensionContribution: ep?.pensionContribution ?? null,
+          // Prefer confidential table, fall back to legacy EmployeeProfile fields
+          salary: confidential?.salary ?? ep?.salary ?? null,
+          salaryFrequency: confidential?.salaryFrequency ?? ep?.salaryFrequency ?? null,
+          salaryCurrency: confidential?.salaryCurrency ?? ep?.salaryCurrency ?? null,
+          benefits: confidential?.benefits ?? ep?.benefits ?? null,
+          hmoProvider: confidential?.hmoProvider ?? ep?.hmoProvider ?? null,
+          hmoPlan: confidential?.hmoPlan ?? ep?.hmoPlan ?? null,
+          dependants: confidential?.dependants ?? ep?.dependants ?? null,
+          pensionProvider: confidential?.pensionProvider ?? ep?.pensionProvider ?? null,
+          pensionContribution: confidential?.pensionContribution ?? ep?.pensionContribution ?? null,
           workingPattern: ep?.workingPattern ?? null,
           workingHours: ep?.workingHours ?? null,
-          noticePeriod: ep?.noticePeriod ?? null,
+          noticePeriod: confidential?.noticePeriod ?? ep?.noticePeriod ?? null,
         }
       : null,
     leave: {
@@ -417,6 +438,32 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       create: { profileId, ...empData },
       update: empData,
     })
+  }
+
+  // Dual-write: mirror confidential fields to ConfidentialEmployeeData table
+  const confidentialFieldKeys = [
+    'salary', 'salaryFrequency', 'salaryCurrency', 'benefits',
+    'hmoProvider', 'hmoPlan', 'dependants',
+    'pensionProvider', 'pensionContribution', 'noticePeriod',
+  ] as const
+  const confidentialFields: Record<string, unknown> = {}
+  for (const key of confidentialFieldKeys) {
+    if (key in empData) {
+      confidentialFields[key] = empData[key]
+    }
+  }
+  if (Object.keys(confidentialFields).length > 0) {
+    try {
+      await modulesPrisma.confidentialEmployeeData.upsert({
+        where: { profileId },
+        create: { profileId, ...confidentialFields },
+        update: confidentialFields,
+      })
+    } catch (err: unknown) {
+      // Swallow only "relation does not exist" (table not migrated yet)
+      const msg = err instanceof Error ? err.message : ''
+      if (!msg.includes('does not exist') && !msg.includes('P2021')) throw err
+    }
   }
 
   await recordAuditEvent({

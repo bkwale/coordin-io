@@ -195,7 +195,8 @@ model Profile {
   reports       Profile[]      @relation("ManagerReports")
 
   // Employee details
-  employeeProfile EmployeeProfile?
+  employeeProfile  EmployeeProfile?
+  confidentialData ConfidentialEmployeeData?
 
   // Invitations created by this user
   invitationsSent    Invitation[] @relation("InvitationCreator")
@@ -326,6 +327,8 @@ model EmployeeProfile {
   department          String?   @map("department")
   employmentType      String?   @map("employment_type") // FULL_TIME, PART_TIME, FIXED_TERM, CONTRACTOR, INTERN
   contractType        String?   @map("contract_type") // PERMANENT, TEMPORARY, AGENCY, SECONDMENT
+  // @deprecated — confidential fields below migrated to ConfidentialEmployeeData table
+  // These columns remain for backward compatibility during transition
   salary              Float?
   salaryFrequency     String?   @map("salary_frequency") // ANNUAL, MONTHLY, DAILY, HOURLY
   salaryCurrency      String?   @map("salary_currency")
@@ -354,6 +357,36 @@ model EmployeeProfile {
   profile Profile @relation(fields: [profileId], references: [id])
 
   @@map("employee_profiles")
+}
+
+model ConfidentialEmployeeData {
+  id                  String  @id @default(cuid())
+  profileId           String  @unique @map("profile_id")
+
+  // Compensation
+  salary              Float?
+  salaryFrequency     String?   @map("salary_frequency")
+  salaryCurrency      String?   @map("salary_currency")
+  benefits            String?
+
+  // Insurance & Health
+  hmoProvider         String?   @map("hmo_provider")
+  hmoPlan             String?   @map("hmo_plan")
+  dependants          Int?      @default(0)
+
+  // Pension
+  pensionProvider     String?   @map("pension_provider")
+  pensionContribution Float?    @map("pension_contribution")
+
+  // Contract
+  noticePeriod        String?   @map("notice_period")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  profile Profile @relation(fields: [profileId], references: [id])
+
+  @@map("confidential_employee_data")
 }
 
 model Invitation {
