@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireString, optionalString, optionalEnum, optionalId, requireDate, parseBody } from '@/lib/validation'
+import { ValidationError } from '@/lib/errors'
 import {
   calculateMilestoneStatus,
   buildMilestoneTaskSummary,
@@ -78,6 +79,19 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const stage = optionalString(body.stage, 'Stage', 100)
   const ownerId = optionalId(body.ownerId, 'Owner ID')
 
+  // Soft warning if milestone due date is outside project dates
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { startDate: true, targetCompletion: true },
+  })
+  let warning: string | undefined
+  if (project?.startDate && dueDate < project.startDate) {
+    warning = 'Milestone due date is before the project start date'
+  }
+  if (project?.targetCompletion && dueDate > project.targetCompletion) {
+    warning = 'Milestone due date is after the project target completion'
+  }
+
   // Determine sort order — place at end
   const lastMilestone = await prisma.projectMilestone.findFirst({
     where: { projectId },
@@ -108,5 +122,5 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
     metadata: { action: 'milestone_created', title },
   })
 
-  return success({ milestone }, 201)
+  return success({ milestone, ...(warning ? { warning } : {}) }, 201)
 }, { minProjectRole: 'PROJECT_LEAD' })

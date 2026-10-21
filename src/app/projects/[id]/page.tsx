@@ -484,7 +484,28 @@ export default function ProjectDashboard() {
                   setArchiving(true)
                   try {
                     const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
-                    if (!res.ok) {
+                    if (res.status === 409) {
+                      const body = await res.json().catch(() => ({}))
+                      const openItems = body.openItems || {}
+                      const taskCount = openItems.tasks ?? 0
+                      const milestoneCount = openItems.milestones ?? 0
+                      const parts: string[] = []
+                      if (taskCount > 0) parts.push(`${taskCount} open task(s)`)
+                      if (milestoneCount > 0) parts.push(`${milestoneCount} active milestone(s)`)
+                      const msg = parts.length > 0
+                        ? `This project has ${parts.join(' and ')}. Are you sure you want to archive it?`
+                        : 'This project has open items. Are you sure you want to archive it?'
+                      if (!window.confirm(msg)) {
+                        setArchiving(false)
+                        setShowArchiveConfirm(false)
+                        return
+                      }
+                      const confirmRes = await fetch(`/api/projects/${projectId}?confirmArchive=true`, { method: 'DELETE' })
+                      if (!confirmRes.ok) {
+                        const err = await confirmRes.json().catch(() => ({}))
+                        throw new Error(err.error || 'Failed to archive project')
+                      }
+                    } else if (!res.ok) {
                       const err = await res.json().catch(() => ({}))
                       throw new Error(err.error || 'Failed to archive project')
                     }

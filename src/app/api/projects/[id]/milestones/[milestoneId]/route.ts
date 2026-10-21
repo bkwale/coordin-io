@@ -113,6 +113,22 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
   if ('stage' in body) data.stage = optionalString(body.stage, 'Stage', 100)
   if ('ownerId' in body) data.ownerId = optionalId(body.ownerId, 'Owner ID')
 
+  // Soft warning if milestone due date is outside project dates
+  let warning: string | undefined
+  if ('dueDate' in body && data.dueDate) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { startDate: true, targetCompletion: true },
+    })
+    const newDueDate = data.dueDate as Date
+    if (project?.startDate && newDueDate < project.startDate) {
+      warning = 'Milestone due date is before the project start date'
+    }
+    if (project?.targetCompletion && newDueDate > project.targetCompletion) {
+      warning = 'Milestone due date is after the project target completion'
+    }
+  }
+
   const status = data.status as string | undefined
 
   // Auto-set completedDate when status changes to COMPLETED
@@ -166,7 +182,7 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
     }
   }
 
-  return success({ milestone })
+  return success({ milestone, ...(warning ? { warning } : {}) })
 }, { minProjectRole: 'PROJECT_LEAD' })
 
 /**

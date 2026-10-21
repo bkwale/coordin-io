@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -171,6 +172,27 @@ export const DELETE = withProjectAccess(async (request: NextRequest, { projectId
   // Soft delete — archive
   if (!canPerform(profile.orgPermission, 'projects', 'archive')) {
     throw new PermissionError('You do not have permission to archive projects')
+  }
+
+  // Pre-check: warn about open items unless explicitly confirmed
+  const confirmArchive = url.searchParams.get('confirmArchive') === 'true'
+  if (!confirmArchive) {
+    const [openTaskCount, activeMilestoneCount] = await Promise.all([
+      prisma.task.count({
+        where: { projectId, status: { notIn: ['COMPLETED', 'CANCELLED'] }, archivedAt: null },
+      }),
+      prisma.projectMilestone.count({
+        where: { projectId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
+      }),
+    ])
+
+    if (openTaskCount > 0 || activeMilestoneCount > 0) {
+      return NextResponse.json({
+        requiresConfirmation: true,
+        openItems: { tasks: openTaskCount, milestones: activeMilestoneCount },
+        message: `This project has ${openTaskCount} open task(s) and ${activeMilestoneCount} active milestone(s). Pass ?confirmArchive=true to proceed.`,
+      }, { status: 409 })
+    }
   }
 
   const project = await prisma.project.update({

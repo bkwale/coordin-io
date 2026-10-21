@@ -5,7 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateRequestTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
-import { NotFoundError, PermissionError } from '@/lib/errors'
+import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { createApprovalInstance } from '@/lib/approval-engine'
 import type { RequestStatus } from '@/generated/prisma/client'
@@ -87,6 +87,12 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // Validate transition
   validateRequestTransition(currentStatus, newStatus)
+
+  // Guard: truly terminal statuses cannot transition to anything except CANCELLED/WITHDRAWN
+  // Note: APPROVED is NOT terminal — it can flow to FULFILMENT_IN_PROGRESS → COMPLETED
+  if (['COMPLETED', 'REJECTED'].includes(currentStatus) && !['CANCELLED', 'WITHDRAWN'].includes(newStatus)) {
+    throw new ValidationError(`Cannot transition from ${currentStatus} to ${newStatus}. Only cancellation or withdrawal is allowed.`)
+  }
 
   // Role checks
   const isOwner = claim.profileId === profile.id

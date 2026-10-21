@@ -4,7 +4,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { requireEnum, optionalString, parseBody } from '@/lib/validation'
 import { validateLeaveTransition, isRequesterTransition, isApproverTransition, isAdminTransition } from '@/lib/request-transitions'
-import { NotFoundError, PermissionError } from '@/lib/errors'
+import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import {
   updateLeaveWithBalance,
   recordLeaveAudit,
@@ -91,6 +91,12 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   // ── Validate transition + RBAC ──
   validateLeaveTransition(currentStatus, newStatus)
 
+  // Guard: truly terminal statuses cannot transition to anything except CANCELLED/WITHDRAWN
+  // Note: APPROVED is NOT terminal — it can flow to FULFILMENT_IN_PROGRESS → COMPLETED
+  if (['COMPLETED', 'REJECTED'].includes(currentStatus) && !['CANCELLED', 'WITHDRAWN'].includes(newStatus)) {
+    throw new ValidationError(`Cannot transition from ${currentStatus} to ${newStatus}. Only cancellation or withdrawal is allowed.`)
+  }
+
   const isOwner = leaveRequest.profileId === profile.id
   const isApproverUser = leaveRequest.approverId === profile.id
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
@@ -138,7 +144,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     approver: { select: { id: true, fullName: true } },
   } as const
 
-  // ── Persist (with balance adjustment if needed) ──
+  // ── Persist (with balance adjustment + availability sync) ──
   const updated = await updateLeaveWithBalance(id, leaveRequest, newStatus, updateData, includeRelations)
 
   // ── Side-effects (audit, notifications, approval engine) ──

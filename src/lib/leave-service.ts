@@ -56,6 +56,14 @@ export async function updateLeaveWithBalance(
           carriedForward: 0,
         },
       })
+      // Sync availability if leave is current
+      const now = new Date()
+      if (leaveRequest.startDate <= now && leaveRequest.endDate >= now) {
+        await tx.employeeProfile.updateMany({
+          where: { profileId: leaveRequest.profileId },
+          data: { availabilityStatus: 'ON_LEAVE' },
+        })
+      }
       return result
     })
   }
@@ -73,11 +81,73 @@ export async function updateLeaveWithBalance(
         where: { profileId_year: { profileId: leaveRequest.profileId, year } },
         data: { used: { decrement: leaveRequest.days } },
       })
+      // Reset availability only if no other current approved leave
+      const otherActive = await tx.leaveRequest.findFirst({
+        where: {
+          profileId: leaveRequest.profileId,
+          status: 'APPROVED',
+          id: { not: id },
+          startDate: { lte: new Date() },
+          endDate: { gte: new Date() },
+        },
+      })
+      if (!otherActive) {
+        await tx.employeeProfile.updateMany({
+          where: { profileId: leaveRequest.profileId },
+          data: { availabilityStatus: 'AVAILABLE' },
+        })
+      }
       return result
     })
   }
 
-  // All other transitions — plain update
+  // All other transitions — check for availability sync
+  if (newStatus === 'APPROVED') {
+    const now = new Date()
+    return prisma.$transaction(async (tx) => {
+      const result = await tx.leaveRequest.update({
+        where: { id },
+        data: updateData,
+        include: includeRelations,
+      })
+      if (leaveRequest.startDate <= now && leaveRequest.endDate >= now) {
+        await tx.employeeProfile.updateMany({
+          where: { profileId: leaveRequest.profileId },
+          data: { availabilityStatus: 'ON_LEAVE' },
+        })
+      }
+      return result
+    })
+  }
+
+  // CANCELLED/WITHDRAWN after APPROVED (non-annual)
+  if (['CANCELLED', 'WITHDRAWN'].includes(newStatus) && leaveRequest.status === 'APPROVED') {
+    return prisma.$transaction(async (tx) => {
+      const result = await tx.leaveRequest.update({
+        where: { id },
+        data: updateData,
+        include: includeRelations,
+      })
+      // Reset availability only if no other current approved leave
+      const otherActive = await tx.leaveRequest.findFirst({
+        where: {
+          profileId: leaveRequest.profileId,
+          status: 'APPROVED',
+          id: { not: id },
+          startDate: { lte: new Date() },
+          endDate: { gte: new Date() },
+        },
+      })
+      if (!otherActive) {
+        await tx.employeeProfile.updateMany({
+          where: { profileId: leaveRequest.profileId },
+          data: { availabilityStatus: 'AVAILABLE' },
+        })
+      }
+      return result
+    })
+  }
+
   return prisma.leaveRequest.update({
     where: { id },
     data: updateData,

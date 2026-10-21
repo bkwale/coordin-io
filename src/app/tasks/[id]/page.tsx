@@ -167,6 +167,8 @@ export default function TaskDetailPage() {
   const [commentText, setCommentText] = useState('')
   const [commentLoading, setCommentLoading] = useState(false)
   const [checklistLoading, setChecklistLoading] = useState<string | null>(null)
+  const [checklistDeleting, setChecklistDeleting] = useState<string | null>(null)
+  const [clearingAll, setClearingAll] = useState(false)
   const [newItemLabel, setNewItemLabel] = useState('')
   const [addingItem, setAddingItem] = useState(false)
   const [projectMembers, setProjectMembers] = useState<{id: string; fullName: string}[]>([])
@@ -442,6 +444,60 @@ export default function TaskDetailPage() {
       toast(err instanceof Error ? err.message : 'Failed to add item', 'error')
     } finally {
       setAddingItem(false)
+    }
+  }
+
+  /* ── Delete checklist item ────────────────────────────── */
+
+  async function handleDeleteChecklistItem(itemId: string) {
+    if (!task) return
+    setChecklistDeleting(itemId)
+    const prevItems = task.checklistItems
+    setTask((prev) => prev ? {
+      ...prev,
+      checklistItems: prev.checklistItems.filter((ci) => ci.id !== itemId),
+    } : prev)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/checklist`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to delete item')
+      }
+    } catch (err) {
+      setTask((prev) => prev ? { ...prev, checklistItems: prevItems } : prev)
+      toast(err instanceof Error ? err.message : 'Failed to delete item', 'error')
+    } finally {
+      setChecklistDeleting(null)
+    }
+  }
+
+  /* ── Clear all checklist items ──────────────────────── */
+
+  async function handleClearAllChecklist() {
+    if (!task || task.checklistItems.length === 0) return
+    if (!window.confirm(`Clear all ${task.checklistItems.length} checklist item(s)? This cannot be undone.`)) return
+    setClearingAll(true)
+    const prevItems = task.checklistItems
+    setTask((prev) => prev ? { ...prev, checklistItems: [] } : prev)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/checklist`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteAll: true }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || 'Failed to clear checklist')
+      }
+    } catch (err) {
+      setTask((prev) => prev ? { ...prev, checklistItems: prevItems } : prev)
+      toast(err instanceof Error ? err.message : 'Failed to clear checklist', 'error')
+    } finally {
+      setClearingAll(false)
     }
   }
 
@@ -874,15 +930,27 @@ export default function TaskDetailPage() {
                   </span>
                 )}
               </div>
-              {/* Progress bar */}
-              {checklistTotal > 0 && (
-                <div className="w-24 h-1.5 bg-ink-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                    style={{ width: `${(checklistCompleted / checklistTotal) * 100}%` }}
-                  />
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                {/* Progress bar */}
+                {checklistTotal > 0 && (
+                  <div className="w-24 h-1.5 bg-ink-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                      style={{ width: `${(checklistCompleted / checklistTotal) * 100}%` }}
+                    />
+                  </div>
+                )}
+                {checklistTotal > 0 && (
+                  <button
+                    onClick={handleClearAllChecklist}
+                    disabled={clearingAll}
+                    className="text-[11px] text-red-500 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
+                    title="Clear all checklist items"
+                  >
+                    {clearingAll ? 'Clearing...' : 'Clear all'}
+                  </button>
+                )}
+              </div>
             </div>
 
             {task.checklistItems.length === 0 ? (
@@ -892,48 +960,64 @@ export default function TaskDetailPage() {
             ) : (
               <div className="divide-y divide-ink-50">
                 {task.checklistItems.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    onClick={() => handleToggleChecklist(item)}
-                    disabled={checklistLoading === item.id}
                     className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-surface-50 transition-colors group"
                   >
-                    {checklistLoading === item.id ? (
-                      <Loader2 className="w-4 h-4 text-ink-300 animate-spin shrink-0" />
-                    ) : item.completed ? (
-                      <CheckSquare2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    ) : (
-                      <Square className="w-4 h-4 text-ink-300 group-hover:text-ink-500 shrink-0 transition-colors" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <span className={cn(
-                        'text-[13px]',
-                        item.completed ? 'text-ink-400 line-through' : 'text-ink-700',
-                      )}>
-                        {item.label}
-                      </span>
-                      {(item.assignee || item.dueDate) && (
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {item.assignee && (
-                            <span className="text-[10px] text-ink-400 flex items-center gap-0.5">
-                              <User className="w-2.5 h-2.5" /> {item.assignee.fullName}
-                            </span>
-                          )}
-                          {item.dueDate && (
-                            <span className={cn(
-                              'text-[10px] flex items-center gap-0.5',
-                              new Date(item.dueDate) < new Date() && !item.completed ? 'text-red-500' : 'text-ink-400',
-                            )}>
-                              <Calendar className="w-2.5 h-2.5" /> {formatDate(item.dueDate)}
-                            </span>
-                          )}
-                        </div>
+                    <button
+                      onClick={() => handleToggleChecklist(item)}
+                      disabled={checklistLoading === item.id}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      {checklistLoading === item.id ? (
+                        <Loader2 className="w-4 h-4 text-ink-300 animate-spin shrink-0" />
+                      ) : item.completed ? (
+                        <CheckSquare2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Square className="w-4 h-4 text-ink-300 group-hover:text-ink-500 shrink-0 transition-colors" />
                       )}
-                    </div>
-                    {item.mandatory && !item.completed && (
-                      <span className="text-[10px] text-red-500 font-medium shrink-0">Required</span>
-                    )}
-                  </button>
+                      <div className="flex-1 min-w-0">
+                        <span className={cn(
+                          'text-[13px]',
+                          item.completed ? 'text-ink-400 line-through' : 'text-ink-700',
+                        )}>
+                          {item.label}
+                        </span>
+                        {(item.assignee || item.dueDate) && (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {item.assignee && (
+                              <span className="text-[10px] text-ink-400 flex items-center gap-0.5">
+                                <User className="w-2.5 h-2.5" /> {item.assignee.fullName}
+                              </span>
+                            )}
+                            {item.dueDate && (
+                              <span className={cn(
+                                'text-[10px] flex items-center gap-0.5',
+                                new Date(item.dueDate) < new Date() && !item.completed ? 'text-red-500' : 'text-ink-400',
+                              )}>
+                                <Calendar className="w-2.5 h-2.5" /> {formatDate(item.dueDate)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {item.mandatory && !item.completed && (
+                        <span className="text-[10px] text-red-500 font-medium shrink-0">Required</span>
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteChecklistItem(item.id) }}
+                      disabled={checklistDeleting === item.id}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-50 text-ink-300 hover:text-red-500 shrink-0"
+                      title="Delete item"
+                    >
+                      {checklistDeleting === item.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

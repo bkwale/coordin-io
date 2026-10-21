@@ -1,17 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/useUser'
+import { useProfile } from '@/lib/hooks/useProfile'
+import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard, FolderOpen, Sparkles, BookOpen,
   GraduationCap, Users, ExternalLink, BarChart3, PoundSterling,
   TrendingUp, Receipt, Target, Shield, Clock, ClipboardList,
   Link as LinkIcon, Plus, Search, MoreHorizontal,
   ChevronLeft, ChevronRight, CalendarDays, Wallet,
-  Wrench, Package,
+  Wrench, Package, User as UserIcon, Settings, LogOut,
 } from 'lucide-react'
 
 /* ── Navigation structure ──────────────────────────────── */
@@ -113,11 +115,32 @@ function NavSection({ title, items, pathname, collapsed, onClick }: {
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
   const close = () => setOpen(false)
   const { user } = useUser()
+  const { profile: myProfile } = useProfile()
 
-  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
+  // Close user menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    if (showUserMenu) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showUserMenu])
+
+  const handleSignOut = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const displayName = myProfile?.fullName || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
   const initials = displayName
     .split(' ')
     .map((w: string) => w[0])
@@ -233,24 +256,67 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         <div className={cn('border-t border-white/[0.06]', collapsed ? 'mx-3' : 'mx-5')} />
 
         {/* User */}
-        <div className={cn('py-4', collapsed ? 'px-3' : 'px-5')}>
+        <div className={cn('py-4 relative', collapsed ? 'px-3' : 'px-5')} ref={userMenuRef}>
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
-            <div className="relative shrink-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-accent flex items-center justify-center text-[12px] font-semibold text-white">{initials}</div>
+            <Link
+              href="/settings/profile"
+              onClick={close}
+              title={collapsed ? displayName : undefined}
+              className="relative shrink-0 group"
+            >
+              <div className="w-9 h-9 rounded-full bg-gradient-accent flex items-center justify-center text-[12px] font-semibold text-white group-hover:ring-2 group-hover:ring-accent-400/50 transition-all">{initials}</div>
               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#16162a]" />
-            </div>
+              {collapsed && (
+                <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-ink-900 px-2.5 py-1 text-[11px] font-medium text-white shadow-elevated opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  {displayName}
+                </span>
+              )}
+            </Link>
             {!collapsed && (
               <>
-                <div className="flex-1 min-w-0">
+                <Link href="/settings/profile" onClick={close} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
                   <p className="text-[13px] font-medium text-white/80 truncate">{displayName}</p>
-                  <p className="text-[10px] text-white/30">{user?.email || ''}</p>
-                </div>
-                <button className="text-white/20 hover:text-white/50 transition-colors">
+                  <p className="text-[10px] text-white/30">{myProfile?.jobTitle || user?.email || ''}</p>
+                </Link>
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="text-white/20 hover:text-white/50 transition-colors"
+                >
                   <MoreHorizontal className="w-4 h-4" />
                 </button>
               </>
             )}
           </div>
+
+          {/* User dropdown menu */}
+          {showUserMenu && !collapsed && (
+            <div className="absolute bottom-full left-4 right-4 mb-2 rounded-lg bg-ink-900 border border-white/[0.08] shadow-elevated py-1 z-50">
+              <Link
+                href={myProfile ? `/staffing/${myProfile.id}` : '/settings'}
+                onClick={() => { setShowUserMenu(false); close() }}
+                className="flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <UserIcon className="w-4 h-4" />
+                My Profile
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => { setShowUserMenu(false); close() }}
+                className="flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </Link>
+              <div className="mx-2 my-1 border-t border-white/[0.06]" />
+              <button
+                onClick={() => { setShowUserMenu(false); handleSignOut() }}
+                className="flex items-center gap-2.5 px-3 py-2 w-full text-[12px] text-red-400/70 hover:text-red-400 hover:bg-white/[0.06] transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Collapse toggle — desktop only */}

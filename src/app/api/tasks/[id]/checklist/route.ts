@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { NotFoundError, ValidationError } from '@/lib/errors'
 import { withTaskAccess } from '@/lib/with-task-access'
 import { requireString, requireId, optionalId, optionalDate, parseBody } from '@/lib/validation'
+import { recordAuditEvent, AuditActions } from '@/lib/audit'
 
 /**
  * POST /api/tasks/[id]/checklist — Add a checklist item.
@@ -87,4 +88,56 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { taskId }) => 
   })
 
   return success({ item })
+})
+
+/**
+ * DELETE /api/tasks/[id]/checklist — Delete checklist item(s).
+ * Body: { itemId } for single item, or { deleteAll: true } to clear all.
+ */
+export const DELETE = withTaskAccess(async (request: NextRequest, { taskId, profile }) => {
+  const body = await parseBody(request)
+
+  // deleteAll mode — clear all checklist items for this task
+  if (body.deleteAll === true) {
+    const { count } = await prisma.taskChecklistItem.deleteMany({
+      where: { taskId },
+    })
+
+    await recordAuditEvent({
+      organisationId: profile.organisationId,
+      actorId: profile.id,
+      action: AuditActions.TASK_STATUS_CHANGED,
+      entityType: 'TaskChecklistItem',
+      entityId: taskId,
+      metadata: { action: 'checklist_cleared', count },
+    })
+
+    return success({ deleted: true, count })
+  }
+
+  // Single item delete
+  const itemId = requireId(body.itemId, 'Item ID')
+
+  const existing = await prisma.taskChecklistItem.findUnique({
+    where: { id: itemId },
+  })
+
+  if (!existing || existing.taskId !== taskId) {
+    throw new NotFoundError('Checklist item not found')
+  }
+
+  await prisma.taskChecklistItem.delete({
+    where: { id: itemId },
+  })
+
+  await recordAuditEvent({
+    organisationId: profile.organisationId,
+    actorId: profile.id,
+    action: AuditActions.TASK_STATUS_CHANGED,
+    entityType: 'TaskChecklistItem',
+    entityId: itemId,
+    metadata: { action: 'checklist_item_deleted', label: existing.label },
+  })
+
+  return success({ deleted: true })
 })
