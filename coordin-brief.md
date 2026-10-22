@@ -1,8 +1,8 @@
 # Coordin.io — Product Brief
 
-**Last updated:** 25 August 2026
+**Last updated:** 22 October 2026
 **Author:** Wale Koleosho
-**Status:** Live on Vercel. Full-stack platform — Supabase backend, 50+ API routes, 1421 unit tests, CI green. First paying practice confirmed (~£180/month).
+**Status:** Live on Vercel. Full-stack platform — Supabase backend, 55+ API routes, 1421 unit tests, CI green. First paying practice confirmed (~£180/month). Tier 1 Helpdesk shipped.
 
 ---
 
@@ -23,7 +23,7 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 **Live platform — building toward first paying customer onboarding.**
 
 - Full-stack application deployed to Vercel with Supabase (PostgreSQL) backend
-- 50+ API routes, all authenticated with org-scoped multi-tenancy
+- 55+ API routes, all authenticated with org-scoped multi-tenancy
 - 1421 unit tests + 88-case E2E test plan with Playwright suite
 - GitHub Actions CI pipeline (typecheck + test + build verification)
 - Resend email integration (invitations, quotes, notifications, password recovery)
@@ -57,6 +57,7 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | **Notifications** | `/notifications` | Cross-module notifications with email delivery via Resend, user preference controls |
 | **Knowledge Base** | `/knowledge`, `/knowledge/[id]` | Article library with real data |
 | **Marketing** | `/`, `/use-cases`, `/features/brpd`, `/features/quotes`, `/book-demo`, `/faq`, `/demo-access` | 8-section homepage, 5 use case pages, timed demo (10 min), demo signup with Resend emails |
+| **Support / Helpdesk** | `/support-tickets`, `/support-tickets/[id]` | Tier 1 in-app helpdesk — ticket submission (Report Issue modal with category), My Tickets list with status filters, ticket detail with reply thread, admin status controls (OPEN → IN_PROGRESS → RESOLVED → CLOSED), email notifications on staff replies, access control (users see own tickets, ADMIN/OWNER see all org tickets) |
 | **Admin** | `/admin` | Platform admin backoffice (super-admin only) |
 
 ### Backend Infrastructure
@@ -66,7 +67,7 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | **Database** | Supabase PostgreSQL (eu-central-1), Prisma ORM, 30+ models |
 | **Auth** | Supabase Auth + withAuth() middleware, invitation token system |
 | **Permissions** | canPerform() matrix — 8 roles, lateral isolation, tier-based hierarchy |
-| **API Routes** | 50+ Next.js API routes, all authenticated + org-scoped |
+| **API Routes** | 55+ Next.js API routes, all authenticated + org-scoped |
 | **Email** | Resend integration — invitations, quotes, notifications, password recovery |
 | **File Upload** | Direct upload to Supabase Storage (PDF, images) |
 | **Validation** | Input validation helpers (requireUUID, requireNumber, requireDate, maxLength) |
@@ -198,6 +199,7 @@ Optional: Follow-up Required, Awaiting Client Clarification, Awaiting Deposit
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 22 Oct 2026 | Tier 1 Helpdesk shipped | SupportTicket + SupportTicketReply models, 3 API routes, ticket submission with categories, My Tickets with status filters, admin status controls, email notifications on replies, XSS-safe email templates |
 | 25 Aug 2026 | Playwright E2E suite + test plan | 88 test cases, 9 spec files, page object pattern, role-based auth |
 | 25 Aug 2026 | Hardcoded data audit | Fixed email fallbacks (noreply@coordin.io), API key validation, demo signup |
 | 25 Aug 2026 | Timesheet CSV + PDF exports | Manager-filtered exports with OWASP CSV injection protection |
