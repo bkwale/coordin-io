@@ -913,3 +913,26 @@ Focused release series addressing data integrity gaps, permission model consiste
 **What:** Added status check after profile lookup in `withAuth`. If `profile.status === 'DEACTIVATED'`, the request is rejected with 403 "Your account has been deactivated." This closes the gap where flipping a user to DEACTIVATED did not actually prevent API access.
 
 **Why:** Offboarding requirement — setting an employee to Inactive/Deactivated must block all access. Previously, `withAuth` only checked session validity and permissions, not employment status.
+
+### Payroll Export — Confidential XLSX Download (COMPLETE)
+
+**What:** HR, FINANCE, ADMIN, and OWNER roles can now export a comprehensive payroll spreadsheet (.xlsx) from the Staffing → Reports tab. The export includes employee details, salary, bank account information, pension contributions, and contract terms — all sourced from the confidential employee data table.
+
+| Component | File | Change |
+|-----------|------|--------|
+| API route | `src/app/api/staffing/export/payroll/route.ts` | New — generates .xlsx with ExcelJS. 18-column layout with styled headers, alternating row shading, auto-filters, and metadata sheet. Permission-gated via `canPerform(role, 'staffing', 'view_salary')`. Every export is audit-logged. |
+| UI button | `src/app/staffing/page.tsx` | "Payroll Export (.xlsx)" button in Reports tab. Visible only to roles in `PAYROLL_EXPORT_ROLES` Set (HR, FINANCE, ADMIN, OWNER). Downloads file directly. |
+| Profile hook fix | `src/lib/hooks/useProfile.ts` | Fixed `success()` wrapper unwrapping — changed `data?.profile ?? data` to `data?.data ?? data?.profile ?? data` so `orgPermission` is read correctly from API response. |
+| Constants | `src/app/staffing/page.tsx` | Extracted `PAYROLL_EXPORT_ROLES` to module scope (was inline `PAYROLL_ROLES` Set recreated each render). |
+
+**Export columns:** Employee Name, Employee ID, Email, Job Title, Department, Office, Start Date, Contract Type, Salary, Currency, Frequency, Bank Name, Account Name, Account Number, Sort Code, Pension Provider, Pension Contribution (%), Notice Period.
+
+**Security:**
+- Permission check: `canPerform(role, 'staffing', 'view_salary')` — HR, FINANCE, ADMIN, OWNER only
+- Audit trail: `staffing.payroll_exported` event with employee count, exporter name, and role
+- Metadata sheet: export date, exporter, role, total count, CONFIDENTIAL classification
+- `Cache-Control: no-store` header on response
+
+**Bug fix:** The `useProfile()` hook was not unwrapping the `success()` API response wrapper (`{ data: { ... } }`). It looked for `data.profile` (undefined), fell back to `data` itself (the wrapper), so `profile.orgPermission` was always `undefined`. This caused `canExportPayroll` to be `false` for ALL users. Fixed by adding `data?.data` as the first unwrap option.
+
+**Verification:** 0 type errors. Deployed and verified on live site — button visible for OWNER role. Commit a38e475 pushed.
