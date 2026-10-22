@@ -2,12 +2,14 @@ import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
-import { requireString, optionalString, parseBody } from '@/lib/validation'
+import { requireString, optionalString, optionalDate, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { recordAuditEvent } from '@/lib/audit'
 
 const STAGES = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION'] as const
 const VALID_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'WAIVED']
+const VALID_DOC_STATUSES = ['NOT_SENT', 'SENT', 'VIEWED', 'ACKNOWLEDGED']
 
 /**
  * Helper to extract assignmentId from the URL.
@@ -62,7 +64,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   // Non-managers can only see their own assignment tasks
-  const isManager = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'MANAGER'
+  const isHROrAbove = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR'
+  const isManager = isHROrAbove || profile.orgPermission === 'MANAGER'
   if (!isManager && assignment.profileId !== profile.id) {
     throw new PermissionError('You can only view your own onboarding tasks')
   }
@@ -125,12 +128,17 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     approvedAt: Date | null
     comment: string | null
     sortOrder: number
+    isAdHoc: boolean
+    documentStatus: string | null
+    documentSentAt: Date | null
+    documentViewedAt: Date | null
+    documentAcknowledgedAt: Date | null
     templateItem: {
       requiresEvidence: boolean
       requiresApproval: boolean
       responsibleRole: string | null
       description: string | null
-    }
+    } | null
   }>) {
     const stageBucket = groupedTasks[task.stage] ?? (groupedTasks[task.stage] = [])
     stageBucket.push({
@@ -149,6 +157,11 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       approvedByName: task.approvedById ? (peopleMap.get(task.approvedById) ?? 'Not provided') : 'Not provided',
       approvedAt: task.approvedAt,
       comment: task.comment ?? 'Not provided',
+      isAdHoc: task.isAdHoc,
+      documentStatus: task.documentStatus,
+      documentSentAt: task.documentSentAt,
+      documentViewedAt: task.documentViewedAt,
+      documentAcknowledgedAt: task.documentAcknowledgedAt,
       responsibleRole: task.templateItem?.responsibleRole ?? 'Not provided',
       requiresEvidence: task.templateItem?.requiresEvidence ?? false,
       requiresApproval: task.templateItem?.requiresApproval ?? false,
@@ -246,6 +259,19 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     updateData.comment = optionalString(body.comment, 'comment', 2000) ?? null
   }
 
+  // Document status tracking (NOT_SENT → SENT → VIEWED → ACKNOWLEDGED)
+  if (body.documentStatus !== undefined) {
+    const docStatus = requireString(body.documentStatus, 'documentStatus', 20)
+    if (!VALID_DOC_STATUSES.includes(docStatus)) {
+      throw new ValidationError(`documentStatus must be one of: ${VALID_DOC_STATUSES.join(', ')}`)
+    }
+    updateData.documentStatus = docStatus
+    const now = new Date()
+    if (docStatus === 'SENT') updateData.documentSentAt = now
+    if (docStatus === 'VIEWED') updateData.documentViewedAt = now
+    if (docStatus === 'ACKNOWLEDGED') updateData.documentAcknowledgedAt = now
+  }
+
   // Approval (managers/admins only)
   if (body.approved === true) {
     if (!isManager) {
@@ -281,4 +307,101 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   })
 
   return success({ task: updated, assignment: updatedAssignment })
+})
+
+/**
+ * POST /api/onboarding/assignments/[assignmentId]/tasks — Create an ad-hoc task.
+ *
+ * Manager/HR/Admin only. Creates an individual task not tied to a template item.
+ * Supports document tracking fields for policy/document acknowledgement.
+ */
+export const POST = withAuth(async (request: NextRequest, { profile }) => {
+  const assignmentId = getAssignmentId(request.url)
+
+  const isHROrAbove = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR'
+  const isManager = isHROrAbove || profile.orgPermission === 'MANAGER'
+  if (!isManager) {
+    throw new PermissionError('Only managers, HR, and admins can create ad-hoc onboarding tasks')
+  }
+
+  const assignment = await modulesPrisma.onboardingAssignment.findFirst({
+    where: {
+      id: assignmentId,
+      organisationId: profile.organisationId,
+    },
+  })
+  if (!assignment) {
+    throw new NotFoundError('Assignment not found')
+  }
+
+  const body = await parseBody(request)
+
+  const title = requireString(body.title, 'title', 500)
+  const stage = requireString(body.stage, 'stage', 50)
+  if (!STAGES.includes(stage as typeof STAGES[number])) {
+    throw new ValidationError(`stage must be one of: ${STAGES.join(', ')}`)
+  }
+
+  const category = optionalString(body.category, 'category', 200)
+  const description = optionalString(body.description, 'description', 2000)
+  const assigneeId = optionalString(body.assigneeId, 'assigneeId', 50)
+  const dueDate = optionalDate(body.dueDate, 'dueDate')
+  const notifyEmployee = body.notifyEmployee === true
+  const actionRequired = body.actionRequired === true
+  const acknowledgementRequired = body.acknowledgementRequired === true
+
+  // Document status — if this is a document task, start as NOT_SENT
+  const documentStatus = acknowledgementRequired ? 'NOT_SENT' : null
+
+  // Get max sort order for this assignment
+  const maxSortTask = await modulesPrisma.onboardingTask.findFirst({
+    where: { assignmentId },
+    orderBy: { sortOrder: 'desc' },
+    select: { sortOrder: true },
+  })
+
+  const task = await modulesPrisma.onboardingTask.create({
+    data: {
+      assignmentId,
+      templateItemId: null,
+      assigneeId: assigneeId ?? assignment.profileId,
+      title,
+      stage,
+      category: category ?? null,
+      dueDate: dueDate ?? null,
+      status: 'PENDING',
+      isAdHoc: true,
+      notifyEmployee,
+      actionRequired,
+      acknowledgementRequired,
+      documentStatus,
+      comment: description ?? null,
+      sortOrder: (maxSortTask?.sortOrder ?? 0) + 1,
+    },
+  })
+
+  // Recalculate assignment progress
+  await recalculateProgress(assignmentId)
+
+  // Notify employee if requested
+  if (notifyEmployee) {
+    await createNotification({
+      profileId: assignment.profileId,
+      type: NOTIFICATION_EVENTS.ONBOARDING_TASK_ASSIGNED,
+      title: 'New onboarding task assigned',
+      body: `You have a new task: "${title}"${dueDate ? ` — due ${new Date(dueDate).toLocaleDateString()}` : ''}.`,
+      linkUrl: '/onboarding',
+    })
+  }
+
+  await recordAuditEvent({
+    organisationId: profile.organisationId,
+    actorId: profile.id,
+    action: 'onboarding_task.created_adhoc',
+    entityType: 'OnboardingTask',
+    entityId: task.id,
+    metadata: { title, stage, assignmentId, isAdHoc: true },
+  })
+
+  return success({ task }, 201)
 })

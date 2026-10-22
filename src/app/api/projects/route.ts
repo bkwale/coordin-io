@@ -12,22 +12,49 @@ import { requireString, optionalString, optionalId, optionalEnum, optionalDate, 
  * Admins / Owners see all org projects.
  * Everyone else sees only projects they are a member of.
  */
-export const GET = withAuth(async (_request: NextRequest, { profile }) => {
+export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const orgId = profile.organisationId
   const isAdmin = canPerform(profile.orgPermission, 'projects', 'view_all')
+  const url = new URL(request.url)
+
+  // ── Query params ──────────────────────────────────
+  const search = url.searchParams.get('search')?.trim() || null
+  const stageFilter = url.searchParams.get('stage') || null
+  const statusFilter = url.searchParams.get('status') || null
+  const typeFilter = url.searchParams.get('projectType') || null
+  const healthFilter = url.searchParams.get('healthStatus') || null
+  const officeFilter = url.searchParams.get('officeId') || null
+  const includeArchived = url.searchParams.get('includeArchived') === 'true'
+
+  // ── Build where clause ────────────────────────────
+  const where: Record<string, unknown> = { organisationId: orgId }
+
+  if (!isAdmin) {
+    where.memberships = { some: { profileId: profile.id, removedAt: null } }
+  }
+
+  // By default hide ARCHIVED projects unless explicitly requested
+  if (!includeArchived) {
+    where.status = statusFilter ? statusFilter : { not: 'ARCHIVED' }
+  } else if (statusFilter) {
+    where.status = statusFilter
+  }
+
+  if (stageFilter) where.stage = stageFilter
+  if (typeFilter) where.projectType = typeFilter
+  if (healthFilter) where.healthStatus = healthFilter
+  if (officeFilter) where.officeId = officeFilter
+
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { code: { contains: search, mode: 'insensitive' } },
+      { clientBrand: { contains: search, mode: 'insensitive' } },
+    ]
+  }
 
   const projects = await prisma.project.findMany({
-    where: isAdmin
-      ? { organisationId: orgId }
-      : {
-          organisationId: orgId,
-          memberships: {
-            some: {
-              profileId: profile.id,
-              removedAt: null,
-            },
-          },
-        },
+    where,
     include: {
       office: { select: { id: true, name: true } },
       _count: {

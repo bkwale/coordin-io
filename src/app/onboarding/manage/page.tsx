@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight, Plus, X, Check, Trash2,
   FileText, AlertCircle, Loader2, Shield, Settings,
   Calendar, CheckCircle2, AlertTriangle, Edit2, Save,
+  Building, MapPin, Send, Eye, FileCheck,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -14,11 +15,20 @@ import { useToast } from '@/components/Toast'
    TYPES
    ================================================================ */
 
+interface OfficeSummary {
+  id: string
+  name: string
+  region: string | null
+}
+
 interface TemplateSummary {
   id: string
   name: string
   roleLevel: string
   description: string
+  officeId: string | null
+  region: string | null
+  officeName: string | null
   isDefault: boolean
   isActive: boolean
   totalItems: number
@@ -89,6 +99,11 @@ interface OnboardingTaskDetail {
   requiresEvidence: boolean
   requiresApproval: boolean
   description: string
+  isAdHoc: boolean
+  documentStatus: string | null
+  documentSentAt: string | null
+  documentViewedAt: string | null
+  documentAcknowledgedAt: string | null
 }
 
 /* ================================================================
@@ -120,6 +135,13 @@ const STATUS_COLORS: Record<string, string> = {
   WAIVED: 'bg-gray-100 text-gray-500',
 }
 
+const DOC_STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  NOT_SENT: { label: 'Not Sent', color: 'bg-gray-100 text-gray-600', icon: FileText },
+  SENT: { label: 'Sent', color: 'bg-blue-100 text-blue-700', icon: Send },
+  VIEWED: { label: 'Viewed', color: 'bg-amber-100 text-amber-700', icon: Eye },
+  ACKNOWLEDGED: { label: 'Acknowledged', color: 'bg-green-100 text-green-700', icon: FileCheck },
+}
+
 /* ================================================================
    COMPONENT
    ================================================================ */
@@ -134,8 +156,9 @@ export default function OnboardingManagePage() {
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null)
   const [templateDetail, setTemplateDetail] = useState<TemplateDetail | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [createForm, setCreateForm] = useState({ name: '', roleLevel: '', description: '' })
+  const [createForm, setCreateForm] = useState({ name: '', roleLevel: '', description: '', officeId: '', region: '' })
   const [saving, setSaving] = useState(false)
+  const [offices, setOffices] = useState<OfficeSummary[]>([])
 
   // Item add state
   const [addingItemStage, setAddingItemStage] = useState<string | null>(null)
@@ -151,6 +174,13 @@ export default function OnboardingManagePage() {
   const [showAssignForm, setShowAssignForm] = useState(false)
   const [assignForm, setAssignForm] = useState({ templateId: '', profileId: '', startDate: '' })
   const [employees, setEmployees] = useState<{ id: string; fullName: string }[]>([])
+
+  // Ad-hoc task state
+  const [showAdHocForm, setShowAdHocForm] = useState<string | null>(null)
+  const [adHocForm, setAdHocForm] = useState({
+    title: '', stage: 'BEFORE_START', category: '', description: '',
+    dueDate: '', notifyEmployee: true, acknowledgementRequired: false,
+  })
 
   // Probation state
   const [probationReviews, setProbationReviews] = useState<{
@@ -205,11 +235,23 @@ export default function OnboardingManagePage() {
     }
   }, [])
 
+  const fetchOffices = useCallback(async () => {
+    try {
+      const res = await fetch('/api/offices')
+      if (!res.ok) return
+      const json = await res.json()
+      const list = json.data?.offices ?? []
+      setOffices(list.map((o: { id: string; name: string; region: string | null }) => ({ id: o.id, name: o.name, region: o.region })))
+    } catch {
+      // Non-fatal
+    }
+  }, [])
+
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchTemplates(), fetchAssignments(), fetchProbation(), fetchEmployees()])
+    await Promise.all([fetchTemplates(), fetchAssignments(), fetchProbation(), fetchEmployees(), fetchOffices()])
     setLoading(false)
-  }, [fetchTemplates, fetchAssignments, fetchProbation, fetchEmployees])
+  }, [fetchTemplates, fetchAssignments, fetchProbation, fetchEmployees, fetchOffices])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -248,6 +290,8 @@ export default function OnboardingManagePage() {
           name: createForm.name,
           roleLevel: createForm.roleLevel || null,
           description: createForm.description || null,
+          officeId: createForm.officeId || null,
+          region: createForm.region || null,
         }),
       })
       if (!res.ok) {
@@ -256,7 +300,7 @@ export default function OnboardingManagePage() {
       }
       toast('Template created', 'success')
       setShowCreateForm(false)
-      setCreateForm({ name: '', roleLevel: '', description: '' })
+      setCreateForm({ name: '', roleLevel: '', description: '', officeId: '', region: '' })
       await fetchTemplates()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to create template', 'error')
@@ -427,6 +471,52 @@ export default function OnboardingManagePage() {
     }
   }
 
+  // ── Create ad-hoc task ───────────────────────────────────
+
+  const handleCreateAdHocTask = async (assignmentId: string) => {
+    if (!adHocForm.title.trim()) {
+      toast('Task title is required', 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/onboarding/assignments/${assignmentId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: adHocForm.title,
+          stage: adHocForm.stage,
+          category: adHocForm.category || null,
+          description: adHocForm.description || null,
+          dueDate: adHocForm.dueDate || null,
+          notifyEmployee: adHocForm.notifyEmployee,
+          acknowledgementRequired: adHocForm.acknowledgementRequired,
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error || 'Failed to create task')
+      }
+      toast('Ad-hoc task created', 'success')
+      setShowAdHocForm(null)
+      setAdHocForm({ title: '', stage: 'BEFORE_START', category: '', description: '', dueDate: '', notifyEmployee: true, acknowledgementRequired: false })
+      // Refresh tasks
+      setExpandedAssignment(null)
+      setTimeout(() => loadAssignmentTasks(assignmentId), 100)
+      await fetchAssignments()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to create task', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Update document status ──────────────────────────────
+
+  const handleDocStatus = async (assignmentId: string, taskId: string, newStatus: string) => {
+    await handleUpdateTask(assignmentId, taskId, { documentStatus: newStatus })
+  }
+
   // ── Render: Templates Tab ────────────────────────────────
 
   function renderTemplatesTab() {
@@ -465,6 +555,41 @@ export default function OnboardingManagePage() {
                   className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
                   placeholder="e.g. Senior Architect"
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-medium text-ink-500 mb-1">
+                  <Building className="w-3 h-3 inline mr-1" />
+                  Office (optional)
+                </label>
+                <select
+                  value={createForm.officeId}
+                  onChange={(e) => setCreateForm({ ...createForm, officeId: e.target.value })}
+                  className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                >
+                  <option value="">Org-wide (all offices)</option>
+                  {offices.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-500 mb-1">
+                  <MapPin className="w-3 h-3 inline mr-1" />
+                  Region (optional)
+                </label>
+                <select
+                  value={createForm.region}
+                  onChange={(e) => setCreateForm({ ...createForm, region: e.target.value })}
+                  className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                >
+                  <option value="">Any region</option>
+                  <option value="UK">UK</option>
+                  <option value="NG">Nigeria</option>
+                  <option value="EE">Estonia</option>
+                  <option value="EU">EU</option>
+                </select>
               </div>
             </div>
             <div>
@@ -528,6 +653,9 @@ export default function OnboardingManagePage() {
                     </div>
                     <div className="text-[12px] text-ink-400 mt-0.5">
                       {t.roleLevel !== 'Not provided' ? t.roleLevel : 'All roles'} &middot; {t.totalItems} item{t.totalItems !== 1 ? 's' : ''} &middot; {t.assignmentCount} assignment{t.assignmentCount !== 1 ? 's' : ''}
+                      {t.officeName && <> &middot; <Building className="w-3 h-3 inline" /> {t.officeName}</>}
+                      {t.region && <> &middot; <MapPin className="w-3 h-3 inline" /> {t.region}</>}
+                      {!t.officeId && !t.region && <> &middot; Org-wide</>}
                     </div>
                   </div>
                 </div>
@@ -854,6 +982,112 @@ export default function OnboardingManagePage() {
                     })}
                   </div>
 
+                  {/* Add ad-hoc task button */}
+                  <div className="px-4 py-2 border-t border-ink-100">
+                    <button
+                      onClick={() => setShowAdHocForm(showAdHocForm === a.id ? null : a.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Ad-Hoc Task
+                    </button>
+
+                    {showAdHocForm === a.id && (
+                      <div className="mt-3 p-4 bg-purple-50/50 border border-purple-200 rounded-xl space-y-3">
+                        <h5 className="text-[13px] font-semibold text-purple-800">New Ad-Hoc Task</h5>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <label className="block text-[11px] font-medium text-ink-500 mb-1">Title *</label>
+                            <input
+                              type="text"
+                              value={adHocForm.title}
+                              onChange={(e) => setAdHocForm({ ...adHocForm, title: e.target.value })}
+                              placeholder="e.g. Sign health & safety declaration"
+                              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-ink-500 mb-1">Stage *</label>
+                            <select
+                              value={adHocForm.stage}
+                              onChange={(e) => setAdHocForm({ ...adHocForm, stage: e.target.value })}
+                              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                            >
+                              {STAGES.map((s) => (
+                                <option key={s.key} value={s.key}>{s.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-ink-500 mb-1">Category</label>
+                            <input
+                              type="text"
+                              value={adHocForm.category}
+                              onChange={(e) => setAdHocForm({ ...adHocForm, category: e.target.value })}
+                              placeholder="e.g. Compliance, IT Setup"
+                              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-[11px] font-medium text-ink-500 mb-1">Description</label>
+                            <textarea
+                              value={adHocForm.description}
+                              onChange={(e) => setAdHocForm({ ...adHocForm, description: e.target.value })}
+                              placeholder="Brief description of what needs to be done..."
+                              rows={2}
+                              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-ink-500 mb-1">Due Date</label>
+                            <input
+                              type="date"
+                              value={adHocForm.dueDate}
+                              onChange={(e) => setAdHocForm({ ...adHocForm, dueDate: e.target.value })}
+                              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                            />
+                          </div>
+                          <div className="flex items-end gap-4 pb-1">
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={adHocForm.notifyEmployee}
+                                onChange={(e) => setAdHocForm({ ...adHocForm, notifyEmployee: e.target.checked })}
+                                className="rounded border-ink-300"
+                              />
+                              Notify employee
+                            </label>
+                            <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={adHocForm.acknowledgementRequired}
+                                onChange={(e) => setAdHocForm({ ...adHocForm, acknowledgementRequired: e.target.checked })}
+                                className="rounded border-ink-300"
+                              />
+                              Require acknowledgement
+                            </label>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => { setShowAdHocForm(null); setAdHocForm({ title: '', stage: 'BEFORE_START', category: '', description: '', dueDate: '', notifyEmployee: true, acknowledgementRequired: false }) }}
+                            className="px-3 py-1.5 text-[12px] text-ink-500 hover:text-ink-700"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleCreateAdHocTask(a.id)}
+                            disabled={saving || !adHocForm.title}
+                            className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-700 text-white rounded-lg text-[12px] font-medium disabled:opacity-50"
+                          >
+                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                            Add Task
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Tasks by stage */}
                   {assignmentTasks && (
                     <div className="px-4 pb-4 space-y-3">
@@ -876,11 +1110,27 @@ export default function OnboardingManagePage() {
                                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-700'}`}>
                                           {task.status}
                                         </span>
+                                        {task.isAdHoc && (
+                                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                                            AD-HOC
+                                          </span>
+                                        )}
                                         {isOverdue && (
                                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
                                             OVERDUE
                                           </span>
                                         )}
+                                        {task.documentStatus && (() => {
+                                          const dm = DOC_STATUS_META[task.documentStatus]
+                                          if (!dm) return null
+                                          const Icon = dm.icon
+                                          return (
+                                            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${dm.color}`}>
+                                              <Icon className="w-3 h-3" />
+                                              {dm.label}
+                                            </span>
+                                          )
+                                        })()}
                                       </div>
                                       <div className="flex items-center gap-3 mt-0.5 text-[11px] text-ink-400">
                                         <span>{task.responsibleRole}</span>
@@ -894,6 +1144,27 @@ export default function OnboardingManagePage() {
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-1">
+                                      {/* Document status progression buttons */}
+                                      {task.documentStatus === 'NOT_SENT' && (
+                                        <button
+                                          onClick={() => handleDocStatus(a.id, task.id, 'SENT')}
+                                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                                          title="Mark as sent"
+                                        >
+                                          <Send className="w-3.5 h-3.5" />
+                                          Send
+                                        </button>
+                                      )}
+                                      {task.documentStatus === 'SENT' && (
+                                        <button
+                                          onClick={() => handleDocStatus(a.id, task.id, 'VIEWED')}
+                                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-amber-700 hover:bg-amber-50 rounded transition-colors"
+                                          title="Mark as viewed"
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                          Viewed
+                                        </button>
+                                      )}
                                       {task.status !== 'COMPLETED' && task.status !== 'WAIVED' && (
                                         <button
                                           onClick={() => handleUpdateTask(a.id, task.id, { status: 'COMPLETED' })}

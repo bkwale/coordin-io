@@ -16,6 +16,8 @@ import { recordAuditEvent } from '@/lib/audit'
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const activeOnly = url.searchParams.get('activeOnly') !== 'false'
+  const officeFilter = url.searchParams.get('officeId')
+  const regionFilter = url.searchParams.get('region')
 
   const where: Record<string, unknown> = {
     organisationId: profile.organisationId,
@@ -23,12 +25,22 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   if (activeOnly) {
     where.isActive = true
   }
+  if (officeFilter) {
+    // Return templates scoped to this office OR org-wide (null officeId)
+    where.OR = [{ officeId: officeFilter }, { officeId: null }]
+  }
+  if (regionFilter) {
+    where.region = regionFilter
+  }
 
   const templates = await modulesPrisma.onboardingTemplate.findMany({
     where,
     include: {
       items: {
         select: { id: true, stage: true },
+      },
+      office: {
+        select: { id: true, name: true },
       },
       _count: {
         select: { assignments: true },
@@ -43,11 +55,14 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     name: string
     roleLevel: string | null
     description: string | null
+    officeId: string | null
+    region: string | null
     isDefault: boolean
     isActive: boolean
     createdAt: Date
     updatedAt: Date
     items: { id: string; stage: string }[]
+    office: { id: string; name: string } | null
     _count: { assignments: number }
   }) => {
     const stageCounts: Record<string, number> = {}
@@ -59,6 +74,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       name: t.name,
       roleLevel: t.roleLevel ?? 'Not provided',
       description: t.description ?? 'Not provided',
+      officeId: t.officeId,
+      region: t.region,
+      officeName: t.office?.name ?? null,
       isDefault: t.isDefault,
       isActive: t.isActive,
       totalItems: t.items.length,
@@ -88,6 +106,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const name = requireString(body.name, 'name', 200)
   const roleLevel = optionalString(body.roleLevel, 'roleLevel', 100)
   const description = optionalString(body.description, 'description', 2000)
+  const officeId = optionalString(body.officeId, 'officeId', 50)
+  const region = optionalString(body.region, 'region', 10)
   const isDefault = body.isDefault === true
 
   // If setting as default, unset any existing default
@@ -122,6 +142,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       name,
       roleLevel: roleLevel ?? null,
       description: description ?? null,
+      officeId: officeId ?? null,
+      region: region ?? null,
       isDefault,
       items: itemsData.length > 0 ? { create: itemsData } : undefined,
     },

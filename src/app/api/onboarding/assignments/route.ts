@@ -23,7 +23,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   const isAdmin = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
   const isHROrAbove = profile.orgPermission === 'HR' || isAdmin
-  const isManager = profile.orgPermission === 'MANAGER' || isHROrAbove
+  const isManager = isHROrAbove || profile.orgPermission === 'MANAGER'
 
   const where: Record<string, unknown> = {
     organisationId: profile.organisationId,

@@ -141,6 +141,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
         assignedTo: { select: { id: true, fullName: true } },
         project: { select: { id: true, name: true, code: true } },
         office: { select: { id: true, name: true } },
+        _count: { select: { items: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -215,6 +216,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const managerId = profile.managerId || null
   const requestNumber = await generateRequestNumber(profile.organisationId)
 
+  // Parse inline items if provided (filter out items with empty descriptions)
+  const inlineItems: Array<{ description: string; quantity?: number; unitCost?: number; currency?: string; category?: string; notes?: string }> =
+    Array.isArray(body.items) ? body.items.filter((i: Record<string, unknown>) => i && typeof i.description === 'string' && i.description.trim()) : []
+
   const serviceRequest = await modulesPrisma.serviceRequest.create({
     data: {
       requestNumber,
@@ -237,11 +242,25 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       serviceTarget: serviceTarget ? Math.round(serviceTarget) : null,
       attachmentUrls: [],
       dynamicFields: body.dynamicFields || null,
+      ...(inlineItems.length > 0 ? {
+        items: {
+          create: inlineItems.map((item, idx) => ({
+            description: String(item.description || '').slice(0, 500),
+            quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
+            unitCost: item.unitCost != null ? Number(item.unitCost) : null,
+            currency: String(item.currency || 'GBP').slice(0, 10),
+            category: item.category ? String(item.category).slice(0, 200) : null,
+            notes: item.notes ? String(item.notes).slice(0, 2000) : null,
+            sortOrder: idx + 1,
+          })),
+        },
+      } : {}),
     },
     include: {
       profile: { select: { id: true, fullName: true } },
       approver: { select: { id: true, fullName: true } },
       project: { select: { id: true, name: true, code: true } },
+      items: { orderBy: { sortOrder: 'asc' } },
     },
   })
 

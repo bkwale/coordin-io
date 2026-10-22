@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronRight, Search, Filter, Calendar,
   User, Tag, MapPin, DollarSign, Paperclip, MessageSquare,
   ArrowLeft, Send, ThumbsUp, ThumbsDown, PlayCircle, Eye,
+  Trash2, Package,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
@@ -14,6 +15,17 @@ import { useApiMutation } from '@/hooks/use-api'
 import { SkeletonRow } from '@/components/Skeleton'
 
 /* ── Types ─────────────────────────────────────────────── */
+
+interface ServiceRequestItem {
+  id: string
+  description: string
+  quantity: number
+  unitCost: number | null
+  currency: string | null
+  category: string | null
+  notes: string | null
+  sortOrder: number
+}
 
 interface ServiceRequest {
   id: string
@@ -44,6 +56,8 @@ interface ServiceRequest {
   assignedTo: { id: string; fullName: string } | null
   project: { id: string; name: string; code?: string } | null
   office: { id: string; name: string } | null
+  items?: ServiceRequestItem[]
+  _count?: { items: number }
 }
 
 interface SummaryCounts {
@@ -206,6 +220,7 @@ export default function ServiceRequestsPage() {
   const [formEstimatedCost, setFormEstimatedCost] = useState('')
   const [formRequiredByDate, setFormRequiredByDate] = useState('')
   const [formBudgetCode, setFormBudgetCode] = useState('')
+  const [formItems, setFormItems] = useState<Array<{ description: string; quantity: string; unitCost: string; category: string; notes: string }>>([])
   const { mutate: createRequest, loading: creating } = useApiMutation<ServiceRequest>('/api/service-requests', 'POST')
 
   // Detail panel
@@ -266,6 +281,16 @@ export default function ServiceRequestsPage() {
     e.preventDefault()
     if (!formTitle) return
 
+    const itemsPayload = formItems
+      .filter(i => i.description.trim())
+      .map(i => ({
+        description: i.description.trim(),
+        quantity: i.quantity ? parseInt(i.quantity, 10) : 1,
+        unitCost: i.unitCost ? parseFloat(i.unitCost) : undefined,
+        category: i.category || undefined,
+        notes: i.notes || undefined,
+      }))
+
     const result = await createRequest({
       requestType: formType,
       title: formTitle,
@@ -276,6 +301,7 @@ export default function ServiceRequestsPage() {
       estimatedCost: formEstimatedCost ? parseFloat(formEstimatedCost) : undefined,
       requiredByDate: formRequiredByDate || undefined,
       budgetCode: formBudgetCode || undefined,
+      ...(itemsPayload.length > 0 ? { items: itemsPayload } : {}),
     })
 
     if (result) {
@@ -298,7 +324,29 @@ export default function ServiceRequestsPage() {
     setFormEstimatedCost('')
     setFormRequiredByDate('')
     setFormBudgetCode('')
+    setFormItems([])
   }
+
+  /* ── Line item helpers ──────────────────────────── */
+  const addFormItem = () => {
+    setFormItems([...formItems, { description: '', quantity: '1', unitCost: '', category: '', notes: '' }])
+  }
+
+  const updateFormItem = (idx: number, field: string, value: string) => {
+    setFormItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item))
+  }
+
+  const removeFormItem = (idx: number) => {
+    setFormItems(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const formItemsTotal = useMemo(() => {
+    return formItems.reduce((sum, item) => {
+      const qty = parseInt(item.quantity, 10) || 1
+      const cost = parseFloat(item.unitCost) || 0
+      return sum + qty * cost
+    }, 0)
+  }, [formItems])
 
   /* ── Status change ───────────────────────────────── */
   const handleStatusChange = async (id: string, newStatus: string, extras?: Record<string, unknown>) => {
@@ -555,6 +603,90 @@ export default function ServiceRequestsPage() {
             </div>
           </div>
 
+          {/* Line items */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-medium text-ink-500">
+                Line items {formItems.length > 0 && <span className="text-ink-400">({formItems.length})</span>}
+              </label>
+              <button
+                type="button"
+                onClick={addFormItem}
+                className="flex items-center gap-1 text-[11px] font-medium text-accent-600 hover:text-accent-700 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> Add item
+              </button>
+            </div>
+
+            {formItems.length > 0 && (
+              <div className="space-y-2">
+                {formItems.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-2 bg-ink-25 rounded-lg p-3">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-2">
+                      <div className="sm:col-span-5">
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => updateFormItem(idx, 'description', e.target.value)}
+                          placeholder="Item description *"
+                          className="w-full px-2.5 py-1.5 text-[12px] border border-ink-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
+                          maxLength={500}
+                          required
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => updateFormItem(idx, 'quantity', e.target.value)}
+                          placeholder="Qty"
+                          className="w-full px-2.5 py-1.5 text-[12px] border border-ink-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.unitCost}
+                          onChange={(e) => updateFormItem(idx, 'unitCost', e.target.value)}
+                          placeholder="Unit cost"
+                          className="w-full px-2.5 py-1.5 text-[12px] border border-ink-200 rounded focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex items-center">
+                        <span className="text-[12px] text-ink-500 font-medium">
+                          {((parseInt(item.quantity, 10) || 1) * (parseFloat(item.unitCost) || 0)).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFormItem(idx)}
+                      className="p-1 text-ink-300 hover:text-red-500 transition-colors mt-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Items total */}
+                {formItemsTotal > 0 && (
+                  <div className="flex justify-end pr-8">
+                    <span className="text-[12px] font-semibold text-ink-700">
+                      Total: {formItemsTotal.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {formItems.length === 0 && (
+              <p className="text-[11px] text-ink-300 italic">No line items — add items for itemised costing</p>
+            )}
+          </div>
+
           {/* Row 5: Budget code */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -754,6 +886,7 @@ export default function ServiceRequestsPage() {
                       {' · '}{formatShortDate(req.createdAt)}
                       {' · '}{req.profile.fullName}
                       {req.project && ` · ${req.project.code || req.project.name}`}
+                      {req._count && req._count.items > 0 && ` · ${req._count.items} item${req._count.items !== 1 ? 's' : ''}`}
                     </p>
                   </div>
 
@@ -1013,6 +1146,53 @@ function RequestDetailPanel({
               )}
             </div>
           </div>
+
+          {/* Line items */}
+          {request.items && request.items.length > 0 && (
+            <div className="border-t border-ink-100 pt-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-ink-400" />
+                <p className="text-[12px] font-medium text-ink-600">Line items ({request.items.length})</p>
+              </div>
+              <div className="bg-ink-25 rounded-lg overflow-hidden">
+                {/* Table header */}
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[10px] font-semibold text-ink-400 uppercase tracking-wide border-b border-ink-100">
+                  <div className="col-span-5">Description</div>
+                  <div className="col-span-2 text-center">Qty</div>
+                  <div className="col-span-3 text-right">Unit cost</div>
+                  <div className="col-span-2 text-right">Total</div>
+                </div>
+                {/* Table rows */}
+                {request.items.map((item) => (
+                  <div key={item.id} className="grid grid-cols-12 gap-2 px-4 py-2.5 text-[12px] text-ink-700 border-b border-ink-50 last:border-b-0">
+                    <div className="col-span-5">
+                      <p className="font-medium">{item.description}</p>
+                      {item.category && <p className="text-[10px] text-ink-400 mt-0.5">{item.category}</p>}
+                      {item.notes && <p className="text-[10px] text-ink-400 mt-0.5 italic">{item.notes}</p>}
+                    </div>
+                    <div className="col-span-2 text-center">{item.quantity}</div>
+                    <div className="col-span-3 text-right">
+                      {item.unitCost != null
+                        ? `${item.currency || 'GBP'} ${item.unitCost.toLocaleString('en-GB', { minimumFractionDigits: 2 })}`
+                        : '—'}
+                    </div>
+                    <div className="col-span-2 text-right font-medium">
+                      {item.unitCost != null
+                        ? `${item.currency || 'GBP'} ${(item.quantity * item.unitCost).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`
+                        : '—'}
+                    </div>
+                  </div>
+                ))}
+                {/* Total row */}
+                <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-ink-50 text-[12px] font-semibold text-ink-900">
+                  <div className="col-span-10 text-right">Total</div>
+                  <div className="col-span-2 text-right">
+                    {`${request.currency || 'GBP'} ${request.items.reduce((sum, i) => sum + (i.unitCost ? i.quantity * i.unitCost : 0), 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Fulfilment notes (for in-progress requests) */}
           {request.status === 'FULFILMENT_IN_PROGRESS' && (

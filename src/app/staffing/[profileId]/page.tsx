@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, User, Briefcase, Calendar, BarChart3, GraduationCap,
-  Wrench, FileText, ChevronDown, ChevronRight, AlertTriangle,
+  Wrench, FileText, AlertTriangle,
   RefreshCw, Mail, Phone, MapPin, Shield, Clock, Heart,
   Building2, Users, Pencil, X, Save, Loader2, Plus, ExternalLink,
-  Upload, Lock, Award, AlertCircle, Link2, Send,
+  Upload, Lock, Award, AlertCircle, Link2, Send, ClipboardList,
+  CheckCircle2,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -169,10 +170,11 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 }
 
-type SectionKey = 'overview' | 'employment' | 'bank' | 'leave' | 'projects' | 'training' | 'assets' | 'documents'
+type SectionKey = 'overview' | 'employment' | 'bank' | 'leave' | 'projects' | 'training' | 'assets' | 'documents' | 'onboarding'
 
-const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; adminOnly?: boolean }[] = [
+const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; adminOnly?: boolean; selfOnly?: boolean }[] = [
   { key: 'overview', label: 'Overview', icon: User },
+  { key: 'onboarding', label: 'Onboarding', icon: ClipboardList },
   { key: 'employment', label: 'Employment', icon: Briefcase, adminOnly: true },
   { key: 'bank', label: 'Bank Details', icon: Building2 },
   { key: 'leave', label: 'Leave & Absence', icon: Calendar },
@@ -230,9 +232,7 @@ export default function EmployeeProfilePage() {
   const [data, setData] = useState<EmployeeProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedSections, setExpandedSections] = useState<Set<SectionKey>>(
-    new Set(['overview', 'leave', 'projects'])
-  )
+  const [activeTab, setActiveTab] = useState<SectionKey>('overview')
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, string | number | null>>({})
@@ -260,17 +260,31 @@ export default function EmployeeProfilePage() {
     fetchProfile()
   }, [fetchProfile])
 
-  const toggleSection = (key: SectionKey) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
+  // Onboarding data for the onboarding tab
+  const [onboardingAssignments, setOnboardingAssignments] = useState<Array<{
+    id: string; templateId: string; status: string; progress: number; startDate: string
+    template: { id: string; name: string }; taskSummary: { total: number; completed: number; overdue: number }
+  }>>([])
+  const [onboardingLoading, setOnboardingLoading] = useState(false)
+
+  const fetchOnboarding = useCallback(async () => {
+    setOnboardingLoading(true)
+    try {
+      const res = await fetch(`/api/onboarding/assignments?profileId=${profileId}`)
+      if (res.ok) {
+        const json = await res.json()
+        setOnboardingAssignments(json.data?.assignments ?? [])
       }
-      return next
-    })
-  }
+    } catch { /* ignore */ } finally {
+      setOnboardingLoading(false)
+    }
+  }, [profileId])
+
+  useEffect(() => {
+    if (activeTab === 'onboarding' && onboardingAssignments.length === 0 && !onboardingLoading) {
+      fetchOnboarding()
+    }
+  }, [activeTab, onboardingAssignments.length, onboardingLoading, fetchOnboarding])
 
   const startEditing = () => {
     if (!data) return
@@ -432,6 +446,8 @@ export default function EmployeeProfilePage() {
     if (s.adminOnly && !isAdmin && !isSelf) return false
     // Bank details only visible to self or HR/Admin
     if (s.key === 'bank' && !isAdmin && !isSelf) return false
+    // Onboarding visible to self or HR/Admin
+    if (s.key === 'onboarding' && !isAdmin && !isSelf) return false
     return true
   })
 
@@ -565,61 +581,68 @@ export default function EmployeeProfilePage() {
         </div>
       </div>
 
-      {/* ── Accordion sections ───────────────────────────────── */}
-      {visibleSections.map((section) => {
-        const isExpanded = expandedSections.has(section.key)
-        const Icon = section.icon
-        return (
-          <div key={section.key} className="bg-white rounded-xl border border-ink-100 overflow-hidden">
-            <button
-              onClick={() => toggleSection(section.key)}
-              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-ink-25 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center">
-                  <Icon className="w-4 h-4 text-ink-500" />
-                </div>
-                <span className="text-[14px] font-semibold text-ink-900">{section.label}</span>
+      {/* ── Tab bar ───────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-ink-100 overflow-hidden">
+        <div className="flex border-b border-ink-100 overflow-x-auto">
+          {visibleSections.map((section) => {
+            const Icon = section.icon
+            const isActive = activeTab === section.key
+            return (
+              <button
+                key={section.key}
+                onClick={() => setActiveTab(section.key)}
+                className={`flex items-center gap-2 px-4 py-3 text-[13px] font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  isActive
+                    ? 'border-brand-600 text-brand-600 bg-brand-50/30'
+                    : 'border-transparent text-ink-500 hover:text-ink-700 hover:bg-ink-25'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {section.label}
                 {section.adminOnly && (
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
-                    HR/Admin
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">
+                    HR
                   </span>
                 )}
-              </div>
-              {isExpanded
-                ? <ChevronDown className="w-4 h-4 text-ink-400" />
-                : <ChevronRight className="w-4 h-4 text-ink-400" />
-              }
-            </button>
-            {isExpanded && (
-              <div className="px-6 pb-6 border-t border-ink-50">
-                {section.key === 'overview' && (
-                  <OverviewContent
-                    data={data}
-                    editing={editing}
-                    editForm={editForm}
-                    onEditChange={(key, val) => setEditForm((prev) => ({ ...prev, [key]: val }))}
-                  />
-                )}
-                {section.key === 'employment' && (
-                  <EmploymentContent
-                    data={data}
-                    editing={editing}
-                    editForm={editForm}
-                    onEditChange={(key, val) => setEditForm((prev) => ({ ...prev, [key]: val }))}
-                  />
-                )}
-                {section.key === 'bank' && <BankDetailsContent data={data} onRefresh={fetchProfile} />}
-                {section.key === 'leave' && <LeaveContent data={data} />}
-                {section.key === 'projects' && <ProjectsContent data={data} />}
-                {section.key === 'training' && <TrainingContent data={data} />}
-                {section.key === 'assets' && <AssetsContent data={data} />}
-                {section.key === 'documents' && <DocumentsContent data={data} />}
-              </div>
-            )}
-          </div>
-        )
-      })}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ── Tab content ──────────────────────────────────────── */}
+        <div className="px-6 pb-6">
+          {activeTab === 'overview' && (
+            <OverviewContent
+              data={data}
+              editing={editing}
+              editForm={editForm}
+              onEditChange={(key, val) => setEditForm((prev) => ({ ...prev, [key]: val }))}
+            />
+          )}
+          {activeTab === 'employment' && (
+            <EmploymentContent
+              data={data}
+              editing={editing}
+              editForm={editForm}
+              onEditChange={(key, val) => setEditForm((prev) => ({ ...prev, [key]: val }))}
+            />
+          )}
+          {activeTab === 'bank' && <BankDetailsContent data={data} onRefresh={fetchProfile} />}
+          {activeTab === 'leave' && <LeaveContent data={data} />}
+          {activeTab === 'projects' && <ProjectsContent data={data} />}
+          {activeTab === 'training' && <TrainingContent data={data} />}
+          {activeTab === 'assets' && <AssetsContent data={data} />}
+          {activeTab === 'documents' && <DocumentsContent data={data} />}
+          {activeTab === 'onboarding' && (
+            <OnboardingContent
+              profileId={profileId}
+              assignments={onboardingAssignments}
+              loading={onboardingLoading}
+              onRefresh={fetchOnboarding}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -2198,6 +2221,184 @@ function FieldEdit({
           className="w-full text-[13px] border border-ink-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ink-900/10"
         />
       )}
+    </div>
+  )
+}
+
+/* ================================================================
+   ONBOARDING CONTENT
+   ================================================================ */
+
+const STAGE_LABELS: Record<string, string> = {
+  BEFORE_START: 'Before Start',
+  DAY_ONE: 'Day One',
+  ROLE_SPECIFIC: 'Role Specific',
+  PROBATION: 'Probation',
+}
+
+const TASK_STATUS_STYLES: Record<string, { label: string; color: string }> = {
+  PENDING: { label: 'Pending', color: 'bg-ink-100 text-ink-600' },
+  IN_PROGRESS: { label: 'In Progress', color: 'bg-blue-100 text-blue-700' },
+  COMPLETED: { label: 'Completed', color: 'bg-green-100 text-green-700' },
+  OVERDUE: { label: 'Overdue', color: 'bg-red-100 text-red-700' },
+  WAIVED: { label: 'Waived', color: 'bg-amber-100 text-amber-700' },
+}
+
+function OnboardingContent({
+  profileId: _profileId,
+  assignments,
+  loading,
+  onRefresh,
+}: {
+  profileId: string
+  assignments: Array<{
+    id: string; templateId: string; status: string; progress: number; startDate: string
+    template: { id: string; name: string }; taskSummary: { total: number; completed: number; overdue: number }
+  }>
+  loading: boolean
+  onRefresh: () => void
+}) {
+  const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null)
+  const [tasks, setTasks] = useState<Record<string, Array<{ stage: string; tasks: Array<Record<string, unknown>> }>>>({})
+  const [taskLoading, setTaskLoading] = useState<string | null>(null)
+
+  const loadTasks = useCallback(async (assignmentId: string) => {
+    if (tasks[assignmentId]) return
+    setTaskLoading(assignmentId)
+    try {
+      const res = await fetch(`/api/onboarding/assignments/${assignmentId}/tasks`)
+      if (res.ok) {
+        const json = await res.json()
+        const grouped = json.data?.tasks ?? {}
+        const stages = Object.entries(grouped).map(([stage, taskList]) => ({
+          stage,
+          tasks: taskList as Array<Record<string, unknown>>,
+        }))
+        setTasks((prev) => ({ ...prev, [assignmentId]: stages }))
+      }
+    } catch { /* ignore */ } finally {
+      setTaskLoading(null)
+    }
+  }, [tasks])
+
+  const toggleAssignment = (id: string) => {
+    if (expandedAssignment === id) {
+      setExpandedAssignment(null)
+    } else {
+      setExpandedAssignment(id)
+      loadTasks(id)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="pt-6 space-y-3">
+        <SkeletonRow />
+        <SkeletonRow />
+      </div>
+    )
+  }
+
+  if (assignments.length === 0) {
+    return (
+      <div className="pt-6 text-center py-12">
+        <ClipboardList className="w-10 h-10 text-ink-300 mx-auto mb-3" />
+        <p className="text-[14px] text-ink-500">No onboarding assignments</p>
+        <p className="text-[12px] text-ink-400 mt-1">
+          This employee has not been assigned any onboarding programmes yet.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pt-6 space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-[14px] font-semibold text-ink-900">Onboarding Programmes</h3>
+        <button onClick={onRefresh} className="text-[12px] text-ink-500 hover:text-ink-700 flex items-center gap-1">
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </button>
+      </div>
+
+      {assignments.map((a) => {
+        const isExpanded = expandedAssignment === a.id
+        const assignmentTasks = tasks[a.id]
+        return (
+          <div key={a.id} className="border border-ink-100 rounded-lg overflow-hidden">
+            <button
+              onClick={() => toggleAssignment(a.id)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-ink-25 transition-colors"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-ink-900 truncate">{a.template.name}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    a.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {a.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 mt-1 text-[11px] text-ink-400">
+                  <span>{a.taskSummary.completed}/{a.taskSummary.total} tasks</span>
+                  {a.taskSummary.overdue > 0 && (
+                    <span className="text-red-500">{a.taskSummary.overdue} overdue</span>
+                  )}
+                  <span>Started {new Date(a.startDate).toLocaleDateString()}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 ml-4">
+                <div className="w-20 h-2 bg-ink-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${a.progress}%` }} />
+                </div>
+                <span className="text-[12px] font-medium text-ink-600 w-10 text-right">{a.progress}%</span>
+              </div>
+            </button>
+
+            {isExpanded && (
+              <div className="border-t border-ink-50 px-4 py-4">
+                {taskLoading === a.id ? (
+                  <div className="space-y-2"><SkeletonRow /><SkeletonRow /></div>
+                ) : assignmentTasks ? (
+                  <div className="space-y-4">
+                    {assignmentTasks.map(({ stage, tasks: stageTasks }) => {
+                      if (stageTasks.length === 0) return null
+                      return (
+                        <div key={stage}>
+                          <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-2">
+                            {STAGE_LABELS[stage] ?? stage}
+                          </h4>
+                          <div className="space-y-1.5">
+                            {stageTasks.map((task) => {
+                              const status = TASK_STATUS_STYLES[task.status as string] ?? { label: task.status as string, color: 'bg-ink-100 text-ink-600' }
+                              return (
+                                <div key={task.id as string} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-ink-25">
+                                  <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${task.status === 'COMPLETED' ? 'text-green-500' : 'text-ink-300'}`} />
+                                  <span className="text-[13px] text-ink-800 flex-1 truncate">{task.title as string}</span>
+                                  {task.isAdHoc === true && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">AD-HOC</span>
+                                  )}
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${status.color}`}>
+                                    {status.label}
+                                  </span>
+                                  {typeof task.dueDate === 'string' && (
+                                    <span className="text-[11px] text-ink-400">
+                                      {new Date(task.dueDate).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

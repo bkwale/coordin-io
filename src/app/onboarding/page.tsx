@@ -10,10 +10,13 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Eye,
+  FileCheck,
   FileText,
   GraduationCap,
   Loader2,
   PartyPopper,
+  Send,
   ShieldCheck,
   User,
 } from 'lucide-react'
@@ -82,6 +85,11 @@ type OnboardingTask = {
   requiresApproval: boolean
   description: string
   approvedAt: string | null
+  isAdHoc: boolean
+  documentStatus: string | null
+  documentSentAt: string | null
+  documentViewedAt: string | null
+  documentAcknowledgedAt: string | null
 }
 
 // ────────────────────────────────────────────────────────
@@ -109,6 +117,13 @@ const TASK_STATUS_COLORS: Record<string, string> = {
   COMPLETED: 'bg-green-100 text-green-700',
   OVERDUE: 'bg-red-100 text-red-700',
   WAIVED: 'bg-gray-100 text-gray-500',
+}
+
+const DOC_STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  NOT_SENT: { label: 'Not Sent', color: 'bg-gray-100 text-gray-600', icon: FileText },
+  SENT: { label: 'Sent', color: 'bg-blue-100 text-blue-700', icon: Send },
+  VIEWED: { label: 'Viewed', color: 'bg-amber-100 text-amber-700', icon: Eye },
+  ACKNOWLEDGED: { label: 'Acknowledged', color: 'bg-green-100 text-green-700', icon: FileCheck },
 }
 
 // ────────────────────────────────────────────────────────
@@ -500,10 +515,26 @@ export default function OnboardingPage() {
                               {task.description !== 'Not provided' && (
                                 <p className="text-[13px] text-ink-500 mt-1">{task.description}</p>
                               )}
-                              <div className="flex items-center gap-3 mt-1.5 text-[12px] text-ink-400">
+                              <div className="flex items-center gap-3 mt-1.5 text-[12px] text-ink-400 flex-wrap">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TASK_STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-700'}`}>
                                   {task.status}
                                 </span>
+                                {task.isAdHoc && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                                    AD-HOC
+                                  </span>
+                                )}
+                                {task.documentStatus && (() => {
+                                  const dm = DOC_STATUS_META[task.documentStatus]
+                                  if (!dm) return null
+                                  const DocIcon = dm.icon
+                                  return (
+                                    <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${dm.color}`}>
+                                      <DocIcon className="w-3 h-3" />
+                                      {dm.label}
+                                    </span>
+                                  )
+                                })()}
                                 {task.dueDate && (
                                   <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
                                     Due: {new Date(task.dueDate).toLocaleDateString()}
@@ -522,6 +553,17 @@ export default function OnboardingPage() {
                           </div>
 
                           <div className="flex-shrink-0 flex items-center gap-2">
+                            {/* Document acknowledge button for employees */}
+                            {task.documentStatus && task.documentStatus !== 'ACKNOWLEDGED' && task.documentStatus !== 'NOT_SENT' && (
+                              <button
+                                onClick={() => handleTaskAction(task.id, { documentStatus: 'ACKNOWLEDGED' })}
+                                disabled={actionLoading === task.id}
+                                className="bg-green-600 text-white text-[13px] font-semibold px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {actionLoading === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileCheck className="w-3.5 h-3.5" />}
+                                Acknowledge
+                              </button>
+                            )}
                             {!isDone && task.responsibleRole === 'EMPLOYEE' && (
                               <>
                                 {task.status === 'PENDING' && (

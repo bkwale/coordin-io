@@ -13,8 +13,9 @@ import {
   TrendingUp, Receipt, Target, Shield, Clock, ClipboardList,
   Link as LinkIcon, Plus, Search, MoreHorizontal,
   ChevronLeft, ChevronRight, CalendarDays, Wallet,
-  Wrench, Package, User as UserIcon, Settings, LogOut,
+  Wrench, Package, User as UserIcon, Settings, LogOut, Bug,
 } from 'lucide-react'
+import { ReportIssueModal } from './ReportIssueModal'
 
 /* ── Navigation structure ──────────────────────────────── */
 
@@ -118,6 +119,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showReportIssue, setShowReportIssue] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const close = () => setOpen(false)
   const { user } = useUser()
@@ -255,6 +257,21 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {/* Divider */}
         <div className={cn('border-t border-white/[0.06]', collapsed ? 'mx-3' : 'mx-5')} />
 
+        {/* Report Issue */}
+        <div className={cn('py-2', collapsed ? 'px-3' : 'px-5')}>
+          <button
+            onClick={() => setShowReportIssue(true)}
+            className={cn(
+              'flex items-center w-full rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors',
+              collapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2'
+            )}
+            title={collapsed ? 'Report Issue' : undefined}
+          >
+            <Bug className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="text-[12px] font-medium">Report Issue</span>}
+          </button>
+        </div>
+
         {/* User */}
         <div className={cn('py-4 relative', collapsed ? 'px-3' : 'px-5')} ref={userMenuRef}>
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
@@ -328,6 +345,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </aside>
+
+      {/* Report Issue Modal */}
+      <ReportIssueModal open={showReportIssue} onClose={() => setShowReportIssue(false)} />
     </>
   )
 }

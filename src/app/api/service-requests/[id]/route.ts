@@ -41,6 +41,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       assignedTo: { select: { id: true, fullName: true } },
       project: { select: { id: true, name: true, code: true } },
       office: { select: { id: true, name: true } },
+      items: { orderBy: { sortOrder: 'asc' } },
     },
   })
 
