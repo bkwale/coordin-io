@@ -72,6 +72,20 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     ? (body.type as typeof validTypes[number])
     : 'PUBLIC_HOLIDAY'
 
+  // Prevent duplicate: same org + same date (+ same office scope)
+  const existing = await prisma.publicHoliday.findFirst({
+    where: {
+      organisationId: profile.organisationId,
+      date,
+      officeId: officeId ?? null,
+    },
+  })
+  if (existing) {
+    throw new ValidationError(
+      `A holiday already exists on ${dateStr}${existing.name ? ` (${existing.name})` : ''}. Please edit the existing entry instead.`
+    )
+  }
+
   // If officeId provided, verify it belongs to the org
   if (officeId) {
     const office = await prisma.office.findFirst({

@@ -506,6 +506,49 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     })
   }
 
+  // ── Auto-generate probation reviews when probation fields are set ──
+  if (hasHRAccess && empData.probationStartDate) {
+    const startDate = empData.probationStartDate as Date
+    const lengthMonths = (empData.probationLength as number) ?? 3 // default 3 months
+
+    // Define review milestones based on probation length
+    const milestones: { type: string; daysOffset: number }[] = []
+    if (lengthMonths >= 1) milestones.push({ type: '30-day', daysOffset: 30 })
+    if (lengthMonths >= 2) milestones.push({ type: '60-day', daysOffset: 60 })
+    if (lengthMonths >= 3) milestones.push({ type: '90-day', daysOffset: 90 })
+    // Final review at probation end
+    milestones.push({ type: 'final', daysOffset: lengthMonths * 30 })
+
+    // Remove existing auto-generated reviews that haven't been completed
+    // (so re-saving probation dates regenerates them cleanly)
+    try {
+      await modulesPrisma.probationReview.deleteMany({
+        where: {
+          profileId,
+          completedDate: null,
+        },
+      })
+
+      // Create new review milestones
+      for (const milestone of milestones) {
+        const scheduledDate = new Date(startDate)
+        scheduledDate.setDate(scheduledDate.getDate() + milestone.daysOffset)
+
+        await modulesPrisma.probationReview.create({
+          data: {
+            profileId,
+            reviewType: milestone.type,
+            scheduledDate,
+          },
+        })
+      }
+    } catch (err: unknown) {
+      // Swallow only "table does not exist" errors
+      const msg = err instanceof Error ? err.message : ''
+      if (!msg.includes('does not exist') && !msg.includes('P2021')) throw err
+    }
+  }
+
   // Dual-write: mirror confidential fields to ConfidentialEmployeeData table
   const confidentialFieldKeys = [
     'salary', 'salaryFrequency', 'salaryCurrency', 'benefits',

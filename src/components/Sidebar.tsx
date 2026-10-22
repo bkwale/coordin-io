@@ -259,7 +259,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         <div className={cn('py-4 relative', collapsed ? 'px-3' : 'px-5')} ref={userMenuRef}>
           <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-3')}>
             <Link
-              href="/settings/profile"
+              href={myProfile ? `/staffing/${myProfile.id}` : '/settings'}
               onClick={close}
               title={collapsed ? displayName : undefined}
               className="relative shrink-0 group"
@@ -274,7 +274,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             </Link>
             {!collapsed && (
               <>
-                <Link href="/settings/profile" onClick={close} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                <Link href={myProfile ? `/staffing/${myProfile.id}` : '/settings'} onClick={close} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
                   <p className="text-[13px] font-medium text-white/80 truncate">{displayName}</p>
                   <p className="text-[10px] text-white/30">{myProfile?.jobTitle || user?.email || ''}</p>
                 </Link>
