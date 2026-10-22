@@ -12,6 +12,14 @@ const PRIORITIES = [
   { value: 'critical', label: 'Critical', color: 'bg-red-500' },
 ]
 
+const CATEGORIES = [
+  { value: 'BUG', label: 'Bug' },
+  { value: 'FEATURE_REQUEST', label: 'Feature Request' },
+  { value: 'QUESTION', label: 'Question' },
+  { value: 'ACCESS_ISSUE', label: 'Access Issue' },
+  { value: 'OTHER', label: 'Other' },
+]
+
 type Status = 'idle' | 'sending' | 'success' | 'error'
 
 export function ReportIssueModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -21,25 +29,28 @@ export function ReportIssueModal({ open, onClose }: { open: boolean; onClose: ()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
+  const [category, setCategory] = useState('BUG')
   const [screenshot, setScreenshot] = useState<string | null>(null)
   const [screenshotName, setScreenshotName] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [ticketRef, setTicketRef] = useState('')
 
   const reset = useCallback(() => {
     setTitle('')
     setDescription('')
     setPriority('medium')
+    setCategory('BUG')
     setScreenshot(null)
     setScreenshotName('')
     setStatus('idle')
     setErrorMsg('')
+    setTicketRef('')
   }, [])
 
   const handleClose = useCallback(() => {
     if (status === 'sending') return
     onClose()
-    // reset after animation
     setTimeout(reset, 200)
   }, [onClose, reset, status])
 
@@ -69,6 +80,7 @@ export function ReportIssueModal({ open, onClose }: { open: boolean; onClose: ()
           title: title.trim(),
           description: description.trim(),
           priority,
+          category,
           page: pathname,
           ...(screenshot ? { screenshot } : {}),
         }),
@@ -77,15 +89,14 @@ export function ReportIssueModal({ open, onClose }: { open: boolean; onClose: ()
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Something went wrong')
       }
+      const data = await res.json()
+      setTicketRef(data.data?.ticketRef || '')
       setStatus('success')
-      setTimeout(() => {
-        handleClose()
-      }, 1500)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to send ticket')
       setStatus('error')
     }
-  }, [title, description, priority, pathname, screenshot, handleClose])
+  }, [title, description, priority, category, pathname, screenshot])
 
   if (!open) return null
 
@@ -114,7 +125,14 @@ export function ReportIssueModal({ open, onClose }: { open: boolean; onClose: ()
         {status === 'success' ? (
           <div className="px-6 py-12 flex flex-col items-center gap-3">
             <CheckCircle2 className="w-10 h-10 text-emerald-400" />
-            <p className="text-[14px] text-white/80">Ticket submitted — we&apos;ll get back to you shortly.</p>
+            <p className="text-[14px] text-white/80">Ticket {ticketRef} submitted successfully.</p>
+            <p className="text-[12px] text-white/40">Track it under My Tickets in the sidebar.</p>
+            <button
+              onClick={handleClose}
+              className="mt-4 px-5 py-2 rounded-lg text-[12px] font-medium bg-white/[0.06] text-white/60 hover:bg-white/[0.10] transition-colors"
+            >
+              Close
+            </button>
           </div>
         ) : (
           <>
@@ -146,25 +164,42 @@ export function ReportIssueModal({ open, onClose }: { open: boolean; onClose: ()
                 />
               </div>
 
-              {/* Priority */}
-              <div>
-                <label className="block text-[11px] font-medium text-white/40 uppercase tracking-wider mb-1.5">Priority</label>
-                <div className="flex gap-2">
-                  {PRIORITIES.map(p => (
-                    <button
-                      key={p.value}
-                      onClick={() => setPriority(p.value)}
-                      className={cn(
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border',
-                        priority === p.value
-                          ? 'bg-white/[0.08] border-white/[0.15] text-white'
-                          : 'bg-transparent border-white/[0.06] text-white/40 hover:text-white/60 hover:border-white/[0.10]'
-                      )}
-                    >
-                      <span className={cn('w-2 h-2 rounded-full', p.color)} />
-                      {p.label}
-                    </button>
-                  ))}
+              {/* Category + Priority row */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Category */}
+                <div>
+                  <label className="block text-[11px] font-medium text-white/40 uppercase tracking-wider mb-1.5">Category</label>
+                  <select
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    className="w-full rounded-lg bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-accent-400/50 transition-colors"
+                  >
+                    {CATEGORIES.map(c => (
+                      <option key={c.value} value={c.value} className="bg-ink-900">{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Priority */}
+                <div>
+                  <label className="block text-[11px] font-medium text-white/40 uppercase tracking-wider mb-1.5">Priority</label>
+                  <div className="flex gap-1.5">
+                    {PRIORITIES.map(p => (
+                      <button
+                        key={p.value}
+                        onClick={() => setPriority(p.value)}
+                        className={cn(
+                          'flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all border',
+                          priority === p.value
+                            ? 'bg-white/[0.08] border-white/[0.15] text-white'
+                            : 'bg-transparent border-white/[0.06] text-white/40 hover:text-white/60 hover:border-white/[0.10]'
+                        )}
+                      >
+                        <span className={cn('w-1.5 h-1.5 rounded-full', p.color)} />
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

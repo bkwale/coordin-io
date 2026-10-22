@@ -13,7 +13,7 @@ import {
   TrendingUp, Receipt, Target, Shield, Clock, ClipboardList,
   Link as LinkIcon, Plus, Search, MoreHorizontal,
   ChevronLeft, ChevronRight, CalendarDays, Wallet,
-  Wrench, Package, User as UserIcon, Settings, LogOut, Bug,
+  Wrench, Package, User as UserIcon, Settings, LogOut, Bug, Ticket,
 } from 'lucide-react'
 import { ReportIssueModal } from './ReportIssueModal'
 
@@ -257,8 +257,23 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {/* Divider */}
         <div className={cn('border-t border-white/[0.06]', collapsed ? 'mx-3' : 'mx-5')} />
 
-        {/* Report Issue */}
-        <div className={cn('py-2', collapsed ? 'px-3' : 'px-5')}>
+        {/* Support */}
+        <div className={cn('py-2 space-y-0.5', collapsed ? 'px-3' : 'px-5')}>
+          <Link
+            href="/support-tickets"
+            onClick={close}
+            className={cn(
+              'flex items-center w-full rounded-lg transition-colors',
+              pathname === '/support-tickets'
+                ? 'text-white bg-white/[0.06]'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]',
+              collapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2'
+            )}
+            title={collapsed ? 'My Tickets' : undefined}
+          >
+            <Ticket className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="text-[12px] font-medium">My Tickets</span>}
+          </Link>
           <button
             onClick={() => setShowReportIssue(true)}
             className={cn(

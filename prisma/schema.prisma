@@ -71,6 +71,7 @@ model Organisation {
   approvalRoutes      ApprovalRoute[]
   approvalInstances   ApprovalInstance[]
   externalLinks       ExternalLink[]
+  supportTickets      SupportTicket[]
 
   @@map("organisations")
 }
@@ -277,6 +278,10 @@ model Profile {
   approvalStepsEscalatedTo   ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
   externalLinksCreated       ExternalLink[]         @relation("ExternalLinkCreator")
   blackoutDatesCreated       BlackoutDate[]         @relation("BlackoutDateCreatedBy")
+
+  // Support Tickets
+  supportTicketsSubmitted    SupportTicket[]        @relation("ticketSubmitter")
+  supportTicketReplies       SupportTicketReply[]   @relation("ticketReplyAuthor")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -2662,4 +2667,69 @@ enum ExternalLinkType {
   SHAREPOINT_FOLDER
   SHAREPOINT_DOCUMENT
   EXTERNAL_URL
+}
+
+// ──────────────────────────────────────────────
+// Support Tickets — Tier 1 Helpdesk
+// ──────────────────────────────────────────────
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  BUG
+  FEATURE_REQUEST
+  QUESTION
+  ACCESS_ISSUE
+  OTHER
+}
+
+model SupportTicket {
+  id              String          @id @default(cuid())
+  organisationId  String
+  submitterId     String
+  title           String          @db.VarChar(200)
+  description     String          @db.Text
+  status          TicketStatus    @default(OPEN)
+  priority        TicketPriority  @default(MEDIUM)
+  category        TicketCategory  @default(OTHER)
+  page            String?         @db.VarChar(500)
+  screenshotUrl   String?         @db.Text
+  resolvedAt      DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organisation    Organisation    @relation(fields: [organisationId], references: [id])
+  submitter       Profile         @relation("ticketSubmitter", fields: [submitterId], references: [id])
+  replies         SupportTicketReply[]
+
+  @@index([organisationId, status])
+  @@index([submitterId])
+  @@map("support_tickets")
+}
+
+model SupportTicketReply {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  message   String   @db.Text
+  isStaff   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author    Profile       @relation("ticketReplyAuthor", fields: [authorId], references: [id])
+
+  @@index([ticketId])
+  @@map("support_ticket_replies")
 }
