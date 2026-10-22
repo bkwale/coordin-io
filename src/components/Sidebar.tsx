@@ -16,29 +16,31 @@ import {
   Wrench, Package, User as UserIcon, Settings, LogOut, Bug, Ticket,
 } from 'lucide-react'
 import { ReportIssueModal } from './ReportIssueModal'
+import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
 
 /* ── Navigation structure ──────────────────────────────── */
 
 const MAIN_ITEMS = [
   { href: '/my-work', label: 'My Work', icon: ClipboardList },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/projects', label: 'Projects', icon: FolderOpen },
-  { href: '/leave', label: 'Leave', icon: CalendarDays },
-  { href: '/expenses', label: 'Expenses', icon: Wallet },
+  { href: '/projects', label: 'Projects', icon: FolderOpen, featureKey: 'projects' },
+  { href: '/leave', label: 'Leave', icon: CalendarDays, featureKey: 'staffing' },
+  { href: '/expenses', label: 'Expenses', icon: Wallet, featureKey: 'staffing' },
   { href: '/service-requests', label: 'Requests', icon: Wrench },
-  { href: '/assets', label: 'Assets', icon: Package },
-  { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt },
-  { href: '/staffing', label: 'Staffing', icon: Users },
-  { href: '/timesheets', label: 'Timesheets', icon: Clock },
+  { href: '/assets', label: 'Assets', icon: Package, featureKey: 'staffing' },
+  { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt, featureKey: 'commercial' },
+  { href: '/staffing', label: 'Staffing', icon: Users, featureKey: 'staffing' },
+  { href: '/timesheets', label: 'Timesheets', icon: Clock, featureKey: 'timesheets' },
+  { href: '/support-tickets', label: 'Support', icon: Ticket, featureKey: 'helpdesk' },
 ]
 
-const INSIGHTS_ITEMS = [
-  { href: '/analytics/portfolio', label: 'Portfolio', icon: BarChart3 },
-  { href: '/analytics/commercial', label: 'Commercial', icon: PoundSterling },
-  { href: '/analytics/cashflow', label: 'Cashflow', icon: TrendingUp },
+const INSIGHTS_ITEMS: NavItemDef[] = [
+  { href: '/analytics/portfolio', label: 'Portfolio', icon: BarChart3, featureKey: 'projects' },
+  { href: '/analytics/commercial', label: 'Commercial', icon: PoundSterling, featureKey: 'commercial' },
+  { href: '/analytics/cashflow', label: 'Cashflow', icon: TrendingUp, featureKey: 'commercial' },
 ]
 
-const MORE_ITEMS = [
+const MORE_ITEMS: NavItemDef[] = [
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
   { href: '/cpd', label: 'CPD', icon: GraduationCap },
   { href: '/opportunities', label: 'Opportunities', icon: Target },
@@ -50,7 +52,7 @@ const SETTINGS_ITEMS = [
   { href: '/settings', label: 'Settings', icon: Shield },
 ]
 
-type NavItemDef = { href: string; label: string; icon: React.FC<{ className?: string }> }
+type NavItemDef = { href: string; label: string; icon: React.FC<{ className?: string }>; featureKey?: string }
 
 /* ── NavItem ───────────────────────────────────────────── */
 
@@ -124,6 +126,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const close = () => setOpen(false)
   const { user } = useUser()
   const { profile: myProfile } = useProfile()
+  const { isEnabled: isFeatureEnabled } = useOrgFeatures()
 
   // Close user menu on outside click
   useEffect(() => {
@@ -212,7 +215,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-[0.18em] px-3 mb-2">Main</p>
             )}
             <div className="space-y-0.5">
-              {MAIN_ITEMS.map(item => {
+              {MAIN_ITEMS.filter(item => !item.featureKey || isFeatureEnabled(item.featureKey)).map(item => {
                 const isActive = item.href === '/'
                   ? pathname === '/'
                   : pathname.startsWith(item.href)
@@ -223,8 +226,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             </div>
           </div>
 
-          <NavSection title="Insights" items={INSIGHTS_ITEMS} pathname={pathname} collapsed={collapsed} onClick={close} />
-          <NavSection title="More" items={MORE_ITEMS} pathname={pathname} collapsed={collapsed} onClick={close} />
+          <NavSection title="Insights" items={INSIGHTS_ITEMS.filter(item => !item.featureKey || isFeatureEnabled(item.featureKey))} pathname={pathname} collapsed={collapsed} onClick={close} />
+          <NavSection title="More" items={MORE_ITEMS.filter(item => !item.featureKey || isFeatureEnabled(item.featureKey))} pathname={pathname} collapsed={collapsed} onClick={close} />
           <NavSection title="Settings" items={SETTINGS_ITEMS} pathname={pathname} collapsed={collapsed} onClick={close} />
 
           {/* New Project CTA */}

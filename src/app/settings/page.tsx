@@ -7,7 +7,7 @@ import {
   ChevronRight, Loader2, Pencil, X, Trash2, Star,
   ScrollText, Download, ChevronLeft, Filter, CalendarDays,
   Link2, Copy, Ban, LockKeyhole, FileText, ClipboardList,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, ToggleLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +73,7 @@ const SETTINGS_TABS = [
   { key: 'holidays', label: 'Public Holidays', icon: CalendarDays, description: 'Manage public holidays' },
   { key: 'leavePolicies', label: 'Leave Policies', icon: FileText, description: 'Entitlement rules by grade & type' },
   { key: 'onboarding', label: 'Onboarding', icon: ClipboardList, description: 'Templates & task options' },
+  { key: 'features', label: 'Features', icon: ToggleLeft, description: 'Enable or disable modules' },
 ] as const
 
 type TabKey = typeof SETTINGS_TABS[number]['key']
@@ -159,6 +160,7 @@ export default function SettingsPage() {
               {activeTab === 'holidays' && <PublicHolidaysSection />}
               {activeTab === 'leavePolicies' && <LeavePoliciesSection />}
               {activeTab === 'onboarding' && <OnboardingSection />}
+              {activeTab === 'features' && <FeaturesSection />}
             </div>
           </div>
         </div>
@@ -4273,6 +4275,120 @@ function EmptyState({ icon: Icon, title, description }: { icon: React.FC<{ class
       <Icon className="w-10 h-10 text-ink-200 mx-auto mb-3" />
       <p className="text-[13px] font-medium text-ink-500">{title}</p>
       <p className="text-[11px] text-ink-300 mt-1">{description}</p>
+    </div>
+  )
+}
+
+/* ── Features Section ────────────────────────────────────── */
+
+interface FeatureItem {
+  key: string
+  label: string
+  description: string
+  enabled: boolean
+  default: boolean
+  hasOverride: boolean
+  enabledAt: string | null
+  enabledBy: string | null
+}
+
+function FeaturesSection() {
+  const [features, setFeatures] = useState<FeatureItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toggling, setToggling] = useState<string | null>(null)
+
+  const loadFeatures = useCallback(async () => {
+    try {
+      const res = await fetch('/api/org/features')
+      if (!res.ok) return
+      const json = await res.json()
+      setFeatures(json?.data ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadFeatures() }, [loadFeatures])
+
+  const handleToggle = async (featureKey: string, enabled: boolean) => {
+    setToggling(featureKey)
+    try {
+      const res = await fetch('/api/org/features', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featureKey, enabled }),
+      })
+      if (res.ok) {
+        setFeatures(prev =>
+          prev.map(f =>
+            f.key === featureKey ? { ...f, enabled, hasOverride: true } : f
+          )
+        )
+      }
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-5 h-5 animate-spin text-ink-300" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-ink-900">Feature Modules</h2>
+        <p className="text-[13px] text-ink-400 mt-1">
+          Enable or disable modules for your organisation. Disabled modules are hidden from the sidebar and inaccessible via direct URL.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {features.map(feature => (
+          <div
+            key={feature.key}
+            className="flex items-center justify-between p-4 rounded-lg bg-surface-50 border border-surface-200 hover:border-surface-300 transition-colors"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-medium text-ink-800">{feature.label}</span>
+                {feature.default && !feature.hasOverride && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-100 text-ink-400 font-medium">DEFAULT</span>
+                )}
+                {feature.hasOverride && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-medium">CUSTOM</span>
+                )}
+              </div>
+              <p className="text-[11px] text-ink-400 mt-0.5">{feature.description}</p>
+              {feature.enabledBy && feature.enabledAt && (
+                <p className="text-[10px] text-ink-300 mt-1">
+                  {feature.enabled ? 'Enabled' : 'Disabled'} by {feature.enabledBy} · {new Date(feature.enabledAt).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => handleToggle(feature.key, !feature.enabled)}
+              disabled={toggling === feature.key}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                feature.enabled ? 'bg-indigo-600' : 'bg-surface-300',
+                toggling === feature.key && 'opacity-50 cursor-wait'
+              )}
+            >
+              <span
+                className={cn(
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  feature.enabled ? 'translate-x-5' : 'translate-x-0'
+                )}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

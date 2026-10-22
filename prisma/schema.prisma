@@ -72,6 +72,7 @@ model Organisation {
   approvalInstances   ApprovalInstance[]
   externalLinks       ExternalLink[]
   supportTickets      SupportTicket[]
+  features            OrganisationFeature[]
 
   @@map("organisations")
 }
@@ -282,6 +283,9 @@ model Profile {
   // Support Tickets
   supportTicketsSubmitted    SupportTicket[]        @relation("ticketSubmitter")
   supportTicketReplies       SupportTicketReply[]   @relation("ticketReplyAuthor")
+
+  // Feature flags
+  featuresEnabled            OrganisationFeature[]  @relation("featureEnabler")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -2732,4 +2736,23 @@ model SupportTicketReply {
 
   @@index([ticketId])
   @@map("support_ticket_replies")
+}
+
+model OrganisationFeature {
+  id              String    @id @default(cuid())
+  organisationId  String    @map("organisation_id")
+  featureKey      String    @map("feature_key")
+  enabled         Boolean   @default(false)
+  config          Json      @default("{}")
+  enabledAt       DateTime? @map("enabled_at")
+  enabledBy       String?   @map("enabled_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  enabledByProfile Profile?    @relation("featureEnabler", fields: [enabledBy], references: [id])
+
+  @@unique([organisationId, featureKey])
+  @@index([organisationId])
+  @@map("organisation_features")
 }
