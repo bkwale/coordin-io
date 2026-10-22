@@ -145,7 +145,7 @@ export default function TicketDetailPage() {
       {/* Back link */}
       <Link href="/support-tickets" className="flex items-center gap-1.5 text-[12px] text-ink-400 hover:text-accent-600 transition-colors">
         <ArrowLeft className="w-3.5 h-3.5" />
-        Back to My Tickets
+        {isAdmin ? 'Back to Support Tickets' : 'Back to My Tickets'}
       </Link>
 
       {/* Ticket header */}

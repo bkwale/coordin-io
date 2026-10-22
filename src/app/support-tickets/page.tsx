@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonRow } from '@/components/Skeleton'
+import { useProfile } from '@/lib/hooks/useProfile'
 
 interface TicketItem {
   id: string
@@ -49,10 +50,13 @@ const CATEGORY_ICON = {
 type StatusFilter = 'all' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 
 export default function SupportTicketsPage() {
+  const { profile } = useProfile()
   const [tickets, setTickets] = useState<TicketItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<StatusFilter>('all')
+
+  const isAdmin = profile?.orgPermission === 'ADMIN' || profile?.orgPermission === 'OWNER'
 
   const fetchTickets = useCallback(async () => {
     setLoading(true)
@@ -81,9 +85,11 @@ export default function SupportTicketsPage() {
       <div>
         <h1 className="text-[24px] font-semibold text-ink-900 flex items-center gap-2.5">
           <Ticket className="w-5 h-5 text-accent-500" />
-          My Tickets
+          {isAdmin ? 'Support Tickets' : 'My Tickets'}
         </h1>
-        <p className="text-[13px] text-ink-400 mt-1">Track your support requests and their progress.</p>
+        <p className="text-[13px] text-ink-400 mt-1">
+          {isAdmin ? 'All support tickets across your organisation.' : 'Track your support requests and their progress.'}
+        </p>
       </div>
 
       {/* Status filter pills */}
@@ -164,6 +170,9 @@ export default function SupportTicketsPage() {
                     </div>
                     <p className="text-[13px] text-ink-900 font-medium truncate">{ticket.title}</p>
                     <div className="flex items-center gap-3 mt-1">
+                      {isAdmin && (
+                        <span className="text-[11px] text-ink-500 font-medium">{ticket.submitter.fullName}</span>
+                      )}
                       <span className="text-[11px] text-ink-300">
                         {new Date(ticket.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
