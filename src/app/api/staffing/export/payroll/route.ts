@@ -120,13 +120,12 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 
   // Style header row
   const headerRow = sheet.getRow(1)
-  headerRow.font = { bold: true, size: 11, name: 'Arial' }
+  headerRow.font = { bold: true, size: 11, name: 'Arial', color: { argb: 'FFFFFFFF' } }
   headerRow.fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: 'FF1A1A2E' },
   }
-  headerRow.font = { bold: true, size: 11, name: 'Arial', color: { argb: 'FFFFFFFF' } }
   headerRow.alignment = { vertical: 'middle', horizontal: 'left' }
   headerRow.height = 28
 

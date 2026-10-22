@@ -20,7 +20,7 @@ export function useProfile() {
     fetch('/api/me')
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        setProfile(data?.profile ?? data ?? null)
+        setProfile(data?.data ?? data?.profile ?? data ?? null)
         setLoading(false)
       })
       .catch(() => setLoading(false))

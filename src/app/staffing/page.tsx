@@ -14,6 +14,13 @@ import { useProfile } from '@/lib/hooks/useProfile'
 import { generateCsv, STAFFING_COLUMNS } from '@/lib/export-utils'
 
 /* ================================================================
+   CONSTANTS
+   ================================================================ */
+
+/** Roles that may export payroll data (module-scope to avoid re-creation each render). */
+const PAYROLL_EXPORT_ROLES = new Set(['HR', 'FINANCE', 'ADMIN', 'OWNER'])
+
+/* ================================================================
    TYPES
    ================================================================ */
 
@@ -232,8 +239,7 @@ export default function StaffingPage() {
   const [officeHolidaysLoading, setOfficeHolidaysLoading] = useState(false)
 
   // Payroll export visibility — HR, FINANCE, ADMIN, OWNER
-  const PAYROLL_ROLES = new Set(['HR', 'FINANCE', 'ADMIN', 'OWNER'])
-  const canExportPayroll = profile?.orgPermission ? PAYROLL_ROLES.has(profile.orgPermission) : false
+  const canExportPayroll = profile?.orgPermission ? PAYROLL_EXPORT_ROLES.has(profile.orgPermission) : false
 
   const handlePayrollExport = useCallback(async () => {
     if (payrollExporting) return
