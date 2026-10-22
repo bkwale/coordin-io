@@ -936,3 +936,27 @@ Focused release series addressing data integrity gaps, permission model consiste
 **Bug fix:** The `useProfile()` hook was not unwrapping the `success()` API response wrapper (`{ data: { ... } }`). It looked for `data.profile` (undefined), fell back to `data` itself (the wrapper), so `profile.orgPermission` was always `undefined`. This caused `canExportPayroll` to be `false` for ALL users. Fixed by adding `data?.data` as the first unwrap option.
 
 **Verification:** 0 type errors. Deployed and verified on live site — button visible for OWNER role. Commit a38e475 pushed.
+
+### Feature Flag System — Per-Org Module Toggling (COMPLETE)
+
+**What:** Organisations can now enable/disable entire modules (People & HR, Projects, Commercial, Timesheets, Spend Management, Support Tickets, Compliance, Documents, Approvals) through Settings → Features. The system operates at three layers: API middleware (`requireFeature`), page-level gating (`FeatureGate` component), and sidebar visibility filtering.
+
+| Component | File | Change |
+|-----------|------|--------|
+| Prisma model | `prisma/schema.prisma` | New `OrganisationFeature` model — `organisationId + featureKey` unique, `enabled`, `enabledAt`, `enabledBy` with audit trail. Relations to `Organisation` and `Profile`. |
+| Feature registry | `src/lib/feature-flags.ts` | `FEATURE_REGISTRY` const defines 9 features with labels, descriptions, and defaults. `getOrgFeatures()` uses `cached()` fetch-through (5 min TTL). `requireFeature()` middleware returns 403 when disabled. `getOrgFeatureDetails()` returns full metadata for admin UI. |
+| API routes | `src/app/api/org/features/route.ts` | GET returns all features with current state. PATCH toggles a feature — upserts DB override, invalidates cache, records audit event. PATCH gated by `edit_org_settings` capability (OWNER/ADMIN only). |
+| Frontend hook | `src/lib/hooks/useOrgFeatures.ts` | `useOrgFeatures()` — fetches `/api/org/features`, returns `{ features, loading, isEnabled, toggleFeature }`. |
+| Sidebar gating | `src/components/Sidebar.tsx` | Nav items filtered by `featureKey` before rendering. `NavItemDef[]` explicit typing. Settings items always visible. |
+| Page gate | `src/components/FeatureGate.tsx` | Wraps pages — shows loading, then children (enabled) or "feature disabled" message with back link. |
+| Admin UI | `src/app/settings/page.tsx` | New "Features" tab in Settings. Toggle switches per feature with label, description, DEFAULT/CUSTOM badges, audit trail (who enabled, when). |
+
+**Architecture:**
+- `FEATURE_REGISTRY` is the single source of truth for known features and defaults.
+- DB stores **overrides only** — no row means the feature uses its registry default. No migration needed to add new features.
+- Cache: Redis-backed via `cached()` fetch-through, 5-minute TTL, invalidated on toggle.
+- Three gating levels: (1) `requireFeature(key)` API middleware (not yet wired to routes — dormant), (2) `FeatureGate` component for page-level UI gating, (3) sidebar `featureKey` filtering hides nav items.
+
+**CWA Defaults:** Staffing, Projects, Documents, Approvals enabled by registry default. Commercial, Timesheets, Helpdesk, Compliance explicitly enabled via DB override for CWA HOMES.
+
+**Verification:** 0 type errors. Crispin QA clean (3 SHOULD-FIX follow-ups, 0 blockers). Commit 05da1c5 pushed and deployed.
