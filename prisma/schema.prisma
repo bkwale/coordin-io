@@ -381,6 +381,19 @@ model ConfidentialEmployeeData {
   // Contract
   noticePeriod        String?   @map("notice_period")
 
+  // Bank Details
+  bankAccountName     String?   @map("bank_account_name")
+  bankAccountNumber   String?   @map("bank_account_number")
+  bankName            String?   @map("bank_name")
+  bankCode            String?   @map("bank_code")
+  bankSortCode        String?   @map("bank_sort_code")
+  bankVerified        Boolean   @default(false) @map("bank_verified")
+  bankVerifiedAt      DateTime? @map("bank_verified_at")
+  bankApprovalStatus  String?   @map("bank_approval_status") // PENDING, APPROVED, REJECTED
+  bankApprovedBy      String?   @map("bank_approved_by")
+  bankApprovedAt      DateTime? @map("bank_approved_at")
+  bankRejectionReason String?   @map("bank_rejection_reason")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

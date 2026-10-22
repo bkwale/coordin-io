@@ -75,12 +75,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const showConfidential = hasHRAccess || isSelf
 
   // Fetch confidential data separately — only when authorized
-  let confidential: {
-    salary: number | null; salaryFrequency: string | null; salaryCurrency: string | null;
-    benefits: string | null; hmoProvider: string | null; hmoPlan: string | null;
-    dependants: number | null; pensionProvider: string | null; pensionContribution: number | null;
-    noticePeriod: string | null;
-  } | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let confidential: any = null
 
   if (showConfidential) {
     try {
@@ -288,6 +284,22 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     },
     assets: employee.assetAssignments,
     hrDocumentCounts,
+    // Bank details — visible to self (own bank info), manager (view+approve), HR (edit)
+    bankDetails: showConfidential
+      ? {
+          accountName: confidential?.bankAccountName ?? null,
+          accountNumber: confidential?.bankAccountNumber ?? null,
+          bankName: confidential?.bankName ?? null,
+          bankCode: confidential?.bankCode ?? null,
+          sortCode: confidential?.bankSortCode ?? null,
+          verified: confidential?.bankVerified ?? false,
+          verifiedAt: confidential?.bankVerifiedAt ?? null,
+          approvalStatus: confidential?.bankApprovalStatus ?? null,
+          approvedBy: confidential?.bankApprovedBy ?? null,
+          approvedAt: confidential?.bankApprovedAt ?? null,
+          rejectionReason: confidential?.bankRejectionReason ?? null,
+        }
+      : null,
     isAdmin: hasHRAccess,
     hasHRAccess,
     isSelf,
@@ -423,6 +435,60 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (annualLeaveAllocation !== null) empData.annualLeaveAllocation = annualLeaveAllocation
   }
 
+  // ── Bank details ──
+  // Self: submit own bank details → status PENDING
+  // HR: edit bank details directly → status APPROVED
+  const bankConfidentialData: Record<string, unknown> = {}
+  if (isSelf || hasHRAccess) {
+    const bankAccountNumber = optionalString(body.bankAccountNumber as unknown, 'bankAccountNumber', 10)
+    const bankCode = optionalString(body.bankCode as unknown, 'bankCode', 10)
+    const bankAccountName = optionalString(body.bankAccountName as unknown, 'bankAccountName', 200)
+    const bankName = optionalString(body.bankName as unknown, 'bankName', 200)
+    const bankSortCode = optionalString(body.bankSortCode as unknown, 'bankSortCode', 10)
+    const bankVerified = typeof body.bankVerified === 'boolean' ? body.bankVerified : null
+
+    if (bankAccountNumber !== null) bankConfidentialData.bankAccountNumber = bankAccountNumber
+    if (bankCode !== null) bankConfidentialData.bankCode = bankCode
+    if (bankAccountName !== null) bankConfidentialData.bankAccountName = bankAccountName
+    if (bankName !== null) bankConfidentialData.bankName = bankName
+    if (bankSortCode !== null) bankConfidentialData.bankSortCode = bankSortCode
+    if (bankVerified !== null) {
+      bankConfidentialData.bankVerified = bankVerified
+      if (bankVerified) bankConfidentialData.bankVerifiedAt = new Date()
+    }
+
+    // Set approval status based on who is submitting
+    if (Object.keys(bankConfidentialData).length > 0) {
+      if (hasHRAccess && !isSelf) {
+        // HR editing directly → auto-approve
+        bankConfidentialData.bankApprovalStatus = 'APPROVED'
+        bankConfidentialData.bankApprovedBy = profile.id
+        bankConfidentialData.bankApprovedAt = new Date()
+        bankConfidentialData.bankRejectionReason = null
+      } else {
+        // Self submitting → pending approval
+        bankConfidentialData.bankApprovalStatus = 'PENDING'
+        bankConfidentialData.bankApprovedBy = null
+        bankConfidentialData.bankApprovedAt = null
+        bankConfidentialData.bankRejectionReason = null
+      }
+    }
+  }
+
+  // Write bank details to confidential table
+  if (Object.keys(bankConfidentialData).length > 0) {
+    try {
+      await modulesPrisma.confidentialEmployeeData.upsert({
+        where: { profileId },
+        create: { profileId, ...bankConfidentialData },
+        update: bankConfidentialData,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
+      if (!msg.includes('does not exist') && !msg.includes('P2021')) throw err
+    }
+  }
+
   // Update Profile table fields
   if (Object.keys(profileData).length > 0) {
     await modulesPrisma.profile.update({
@@ -472,7 +538,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     action: 'staffing.employee_profile_updated',
     entityType: 'profile',
     entityId: profileId,
-    metadata: { fields: Object.keys({ ...profileData, ...empData }) },
+    metadata: { fields: Object.keys({ ...profileData, ...empData, ...bankConfidentialData }) },
   })
 
   return success({ updated: true })

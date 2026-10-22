@@ -86,8 +86,22 @@ interface EmployeeProfileData {
     id: string
     asset: { id: string; name: string; assetTag: string | null; category: string }
   }[]
+  bankDetails: {
+    accountName: string | null
+    accountNumber: string | null
+    bankName: string | null
+    bankCode: string | null
+    sortCode: string | null
+    verified: boolean
+    verifiedAt: string | null
+    approvalStatus: string | null
+    approvedBy: string | null
+    approvedAt: string | null
+    rejectionReason: string | null
+  } | null
   hrDocumentCounts: Record<string, number>
   isAdmin: boolean
+  hasHRAccess: boolean
   isSelf: boolean
 }
 
@@ -155,11 +169,12 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 }
 
-type SectionKey = 'overview' | 'employment' | 'leave' | 'projects' | 'training' | 'assets' | 'documents'
+type SectionKey = 'overview' | 'employment' | 'bank' | 'leave' | 'projects' | 'training' | 'assets' | 'documents'
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ElementType; adminOnly?: boolean }[] = [
   { key: 'overview', label: 'Overview', icon: User },
   { key: 'employment', label: 'Employment', icon: Briefcase, adminOnly: true },
+  { key: 'bank', label: 'Bank Details', icon: Building2 },
   { key: 'leave', label: 'Leave & Absence', icon: Calendar },
   { key: 'projects', label: 'Projects & Capacity', icon: BarChart3 },
   { key: 'training', label: 'Training & CPD', icon: GraduationCap },
@@ -415,6 +430,8 @@ export default function EmployeeProfilePage() {
 
   const visibleSections = SECTIONS.filter((s) => {
     if (s.adminOnly && !isAdmin && !isSelf) return false
+    // Bank details only visible to self or HR/Admin
+    if (s.key === 'bank' && !isAdmin && !isSelf) return false
     return true
   })
 
@@ -592,6 +609,7 @@ export default function EmployeeProfilePage() {
                     onEditChange={(key, val) => setEditForm((prev) => ({ ...prev, [key]: val }))}
                   />
                 )}
+                {section.key === 'bank' && <BankDetailsContent data={data} onRefresh={fetchProfile} />}
                 {section.key === 'leave' && <LeaveContent data={data} />}
                 {section.key === 'projects' && <ProjectsContent data={data} />}
                 {section.key === 'training' && <TrainingContent data={data} />}
@@ -880,6 +898,356 @@ function EmploymentContent({
           {renderField('Hours per week', 'workingHours', employment.workingHours !== null && employment.workingHours !== undefined ? `${employment.workingHours}h` : 'Not provided', { type: 'number' })}
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ================================================================
+   BANK DETAILS SECTION
+   ================================================================ */
+
+interface NigerianBankOption {
+  name: string
+  code: string
+}
+
+function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; onRefresh: () => void }) {
+  const { bankDetails, isSelf, hasHRAccess, employee } = data
+  const { toast: showToast } = useToast()
+
+  const [banks, setBanks] = useState<NigerianBankOption[]>([])
+  const [selectedBank, setSelectedBank] = useState(bankDetails?.bankCode ?? '')
+  const [accountNumber, setAccountNumber] = useState(bankDetails?.accountNumber ?? '')
+  const [sortCode, setSortCode] = useState(bankDetails?.sortCode ?? '')
+  const [verifiedName, setVerifiedName] = useState(bankDetails?.accountName ?? '')
+  const [verifying, setVerifying] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [showRejectForm, setShowRejectForm] = useState(false)
+  const [isVerified, setIsVerified] = useState(bankDetails?.verified ?? false)
+  const [editing, setEditing] = useState(false)
+
+  // Fetch banks list
+  useEffect(() => {
+    fetch('/api/staffing/banks')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data?.banks) setBanks(d.data.banks)
+      })
+      .catch(() => {})
+  }, [])
+
+  const canSubmit = isSelf || hasHRAccess
+  const canApprove = hasHRAccess && !isSelf
+  const hasExisting = !!bankDetails?.accountNumber
+  const isPending = bankDetails?.approvalStatus === 'PENDING'
+  const isApproved = bankDetails?.approvalStatus === 'APPROVED'
+  const isRejected = bankDetails?.approvalStatus === 'REJECTED'
+
+  const verifyAccount = async () => {
+    if (!accountNumber || !selectedBank) {
+      showToast('Please enter account number and select a bank', 'error')
+      return
+    }
+    if (!/^\d{10}$/.test(accountNumber)) {
+      showToast('Account number must be exactly 10 digits', 'error')
+      return
+    }
+    setVerifying(true)
+    try {
+      const res = await fetch('/api/staffing/bank-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountNumber, bankCode: selectedBank }),
+      })
+      const result = await res.json()
+      if (result.data?.verified) {
+        setVerifiedName(result.data.accountName)
+        setIsVerified(true)
+        showToast(`Account verified: ${result.data.accountName}`, 'success')
+      } else {
+        setVerifiedName('')
+        setIsVerified(false)
+        showToast(result.data?.error || 'Verification failed', 'error')
+      }
+    } catch {
+      showToast('Failed to verify account', 'error')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const submitBankDetails = async () => {
+    if (!verifiedName || !isVerified) {
+      showToast('Please verify your account first', 'error')
+      return
+    }
+    setSubmitting(true)
+    const bankName = banks.find((b) => b.code === selectedBank)?.name ?? ''
+    try {
+      const res = await fetch(`/api/staffing/employees/${employee.id}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bankAccountNumber: accountNumber,
+          bankCode: selectedBank,
+          bankAccountName: verifiedName,
+          bankName,
+          bankSortCode: sortCode || undefined,
+          bankVerified: true,
+        }),
+      })
+      const result = await res.json()
+      if (result.error) {
+        showToast(result.error, 'error')
+      } else {
+        showToast('Bank details submitted successfully', 'success')
+        setEditing(false)
+        onRefresh()
+      }
+    } catch {
+      showToast('Failed to submit bank details', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleApproval = async (action: 'APPROVED' | 'REJECTED') => {
+    if (action === 'APPROVED') setApproving(true)
+    else setRejecting(true)
+    try {
+      const res = await fetch(`/api/staffing/employees/${employee.id}/bank-approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reason: action === 'REJECTED' ? rejectReason : undefined }),
+      })
+      const result = await res.json()
+      if (result.error) {
+        showToast(result.error, 'error')
+      } else {
+        showToast(`Bank details ${action.toLowerCase()}`, 'success')
+        setShowRejectForm(false)
+        setRejectReason('')
+        onRefresh()
+      }
+    } catch {
+      showToast('Failed to process approval', 'error')
+    } finally {
+      setApproving(false)
+      setRejecting(false)
+    }
+  }
+
+  // Approval status badge
+  const statusBadge = bankDetails?.approvalStatus ? (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${
+      isApproved ? 'bg-emerald-50 text-emerald-700' :
+      isPending ? 'bg-amber-50 text-amber-700' :
+      isRejected ? 'bg-red-50 text-red-700' :
+      'bg-ink-50 text-ink-500'
+    }`}>
+      {isApproved && <Shield className="w-3 h-3" />}
+      {isPending && <Clock className="w-3 h-3" />}
+      {isRejected && <AlertCircle className="w-3 h-3" />}
+      {bankDetails.approvalStatus}
+    </span>
+  ) : null
+
+  // If no bank details and not editing — show empty state
+  if (!hasExisting && !editing) {
+    return (
+      <div className="pt-4 space-y-4">
+        <p className="text-[13px] text-ink-400">No bank details on file.</p>
+        {canSubmit && (
+          <button
+            onClick={() => setEditing(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Bank Details
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // Edit / entry form
+  if (editing || (!hasExisting && canSubmit)) {
+    return (
+      <div className="pt-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Bank</label>
+            <select
+              value={selectedBank}
+              onChange={(e) => { setSelectedBank(e.target.value); setIsVerified(false); setVerifiedName('') }}
+              className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a bank...</option>
+              {banks.map((b) => (
+                <option key={b.code} value={b.code}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Account Number (NUBAN)</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                maxLength={10}
+                value={accountNumber}
+                onChange={(e) => { setAccountNumber(e.target.value.replace(/\D/g, '')); setIsVerified(false); setVerifiedName('') }}
+                placeholder="10-digit account number"
+                className="flex-1 px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={verifyAccount}
+                disabled={verifying || !accountNumber || !selectedBank}
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify'}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Sort Code (optional)</label>
+            <input
+              type="text"
+              maxLength={10}
+              value={sortCode}
+              onChange={(e) => setSortCode(e.target.value)}
+              placeholder="Sort code"
+              className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {verifiedName && (
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Account Name</label>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[13px] text-emerald-700">
+                <Shield className="w-4 h-4" />
+                {verifiedName}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          <button
+            onClick={submitBankDetails}
+            disabled={submitting || !isVerified}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {submitting ? 'Submitting...' : 'Submit Bank Details'}
+          </button>
+          {hasExisting && (
+            <button
+              onClick={() => { setEditing(false); setAccountNumber(bankDetails?.accountNumber ?? ''); setSelectedBank(bankDetails?.bankCode ?? ''); setSortCode(bankDetails?.sortCode ?? ''); setVerifiedName(bankDetails?.accountName ?? ''); setIsVerified(bankDetails?.verified ?? false) }}
+              className="px-4 py-2 rounded-lg border border-ink-200 text-ink-600 text-[13px] font-medium hover:bg-ink-50 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+        {!isVerified && accountNumber.length === 10 && selectedBank && (
+          <p className="text-[12px] text-amber-600 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> Click Verify to confirm the account before submitting
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  // Display existing bank details (read-only view)
+  return (
+    <div className="pt-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {statusBadge}
+          {bankDetails?.verified && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">
+              <Shield className="w-3 h-3" /> Paystack Verified
+            </span>
+          )}
+        </div>
+        {canSubmit && (isRejected || isApproved) && (
+          <button
+            onClick={() => setEditing(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-ink-200 text-ink-600 text-[12px] font-medium hover:bg-ink-50 transition-colors"
+          >
+            <Pencil className="w-3 h-3" /> Update
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+        <div>
+          <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Account Name</span>
+          <p className="text-[13px] text-ink-900 mt-0.5">{bankDetails?.accountName || 'Not provided'}</p>
+        </div>
+        <div>
+          <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Account Number</span>
+          <p className="text-[13px] text-ink-900 mt-0.5 font-mono">{bankDetails?.accountNumber || 'Not provided'}</p>
+        </div>
+        <div>
+          <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Bank</span>
+          <p className="text-[13px] text-ink-900 mt-0.5">{bankDetails?.bankName || 'Not provided'}</p>
+        </div>
+        {bankDetails?.sortCode && (
+          <div>
+            <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Sort Code</span>
+            <p className="text-[13px] text-ink-900 mt-0.5 font-mono">{bankDetails.sortCode}</p>
+          </div>
+        )}
+      </div>
+
+      {isRejected && bankDetails?.rejectionReason && (
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+          <p className="text-[12px] font-medium text-red-700 mb-1">Rejection Reason</p>
+          <p className="text-[13px] text-red-600">{bankDetails.rejectionReason}</p>
+        </div>
+      )}
+
+      {/* Approval controls for HR */}
+      {canApprove && isPending && (
+        <div className="pt-2 space-y-3 border-t border-ink-100">
+          <p className="text-[12px] font-medium text-ink-600">Approval Action</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleApproval('APPROVED')}
+              disabled={approving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {approving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+              Approve
+            </button>
+            <button
+              onClick={() => setShowRejectForm(!showRejectForm)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-[13px] font-medium hover:bg-red-700 transition-colors"
+            >
+              <X className="w-4 h-4" /> Reject
+            </button>
+          </div>
+          {showRejectForm && (
+            <div className="space-y-2">
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Reason for rejection..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <button
+                onClick={() => handleApproval('REJECTED')}
+                disabled={rejecting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-[13px] font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {rejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Rejection'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
