@@ -9,6 +9,8 @@ import {
   CalendarDays, BookOpen, Wrench, ChevronLeft, Eye, Download,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
+import { useToast } from '@/components/Toast'
+import { useProfile } from '@/lib/hooks/useProfile'
 import { generateCsv, STAFFING_COLUMNS } from '@/lib/export-utils'
 
 /* ================================================================
@@ -198,10 +200,13 @@ function formatWeek(iso: string): string {
    ================================================================ */
 
 export default function StaffingPage() {
+  const { profile } = useProfile()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<TabKey>('people')
   const [data, setData] = useState<StaffingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [payrollExporting, setPayrollExporting] = useState(false)
 
   // People tab state
   const [searchQuery, setSearchQuery] = useState('')
@@ -225,6 +230,34 @@ export default function StaffingPage() {
   // Office holidays state
   const [officeHolidays, setOfficeHolidays] = useState<Record<string, { id: string; name: string; date: string }[]>>({})
   const [officeHolidaysLoading, setOfficeHolidaysLoading] = useState(false)
+
+  // Payroll export visibility — HR, FINANCE, ADMIN, OWNER
+  const PAYROLL_ROLES = new Set(['HR', 'FINANCE', 'ADMIN', 'OWNER'])
+  const canExportPayroll = profile?.orgPermission ? PAYROLL_ROLES.has(profile.orgPermission) : false
+
+  const handlePayrollExport = useCallback(async () => {
+    if (payrollExporting) return
+    setPayrollExporting(true)
+    try {
+      const res = await fetch('/api/staffing/export/payroll')
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error?.message || 'Failed to export payroll')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `payroll-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast('Payroll export downloaded', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Export failed', 'error')
+    } finally {
+      setPayrollExporting(false)
+    }
+  }, [payrollExporting, toast])
 
   /* ── Data fetching ─────────────────────────────────────────── */
 
@@ -1256,23 +1289,38 @@ export default function StaffingPage() {
         <div className="bg-white rounded-xl border border-ink-100 p-5 text-center">
           <FileText className="w-8 h-8 text-ink-200 mx-auto mb-3" />
           <p className="text-[13px] font-medium text-ink-700">Report Export</p>
-          <p className="text-[11px] text-ink-400 mt-1 mb-4">Export staffing data as CSV for reporting and analysis.</p>
-          <button
-            onClick={() => {
-              if (!data) return
-              const csv = generateCsv(STAFFING_COLUMNS, filteredEmployees as unknown as Record<string, unknown>[])
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `staffing-report-${new Date().toISOString().slice(0, 10)}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
-          >
-            <Download className="w-4 h-4" /> Export CSV
-          </button>
+          <p className="text-[11px] text-ink-400 mt-1 mb-4">Export staffing data for reporting and analysis.</p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                if (!data) return
+                const csv = generateCsv(STAFFING_COLUMNS, filteredEmployees as unknown as Record<string, unknown>[])
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `staffing-report-${new Date().toISOString().slice(0, 10)}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+            {canExportPayroll && (
+              <button
+                onClick={handlePayrollExport}
+                disabled={payrollExporting}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-600 text-white text-[13px] font-medium hover:bg-accent-700 transition-colors disabled:opacity-50 disabled:cursor-wait"
+              >
+                <Download className="w-4 h-4" />
+                {payrollExporting ? 'Exporting…' : 'Payroll Export (.xlsx)'}
+              </button>
+            )}
+          </div>
+          {canExportPayroll && (
+            <p className="text-[10px] text-ink-300 mt-2">Payroll export includes salary, bank details, and contract data. Audit logged.</p>
+          )}
         </div>
       </div>
     )
