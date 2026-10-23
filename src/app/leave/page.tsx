@@ -1244,7 +1244,7 @@ function TeamCalendarTab(props: TeamCalendarTabProps) {
                           )}
                           title={`${member.fullName} - ${getLeaveTypeLabel(leave.leaveType)} (${STATUS_META[leave.status]?.label || leave.status})`}
                         >
-                          {member.fullName.split(' ')[0]}
+                          {member.fullName.split(' ')[0]} · {getLeaveTypeLabel(leave.leaveType)}
                         </div>
                       )
                     })}
