@@ -311,7 +311,7 @@ describe('GET /api/dashboard', () => {
     await GET(req)
 
     const findManyCall = mockPrisma.project.findMany.mock.calls[0][0]
-    expect(findManyCall.where).toEqual({ organisationId: 'org-1' })
+    expect(findManyCall.where).toEqual({ organisationId: 'org-1', status: { notIn: ['ARCHIVED', 'COMPLETED'] } })
   })
 
   it('member sees only projects they are a member of', async () => {
