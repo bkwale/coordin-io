@@ -51,7 +51,7 @@ export const GET = withAuth(async (_request, { profile }) => {
     select: { days: true },
   })
 
-  const pendingDays = pendingRequests.reduce((sum, r) => sum + r.days, 0)
+  const pendingDays = pendingRequests.reduce((sum: any, r: any) => sum + r.days, 0)
 
   // Split approved leave into taken (past) vs approved future
   const approvedRequests = await prisma.leaveRequest.findMany({
@@ -68,12 +68,12 @@ export const GET = withAuth(async (_request, { profile }) => {
   // "Taken" = approved requests already started (startDate < today)
   // "Approved Future" = approved requests not yet started (startDate >= today)
   const takenDays = approvedRequests
-    .filter((r) => new Date(r.startDate) < today)
-    .reduce((sum, r) => sum + r.days, 0)
+    .filter((r: any) => new Date(r.startDate) < today)
+    .reduce((sum: any, r: any) => sum + r.days, 0)
 
   const approvedFutureDays = approvedRequests
-    .filter((r) => new Date(r.startDate) >= today)
-    .reduce((sum, r) => sum + r.days, 0)
+    .filter((r: any) => new Date(r.startDate) >= today)
+    .reduce((sum: any, r: any) => sum + r.days, 0)
 
   const summary = calculateLeaveBalance(allocation, used, carriedForward, pendingDays)
 

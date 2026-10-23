@@ -79,7 +79,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new Error('Maximum 20 approval steps per route')
   }
 
-  const route = await prisma.$transaction(async (tx) => {
+  const route = await prisma.$transaction(async (tx: any) => {
     // If setting as default, unset existing default for this type
     if (isDefault) {
       await tx.approvalRoute.updateMany({

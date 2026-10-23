@@ -22,7 +22,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     },
   })
 
-  const mapped = policies.map((policy) => {
+  const mapped = policies.map((policy: any) => {
     const ack = policy.acknowledgements[0] ?? null
     return {
       id: policy.id,

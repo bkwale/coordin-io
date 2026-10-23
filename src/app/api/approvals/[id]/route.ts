@@ -140,28 +140,28 @@ async function updateSourceEntity(
       await prisma.leaveRequest.update({
         where: { id: entityId },
         data: { status: newStatus },
-      }).catch((err) => console.error(`[approval] Failed to update leave request ${entityId}:`, err))
+      }).catch((err: any) => console.error(`[approval] Failed to update leave request ${entityId}:`, err))
       break
 
     case 'EXPENSE':
       await prisma.expenseClaim.update({
         where: { id: entityId },
         data: { status: newStatus },
-      }).catch((err) => console.error(`[approval] Failed to update expense ${entityId}:`, err))
+      }).catch((err: any) => console.error(`[approval] Failed to update expense ${entityId}:`, err))
       break
 
     case 'SERVICE_REQUEST':
       await prisma.serviceRequest.update({
         where: { id: entityId },
         data: { status: newStatus },
-      }).catch((err) => console.error(`[approval] Failed to update service request ${entityId}:`, err))
+      }).catch((err: any) => console.error(`[approval] Failed to update service request ${entityId}:`, err))
       break
 
     case 'TRAVEL':
       await prisma.leaveRequest.update({
         where: { id: entityId },
         data: { status: newStatus },
-      }).catch((err) => console.error(`[approval] Failed to update travel request ${entityId}:`, err))
+      }).catch((err: any) => console.error(`[approval] Failed to update travel request ${entityId}:`, err))
       break
   }
 }

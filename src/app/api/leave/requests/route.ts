@@ -148,7 +148,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const overlap = findOverlappingRequest(
     { startDate, endDate },
-    existingRequests.map((r) => ({
+    existingRequests.map((r: any) => ({
       id: r.id,
       startDate: r.startDate,
       endDate: r.endDate,

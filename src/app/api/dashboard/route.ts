@@ -66,20 +66,20 @@ async function fetchDashboard(profile: any) {
 
   const NON_OVERDUE_STATUSES: TaskStatus[] = ['COMPLETED']
 
-  const projectSummaries = projects.map((project) => {
+  const projectSummaries = projects.map((project: any) => {
     const myTaskCount = project.tasks.filter(
-      (t) => t.ownerId === profile.id && t.status !== 'COMPLETED',
+      (t: any) => t.ownerId === profile.id && t.status !== 'COMPLETED',
     ).length
 
     const overdueTaskCount = project.tasks.filter(
-      (t) =>
+      (t: any) =>
         t.dueDate !== null &&
         t.dueDate < now &&
         !NON_OVERDUE_STATUSES.includes(t.status),
     ).length
 
     const inReviewTaskCount = project.tasks.filter(
-      (t) =>
+      (t: any) =>
         t.status === 'READY_FOR_REVIEW' && t.reviewerId === profile.id,
     ).length
 
@@ -99,7 +99,7 @@ async function fetchDashboard(profile: any) {
   })
 
   const allProjectsHealthy = projectSummaries.length > 0 &&
-    projectSummaries.every((p) => p.effectiveHealth === 'GREEN')
+    projectSummaries.every((p: any) => p.effectiveHealth === 'GREEN')
 
   // ── 2. Urgent tasks ──────────────────────────────────────
   //    Overdue OR due today OR high/critical priority,
@@ -136,7 +136,7 @@ async function fetchDashboard(profile: any) {
     ],
   })
 
-  const urgentTaskList = urgentTasks.map((t) => ({
+  const urgentTaskList = urgentTasks.map((t: any) => ({
     id: t.id,
     title: t.title,
     projectId: t.project.id,

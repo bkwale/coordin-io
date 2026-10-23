@@ -27,7 +27,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     logoUrl: org.logoUrl,
     defaultCurrency: org.defaultCurrency,
     currencies: org.currencies,
-    offices: org.offices.map((o) => ({
+    offices: org.offices.map((o: any) => ({
       id: o.id,
       name: o.name,
       city: o.city,

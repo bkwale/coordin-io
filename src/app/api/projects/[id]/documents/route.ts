@@ -37,7 +37,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
   })
 
   // Flatten: attach latestRevision as a top-level field per document
-  const result = documents.map((doc) => {
+  const result = documents.map((doc: any) => {
     const { revisions, ...rest } = doc
     return {
       ...rest,

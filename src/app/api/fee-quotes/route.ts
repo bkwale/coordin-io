@@ -99,7 +99,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   })
   const initials = (org?.name || 'ORG')
     .split(/\s+/)
-    .map(w => w[0]?.toUpperCase() || '')
+    .map((w: any) => w[0]?.toUpperCase() || '')
     .join('')
     .slice(0, 3)
 

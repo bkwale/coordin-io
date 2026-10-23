@@ -74,7 +74,7 @@ export async function findMatchingRoute(
   }
 
   // Fall back to default route
-  return routes.find((r) => r.isDefault) ?? routes[0]
+  return routes.find((r: any) => r.isDefault) ?? routes[0]
 }
 
 function matchesConditions(
@@ -153,7 +153,7 @@ export async function createApprovalInstance(
   if (!route || route.steps.length === 0) return null
 
   // Create instance + all step instances in a transaction
-  const instance = await prisma.$transaction(async (tx) => {
+  const instance = await prisma.$transaction(async (tx: any) => {
     const inst = await tx.approvalInstance.create({
       data: {
         organisationId: context.organisationId,
@@ -240,7 +240,7 @@ export async function processApprovalStep(
   action: ApprovalAction,
   comment?: string,
 ): Promise<ProcessResult> {
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const instance = await tx.approvalInstance.findUnique({
       where: { id: instanceId },
       include: {
@@ -258,11 +258,11 @@ export async function processApprovalStep(
 
     // Find the current pending step
     const currentStep = instance.steps.find(
-      (s) => s.status === 'PENDING' && s.stepOrder === instance.currentStepOrder,
+      (s: any) => s.status === 'PENDING' && s.stepOrder === instance.currentStepOrder,
     )
 
     // If current step was skipped, find next pending
-    const effectiveStep = currentStep ?? instance.steps.find((s) => s.status === 'PENDING')
+    const effectiveStep = currentStep ?? instance.steps.find((s: any) => s.status === 'PENDING')
 
     if (!effectiveStep) {
       throw new Error('No pending step found')
@@ -323,7 +323,7 @@ export async function processApprovalStep(
 
     // APPROVE — advance to next step or complete
     const nextPendingStep = instance.steps.find(
-      (s) => s.stepOrder > effectiveStep.stepOrder && s.status === 'PENDING',
+      (s: any) => s.stepOrder > effectiveStep.stepOrder && s.status === 'PENDING',
     )
 
     if (nextPendingStep) {

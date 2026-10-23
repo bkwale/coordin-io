@@ -39,7 +39,7 @@ export async function updateLeaveWithBalance(
   // Approve annual leave — increment used days
   if (newStatus === 'APPROVED' && leaveRequest.leaveType === 'ANNUAL') {
     const year = leaveRequest.startDate.getFullYear()
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: any) => {
       const result = await tx.leaveRequest.update({
         where: { id },
         data: updateData,
@@ -71,7 +71,7 @@ export async function updateLeaveWithBalance(
   // Cancel previously approved annual leave — restore the balance
   if (newStatus === 'CANCELLED' && leaveRequest.leaveType === 'ANNUAL' && leaveRequest.status === 'APPROVED') {
     const year = leaveRequest.startDate.getFullYear()
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: any) => {
       const result = await tx.leaveRequest.update({
         where: { id },
         data: updateData,
@@ -104,7 +104,7 @@ export async function updateLeaveWithBalance(
   // All other transitions — check for availability sync
   if (newStatus === 'APPROVED') {
     const now = new Date()
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: any) => {
       const result = await tx.leaveRequest.update({
         where: { id },
         data: updateData,
@@ -122,7 +122,7 @@ export async function updateLeaveWithBalance(
 
   // CANCELLED/WITHDRAWN after APPROVED (non-annual)
   if (['CANCELLED', 'WITHDRAWN'].includes(newStatus) && leaveRequest.status === 'APPROVED') {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: any) => {
       const result = await tx.leaveRequest.update({
         where: { id },
         data: updateData,

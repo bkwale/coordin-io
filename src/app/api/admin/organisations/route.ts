@@ -24,7 +24,7 @@ export const GET = withSuperAdmin(async (_request: NextRequest) => {
   `)
 
   return NextResponse.json({
-    organisations: orgs.map((o) => ({
+    organisations: orgs.map((o: any) => ({
       ...o,
       user_count: Number(o.user_count),
       project_count: Number(o.project_count),

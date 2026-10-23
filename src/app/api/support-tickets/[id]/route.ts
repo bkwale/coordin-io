@@ -58,7 +58,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       page: ticket.page,
       screenshotUrl: ticket.screenshotUrl,
       submitter: ticket.submitter,
-      replies: ticket.replies.map(r => ({
+      replies: ticket.replies.map((r: any) => ({
         id: r.id,
         message: r.message,
         isStaff: r.isStaff,

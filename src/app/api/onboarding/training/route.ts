@@ -19,7 +19,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     },
   })
 
-  const mapped = items.map((item) => {
+  const mapped = items.map((item: any) => {
     const completion = item.completions[0] ?? null
     return {
       id: item.id,

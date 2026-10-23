@@ -42,7 +42,7 @@ export const POST = withRevisionAccess(async (request: NextRequest, { revision, 
   const isConstructionIssue = revision.revision.startsWith('C')
 
   // Use $transaction for atomicity: create review + optionally update document status
-  const review = await prisma.$transaction(async (tx) => {
+  const review = await prisma.$transaction(async (tx: any) => {
     const newReview = await tx.documentReview.create({
       data: {
         revisionId: revision.id,

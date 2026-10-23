@@ -24,7 +24,7 @@ async function computeDerivedHealth(projectId: string) {
 
   const totalTasks = allTasks.length
   const overdueTasks = allTasks.filter(
-    t => t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED',
+    (t: any) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED',
   ).length
 
   let scheduleHealth: 'GREEN' | 'AMBER' | 'RED' = 'GREEN'
@@ -160,7 +160,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
       where: { id: { in: reporterIds } },
       select: { id: true, fullName: true },
     })
-    reporterMap = Object.fromEntries(profiles.map(p => [p.id, p.fullName]))
+    reporterMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.fullName]))
   }
 
   const historyWithNames = history.map((h: Record<string, unknown>) => ({
@@ -254,8 +254,8 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     })
 
     const recipients = memberships
-      .filter(m => m.profileId !== profile.id)
-      .map(m => ({ profileId: m.profileId }))
+      .filter((m: any) => m.profileId !== profile.id)
+      .map((m: any) => ({ profileId: m.profileId }))
 
     if (recipients.length > 0) {
       await createNotifications(recipients, {

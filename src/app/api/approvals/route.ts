@@ -14,7 +14,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   )
 
   // Enrich with entity details based on request type
-  const approvals = pendingSteps.map((step) => ({
+  const approvals = pendingSteps.map((step: any) => ({
     stepId: step.id,
     instanceId: step.instance.id,
     stepOrder: step.stepOrder,

@@ -48,7 +48,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
 
   if (!milestone) throw new NotFoundError('Milestone not found')
 
-  const taskStatuses = milestone.tasks.map((t) => t.status as TaskStatusForCalc)
+  const taskStatuses = milestone.tasks.map((t: any) => t.status as TaskStatusForCalc)
   const calculatedStatus = calculateMilestoneStatus({
     currentStatus: milestone.status,
     dueDate: milestone.dueDate,

@@ -15,7 +15,7 @@ import { withTaskAccess } from '@/lib/with-task-access'
  * comments, dependencies, archivedAt, completedAt, attachments.
  */
 export const POST = withTaskAccess(async (request: NextRequest, { task: source, profile }) => {
-  const duplicated = await prisma.$transaction(async (tx) => {
+  const duplicated = await prisma.$transaction(async (tx: any) => {
     // Create the duplicate task
     const newTask = await tx.task.create({
       data: {
@@ -48,7 +48,7 @@ export const POST = withTaskAccess(async (request: NextRequest, { task: source, 
 
     if (checklistItems.length > 0) {
       await tx.taskChecklistItem.createMany({
-        data: checklistItems.map((item) => ({
+        data: checklistItems.map((item: any) => ({
           taskId: newTask.id,
           label: item.label,
           mandatory: item.mandatory,

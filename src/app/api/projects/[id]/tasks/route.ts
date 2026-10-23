@@ -78,7 +78,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
   })
 
   // Shape checklist counts + task numbers for the response
-  const shaped = tasks.map(({ checklistItems, milestone, ...task }) => ({
+  const shaped = tasks.map(({ checklistItems, milestone, ...task }: any) => ({
     ...task,
     milestone: milestone ?? null,
     taskNumber: formatProjectTaskNumber(prefix, numberMap.get(task.id) || 0),
@@ -91,7 +91,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { profile, pro
       : null,
     checklist: {
       total: checklistItems.length,
-      completed: checklistItems.filter((item) => item.completed).length,
+      completed: checklistItems.filter((item: any) => item.completed).length,
     },
   }))
 
@@ -136,7 +136,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
     }
   }
 
-  const task = await prisma.$transaction(async (tx) => {
+  const task = await prisma.$transaction(async (tx: any) => {
     const created = await tx.task.create({
       data: {
         projectId,

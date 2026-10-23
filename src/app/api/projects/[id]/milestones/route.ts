@@ -28,8 +28,8 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
   })
 
   // Enrich each milestone with calculated status and task summary
-  const enriched = milestones.map((m) => {
-    const taskStatuses = m.tasks.map((t) => t.status as TaskStatusForCalc)
+  const enriched = milestones.map((m: any) => {
+    const taskStatuses = m.tasks.map((t: any) => t.status as TaskStatusForCalc)
     const calculatedStatus = calculateMilestoneStatus({
       currentStatus: m.status,
       dueDate: m.dueDate,

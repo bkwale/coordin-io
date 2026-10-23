@@ -43,7 +43,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId, 
   })
 
   const taskSummary = taskCounts.reduce<Record<string, number>>(
-    (acc, row) => {
+    (acc: any, row: any) => {
       acc[row.status] = row._count.id
       return acc
     },
@@ -163,7 +163,7 @@ export const DELETE = withProjectAccess(async (request: NextRequest, { projectId
     }
 
     // Delete project and all related data in a transaction
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       // Delete child records first (cascade doesn't always work with PgBouncer)
       await tx.task.deleteMany({ where: { projectId } })
       await tx.projectMembership.deleteMany({ where: { projectId } })

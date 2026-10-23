@@ -57,7 +57,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if ('conditions' in body) data.conditions = body.conditions && typeof body.conditions === 'object' ? body.conditions as any : null
 
   // Wrap default-unsetting + update in a transaction to avoid race
-  const route = await prisma.$transaction(async (tx) => {
+  const route = await prisma.$transaction(async (tx: any) => {
     if (data.isDefault === true && !existing.isDefault) {
       await tx.approvalRoute.updateMany({
         where: {

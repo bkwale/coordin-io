@@ -29,11 +29,11 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   })
 
   const unacknowledgedPolicies = mandatoryPolicies.filter(
-    (p) => p.acknowledgements.length === 0,
+    (p: any) => p.acknowledgements.length === 0,
   )
 
   const policiesCount = unacknowledgedPolicies.length
-  const policiesPreview = unacknowledgedPolicies.slice(0, 3).map((p) => ({
+  const policiesPreview = unacknowledgedPolicies.slice(0, 3).map((p: any) => ({
     id: p.id,
     title: p.title,
     category: p.category,
@@ -63,9 +63,9 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     },
   })
 
-  const incompleteTasks = onboardingAssignments.flatMap((a) => a.tasks)
+  const incompleteTasks = onboardingAssignments.flatMap((a: any) => a.tasks)
   const onboardingCount = incompleteTasks.length
-  const onboardingPreview = incompleteTasks.slice(0, 3).map((t) => ({
+  const onboardingPreview = incompleteTasks.slice(0, 3).map((t: any) => ({
     id: t.id,
     title: t.title,
     stage: t.stage,

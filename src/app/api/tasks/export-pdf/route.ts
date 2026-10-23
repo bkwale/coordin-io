@@ -290,10 +290,10 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     }),
   ])
 
-  const numberMap = new Map(allTaskIds.map((t, i) => [t.id, i + 1]))
+  const numberMap = new Map(allTaskIds.map((t: any, i: any) => [t.id, i + 1]))
   const prefix = project.code || 'T'
 
-  const taskRows: TaskRow[] = tasks.map((t) => ({
+  const taskRows: TaskRow[] = tasks.map((t: any) => ({
     taskNumber: `${prefix}-${String(numberMap.get(t.id) || 0).padStart(3, '0')}`,
     title: t.title,
     status: t.status,

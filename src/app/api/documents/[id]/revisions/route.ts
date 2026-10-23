@@ -27,7 +27,7 @@ export const POST = withDocumentAccess(async (request: NextRequest, { documentId
   const now = new Date()
 
   // Use $transaction for atomicity: supersede + create + update document
-  const revision = await prisma.$transaction(async (tx) => {
+  const revision = await prisma.$transaction(async (tx: any) => {
     // Supersede the previous latest revision
     const previousRevision = await tx.documentRevision.findFirst({
       where: { documentId, supersededAt: null },

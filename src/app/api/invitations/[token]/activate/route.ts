@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import type { PrismaClient } from '@/generated/prisma/client'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success, error as apiError } from '@/lib/api-response'
 import {
@@ -112,7 +111,7 @@ export async function POST(
     // ── Transaction: create profile + employee profile + update invitation ──
     const result = await prisma.$transaction(
       async (
-        tx: Parameters<Parameters<PrismaClient['$transaction']>[0]>[0],
+        tx: any,
       ) => {
         // 1. Create Profile
         const profile = await tx.profile.create({

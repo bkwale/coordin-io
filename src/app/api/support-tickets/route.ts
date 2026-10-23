@@ -50,7 +50,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   })
 
   return success({
-    tickets: tickets.map(t => ({
+    tickets: tickets.map((t: any) => ({
       id: t.id,
       ref: `#${t.id.slice(-6).toUpperCase()}`,
       title: t.title,

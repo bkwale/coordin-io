@@ -99,7 +99,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     clientEmail: quote.clientEmail,
     clientAddress: quote.clientAddress,
     description: quote.description,
-    lineItems: quote.lineItems.map(li => ({
+    lineItems: quote.lineItems.map((li: any) => ({
       description: li.description,
       quantity: li.quantity,
       unitPrice: li.unitPrice,

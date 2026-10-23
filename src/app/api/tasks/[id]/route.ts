@@ -143,7 +143,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
         where: { taskId: taskId },
         select: { mandatory: true, completed: true },
       })
-      const incomplete = checklistItems.filter(ci => ci.mandatory && !ci.completed)
+      const incomplete = checklistItems.filter((ci: any) => ci.mandatory && !ci.completed)
       if (incomplete.length > 0) {
         throw new ValidationError(
           `Cannot complete task: ${incomplete.length} mandatory checklist item(s) are not done`,

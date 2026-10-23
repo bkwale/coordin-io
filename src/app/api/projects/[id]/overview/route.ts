@@ -91,27 +91,27 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
   })
 
   // ── Shape task stats ──────────────────────────────────
-  const tasksByStatus = taskCounts.reduce<Record<string, number>>((acc, row) => {
+  const tasksByStatus = taskCounts.reduce<Record<string, number>>((acc: any, row: any) => {
     acc[row.status] = row._count.id
     return acc
   }, {})
 
-  const totalTasks = Object.values(tasksByStatus).reduce((a, b) => a + b, 0)
+  const totalTasks = Object.values(tasksByStatus).reduce((a: any, b: any) => (a as number) + (b as number), 0)
   const completedTasks = tasksByStatus['COMPLETED'] || 0
 
   // ── Shape document stats ──────────────────────────────
-  const documentsByType = documentCounts.reduce<Record<string, number>>((acc, row) => {
+  const documentsByType = documentCounts.reduce<Record<string, number>>((acc: any, row: any) => {
     acc[row.documentType] = row._count._all
     return acc
   }, {})
 
-  const totalDocuments = Object.values(documentsByType).reduce((a, b) => a + b, 0) + drawingCount
+  const totalDocuments = Object.values(documentsByType).reduce((a: any, b: any) => (a as number) + (b as number), 0) + drawingCount
 
   // ── Milestone summary with calculated status ──────────
   const now = new Date()
 
-  const milestones = milestonesRaw.map((m) => {
-    const taskStatuses = m.tasks.map((t) => t.status as TaskStatusForCalc)
+  const milestones = milestonesRaw.map((m: any) => {
+    const taskStatuses = m.tasks.map((t: any) => t.status as TaskStatusForCalc)
     const calcStatus = calculateMilestoneStatus({
       currentStatus: m.status,
       dueDate: m.dueDate,
@@ -123,8 +123,8 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
     return { ...rest, status: calcStatus, storedStatus: m.status, taskSummary }
   })
 
-  const activeMilestones = milestones.filter(m => m.status !== 'COMPLETED' && m.status !== 'CANCELLED')
-  const nextMilestone = activeMilestones.find(m => m.dueDate >= now) || activeMilestones[0] || null
+  const activeMilestones = milestones.filter((m: any) => m.status !== 'COMPLETED' && m.status !== 'CANCELLED')
+  const nextMilestone = activeMilestones.find((m: any) => m.dueDate >= now) || activeMilestones[0] || null
 
   // ── Days to target completion ─────────────────────────
   const daysToTarget = project.targetCompletion
@@ -140,7 +140,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
     milestones: {
       total: milestones.length,
       active: activeMilestones.length,
-      completed: milestones.filter(m => m.status === 'COMPLETED').length,
+      completed: milestones.filter((m: any) => m.status === 'COMPLETED').length,
       next: nextMilestone,
       items: milestones,
     },
@@ -158,7 +158,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
     metrics: {
       daysToTarget,
       teamSize: project.memberships.length,
-      completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      completionRate: (totalTasks as number) > 0 ? Math.round((completedTasks / (totalTasks as number)) * 100) : 0,
     },
   })
 })

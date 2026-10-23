@@ -27,7 +27,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   ])
 
   return NextResponse.json({
-    members: members.map((m) => ({
+    members: members.map((m: any) => ({
       id: m.id,
       fullName: m.fullName,
       email: m.email,
@@ -45,7 +45,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     })),
     offices,
     total: members.length,
-    active: members.filter((m) => m.status === 'ACTIVE').length,
+    active: members.filter((m: any) => m.status === 'ACTIVE').length,
     viewerPermission: profile.orgPermission,
     viewerProfileId: profile.id,
   })

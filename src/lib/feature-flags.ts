@@ -115,10 +115,10 @@ export async function getOrgFeatureDetails(orgId: string) {
     include: { enabledByProfile: { select: { fullName: true } } },
   })
 
-  const overrideMap = new Map(overrides.map(o => [o.featureKey, o]))
+  const overrideMap = new Map(overrides.map((o: any) => [o.featureKey, o]))
 
   return Object.entries(FEATURE_REGISTRY).map(([key, config]) => {
-    const override = overrideMap.get(key)
+    const override: any = overrideMap.get(key)
     return {
       key,
       label: config.label,

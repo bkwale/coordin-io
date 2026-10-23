@@ -110,7 +110,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     prisma.auditEvent.count({ where }),
   ])
 
-  const formatted = events.map(e => ({
+  const formatted = events.map((e: any) => ({
     id: e.id,
     action: e.action,
     actionLabel: AUDIT_ACTION_LABELS[e.action] || e.action.replace(/[._]/g, ' '),
