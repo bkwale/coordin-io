@@ -220,18 +220,22 @@ async function fetchStaffingDashboard(
           status: { in: ['SUBMITTED', 'UNDER_REVIEW', 'LINE_MANAGER_APPROVED'] },
         },
       })
+      // Count leave that overlaps with next 30/60 days — include all approved stages
+      const approvedStatuses = ['APPROVED', 'HR_APPROVED', 'LINE_MANAGER_APPROVED']
       leaveNext30 = await modulesPrisma.leaveRequest.count({
         where: {
           profile: { organisationId: orgId },
-          status: 'APPROVED',
-          startDate: { gte: now, lte: in30Days },
+          status: { in: approvedStatuses },
+          startDate: { lte: in30Days },
+          endDate: { gte: now },
         },
       })
       leaveNext60 = await modulesPrisma.leaveRequest.count({
         where: {
           profile: { organisationId: orgId },
-          status: 'APPROVED',
-          startDate: { gte: now, lte: in60Days },
+          status: { in: approvedStatuses },
+          startDate: { lte: in60Days },
+          endDate: { gte: now },
         },
       })
     } catch { /* Leave tables may not be available */ }

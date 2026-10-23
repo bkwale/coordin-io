@@ -217,6 +217,65 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     return newAssignment
   })
 
+  // Auto-generate probation reviews if none exist for this employee
+  try {
+    const existingReviews = await modulesPrisma.probationReview.count({
+      where: { profileId: targetProfileId },
+    })
+    if (existingReviews === 0) {
+      // Check if employee has probation dates set; if not, default from startDate
+      const empProfile = await modulesPrisma.employeeProfile.findUnique({
+        where: { profileId: targetProfileId },
+        select: { probationStartDate: true, probationLength: true },
+      })
+
+      const probStart = empProfile?.probationStartDate ?? startDate
+      const probMonths = empProfile?.probationLength ?? 3
+
+      const milestones: { type: string; daysOffset: number }[] = []
+      if (probMonths >= 1) milestones.push({ type: '30-day', daysOffset: 30 })
+      if (probMonths >= 2) milestones.push({ type: '60-day', daysOffset: 60 })
+      if (probMonths >= 3) milestones.push({ type: '90-day', daysOffset: 90 })
+      milestones.push({ type: 'final', daysOffset: probMonths * 30 })
+
+      for (const milestone of milestones) {
+        const scheduledDate = new Date(probStart)
+        scheduledDate.setDate(scheduledDate.getDate() + milestone.daysOffset)
+        await modulesPrisma.probationReview.create({
+          data: {
+            profileId: targetProfileId,
+            reviewType: milestone.type,
+            scheduledDate,
+          },
+        })
+      }
+
+      // Set probation fields on employee profile if not already set
+      if (!empProfile?.probationStartDate) {
+        const probEnd = new Date(probStart)
+        probEnd.setMonth(probEnd.getMonth() + probMonths)
+        await modulesPrisma.employeeProfile.upsert({
+          where: { profileId: targetProfileId },
+          create: {
+            profileId: targetProfileId,
+            probationStartDate: probStart,
+            probationEndDate: probEnd,
+            probationLength: probMonths,
+            probationStatus: 'PROBATION',
+          },
+          update: {
+            probationStartDate: probStart,
+            probationEndDate: probEnd,
+            probationLength: probMonths,
+            probationStatus: 'PROBATION',
+          },
+        })
+      }
+    }
+  } catch {
+    // Swallow errors — probation auto-gen is best-effort
+  }
+
   // Send notification to the employee
   await createNotification({
     profileId: targetProfileId,

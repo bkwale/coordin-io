@@ -3322,7 +3322,7 @@ function PublicHolidaysSection() {
       ])
       if (!hRes.ok) throw new Error('Failed to load holidays')
       const hData = await hRes.json()
-      setHolidays(hData.holidays ?? [])
+      setHolidays(hData.data?.holidays ?? hData.holidays ?? [])
       if (oRes.ok) {
         const oData = await oRes.json()
         setOffices((oData.organisation?.offices ?? []).map((o: OfficeData) => ({ id: o.id, name: o.name })))

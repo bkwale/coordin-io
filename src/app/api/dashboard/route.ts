@@ -39,9 +39,10 @@ async function fetchDashboard(profile: any) {
   // ── 1. Projects the user can see ─────────────────────────
   const projects = await prisma.project.findMany({
     where: isAdmin
-      ? { organisationId: orgId }
+      ? { organisationId: orgId, status: { notIn: ['ARCHIVED', 'COMPLETED'] } }
       : {
           organisationId: orgId,
+          status: { notIn: ['ARCHIVED', 'COMPLETED'] },
           memberships: {
             some: {
               profileId: profile.id,
