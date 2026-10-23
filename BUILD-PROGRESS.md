@@ -960,3 +960,24 @@ Focused release series addressing data integrity gaps, permission model consiste
 **CWA Defaults:** Staffing, Projects, Documents, Approvals enabled by registry default. Commercial, Timesheets, Helpdesk, Compliance explicitly enabled via DB override for CWA HOMES.
 
 **Verification:** 0 type errors. Crispin QA clean (3 SHOULD-FIX follow-ups, 0 blockers). Commit 05da1c5 pushed and deployed.
+
+---
+
+## Cross-Module Data Consistency Fixes (23 Oct 2026)
+
+**Context:** Ayo's bug report identified that Leave, Staffing, Calendar, and Dashboard displayed related information inconsistently. Root cause analysis and fixes applied across 5 files.
+
+### Fixes Applied
+
+| Bug | Root Cause | Fix | File |
+|-----|-----------|-----|------|
+| Leave Admin 30/60-day counts = 0 | Query only checked `APPROVED` status; date filter required `startDate >= now` (missed leave already started) | Expanded to `['APPROVED', 'HR_APPROVED', 'LINE_MANAGER_APPROVED']`; changed to overlap query (`startDate <= window AND endDate >= now`) | `api/staffing/route.ts` |
+| Duplicate project cards | ARCHIVED/COMPLETED projects included in dashboard query | Added `status: { notIn: ['ARCHIVED', 'COMPLETED'] }` to both admin and member queries | `api/dashboard/route.ts` |
+| Public holidays "No entries found" | Settings UI read `hData.holidays` but API wraps in `success()` → `{ data: { holidays } }` | Added `hData.data?.holidays` fallback | `settings/page.tsx` |
+| Profile page 404 | No `/profile` route existed | Added redirect page → `/staffing/${profileId}` | `app/profile/page.tsx` |
+| Probation reviews not generating | Auto-generation only fired on HR PATCH, not onboarding assignment | Added 30/60/90-day + final review auto-creation to onboarding POST | `api/onboarding/assignments/route.ts` |
+
+### Key Design Decision
+Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >= now`) instead of a **start-only query** (`startDate >= now AND startDate <= windowEnd`). This correctly counts leave that starts before the window but extends into it.
+
+**Verification:** 0 type errors. Commits 79db15e + 4779776 pushed and deployed.
