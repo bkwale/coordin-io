@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useProfile } from '@/hooks/useProfile'
+import { useProfile } from '@/lib/hooks/useProfile'
 
 /**
  * /profile → redirects to /staffing/[profileId]
