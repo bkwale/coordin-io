@@ -4,7 +4,11 @@ import { getProfileByAuthId, hasOrgPermission } from '@/lib/permissions'
 import { canPerform, type Feature, type Action } from '@/lib/role-permissions'
 import { AuthError, PermissionError, formatAPIError } from '@/lib/errors'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { prisma } from '@/lib/prisma'
 import type { OrgPermission } from '@/generated/prisma/client'
+
+const DEMO_COOKIE = 'coordin_demo_start'
+const DEMO_DURATION_MS = 10 * 60 * 1000 // 10 minutes
 
 /**
  * The profile + auth data available inside a withAuth handler.
@@ -55,6 +59,37 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
     const startMs = Date.now()
 
     try {
+      // 0. Demo mode — cookie-based 10-minute pass (read-only, no Supabase session needed)
+      const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
+      if (demoCookie) {
+        const demoStart = parseInt(demoCookie, 10)
+        if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+          // Look up first ADMIN profile from CWA HOMES org for demo context
+          const demoProfile = await prisma.profile.findFirst({
+            where: {
+              organisationId: 'd98a3d14-a3c7-4df7-a7ac-8e1065356e1a',
+              orgPermission: 'ADMIN',
+              status: 'ACTIVE',
+            },
+            include: {
+              organisation: true,
+              office: true,
+              corporateRole: true,
+              employeeProfile: true,
+            },
+          })
+
+          if (demoProfile) {
+            const response = await handler(request, {
+              authUserId: 'demo-user',
+              profile: demoProfile,
+            })
+            return response
+          }
+          // If no demo profile found, fall through to normal auth
+        }
+      }
+
       // 1. Verify Supabase session
       const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
