@@ -981,3 +981,52 @@ Focused release series addressing data integrity gaps, permission model consiste
 Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >= now`) instead of a **start-only query** (`startDate >= now AND startDate <= windowEnd`). This correctly counts leave that starts before the window but extends into it.
 
 **Verification:** 0 type errors. Commits 79db15e + 4779776 pushed and deployed.
+
+---
+
+## E-Invoicing Module — Phase 1 (Oct 2026)
+
+**Context:** Porting Morway (Wale's standalone e-invoicing tool) into Coordin for the construction/architecture market. EU e-invoicing mandates (Belgium Jan 2026, Germany Jan 2027, France Sep 2026, UK Peppol Apr 2029) create urgent demand.
+
+### Build Order & Progress
+
+| Week | Deliverable | Status |
+|------|------------|--------|
+| 1-2 | Supplier register — CRUD API + schema | ✅ Done (commit e4c3fc9) |
+| 2-3 | Invoice reception — Peppol webhook + PDF upload + UBL parser | ✅ Done (commit 28779d6) |
+| 3-4 | Invoice → Project matching with rules engine | ✅ Done (commit 9cd3764) |
+| 4-5 | Invoice approval workflow — wire into approval engine | ✅ Done (commit d45cdbe) |
+| 5-6 | Outbound invoicing — fee quote → invoice conversion | Pending |
+| 6-7 | Xero integration (Morway adapter) | Pending |
+| 7-8 | RIBA stage tracking + resource planning (feature-flagged) | Pending |
+
+### Week 1-3: Schema + APIs (commits e4c3fc9, 28779d6, 9cd3764)
+
+**Schema models:** Supplier, InboundInvoice, InboundInvoiceLine, CategorisationRule — all with organisation scoping and soft-delete support.
+
+**API routes (844 lines):**
+- `api/suppliers/` — full CRUD, VAT duplicate prevention, payment terms
+- `api/suppliers/[id]/` — detail with recent invoices + categorisation rules
+- `api/inbound-invoices/` — list with filters (status, supplier, project, date range) + Peppol webhook + PDF upload
+- `api/inbound-invoices/[id]/` — detail + status transitions + line item updates
+- `api/categorisation-rules/` — CRUD for auto-matching rules (supplier → project/account)
+
+**Morway ported code:**
+- `src/lib/invoicing/ubl-parser.ts` — UBL 2.1 XML parser (EN 16931 compliant)
+- `src/lib/invoicing/pdf-parser.ts` — PDF invoice text extraction + field matching
+- `src/lib/invoicing/rules-engine.ts` — Auto-categorisation: supplier match → project/account assignment
+
+**Feature-flagged:** All routes gated by `isFeatureEnabled(orgId, 'invoicing')`.
+
+### Week 4: Approval Engine Wiring (commit d45cdbe)
+
+**4 touchpoints modified:**
+
+1. **Schema:** Added `INBOUND_INVOICE` to `ApprovalRequestType` enum
+2. **PATCH handler:** Creates approval instance on `PENDING_REVIEW` transition; cancels existing instance on re-submit to prevent orphans; logs errors instead of silent swallow
+3. **Seed routes:** Two default approval routes:
+   - Standard (≤€10k): PM Review → Finance Approval (3+5 day escalation)
+   - Large (>€10k): PM Review → Commercial Manager → Finance (2+3+5 day escalation)
+4. **Completion callback:** `updateSourceEntity` sets invoice status to APPROVED/REJECTED; populates `approvedById` from final approval step; sets `approvedAt` timestamp
+
+**Verification:** 0 type errors. Crispin QA review — 2 MUST-FIX resolved (duplicate instance guard, approvedById in callback). Commit d45cdbe pushed.

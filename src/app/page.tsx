@@ -318,6 +318,41 @@ function MockTimesheetCard() {
   )
 }
 
+/* ── Mock: Invoice Card ───────────────────────── */
+function MockInvoiceCard() {
+  const invoices = [
+    { ref: 'INV-2026-0847', supplier: 'Henderson MEP Ltd', amount: '£12,400', status: 'Pending Approval', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { ref: 'INV-2026-0843', supplier: 'Clearview Glazing', amount: '£3,250', status: 'Approved', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { ref: 'INV-2026-0839', supplier: 'StructurePro Eng.', amount: '£8,900', status: 'Categorised', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  ]
+
+  return (
+    <div className="card-static shadow-elevated p-6 max-w-sm w-full">
+      <div className="flex items-center gap-2 mb-5">
+        <FileText className="w-4 h-4 text-accent-500" />
+        <h4 className="text-[14px] font-semibold text-ink-900">Inbound Invoices</h4>
+        <span className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 border border-accent-200">Peppol Ready</span>
+      </div>
+      <div className="space-y-3">
+        {invoices.map(inv => (
+          <div key={inv.ref} className="p-3 rounded-lg bg-surface-50 border border-surface-200">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[12px] font-semibold text-ink-900">{inv.ref}</span>
+              <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border ${inv.color}`}>
+                {inv.status}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-ink-500">{inv.supplier}</span>
+              <span className="text-[12px] font-medium text-ink-700">{inv.amount}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ── Mock: Mini Dashboard Card ─────────────────── */
 function MockMiniDashboardCard() {
   const kpis = [
@@ -676,6 +711,22 @@ export default function WelcomePage() {
           ]}
           mockup={<MockMiniDashboardCard />}
         />
+
+        <UseCaseSection
+          number="06 — E-Invoicing & Supplier Management"
+          title="E-Invoicing & Supplier Management"
+          problem="EU e-invoicing mandates are arriving fast — Belgium (Jan 2026), Germany (Jan 2027), France (Sep 2026), UK Peppol (Apr 2029) — and most practices still process invoices manually."
+          solution="Receive invoices via Peppol or PDF upload, auto-match them to projects and suppliers, route through configurable approval workflows, and sync to your accounting system."
+          bullets={[
+            'Peppol & UBL 2.1 compliant — EU mandate ready',
+            'PDF upload with automatic field extraction',
+            'Supplier register with VAT validation',
+            'Auto-categorisation rules: supplier → project & account',
+            'Multi-step approval with escalation and audit trail',
+          ]}
+          mockup={<MockInvoiceCard />}
+          reverse
+        />
       </section>
 
       {/* ── Section 4: Why Coordin ─────────────────── */}
@@ -945,6 +996,7 @@ export default function WelcomePage() {
               <ul className="space-y-2.5">
                 <li><Link href="/features/brpd" className="text-[13px] text-ink-500 hover:text-ink-900">BRPD</Link></li>
                 <li><Link href="/features/quotes" className="text-[13px] text-ink-500 hover:text-ink-900">Quotes</Link></li>
+                <li><Link href="/use-cases" className="text-[13px] text-ink-500 hover:text-ink-900">E-Invoicing</Link></li>
                 <li><Link href="/use-cases" className="text-[13px] text-ink-500 hover:text-ink-900">Use Cases</Link></li>
                 <li><Link href="/faq" className="text-[13px] text-ink-500 hover:text-ink-900">FAQ</Link></li>
               </ul>
