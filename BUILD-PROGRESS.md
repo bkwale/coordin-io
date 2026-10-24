@@ -1139,3 +1139,46 @@ Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >
 **App unchanged:** Zero changes to app CSS, components, or design tokens.
 
 **Verification:** 0 type errors. Crispin QA — 0 MUST-FIX, 2 SHOULD-FIX noted (mobile nav gap — pre-existing, not a regression; footer Privacy/Terms links still placeholder). Commit 81b57cf pushed.
+
+---
+
+### Mobile Hamburger Menu (COMPLETE)
+
+Added responsive hamburger navigation to the landing page for mobile screens (`sm:` breakpoint).
+
+**What changed:**
+- Desktop nav links hidden below `sm:` breakpoint
+- Hamburger icon (`Menu` / `X` from lucide-react) toggles dropdown
+- Dropdown includes: Features, Use Cases, FAQ, Book a Demo CTA
+- Sign In link always visible (outside hamburger)
+- Uses `useState` toggle — no external dependency
+
+**Verification:** 0 type errors. Commit b2a5be8 pushed.
+
+---
+
+### Marketing Subpage Restyle — Option C (COMPLETE)
+
+All 5 marketing subpages restyled to match the Option C landing page design language.
+
+**Pages restyled:**
+- `/features/brpd` — BRPD Compliance Workspace feature page
+- `/features/quotes` — Quote to Project feature page
+- `/use-cases` — 5 practice workflows
+- `/faq` — 8-item accordion FAQ
+- `/book-demo` — Demo booking form (7 fields + interest checkboxes)
+
+**What changed across all 5 pages:**
+- Replaced old `MarketingNav` / `MarketingFooter` with Option C nav + hamburger menu
+- Replaced `font-display` headings with `font-light` tracking-tight
+- Replaced `bg-gradient-accent` / `shadow-glow-indigo` CTA buttons with solid dark (`backgroundColor: lp.text`)
+- Replaced `ink-*` / `accent-*` Tailwind color classes with inline `style={{ color: lp.* }}` design tokens
+- Replaced `card-static` rounded boxes with `border-l-2` feature cards
+- Added Space Mono monospace section labels (`"FEATURE"`, `"01"`, etc.)
+- Solid dark logo badge (`bg-[#1a1a18]`) instead of `bg-gradient-accent`
+- Consistent warm neutral background (`#f8f7f4`) across all subpages
+- Mobile hamburger menu with dropdown on all 5 pages
+
+**Content preserved:** All original content — 6 BRPD features, 5 quote templates, quote lifecycle, 5 use cases, 8 FAQ items, full booking form with all fields — carried over with zero changes.
+
+**Verification:** 0 type errors. Commit df0fb12 pushed.
