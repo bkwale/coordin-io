@@ -996,8 +996,8 @@ Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >
 | 2-3 | Invoice reception — Peppol webhook + PDF upload + UBL parser | ✅ Done (commit 28779d6) |
 | 3-4 | Invoice → Project matching with rules engine | ✅ Done (commit 9cd3764) |
 | 4-5 | Invoice approval workflow — wire into approval engine | ✅ Done (commit d45cdbe) |
-| 5-6 | Outbound invoicing — fee quote → invoice conversion | Pending |
-| 6-7 | Xero integration (Morway adapter) | Pending |
+| 5-6 | Outbound invoicing — fee quote → invoice conversion | ✅ Done |
+| 6-7 | Xero integration (Morway adapter) | ✅ Done (commit cf992e3) |
 | 7-8 | RIBA stage tracking + resource planning (feature-flagged) | Pending |
 
 ### Week 1-3: Schema + APIs (commits e4c3fc9, 28779d6, 9cd3764)
@@ -1030,3 +1030,47 @@ Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >
 4. **Completion callback:** `updateSourceEntity` sets invoice status to APPROVED/REJECTED; populates `approvedById` from final approval step; sets `approvedAt` timestamp
 
 **Verification:** 0 type errors. Crispin QA review — 2 MUST-FIX resolved (duplicate instance guard, approvedById in callback). Commit d45cdbe pushed.
+
+### Week 5-6: Outbound Invoicing
+
+**Schema models:** OutboundInvoice, OutboundInvoiceLine — with INVOICED status added to quote lifecycle.
+
+**API routes:**
+- `api/outbound-invoices/` — full CRUD, convert from fee quote, PDF generation
+- `api/outbound-invoices/[id]/` — detail + status transitions (DRAFT → SENT → PAID)
+- `api/outbound-invoices/[id]/pdf` — UBL 2.1 compliant PDF generation
+
+**Morway ported code:**
+- `src/lib/invoicing/ubl-generator.ts` — UBL 2.1 XML output (EN 16931 compliant)
+- `src/lib/invoicing/invoice-pdf.ts` — Professional invoice PDF with line items, VAT, totals
+
+### Week 6-7: Xero Integration (commit cf992e3)
+
+**Architecture:** Thin REST adapter over raw fetch — no xero-node SDK dependency. All Xero routes feature-flagged via `isFeatureEnabled(orgId, 'invoicing')`.
+
+**Schema models (1661 lines across 8 files):**
+- `XeroConnection` — per-org OAuth token storage, sync config (syncInbound/syncOutbound/syncContacts), sync state (lastSyncAt/lastSyncStatus/lastSyncError), lifecycle (active, connectedAt, disconnectedAt). Unique constraint on `[organisationId, xeroTenantId]`.
+- `XeroSyncLog` — per-entity sync audit trail with direction (TO_XERO/FROM_XERO), entity tracking, error capture.
+
+**OAuth 2.0 (PKCE flow):**
+- `src/lib/integrations/xero/oauth.ts` — `buildAuthUrl()` generates PKCE auth URL with code verifier, `exchangeCodeForTokens()` completes the flow, `refreshAccessToken()` auto-refreshes with 60s buffer, `getValidAccessToken()` returns ready-to-use token.
+- `api/integrations/xero/route.ts` — GET (connection status), POST (start OAuth), DELETE (soft disconnect).
+- `api/integrations/xero/callback/route.ts` — OAuth redirect handler: validates state, checks 10min expiry, exchanges tokens, fetches tenants, activates connection.
+
+**REST API client:**
+- `src/lib/integrations/xero/api-client.ts` — `xeroFetch<T>()` core with Bearer + tenant header injection. Contact CRUD (list, get, create, update). Invoice CRUD (list, get, create, update). Xero filter syntax support.
+- Mapping helpers: `mapSupplierToXeroContact()`, `mapOutboundToXeroInvoice()` (→ ACCREC), `mapInboundToXeroInvoice()` (→ ACCPAY).
+
+**Bidirectional sync engine:**
+- `src/lib/integrations/xero/sync-engine.ts` — three sync functions:
+  - `syncInvoicesToXero()` — pushes SENT/PAID outbound invoices as Xero ACCREC (sales invoices)
+  - `syncInboundInvoicesToXero()` — pushes APPROVED inbound invoices as Xero ACCPAY (purchase bills)
+  - `syncContactsToXero()` — syncs active suppliers without xeroContactId
+- `ensureXeroContact()` — creates contact if missing, verifies existing link still valid
+- Rate limit awareness: 50 records per batch, respects Xero's 60 req/min limit
+- Concurrent sync guard: checks `lastSyncStatus === 'IN_PROGRESS'` before starting
+
+**Sync control API:**
+- `api/integrations/xero/sync/route.ts` — POST (trigger manual sync by direction: outbound/inbound/contacts/all), PATCH (update sync config toggles + default account code). ADMIN/OWNER only. Full audit trail via `recordAuditEvent()`.
+
+**Verification:** 0 type errors. Crispin QA — 0 MUST-FIX, 2 SHOULD-FIX resolved (unused imports removed, misleading function name renamed). Commit cf992e3 pushed.
