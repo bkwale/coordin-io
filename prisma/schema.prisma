@@ -665,6 +665,7 @@ model Project {
   outboundInvoices     OutboundInvoice[] @relation("OutboundInvoiceProject")
   categorisationRules  CategorisationRule[] @relation("CategorisationRuleProject")
   stageGates           StageGate[]
+  briefSections        ProjectBriefSection[]
 
   @@map("projects")
 }
@@ -2192,6 +2193,23 @@ model ResourceAllocation {
 
   @@unique([profileId, projectId, weekStarting])
   @@map("resource_allocations")
+}
+
+model ProjectBriefSection {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  sectionKey   String   @map("section_key") // e.g. client_requirements, site_information
+  content      String   @default("")
+  status       String   @default("not_started") // not_started, draft, complete, approved
+  approvedBy   String?  @map("approved_by")
+  lastUpdated  DateTime? @map("last_updated")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([projectId, sectionKey])
+  @@map("project_brief_sections")
 }
 
 model HRDocument {

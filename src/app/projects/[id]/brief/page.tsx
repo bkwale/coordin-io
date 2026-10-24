@@ -4,25 +4,24 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import {
   ChevronDown, ChevronRight, FileText, CheckCircle2,
-  Clock, Edit3, Save, Loader2, AlertTriangle,
+  Clock, Edit3, Save, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useApiFetch } from '@/hooks/use-api'
+import { useToast } from '@/components/Toast'
 import { ProgressBar } from '@/components/ProgressBar'
+import { SkeletonRow } from '@/components/Skeleton'
 
 /* ── Types ─────────────────────────────────────────────── */
 
 type SectionStatus = 'not_started' | 'draft' | 'complete' | 'approved'
 
 interface BriefSectionData {
+  sectionKey: string
   content: string
   status: SectionStatus
   lastUpdated: string | null
   approvedBy: string
-}
-
-interface BriefData {
-  [sectionKey: string]: BriefSectionData
 }
 
 interface ProjectDetail {
@@ -60,49 +59,6 @@ const STATUS_META: Record<SectionStatus, { label: string; badge: string; icon: t
 
 /* ── Helpers ───────────────────────────────────────────── */
 
-function createEmptySection(): BriefSectionData {
-  return {
-    content: '',
-    status: 'not_started',
-    lastUpdated: null,
-    approvedBy: '',
-  }
-}
-
-function createEmptyBrief(): BriefData {
-  const data: BriefData = {}
-  BRIEF_SECTIONS.forEach(s => {
-    data[s.key] = createEmptySection()
-  })
-  return data
-}
-
-function getStorageKey(projectId: string): string {
-  return `coordin_brief_${projectId}`
-}
-
-function loadBrief(projectId: string): BriefData {
-  if (typeof window === 'undefined') return createEmptyBrief()
-  try {
-    const raw = localStorage.getItem(getStorageKey(projectId))
-    if (!raw) return createEmptyBrief()
-    const parsed = JSON.parse(raw) as BriefData
-    // Ensure all sections exist (handles adding new sections later)
-    const merged = createEmptyBrief()
-    Object.keys(merged).forEach(key => {
-      if (parsed[key]) merged[key] = parsed[key]
-    })
-    return merged
-  } catch {
-    return createEmptyBrief()
-  }
-}
-
-function saveBrief(projectId: string, data: BriefData): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(getStorageKey(projectId), JSON.stringify(data))
-}
-
 function formatDate(iso: string | null): string {
   if (!iso) return 'Never'
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -116,15 +72,15 @@ function formatDate(iso: string | null): string {
 
 /* ── Summary Stats ─────────────────────────────────────── */
 
-function computeStats(data: BriefData) {
+function computeStats(sections: BriefSectionData[]) {
   const total = BRIEF_SECTIONS.length
   let notStarted = 0
   let draft = 0
   let complete = 0
   let approved = 0
 
-  BRIEF_SECTIONS.forEach(s => {
-    const status = data[s.key]?.status ?? 'not_started'
+  sections.forEach(s => {
+    const status = s.status ?? 'not_started'
     if (status === 'not_started') notStarted++
     else if (status === 'draft') draft++
     else if (status === 'complete') complete++
@@ -156,7 +112,6 @@ function SectionCard({
   const [localStatus, setLocalStatus] = useState<SectionStatus>(data.status)
   const [localApprovedBy, setLocalApprovedBy] = useState(data.approvedBy)
 
-  // Sync from parent when data changes (e.g. on load)
   useEffect(() => {
     setLocalContent(data.content)
     setLocalStatus(data.status)
@@ -173,7 +128,6 @@ function SectionCard({
 
   return (
     <div className="bg-white rounded-2xl border border-surface-200 shadow-card overflow-hidden">
-      {/* Header — always visible */}
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-50/50 transition-colors"
@@ -211,12 +165,10 @@ function SectionCard({
         </div>
       </button>
 
-      {/* Expanded content */}
       {expanded && (
         <div className="border-t border-surface-200 px-4 py-4 space-y-4">
           <p className="text-[12px] text-ink-500">{description}</p>
 
-          {/* Content textarea */}
           <div>
             <label className="block text-[12px] font-medium text-ink-600 mb-1.5">
               Section Content
@@ -235,7 +187,6 @@ function SectionCard({
             />
           </div>
 
-          {/* Status + Approved By row */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
               <label className="block text-[12px] font-medium text-ink-600 mb-1.5">
@@ -276,7 +227,6 @@ function SectionCard({
             </div>
           </div>
 
-          {/* Last updated + Save */}
           <div className="flex items-center justify-between pt-1">
             <span className="text-[10px] text-ink-400">
               Last updated: {formatDate(data.lastUpdated)}
@@ -337,61 +287,31 @@ function SummaryCard({ label, value, icon: Icon, accent }: SummaryCardProps) {
   )
 }
 
-/* ── Skeleton loaders ─────────────────────────────────── */
-
-function HeaderSkeleton() {
-  return (
-    <div className="animate-pulse space-y-2">
-      <div className="h-6 w-48 bg-surface-200 rounded-lg" />
-      <div className="h-4 w-72 bg-surface-200/60 rounded-lg" />
-    </div>
-  )
-}
-
-function SummarySkeleton() {
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {[...Array(4)].map((_, i) => (
-        <div key={i} className="bg-white rounded-2xl border border-surface-200 shadow-card px-4 py-3.5 animate-pulse">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-surface-200 rounded-xl" />
-            <div className="space-y-1.5">
-              <div className="h-5 w-10 bg-surface-200 rounded" />
-              <div className="h-3 w-20 bg-surface-200/60 rounded" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 /* ── Page ──────────────────────────────────────────────── */
 
 export default function ProjectBriefPage() {
   const params = useParams()
   const projectId = params.id as string
+  const { toast } = useToast()
 
-  /* Fetch project name from API */
   const { data: project, loading: projectLoading } = useApiFetch<ProjectDetail>(
     `/api/projects/${projectId}`,
   )
 
-  /* Brief data — local state persisted to localStorage */
-  const [briefData, setBriefData] = useState<BriefData>(createEmptyBrief)
-  const [loaded, setLoaded] = useState(false)
+  const { data: briefResponse, loading: briefLoading } = useApiFetch<{ sections: BriefSectionData[] }>(
+    `/api/projects/${projectId}/brief`,
+  )
+
+  const [sections, setSections] = useState<BriefSectionData[]>([])
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
 
-  // Load from localStorage on mount
   useEffect(() => {
-    if (projectId) {
-      setBriefData(loadBrief(projectId))
-      setLoaded(true)
+    if (briefResponse?.sections) {
+      setSections(briefResponse.sections)
     }
-  }, [projectId])
+  }, [briefResponse])
 
-  /* Toggle expand/collapse */
   const toggleSection = useCallback((key: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev)
@@ -401,7 +321,6 @@ export default function ProjectBriefPage() {
     })
   }, [])
 
-  /* Expand / collapse all */
   const expandAll = useCallback(() => {
     setExpandedSections(new Set(BRIEF_SECTIONS.map(s => s.key)))
   }, [])
@@ -410,8 +329,7 @@ export default function ProjectBriefPage() {
     setExpandedSections(new Set())
   }, [])
 
-  /* Save a single section */
-  const handleSave = useCallback((
+  const handleSave = useCallback(async (
     key: string,
     content: string,
     status: SectionStatus,
@@ -419,34 +337,63 @@ export default function ProjectBriefPage() {
   ) => {
     setSaving(key)
 
-    // Simulate a brief save delay for UX feedback
-    setTimeout(() => {
-      setBriefData(prev => {
-        const updated: BriefData = {
-          ...prev,
-          [key]: {
-            content,
-            status,
-            approvedBy,
-            lastUpdated: new Date().toISOString(),
-          },
-        }
-        saveBrief(projectId, updated)
-        return updated
+    try {
+      const res = await fetch(`/api/projects/${projectId}/brief`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sectionKey: key, content, status, approvedBy }),
       })
-      setSaving(null)
-    }, 400)
-  }, [projectId])
 
-  /* Stats */
-  const stats = computeStats(briefData)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error?.message || 'Failed to save')
+      }
+
+      const data = await res.json()
+      const updated = data.data?.section
+
+      if (updated) {
+        setSections(prev => prev.map(s =>
+          s.sectionKey === key
+            ? { ...s, content: updated.content, status: updated.status, approvedBy: updated.approvedBy, lastUpdated: updated.lastUpdated }
+            : s
+        ))
+      }
+
+      toast('Section saved', 'success')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save'
+      toast(msg, 'error')
+    } finally {
+      setSaving(null)
+    }
+  }, [projectId, toast])
+
+  const stats = computeStats(sections)
+
+  const loading = briefLoading || (sections.length === 0 && !briefResponse)
+
+  const sectionMap: Record<string, BriefSectionData> = {}
+  for (const s of sections) {
+    sectionMap[s.sectionKey] = s
+  }
+
+  const defaultSection: BriefSectionData = {
+    sectionKey: '',
+    content: '',
+    status: 'not_started',
+    lastUpdated: null,
+    approvedBy: '',
+  }
 
   return (
     <div className="min-h-screen bg-surface-50 p-4 lg:p-6">
-      {/* Header */}
       <div className="mb-6">
         {projectLoading ? (
-          <HeaderSkeleton />
+          <div className="animate-pulse space-y-2">
+            <div className="h-6 w-48 bg-surface-200 rounded-lg" />
+            <div className="h-4 w-72 bg-surface-200/60 rounded-lg" />
+          </div>
         ) : (
           <div>
             <h1 className="text-[15px] font-bold text-ink-900">
@@ -459,15 +406,6 @@ export default function ProjectBriefPage() {
         )}
       </div>
 
-      {/* Info banner */}
-      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200/60 mb-5">
-        <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-        <p className="text-[12px] text-amber-700">
-          Brief data is stored locally. API integration pending.
-        </p>
-      </div>
-
-      {/* Progress bar */}
       <div className="bg-white rounded-2xl border border-surface-200 shadow-card px-4 py-4 mb-5">
         <ProgressBar
           value={stats.progress}
@@ -476,71 +414,87 @@ export default function ProjectBriefPage() {
         />
       </div>
 
-      {/* Summary cards */}
-      {!loaded ? (
-        <SummarySkeleton />
+      {loading ? (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-surface-200 shadow-card px-4 py-3.5 animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-surface-200 rounded-xl" />
+                  <div className="space-y-1.5">
+                    <div className="h-5 w-10 bg-surface-200 rounded" />
+                    <div className="h-3 w-20 bg-surface-200/60 rounded" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)}
+          </div>
+        </>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <SummaryCard
-            label="Sections Complete"
-            value={stats.complete + stats.approved}
-            icon={CheckCircle2}
-            accent="bg-emerald-50 text-emerald-600"
-          />
-          <SummaryCard
-            label="Sections In Draft"
-            value={stats.draft}
-            icon={Edit3}
-            accent="bg-amber-50 text-amber-600"
-          />
-          <SummaryCard
-            label="Sections Not Started"
-            value={stats.notStarted}
-            icon={FileText}
-            accent="bg-slate-100 text-slate-500"
-          />
-          <SummaryCard
-            label="Overall Progress"
-            value={`${stats.progress}%`}
-            icon={CheckCircle2}
-            accent="bg-blue-50 text-blue-600"
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <SummaryCard
+              label="Sections Complete"
+              value={stats.complete + stats.approved}
+              icon={CheckCircle2}
+              accent="bg-emerald-50 text-emerald-600"
+            />
+            <SummaryCard
+              label="Sections In Draft"
+              value={stats.draft}
+              icon={Edit3}
+              accent="bg-amber-50 text-amber-600"
+            />
+            <SummaryCard
+              label="Sections Not Started"
+              value={stats.notStarted}
+              icon={FileText}
+              accent="bg-slate-100 text-slate-500"
+            />
+            <SummaryCard
+              label="Overall Progress"
+              value={`${stats.progress}%`}
+              icon={CheckCircle2}
+              accent="bg-blue-50 text-blue-600"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 mb-3">
+            <button
+              onClick={expandAll}
+              className="text-[11px] font-medium text-accent-500 hover:text-accent-600 transition-colors"
+            >
+              Expand all
+            </button>
+            <span className="text-ink-300">|</span>
+            <button
+              onClick={collapseAll}
+              className="text-[11px] font-medium text-accent-500 hover:text-accent-600 transition-colors"
+            >
+              Collapse all
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {BRIEF_SECTIONS.map(section => (
+              <SectionCard
+                key={section.key}
+                sectionKey={section.key}
+                label={section.label}
+                description={section.description}
+                data={sectionMap[section.key] ?? { ...defaultSection, sectionKey: section.key }}
+                expanded={expandedSections.has(section.key)}
+                onToggle={() => toggleSection(section.key)}
+                onSave={handleSave}
+                saving={saving}
+              />
+            ))}
+          </div>
+        </>
       )}
-
-      {/* Expand/Collapse all */}
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <button
-          onClick={expandAll}
-          className="text-[11px] font-medium text-accent-500 hover:text-accent-600 transition-colors"
-        >
-          Expand all
-        </button>
-        <span className="text-ink-300">|</span>
-        <button
-          onClick={collapseAll}
-          className="text-[11px] font-medium text-accent-500 hover:text-accent-600 transition-colors"
-        >
-          Collapse all
-        </button>
-      </div>
-
-      {/* Section cards */}
-      <div className="space-y-3">
-        {BRIEF_SECTIONS.map(section => (
-          <SectionCard
-            key={section.key}
-            sectionKey={section.key}
-            label={section.label}
-            description={section.description}
-            data={briefData[section.key] ?? createEmptySection()}
-            expanded={expandedSections.has(section.key)}
-            onToggle={() => toggleSection(section.key)}
-            onSave={handleSave}
-            saving={saving}
-          />
-        ))}
-      </div>
     </div>
   )
 }
