@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Menu, X } from 'lucide-react'
 
 /* ══════════════════════════════════════════════════
    Coordin.io — Landing Page
@@ -21,6 +22,8 @@ const lp = {
 
 /* ── Nav ───────────────────────────────────────── */
 function Nav() {
+  const [open, setOpen] = useState(false)
+
   return (
     <nav className="border-b" style={{ borderColor: lp.border }}>
       <div className="flex items-center justify-between px-6 sm:px-10 lg:px-16 py-5 max-w-[1200px] mx-auto">
@@ -32,37 +35,60 @@ function Nav() {
             Coordin.io
           </span>
         </Link>
-        <div className="flex items-center gap-6 sm:gap-8">
-          <Link
-            href="/features/brpd"
-            className="text-[13px] hidden sm:block transition-colors"
-            style={{ color: lp.secondary }}
-          >
+
+        {/* Desktop links */}
+        <div className="hidden sm:flex items-center gap-8">
+          <Link href="/features/brpd" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
             Features
           </Link>
-          <Link
-            href="/use-cases"
-            className="text-[13px] hidden sm:block transition-colors"
-            style={{ color: lp.secondary }}
-          >
+          <Link href="/use-cases" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
             Use Cases
           </Link>
-          <Link
-            href="/faq"
-            className="text-[13px] hidden sm:block transition-colors"
-            style={{ color: lp.secondary }}
-          >
+          <Link href="/faq" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
             FAQ
           </Link>
-          <Link
-            href="/login"
-            className="text-[13px] font-medium"
-            style={{ color: lp.text }}
-          >
+          <Link href="/login" className="text-[13px] font-medium" style={{ color: lp.text }}>
             Sign In
           </Link>
         </div>
+
+        {/* Mobile: Sign In + hamburger */}
+        <div className="flex sm:hidden items-center gap-4">
+          <Link href="/login" className="text-[13px] font-medium" style={{ color: lp.text }}>
+            Sign In
+          </Link>
+          <button
+            onClick={() => setOpen(!open)}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            className="p-1"
+          >
+            {open ? <X className="w-5 h-5" style={{ color: lp.text }} /> : <Menu className="w-5 h-5" style={{ color: lp.text }} />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile menu */}
+      {open && (
+        <div className="sm:hidden border-t px-6 py-4 flex flex-col gap-4" style={{ borderColor: lp.border }}>
+          <Link href="/features/brpd" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            Features
+          </Link>
+          <Link href="/use-cases" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            Use Cases
+          </Link>
+          <Link href="/faq" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            FAQ
+          </Link>
+          <Link
+            href="/book-demo"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center gap-2 text-[14px] font-medium mt-1"
+            style={{ color: lp.text }}
+          >
+            Book a demo <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
     </nav>
   )
 }
