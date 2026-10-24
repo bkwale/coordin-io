@@ -1074,3 +1074,39 @@ Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >
 - `api/integrations/xero/sync/route.ts` — POST (trigger manual sync by direction: outbound/inbound/contacts/all), PATCH (update sync config toggles + default account code). ADMIN/OWNER only. Full audit trail via `recordAuditEvent()`.
 
 **Verification:** 0 type errors. Crispin QA — 0 MUST-FIX, 2 SHOULD-FIX resolved (unused imports removed, misleading function name renamed). Commit cf992e3 pushed.
+
+---
+
+### RIBA Stage Tracking & Resource Planning (Weeks 7-8 — COMPLETE)
+
+**Schema additions:**
+- `StageGate` model — records every stage transition: `fromStage`, `toStage`, `advancedById`, `signOffNotes`, `prerequisitesMet[]`, `isRollback`
+- `currentWorkStage Int @default(0)` on Project — numeric RIBA stage 0–7
+- Relations: `project.stageGates[]`, `profile.stageGatesAdvanced[]`
+
+**Stage gate API:** `api/projects/[id]/stage-gates/route.ts`
+- GET: Stage transition history, current work stage, prerequisite status (checks completed tasks against `STAGE_TEMPLATES`)
+- POST: Advance to next RIBA stage — MANAGER+ only. Validates required prerequisites unless `skipPrerequisites: true` (ADMIN/OWNER only). Creates `StageGate` record + updates `currentWorkStage` + `stage` enum in transaction. Audit trail + notifications to project members.
+- DELETE: Roll back to previous stage — ADMIN/OWNER only. Records rollback gate + audit event.
+
+**Resource planning API:** `api/projects/[id]/resource-plan/route.ts`
+- GET: Project resource allocations by week — returns allocations, project members, week headers, current work stage. MANAGER+ only.
+- POST: Upsert resource allocation by `profileId + projectId + weekStarting`. Audit trail.
+- Uses `modulesPrisma.resourceAllocation` (existing model).
+
+**Stage tracking UI:** `projects/[id]/stages/page.tsx`
+- RIBA stage timeline — 8 stages (0–7) with color-coded nodes, past/current/future states
+- Current stage card with prerequisite checklist (required vs optional, completion status)
+- Next stage prerequisites preview
+- Stage transition history — advance/rollback entries with user, date, notes
+- Advance modal — prerequisite validation, skip option (ADMIN/OWNER), sign-off notes
+- Rollback modal — reason field, ADMIN/OWNER restriction warning
+- Feature flag gated on `riba_tracking` (default: off)
+
+**Project layout:** Added "Stages" tab with `GitBranch` icon to `PROJECT_TABS` array.
+
+**Feature flag:** `riba_tracking` registered in `FEATURE_REGISTRY` with label "RIBA Stage Tracking", default false.
+
+**Landing page:** Added use case section #07 "RIBA Stage Tracking & Resource Planning" with MockStageCard visualisation.
+
+**Verification:** 0 type errors. Crispin QA — 0 MUST-FIX, 2 SHOULD-FIX resolved (unused `useApiMutation` + `Clock` imports removed). Commit 14cd4ae pushed.

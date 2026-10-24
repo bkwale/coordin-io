@@ -23,6 +23,7 @@ import {
   ClipboardCheck,
   Link2,
   Replace,
+  GitBranch,
 } from 'lucide-react'
 
 /* ── Smooth scroll helper ───────────────────────── */
@@ -346,6 +347,59 @@ function MockInvoiceCard() {
               <span className="text-[11px] text-ink-500">{inv.supplier}</span>
               <span className="text-[12px] font-medium text-ink-700">{inv.amount}</span>
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Mock: Stage Tracking Card ────────────────── */
+function MockStageCard() {
+  const stages = [
+    { id: 0, label: 'Strategic Def.', done: true },
+    { id: 1, label: 'Preparation', done: true },
+    { id: 2, label: 'Concept', done: true },
+    { id: 3, label: 'Spatial Coord.', current: true },
+    { id: 4, label: 'Technical', done: false },
+    { id: 5, label: 'Construction', done: false },
+  ]
+
+  return (
+    <div className="card-static shadow-elevated p-6 max-w-sm w-full">
+      <div className="flex items-center gap-2 mb-5">
+        <GitBranch className="w-4 h-4 text-accent-500" />
+        <h4 className="text-[14px] font-semibold text-ink-900">RIBA Stage Progress</h4>
+      </div>
+      <div className="flex items-center gap-1 mb-5">
+        {stages.map((s, i) => (
+          <div key={s.id} className="flex items-center gap-1">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
+              s.done ? 'border-emerald-500 bg-emerald-50 text-emerald-700' :
+              s.current ? 'border-accent-500 bg-accent-50 text-accent-700 ring-2 ring-accent-200' :
+              'border-surface-300 bg-surface-50 text-ink-400'
+            }`}>
+              {s.done ? <CheckCircle className="w-3.5 h-3.5" /> : s.id}
+            </div>
+            {i < stages.length - 1 && (
+              <div className={`h-0.5 w-3 ${i < 3 ? 'bg-emerald-400' : 'bg-surface-200'}`} />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2">
+        {[
+          { task: 'Confirm key spatial decisions', required: true, done: true },
+          { task: 'Review planning submission', required: true, done: false },
+          { task: 'Cost plan review', required: false, done: false },
+        ].map(t => (
+          <div key={t.task} className="flex items-center gap-2 py-1.5 px-3 rounded-md bg-surface-50 text-[11px]">
+            {t.done ? (
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            ) : (
+              <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${t.required ? 'border-amber-400' : 'border-surface-300'}`} />
+            )}
+            <span className={t.done ? 'text-ink-400 line-through' : 'text-ink-700'}>{t.task}</span>
           </div>
         ))}
       </div>
@@ -728,6 +782,22 @@ export default function WelcomePage() {
           ]}
           mockup={<MockInvoiceCard />}
           reverse
+        />
+
+        <UseCaseSection
+          number="07 — RIBA Stage Tracking & Resource Planning"
+          title="RIBA Stage Tracking & Resource Planning"
+          problem="Projects drift between RIBA stages with no formal gate control. Prerequisite tasks get skipped, stage transitions happen without sign-off, and resource allocation is disconnected from project progress."
+          solution="Track every project through RIBA Stages 0–7 with formal stage gates. Each gate validates prerequisite tasks before advancing. Managers allocate team hours per project per week, tied to the current work stage. Full audit trail of every transition."
+          bullets={[
+            'RIBA Plan of Work stages 0–7 with visual timeline',
+            'Prerequisite checklist per stage — required vs optional tasks',
+            'Advance and rollback controls with sign-off notes',
+            'Full stage transition audit trail — who, when, why',
+            'Weekly resource allocation grid per project member',
+            'Feature-flagged — enable per organisation in Settings',
+          ]}
+          mockup={<MockStageCard />}
         />
       </section>
 
