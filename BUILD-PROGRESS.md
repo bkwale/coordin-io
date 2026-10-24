@@ -1110,3 +1110,32 @@ Leave Admin now uses an **overlap query** (`startDate <= windowEnd AND endDate >
 **Landing page:** Added use case section #07 "RIBA Stage Tracking & Resource Planning" with MockStageCard visualisation.
 
 **Verification:** 0 type errors. Crispin QA — 0 MUST-FIX, 2 SHOULD-FIX resolved (unused `useApiMutation` + `Clock` imports removed). Commit 14cd4ae pushed.
+
+---
+
+### Landing Page Redesign — Option C (COMPLETE)
+
+**Design direction:** "The architect's portfolio" — typography-driven, warm neutrals, generous whitespace. Inspired by Foster + Partners and David Chipperfield practice websites.
+
+**What changed:**
+- Cut from ~1,117 lines / ~15 scrolling screens to ~279 lines / 4 sections
+- Removed 7 fake browser-chrome mockup components (DashboardPreview, BrowserChrome, MockQuoteCard, MockProjectHealthCard, MockBRPDCard, MockTimesheetCard, MockInvoiceCard, MockStageCard)
+- Removed 7 use-case sections with alternating layout
+- Removed audience cards grid, "Why Coordin" section
+- Removed demo booking form (moved to /book-demo route)
+- Replaced with: hero → product screenshot → 6 feature blocks (2-col grid) → trust stats strip → CTA → minimal footer
+
+**Landing page colour palette (separate from app):**
+- Background: `#f8f7f4` (warm off-white)
+- Primary text: `#1a1a18` (soft charcoal)
+- Secondary: `#6b6a65`
+- Muted: `#8a8880`
+- Borders: `#d8d6d0`
+
+**Bridge to app:** Product screenshot uses app's real colours (indigo accent, gray-50 surfaces). CTA button uses landing page charcoal (`#1a1a18`), not app accent. Nav structure mirrors app nav for continuity.
+
+**Typography:** Inter (system default via Tailwind) for body. Space Mono (Google Fonts, added to globals.css import) for monospaced section labels ("WHAT IT DOES", "BUILT FOR PRACTICE").
+
+**App unchanged:** Zero changes to app CSS, components, or design tokens.
+
+**Verification:** 0 type errors. Crispin QA — 0 MUST-FIX, 2 SHOULD-FIX noted (mobile nav gap — pre-existing, not a regression; footer Privacy/Terms links still placeholder). Commit 81b57cf pushed.
