@@ -3,9 +3,8 @@ import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { prisma } from '@/lib/prisma'
-import { isFeatureEnabled } from '@/lib/feature-flags'
-import { ValidationError, PermissionError } from '@/lib/errors'
-import { parseBody, requireString, requireNumber, requireDate } from '@/lib/validation'
+import { PermissionError } from '@/lib/errors'
+import { parseBody, requireString, requireNumber } from '@/lib/validation'
 import { recordAuditEvent } from '@/lib/audit'
 
 /**
@@ -17,22 +16,18 @@ import { recordAuditEvent } from '@/lib/audit'
  * Query: weeks=6 (default 6)
  */
 export const GET = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
-  const enabled = await isFeatureEnabled(profile.organisationId, 'riba_tracking')
-  if (!enabled) {
-    throw new ValidationError('RIBA Stage Tracking is not enabled for your organisation')
-  }
-
   if (profile.orgPermission === 'MEMBER') {
     throw new PermissionError('Only managers and above can view resource plans')
   }
 
   const url = new URL(request.url)
   const weeksCount = parseInt(url.searchParams.get('weeks') ?? '6', 10)
+  const offsetDays = parseInt(url.searchParams.get('offset') ?? '0', 10) * 7
 
-  // Current week's Monday
+  // Current week's Monday + offset
   const now = new Date()
   const weekStart = new Date(now)
-  weekStart.setDate(now.getDate() - now.getDay() + 1)
+  weekStart.setDate(now.getDate() - now.getDay() + 1 + offsetDays)
   weekStart.setHours(0, 0, 0, 0)
 
   const weekEnd = new Date(weekStart)
@@ -95,11 +90,6 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
  * MANAGER+ only.
  */
 export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
-  const enabled = await isFeatureEnabled(profile.organisationId, 'riba_tracking')
-  if (!enabled) {
-    throw new ValidationError('RIBA Stage Tracking is not enabled for your organisation')
-  }
-
   if (profile.orgPermission === 'MEMBER') {
     throw new PermissionError('Only managers and above can manage resource plans')
   }

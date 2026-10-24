@@ -6,15 +6,24 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ListChecks, FileText, PoundSterling,
-  ShieldCheck, MapPin, Eye, AlertCircle, BarChart3, Table2,
-  GitBranch,
+  ShieldCheck, HardHat, GitBranch,
 } from 'lucide-react'
+
+/* ── Tab definitions ─────────────────────────────────────── */
+
+interface SubTab {
+  label: string
+  href: string // relative to basePath
+}
 
 interface TabDef {
   label: string
   href: string
   icon: typeof LayoutDashboard
-  subRoutes: string[]
+  /** All routes that belong to this tab (for active-highlight) */
+  routes: string[]
+  /** Subtab pills shown below the main tab bar */
+  subTabs?: SubTab[]
   /** Only show this tab when project uses one of these frameworks */
   frameworks?: string[]
 }
@@ -24,70 +33,80 @@ const PROJECT_TABS: TabDef[] = [
     label: 'Overview',
     href: '',
     icon: LayoutDashboard,
-    subRoutes: ['', '/health', '/brief']
+    routes: ['', '/health', '/brief', '/resources'],
+    subTabs: [
+      { label: 'Dashboard', href: '' },
+      { label: 'Health', href: '/health' },
+      { label: 'Brief', href: '/brief' },
+      { label: 'Resources', href: '/resources' },
+    ],
   },
   {
     label: 'Tasks',
     href: '/tasks',
     icon: ListChecks,
-    subRoutes: ['/tasks', '/registers', '/meetings']
+    routes: ['/tasks', '/registers', '/meetings'],
+    subTabs: [
+      { label: 'Tasks', href: '/tasks' },
+      { label: 'Registers', href: '/registers' },
+      { label: 'Meetings', href: '/meetings' },
+    ],
   },
   {
     label: 'Documents',
     href: '/documents',
     icon: FileText,
-    subRoutes: ['/documents', '/drawing-issues']
+    routes: ['/documents', '/drawing-issues'],
+    subTabs: [
+      { label: 'Documents', href: '/documents' },
+      { label: 'Drawing Issues', href: '/drawing-issues' },
+    ],
   },
   {
     label: 'Commercial',
     href: '/contract-admin',
     icon: PoundSterling,
-    subRoutes: ['/contract-admin', '/tender']
+    routes: ['/contract-admin', '/tender', '/metrics'],
+    subTabs: [
+      { label: 'Contract Admin', href: '/contract-admin' },
+      { label: 'Tender', href: '/tender' },
+      { label: 'Metrics', href: '/metrics' },
+    ],
   },
   {
     label: 'Compliance',
     href: '/brpd',
     icon: ShieldCheck,
-    subRoutes: ['/brpd', '/brpd/changelog', '/building-regs', '/design-risks']
+    routes: ['/brpd', '/brpd/changelog', '/building-regs', '/design-risks'],
+    subTabs: [
+      { label: 'BRPD', href: '/brpd' },
+      { label: 'Building Regs', href: '/building-regs' },
+      { label: 'Design Risks', href: '/design-risks' },
+    ],
   },
   {
-    label: 'Metrics',
-    href: '/metrics',
-    icon: BarChart3,
-    subRoutes: ['/metrics']
-  },
-  {
-    label: 'SOA',
-    href: '/soa',
-    icon: Table2,
-    subRoutes: ['/soa']
-  },
-  {
-    label: 'Observations',
+    label: 'Site',
     href: '/observations',
-    icon: Eye,
-    subRoutes: ['/observations']
-  },
-  {
-    label: 'Snags',
-    href: '/snags',
-    icon: AlertCircle,
-    subRoutes: ['/snags']
-  },
-  {
-    label: 'Planning',
-    href: '/planning',
-    icon: MapPin,
-    subRoutes: ['/planning', '/site-queries']
+    icon: HardHat,
+    routes: ['/observations', '/snags', '/planning', '/site-queries', '/soa'],
+    subTabs: [
+      { label: 'Observations', href: '/observations' },
+      { label: 'Snags', href: '/snags' },
+      { label: 'Planning', href: '/planning' },
+      { label: 'Site Queries', href: '/site-queries' },
+      { label: 'SOA', href: '/soa' },
+    ],
   },
   {
     label: 'Stages',
     href: '/stages',
     icon: GitBranch,
-    subRoutes: ['/stages'],
+    routes: ['/stages'],
     frameworks: ['RIBA'],
   },
 ]
+
+/* ── Layout component ────────────────────────────────────── */
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -116,8 +135,17 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     [workStageFramework]
   )
 
-  // Determine which tab is active
+  // Determine active tab and sub-route
   const currentSubRoute = pathname.replace(basePath, '') || ''
+
+  const activeTab = useMemo(() =>
+    visibleTabs.find(tab => tab.routes.some(r => currentSubRoute === r || currentSubRoute.startsWith(r + '/')))
+      ?? visibleTabs[0],
+    [visibleTabs, currentSubRoute]
+  )
+
+  // Only show subtab pills when the tab has more than 1 subtab
+  const showSubTabs = activeTab?.subTabs && activeTab.subTabs.length > 1
 
   return (
     <div>
@@ -130,11 +158,11 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         </div>
       </div>
 
-      {/* Tab navigation */}
-      <div className="mb-6 border-b border-surface-200">
+      {/* Primary tab navigation */}
+      <div className="border-b border-surface-200">
         <nav className="flex gap-0 overflow-x-auto scrollbar-hide -mb-px" style={{ WebkitOverflowScrolling: 'touch' }}>
           {visibleTabs.map(tab => {
-            const isActive = tab.subRoutes.some(sr => currentSubRoute === sr)
+            const isActive = tab === activeTab
             const tabHref = `${basePath}${tab.href}`
 
             return (
@@ -156,8 +184,36 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         </nav>
       </div>
 
+      {/* Subtab pills */}
+      {showSubTabs && (
+        <div className="flex gap-1 px-1 py-2 overflow-x-auto scrollbar-hide">
+          {activeTab.subTabs!.map(st => {
+            const isActiveSub = currentSubRoute === st.href || currentSubRoute.startsWith(st.href + '/')
+            return (
+              <Link
+                key={st.href}
+                href={`${basePath}${st.href}`}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors',
+                  isActiveSub
+                    ? 'bg-accent-50 text-accent-700 ring-1 ring-accent-200'
+                    : 'text-ink-400 hover:text-ink-600 hover:bg-surface-50'
+                )}
+              >
+                {st.label}
+              </Link>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Spacer when no subtabs */}
+      {!showSubTabs && <div className="mb-6" />}
+
       {/* Page content */}
-      {children}
+      <div className={showSubTabs ? 'mt-2' : ''}>
+        {children}
+      </div>
     </div>
   )
 }
