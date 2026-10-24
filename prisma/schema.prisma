@@ -79,6 +79,7 @@ model Organisation {
   inboundInvoices     InboundInvoice[]
   outboundInvoices    OutboundInvoice[]
   categorisationRules CategorisationRule[]
+  xeroConnections     XeroConnection[]
 
   @@map("organisations")
 }
@@ -298,6 +299,9 @@ model Profile {
   inboundInvoicesCreated     InboundInvoice[]       @relation("InboundInvoiceCreator")
   inboundInvoicesApproved    InboundInvoice[]       @relation("InboundInvoiceApprover")
   outboundInvoicesCreated    OutboundInvoice[]      @relation("OutboundInvoiceCreator")
+
+  // Xero Integration
+  xeroConnections            XeroConnection[]       @relation("XeroConnector")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -2798,6 +2802,9 @@ model Supplier {
   updatedAt       DateTime @updatedAt @map("updated_at")
   createdById     String?  @map("created_by_id")
 
+  // Xero sync
+  xeroContactId   String?  @map("xero_contact_id") // Xero Contact UUID
+
   organisation    Organisation @relation(fields: [organisationId], references: [id])
   createdBy       Profile?     @relation("SupplierCreator", fields: [createdById], references: [id])
   inboundInvoices InboundInvoice[]
@@ -3057,4 +3064,82 @@ model OutboundInvoiceLine {
 
   @@index([invoiceId])
   @@map("outbound_invoice_lines")
+}
+
+// ═══════════════════════════════════════════════════════════
+// XERO INTEGRATION — OAuth connection + sync tracking
+// ═══════════════════════════════════════════════════════════
+
+model XeroConnection {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+
+  // Xero tenant (organisation) details
+  xeroTenantId    String   @map("xero_tenant_id") // Xero organisation UUID
+  xeroTenantName  String?  @map("xero_tenant_name")
+  xeroTenantType  String?  @map("xero_tenant_type") // ORGANISATION, COMPANY, etc.
+
+  // OAuth 2.0 tokens (encrypted at rest)
+  accessToken     String   @db.Text @map("access_token")
+  refreshToken    String   @db.Text @map("refresh_token")
+  tokenExpiresAt  DateTime @map("token_expires_at")
+  scopes          String[] // e.g. ['accounting.invoices', 'accounting.contacts', 'offline_access']
+
+  // Sync configuration
+  syncInbound     Boolean  @default(true) @map("sync_inbound")   // Sync inbound invoices → Xero as ACCPAY
+  syncOutbound    Boolean  @default(true) @map("sync_outbound")  // Sync outbound invoices → Xero as ACCREC
+  syncContacts    Boolean  @default(true) @map("sync_contacts")  // Sync suppliers ↔ Xero contacts
+  defaultAccountCode String? @map("default_account_code")        // Xero account code for new invoices
+
+  // Sync state
+  lastSyncAt      DateTime? @map("last_sync_at")
+  lastSyncStatus  XeroSyncStatus @default(NEVER) @map("last_sync_status")
+  lastSyncError   String?   @map("last_sync_error")
+
+  // Connection lifecycle
+  connectedAt     DateTime  @default(now()) @map("connected_at")
+  connectedById   String    @map("connected_by_id")
+  disconnectedAt  DateTime? @map("disconnected_at")
+  active          Boolean   @default(true)
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  connectedBy     Profile      @relation("XeroConnector", fields: [connectedById], references: [id])
+  syncLogs        XeroSyncLog[]
+
+  @@unique([organisationId, xeroTenantId])
+  @@index([organisationId, active])
+  @@map("xero_connections")
+}
+
+model XeroSyncLog {
+  id              String   @id @default(cuid())
+  connectionId    String   @map("connection_id")
+  direction       XeroSyncDirection
+  entityType      String   @map("entity_type") // 'invoice', 'contact', 'credit_note'
+  entityId        String   @map("entity_id")    // Coordin entity ID
+  xeroId          String?  @map("xero_id")      // Xero entity UUID
+  action          String   // 'create', 'update', 'skip'
+  status          XeroSyncStatus
+  error           String?
+  metadata        Json?    // Additional sync details
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  connection      XeroConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, createdAt])
+  @@index([entityType, entityId])
+  @@map("xero_sync_logs")
+}
+
+enum XeroSyncStatus {
+  NEVER
+  SUCCESS
+  PARTIAL
+  FAILED
+  IN_PROGRESS
+}
+
+enum XeroSyncDirection {
+  TO_XERO    // Coordin → Xero
+  FROM_XERO  // Xero → Coordin
 }
