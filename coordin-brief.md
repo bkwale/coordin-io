@@ -1,8 +1,8 @@
 # Coordin.io — Product Brief
 
-**Last updated:** 22 October 2026
+**Last updated:** 24 October 2026
 **Author:** Wale Koleosho
-**Status:** Live on Vercel. Full-stack platform — Supabase backend, 55+ API routes, 1421 unit tests, CI green. First paying practice confirmed (~£180/month). Tier 1 Helpdesk shipped.
+**Status:** Live on Vercel. Full-stack platform — Supabase backend, 60+ API routes, 1421 unit tests, CI green. First paying practice confirmed (~£180/month). Tier 1 Helpdesk shipped. E-invoicing module in progress (inbound reception + outbound invoicing complete, Xero integration next).
 
 ---
 
@@ -57,6 +57,7 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | **Notifications** | `/notifications` | Cross-module notifications with email delivery via Resend, user preference controls |
 | **Knowledge Base** | `/knowledge`, `/knowledge/[id]` | Article library with real data |
 | **Marketing** | `/`, `/use-cases`, `/features/brpd`, `/features/quotes`, `/book-demo`, `/faq`, `/demo-access` | 8-section homepage, 5 use case pages, timed demo (10 min), demo signup with Resend emails |
+| **Invoicing** | `/api/outbound-invoices`, `/api/inbound-invoices`, `/api/suppliers` | E-invoicing module (Morway integration): **Inbound** — Peppol webhook + PDF upload, UBL parser, invoice → project matching with rules engine, wired into approval engine. **Outbound** — CRUD API, fee quote → invoice conversion (atomic), PDF generation with VAT per line item, email sending via Resend with HTML template + PDF attachment, UBL 2.1 XML generator (Peppol BIS Billing 3.0), auto-generated numbering (INV-{org}-{seq}), status flow DRAFT→SENT→VIEWED→PAID→OVERDUE→VOIDED→CREDITED. **Supplier register** — CRUD with Peppol endpoint IDs. Feature-gated via `isFeatureEnabled('invoicing')`. ADMIN/OWNER permission guards on all write operations. |
 | **Support / Helpdesk** | `/support-tickets`, `/support-tickets/[id]` | Tier 1 in-app helpdesk — ticket submission (Report Issue modal with category), My Tickets list with status filters, ticket detail with reply thread, admin status controls (OPEN → IN_PROGRESS → RESOLVED → CLOSED), email notifications on staff replies, access control (users see own tickets, ADMIN/OWNER see all org tickets) |
 | **Admin** | `/admin` | Platform admin backoffice (super-admin only) |
 
@@ -68,7 +69,8 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | **Auth** | Supabase Auth + withAuth() middleware, invitation token system |
 | **Permissions** | canPerform() matrix — 8 roles, lateral isolation, tier-based hierarchy |
 | **API Routes** | 55+ Next.js API routes, all authenticated + org-scoped |
-| **Email** | Resend integration — invitations, quotes, notifications, password recovery |
+| **Email** | Resend integration — invitations, quotes, invoices, notifications, password recovery |
+| **E-Invoicing** | UBL 2.1 XML generator (Peppol BIS 3.0), invoice PDF generator (PDFKit), inbound Peppol webhook, categorisation rules engine |
 | **File Upload** | Direct upload to Supabase Storage (PDF, images) |
 | **Validation** | Input validation helpers (requireUUID, requireNumber, requireDate, maxLength) |
 | **Rate Limiting** | Applied to auth endpoints + demo signup |
@@ -91,7 +93,8 @@ Previously named ArchitectOps. Rebranded May 2026. Domain: coordin.io
 | Gap | Impact | When Needed |
 |-----|--------|-------------|
 | Integration APIs (Xero, Outlook, SharePoint) | UI pages exist, no backend connectors | After first customer onboarding |
-| Invoicing backend | Data model only, 6 sample invoices | Phase 7 |
+| Invoicing UI pages | Backend API complete (inbound + outbound), UI pages not yet built | Next sprint |
+| Xero integration (invoice sync) | Morway adapter design ready, not yet connected | Phase 7 |
 | AI Teammate | Chat UI exists (mock) | Phase 7 |
 | Client Portal | External collaboration (mock) | Phase 7 |
 | Dark mode | Design system structured for it | Later |
@@ -229,8 +232,9 @@ Optional: Follow-up Required, Awaiting Client Clarification, Awaiting Deposit
 - Xero integration (P1 — invoice sync)
 
 ### Phase 7
+- Invoicing UI pages (list, detail, create, send — wired to existing API)
+- Xero integration via Morway adapter (invoice sync, payment reconciliation)
 - Microsoft 365 integration (Outlook + SharePoint)
-- Invoicing backend + Xero sync
 - Client portal (external collaboration)
 - AI teammate (project status summaries)
 

@@ -716,13 +716,14 @@ export default function WelcomePage() {
           number="06 — E-Invoicing & Supplier Management"
           title="E-Invoicing & Supplier Management"
           problem="EU e-invoicing mandates are arriving fast — Belgium (Jan 2026), Germany (Jan 2027), France (Sep 2026), UK Peppol (Apr 2029) — and most practices still process invoices manually."
-          solution="Receive invoices via Peppol or PDF upload, auto-match them to projects and suppliers, route through configurable approval workflows, and sync to your accounting system."
+          solution="Receive and send invoices via Peppol or PDF. Inbound invoices auto-match to projects and suppliers, route through approval workflows. Outbound invoices generate from fee quotes with one click — PDF, email, and UBL export built in."
           bullets={[
             'Peppol & UBL 2.1 compliant — EU mandate ready',
-            'PDF upload with automatic field extraction',
-            'Supplier register with VAT validation',
-            'Auto-categorisation rules: supplier → project & account',
+            'Inbound: PDF upload, field extraction, auto-categorisation',
+            'Outbound: quote → invoice conversion, PDF generation, email sending',
+            'Supplier register with VAT + Peppol endpoint IDs',
             'Multi-step approval with escalation and audit trail',
+            'Auto-generated invoice numbering and status tracking',
           ]}
           mockup={<MockInvoiceCard />}
           reverse
