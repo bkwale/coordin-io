@@ -633,6 +633,29 @@ export async function seedDefaultApprovalRoutes(organisationId: string): Promise
         { stepOrder: 1, label: 'Line Manager Approval', approverType: 'LINE_MANAGER', escalationDays: 3 },
       ],
     },
+    {
+      requestType: 'INBOUND_INVOICE',
+      name: 'Standard Invoice Approval',
+      isDefault: true,
+      priority: 0,
+      conditions: null,
+      steps: [
+        { stepOrder: 1, label: 'Project Manager Review', approverType: 'LINE_MANAGER', escalationDays: 3 },
+        { stepOrder: 2, label: 'Finance Approval', approverType: 'ROLE', approverRole: 'FINANCE', escalationDays: 5 },
+      ],
+    },
+    {
+      requestType: 'INBOUND_INVOICE',
+      name: 'Large Invoice (>10000)',
+      isDefault: false,
+      priority: 10,
+      conditions: { minAmount: 10000 },
+      steps: [
+        { stepOrder: 1, label: 'Project Manager Review', approverType: 'LINE_MANAGER', escalationDays: 2 },
+        { stepOrder: 2, label: 'Commercial Manager Approval', approverType: 'ROLE', approverRole: 'COMMERCIAL', canSkipIfSameAsPrevious: true, escalationDays: 3 },
+        { stepOrder: 3, label: 'Finance Approval', approverType: 'ROLE', approverRole: 'FINANCE', escalationDays: 5 },
+      ],
+    },
   ]
 
   for (const route of defaults) {

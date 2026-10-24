@@ -163,5 +163,34 @@ async function updateSourceEntity(
         data: { status: newStatus },
       }).catch((err: any) => console.error(`[approval] Failed to update travel request ${entityId}:`, err))
       break
+
+    case 'INBOUND_INVOICE': {
+      const invoiceStatus = outcome === 'APPROVED' ? 'APPROVED' : 'REJECTED'
+      // Find the final approver from the linked approval instance
+      const inv = await prisma.inboundInvoice.findUnique({
+        where: { id: entityId },
+        select: { approvalInstanceId: true },
+      }).catch(() => null)
+      let finalApproverId: string | null = null
+      if (outcome === 'APPROVED' && inv?.approvalInstanceId) {
+        const lastStep = await prisma.approvalStepInstance.findFirst({
+          where: { instanceId: inv.approvalInstanceId, status: 'APPROVED' },
+          orderBy: { stepOrder: 'desc' },
+          select: { approverId: true },
+        }).catch(() => null)
+        finalApproverId = lastStep?.approverId ?? null
+      }
+      await prisma.inboundInvoice.update({
+        where: { id: entityId },
+        data: {
+          status: invoiceStatus,
+          ...(outcome === 'APPROVED' ? {
+            approvedAt: new Date(),
+            approvedById: finalApproverId,
+          } : {}),
+        },
+      }).catch((err: any) => console.error(`[approval] Failed to update inbound invoice ${entityId}:`, err))
+      break
+    }
   }
 }

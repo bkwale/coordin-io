@@ -2550,6 +2550,7 @@ enum ApprovalRequestType {
   EXPENSE
   SERVICE_REQUEST
   TRAVEL
+  INBOUND_INVOICE
 }
 
 enum ApproverType {

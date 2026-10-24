@@ -2,9 +2,10 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
-import { optionalString, optionalId, parseBody } from '@/lib/validation'
+import { optionalString, parseBody } from '@/lib/validation'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { ValidationError, NotFoundError } from '@/lib/errors'
+import { createApprovalInstance } from '@/lib/approval-engine'
 import type { InboundInvoiceStatus } from '@/generated/prisma/client'
 
 const VALID_STATUSES: InboundInvoiceStatus[] = [
@@ -146,6 +147,37 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       },
     })
   })
+
+  // ── Approval Engine: create approval instance on PENDING_REVIEW ──
+  if (body.status === 'PENDING_REVIEW') {
+    // Cancel any existing approval instance before creating a new one
+    if (existing.approvalInstanceId) {
+      await prisma.approvalInstance.update({
+        where: { id: existing.approvalInstanceId },
+        data: { status: 'CANCELLED' },
+      }).catch((err: unknown) => console.error(`[invoicing] Failed to cancel old approval ${existing.approvalInstanceId}:`, err))
+    }
+
+    const approvalInstanceId = await createApprovalInstance({
+      organisationId: profile.organisationId,
+      requestType: 'INBOUND_INVOICE',
+      entityId: id,
+      submitterId: profile.id,
+      amount: existing.grossAmount ?? undefined,
+      submitterManagerId: profile.managerId,
+    }).catch((err: unknown) => {
+      console.error(`[invoicing] Failed to create approval instance for invoice ${id}:`, err)
+      return null
+    })
+
+    // Link approval instance to invoice
+    if (approvalInstanceId) {
+      await prisma.inboundInvoice.update({
+        where: { id },
+        data: { approvalInstanceId },
+      })
+    }
+  }
 
   return success({ invoice })
 }, { requiredPermission: 'MANAGER' })
