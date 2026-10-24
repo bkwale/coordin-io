@@ -45,6 +45,10 @@ export type {
 } from './accounting'
 export type { AccountingSystem } from './accounting'
 
+// ─── Generators ─────────────────────────────────────────────────────────────
+export { generateUBLInvoice } from './generators/ubl-generator'
+export type { UBLInvoiceData, UBLLineItem } from './generators/ubl-generator'
+
 // ─── Rules Engine ────────────────────────────────────────────────────────────
 export { applyRules, detectReverseCharge } from './rules-engine'
 export type {

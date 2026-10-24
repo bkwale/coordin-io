@@ -77,6 +77,7 @@ model Organisation {
   // E-Invoicing
   suppliers           Supplier[]
   inboundInvoices     InboundInvoice[]
+  outboundInvoices    OutboundInvoice[]
   categorisationRules CategorisationRule[]
 
   @@map("organisations")
@@ -296,6 +297,7 @@ model Profile {
   suppliersCreated           Supplier[]             @relation("SupplierCreator")
   inboundInvoicesCreated     InboundInvoice[]       @relation("InboundInvoiceCreator")
   inboundInvoicesApproved    InboundInvoice[]       @relation("InboundInvoiceApprover")
+  outboundInvoicesCreated    OutboundInvoice[]      @relation("OutboundInvoiceCreator")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -652,6 +654,7 @@ model Project {
   keyMetrics           KeyMetric[]
   feeQuotes            FeeQuote[]
   inboundInvoices      InboundInvoice[] @relation("InboundInvoiceProject")
+  outboundInvoices     OutboundInvoice[] @relation("OutboundInvoiceProject")
   categorisationRules  CategorisationRule[] @relation("CategorisationRuleProject")
 
   @@map("projects")
@@ -1763,6 +1766,7 @@ model FeeQuote {
   project      Project?     @relation(fields: [projectId], references: [id])
   createdBy    Profile      @relation("feeQuotesCreated", fields: [createdById], references: [id])
   lineItems    FeeQuoteLineItem[]
+  outboundInvoice OutboundInvoice?
 
   @@map("fee_quotes")
 }
@@ -1790,6 +1794,7 @@ enum FeeQuoteStatus {
   REJECTED
   EXPIRED
   SUPERSEDED
+  INVOICED
 }
 
 model CommercialRisk {
@@ -2796,6 +2801,7 @@ model Supplier {
   organisation    Organisation @relation(fields: [organisationId], references: [id])
   createdBy       Profile?     @relation("SupplierCreator", fields: [createdById], references: [id])
   inboundInvoices InboundInvoice[]
+  outboundInvoices OutboundInvoice[]
   categorisationRules CategorisationRule[] @relation("SupplierRules")
 
   @@unique([organisationId, vatNumber])
@@ -2957,4 +2963,98 @@ enum InboundInvoiceStatus {
   VOIDED          // Cancelled/voided
 
   @@map("inbound_invoice_status")
+}
+
+// ─── Outbound Invoicing ─────────────────────────────────────────────────────
+
+enum OutboundInvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PAID
+  OVERDUE
+  VOIDED
+  CREDITED
+
+  @@map("outbound_invoice_status")
+}
+
+model OutboundInvoice {
+  id              String                @id @default(cuid())
+  organisationId  String                @map("organisation_id")
+  sourceQuoteId   String?               @unique @map("source_quote_id") // FK to FeeQuote (1:1)
+  supplierId      String?               @map("supplier_id") // Client/recipient (Supplier model doubles as contact)
+  projectId       String?               @map("project_id")
+
+  // Core invoice data
+  invoiceNumber   String                @map("invoice_number")
+  documentType    InboundDocumentType   @default(INVOICE) @map("document_type") // Reuse: INVOICE or CREDIT_NOTE
+  invoiceDate     DateTime              @map("invoice_date")
+  dueDate         DateTime?             @map("due_date")
+  currency        Currency              @default(GBP)
+
+  // Amounts
+  netAmount       Float                 @map("net_amount")
+  vatAmount       Float                 @default(0) @map("vat_amount")
+  grossAmount     Float                 @map("gross_amount")
+  taxRate         Float                 @default(0) @map("tax_rate")
+
+  // Client info (denormalised for PDF/email — may differ from Supplier record)
+  clientName      String                @map("client_name")
+  clientEmail     String?               @map("client_email")
+  clientAddress   String?               @map("client_address")
+
+  // Status + lifecycle
+  status          OutboundInvoiceStatus @default(DRAFT)
+  sentAt          DateTime?             @map("sent_at")
+  viewedAt        DateTime?             @map("viewed_at")
+  paidAt          DateTime?             @map("paid_at")
+
+  // Content
+  notes           String?
+  termsAndConditions String?            @map("terms_and_conditions")
+
+  // UBL XML (generated for Peppol sending)
+  ublXml          String?               @db.Text @map("ubl_xml")
+
+  // Accounting sync
+  accountingSystem  String?             @map("accounting_system")
+  externalId        String?             @map("external_id")
+  syncedAt          DateTime?           @map("synced_at")
+  syncError         String?             @map("sync_error")
+
+  // Metadata
+  createdById     String                @map("created_by_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  organisation    Organisation          @relation(fields: [organisationId], references: [id])
+  sourceQuote     FeeQuote?             @relation(fields: [sourceQuoteId], references: [id])
+  supplier        Supplier?             @relation(fields: [supplierId], references: [id])
+  project         Project?              @relation("OutboundInvoiceProject", fields: [projectId], references: [id])
+  createdBy       Profile               @relation("OutboundInvoiceCreator", fields: [createdById], references: [id])
+  lineItems       OutboundInvoiceLine[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, projectId])
+  @@index([invoiceDate])
+  @@map("outbound_invoices")
+}
+
+model OutboundInvoiceLine {
+  id          String   @id @default(cuid())
+  invoiceId   String   @map("invoice_id")
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float   @map("unit_price")
+  vatRate     Float   @default(0) @map("vat_rate")
+  lineTotal   Float   @map("line_total")
+  sortOrder   Int     @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  invoice     OutboundInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("outbound_invoice_lines")
 }
