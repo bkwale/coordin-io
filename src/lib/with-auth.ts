@@ -64,10 +64,10 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
       if (demoCookie) {
         const demoStart = parseInt(demoCookie, 10)
         if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
-          // Look up first OWNER profile from CWA HOMES org for demo context
+          // Look up first OWNER profile from demo org for demo context
           const demoProfile = await prisma.profile.findFirst({
             where: {
-              organisationId: 'd98a3d14-a3c7-4df7-a7ac-8e1065356e1a',
+              organisationId: 'demo_org_sterling_2026',
               orgPermission: { in: ['OWNER', 'ADMIN'] },
               status: 'ACTIVE',
             },
