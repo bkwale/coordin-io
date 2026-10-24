@@ -74,6 +74,11 @@ model Organisation {
   supportTickets      SupportTicket[]
   features            OrganisationFeature[]
 
+  // E-Invoicing
+  suppliers           Supplier[]
+  inboundInvoices     InboundInvoice[]
+  categorisationRules CategorisationRule[]
+
   @@map("organisations")
 }
 
@@ -286,6 +291,11 @@ model Profile {
 
   // Feature flags
   featuresEnabled            OrganisationFeature[]  @relation("featureEnabler")
+
+  // E-Invoicing
+  suppliersCreated           Supplier[]             @relation("SupplierCreator")
+  inboundInvoicesCreated     InboundInvoice[]       @relation("InboundInvoiceCreator")
+  inboundInvoicesApproved    InboundInvoice[]       @relation("InboundInvoiceApprover")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -641,6 +651,8 @@ model Project {
   soaVersions          SOAVersion[]
   keyMetrics           KeyMetric[]
   feeQuotes            FeeQuote[]
+  inboundInvoices      InboundInvoice[] @relation("InboundInvoiceProject")
+  categorisationRules  CategorisationRule[] @relation("CategorisationRuleProject")
 
   @@map("projects")
 }
@@ -2615,6 +2627,7 @@ model ApprovalInstance {
   route        ApprovalRoute          @relation(fields: [routeId], references: [id])
   submitter    Profile                @relation("ApprovalSubmitter", fields: [submitterId], references: [id])
   steps        ApprovalStepInstance[]
+  inboundInvoices InboundInvoice[]    @relation("InboundInvoiceApproval")
 
   @@index([organisationId, status])
   @@index([entityId, requestType])
@@ -2755,4 +2768,192 @@ model OrganisationFeature {
   @@unique([organisationId, featureKey])
   @@index([organisationId])
   @@map("organisation_features")
+}
+
+// ─── E-INVOICING MODULE ─────────────────────────────────────────────────────
+// Inbound supplier invoices — Peppol/UBL reception, PDF parsing, categorisation.
+// Separate from the existing outbound Invoice model (fee invoices to clients).
+
+model Supplier {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  name            String
+  vatNumber       String?  @map("vat_number")
+  peppolId        String?  @map("peppol_id")
+  country         String?  // ISO 3166-1 alpha-2
+  address         String?
+  defaultAccountCode String? @map("default_account_code")
+  paymentTermsDays   Int?    @map("payment_terms_days")
+  contactEmail    String?  @map("contact_email")
+  contactPhone    String?  @map("contact_phone")
+  notes           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdById     String?  @map("created_by_id")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  createdBy       Profile?     @relation("SupplierCreator", fields: [createdById], references: [id])
+  inboundInvoices InboundInvoice[]
+  categorisationRules CategorisationRule[] @relation("SupplierRules")
+
+  @@unique([organisationId, vatNumber])
+  @@index([organisationId])
+  @@index([organisationId, name])
+  @@map("suppliers")
+}
+
+model InboundInvoice {
+  id              String               @id @default(cuid())
+  organisationId  String               @map("organisation_id")
+  supplierId      String?              @map("supplier_id")
+  projectId       String?              @map("project_id")
+
+  // Core invoice data
+  invoiceNumber   String               @map("invoice_number")
+  documentType    InboundDocumentType   @default(INVOICE) @map("document_type")
+  invoiceDate     DateTime             @map("invoice_date")
+  dueDate         DateTime?            @map("due_date")
+  currency        Currency             @default(EUR)
+
+  // Amounts
+  netAmount       Float                @map("net_amount")
+  vatAmount       Float                @default(0) @map("vat_amount")
+  grossAmount     Float                @map("gross_amount")
+
+  // VAT / reverse charge
+  reverseCharge   Boolean              @default(false) @map("reverse_charge")
+  vatExemptionReason String?           @map("vat_exemption_reason")
+  vatBreakdown    Json?                @map("vat_breakdown") // Array of { rate, taxableAmount, vatAmount }
+
+  // Source tracking
+  source          InboundInvoiceSource @default(MANUAL_ENTRY)
+  sourceFileUrl   String?              @map("source_file_url")
+  peppolMessageId String?              @map("peppol_message_id")
+  rawXml          String?              @db.Text @map("raw_xml")
+
+  // Supplier info from parsed data (before matching to Supplier record)
+  parsedSupplierName    String?        @map("parsed_supplier_name")
+  parsedSupplierVat     String?        @map("parsed_supplier_vat")
+  parsedBuyerName       String?        @map("parsed_buyer_name")
+  parsedBuyerVat        String?        @map("parsed_buyer_vat")
+
+  // Linked credit note
+  linkedInvoiceNumber String?          @map("linked_invoice_number")
+
+  // Categorisation
+  overallConfidence Float?             @map("overall_confidence")
+  unmatchedLines    Int                @default(0) @map("unmatched_lines")
+
+  // Status + approval
+  status          InboundInvoiceStatus @default(RECEIVED)
+  approvalInstanceId String?           @map("approval_instance_id")
+  approvedAt      DateTime?            @map("approved_at")
+  approvedById    String?              @map("approved_by_id")
+
+  // Accounting sync
+  accountingSystem  String?            @map("accounting_system") // XERO, DATEV, etc.
+  externalId        String?            @map("external_id") // ID in external accounting system
+  syncedAt          DateTime?          @map("synced_at")
+  syncError         String?            @map("sync_error")
+
+  // Parsing errors
+  parseErrors     Json?                @map("parse_errors") // String array
+
+  notes           String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  createdById     String?              @map("created_by_id")
+
+  organisation    Organisation         @relation(fields: [organisationId], references: [id])
+  supplier        Supplier?            @relation(fields: [supplierId], references: [id])
+  project         Project?             @relation("InboundInvoiceProject", fields: [projectId], references: [id])
+  createdBy       Profile?             @relation("InboundInvoiceCreator", fields: [createdById], references: [id])
+  approvedBy      Profile?             @relation("InboundInvoiceApprover", fields: [approvedById], references: [id])
+  approvalInstance ApprovalInstance?    @relation("InboundInvoiceApproval", fields: [approvalInstanceId], references: [id])
+  lineItems       InboundInvoiceLine[]
+
+  @@index([organisationId, status])
+  @@index([organisationId, supplierId])
+  @@index([organisationId, projectId])
+  @@index([invoiceDate])
+  @@map("inbound_invoices")
+}
+
+model InboundInvoiceLine {
+  id              String   @id @default(cuid())
+  invoiceId       String   @map("invoice_id")
+  description     String
+  quantity        Float    @default(1)
+  unitPrice       Float    @map("unit_price")
+  vatRate         Float    @default(0) @map("vat_rate")
+  lineTotal       Float    @map("line_total")
+  vatExemptionReason String? @map("vat_exemption_reason")
+
+  // Categorisation
+  accountCode           String? @map("account_code")
+  suggestedAccountCode  String? @map("suggested_account_code")
+  accountCodeConfidence Float?  @map("account_code_confidence")
+  ruleId                String? @map("rule_id") // Which CategorisationRule matched
+  costCode              String? @map("cost_code")
+
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  invoice         InboundInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("inbound_invoice_lines")
+}
+
+model CategorisationRule {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  projectId       String?  @map("project_id")
+  supplierId      String?  @map("supplier_id")
+  keyword         String?  // Match against line item description
+  accountCode     String   @map("account_code")
+  priority        Int      @default(0) // Higher = evaluated first
+  active          Boolean  @default(true)
+  description     String?  // Human-readable label
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  project         Project?     @relation("CategorisationRuleProject", fields: [projectId], references: [id])
+  supplier        Supplier?    @relation("SupplierRules", fields: [supplierId], references: [id])
+
+  @@index([organisationId])
+  @@index([organisationId, supplierId])
+  @@map("categorisation_rules")
+}
+
+enum InboundDocumentType {
+  INVOICE
+  CREDIT_NOTE
+
+  @@map("inbound_document_type")
+}
+
+enum InboundInvoiceSource {
+  PEPPOL
+  PDF_UPLOAD
+  IMAGE_UPLOAD
+  EMAIL
+  MANUAL_ENTRY
+
+  @@map("inbound_invoice_source")
+}
+
+enum InboundInvoiceStatus {
+  RECEIVED        // Just arrived, not yet categorised
+  CATEGORISED     // Auto-categorised, awaiting review
+  PENDING_REVIEW  // Sent for manual review
+  APPROVED        // Approved for payment
+  SYNCED          // Posted to accounting system
+  PAID            // Payment confirmed
+  REJECTED        // Rejected
+  VOIDED          // Cancelled/voided
+
+  @@map("inbound_invoice_status")
 }
