@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, ListChecks, FileText, PoundSterling,
   ShieldCheck, MapPin, Eye, AlertCircle, BarChart3, Table2,
+  GitBranch,
 } from 'lucide-react'
 
 const PROJECT_TABS = [
@@ -69,6 +70,12 @@ const PROJECT_TABS = [
     href: '/planning',
     icon: MapPin,
     subRoutes: ['/planning', '/site-queries']
+  },
+  {
+    label: 'Stages',
+    href: '/stages',
+    icon: GitBranch,
+    subRoutes: ['/stages']
   },
 ]
 

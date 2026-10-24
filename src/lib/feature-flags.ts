@@ -25,6 +25,7 @@ export const FEATURE_REGISTRY = {
   documents:        { label: 'Document Management',   default: true,  description: 'Drawing register, document control, transmittals' },
   approvals:        { label: 'Approval Workflows',    default: true,  description: 'Multi-step approval routing for leave, expenses, requests' },
   invoicing:        { label: 'Invoicing',             default: false, description: 'Inbound invoice reception, parsing, categorisation, and accounting sync' },
+  riba_tracking:    { label: 'RIBA Stage Tracking',   default: false, description: 'RIBA work stage gates, transition history, prerequisite validation, and resource planning' },
 } as const
 
 export type FeatureKey = keyof typeof FEATURE_REGISTRY

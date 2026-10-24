@@ -303,6 +303,9 @@ model Profile {
   // Xero Integration
   xeroConnections            XeroConnection[]       @relation("XeroConnector")
 
+  // RIBA Stage Tracking
+  stageGatesAdvanced         StageGate[]            @relation("StageGateAdvancer")
+
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
 
@@ -610,6 +613,7 @@ model Project {
   operatorContact          String?   @map("operator_contact")
   operatorStandardVersion  String?   @map("operator_standard_version")
   workStageFramework       String?   @map("work_stage_framework") // RIBA, NIGERIAN_CWA, INTERNATIONAL, DESIGN_BUILD, CUSTOM
+  currentWorkStage         Int       @default(0) @map("current_work_stage") // Numeric RIBA stage (0-7)
   siteArea                 Float?    @map("site_area") // m²
   netInternalArea          Float?    @map("net_internal_area") // m²
   numberOfBlocks           Int?      @map("number_of_blocks")
@@ -660,6 +664,7 @@ model Project {
   inboundInvoices      InboundInvoice[] @relation("InboundInvoiceProject")
   outboundInvoices     OutboundInvoice[] @relation("OutboundInvoiceProject")
   categorisationRules  CategorisationRule[] @relation("CategorisationRuleProject")
+  stageGates           StageGate[]
 
   @@map("projects")
 }
@@ -3142,4 +3147,28 @@ enum XeroSyncStatus {
 enum XeroSyncDirection {
   TO_XERO    // Coordin → Xero
   FROM_XERO  // Xero → Coordin
+}
+
+// ═══════════════════════════════════════════════════════════
+// RIBA STAGE TRACKING — Stage gates + transition history
+// ═══════════════════════════════════════════════════════════
+
+model StageGate {
+  id               String   @id @default(cuid())
+  projectId        String   @map("project_id")
+  fromStage        Int      @map("from_stage") // RIBA stage number (0-7), -1 for initial
+  toStage          Int      @map("to_stage")   // RIBA stage number (0-7)
+  advancedById     String   @map("advanced_by_id")
+  advancedAt       DateTime @default(now()) @map("advanced_at")
+  signOffNotes     String?  @map("sign_off_notes")
+  prerequisitesMet Json?    @map("prerequisites_met") // JSON array of completed prerequisite task titles
+  attachments      Json?    // JSON array of { name, url } supporting documents
+  isRollback       Boolean  @default(false) @map("is_rollback")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  project    Project @relation(fields: [projectId], references: [id])
+  advancedBy Profile @relation("StageGateAdvancer", fields: [advancedById], references: [id])
+
+  @@index([projectId, advancedAt])
+  @@map("stage_gates")
 }
