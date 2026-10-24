@@ -1,64 +1,122 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Menu, X } from 'lucide-react'
 
-/* ── Shared Marketing Nav ──────────────────────────── */
-function MarketingNav() {
+/* ══════════════════════════════════════════════════
+   Coordin.io — Use Cases
+   Option C design language
+   ══════════════════════════════════════════════════ */
+
+/* ── Design tokens ────────────────────────────────── */
+const lp = {
+  bg: '#f8f7f4',
+  text: '#1a1a18',
+  secondary: '#6b6a65',
+  muted: '#8a8880',
+  border: '#d8d6d0',
+  accent: '#6366f1',
+}
+
+/* ── Nav ──────────────────────────────────────────── */
+function Nav() {
+  const [open, setOpen] = useState(false)
+
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-surface-200/60">
-      <div className="flex items-center justify-between px-6 sm:px-10 py-3.5 max-w-7xl mx-auto">
+    <nav className="border-b" style={{ borderColor: lp.border }}>
+      <div className="flex items-center justify-between px-6 sm:px-10 lg:px-16 py-5 max-w-[1200px] mx-auto">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center text-white font-display text-lg">
+          <div className="w-8 h-8 rounded-lg bg-[#1a1a18] flex items-center justify-center text-white text-lg font-semibold">
             C
           </div>
-          <span className="font-display text-xl text-ink-900">Coordin.io</span>
+          <span className="text-xl font-light tracking-tight" style={{ color: lp.text }}>
+            Coordin.io
+          </span>
         </Link>
-        <div className="flex items-center gap-8">
-          <Link href="/use-cases" className="text-[13px] font-medium text-ink-900 hidden sm:block">
+
+        {/* Desktop links */}
+        <div className="hidden sm:flex items-center gap-8">
+          <Link href="/features/brpd" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
+            Features
+          </Link>
+          <Link href="/use-cases" className="text-[13px] font-medium transition-colors" style={{ color: lp.text }}>
             Use Cases
           </Link>
-          <Link href="/faq" className="text-[13px] font-medium text-ink-500 hover:text-ink-900 hidden sm:block">
+          <Link href="/faq" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
             FAQ
           </Link>
-          <Link href="/book-demo" className="text-[13px] font-medium text-ink-500 hover:text-ink-900 hidden sm:block">
-            Book a Demo
-          </Link>
-          <Link href="/demo-access" className="text-[13px] font-medium text-accent-600 hover:text-accent-700">
-            Try the Demo
+          <Link href="/login" className="text-[13px] font-medium" style={{ color: lp.text }}>
+            Sign In
           </Link>
         </div>
+
+        {/* Mobile: Sign In + hamburger */}
+        <div className="flex sm:hidden items-center gap-4">
+          <Link href="/login" className="text-[13px] font-medium" style={{ color: lp.text }}>
+            Sign In
+          </Link>
+          <button
+            onClick={() => setOpen(!open)}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            className="p-1"
+          >
+            {open ? <X className="w-5 h-5" style={{ color: lp.text }} /> : <Menu className="w-5 h-5" style={{ color: lp.text }} />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile menu */}
+      {open && (
+        <div className="sm:hidden border-t px-6 py-4 flex flex-col gap-4" style={{ borderColor: lp.border }}>
+          <Link href="/features/brpd" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            Features
+          </Link>
+          <Link href="/use-cases" onClick={() => setOpen(false)} className="text-[14px] py-1 font-medium" style={{ color: lp.text }}>
+            Use Cases
+          </Link>
+          <Link href="/faq" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            FAQ
+          </Link>
+          <Link
+            href="/book-demo"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center gap-2 text-[14px] font-medium mt-1"
+            style={{ color: lp.text }}
+          >
+            Book a demo <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
     </nav>
   )
 }
 
-/* ── Shared Footer ─────────────────────────────────── */
-function MarketingFooter() {
+/* ── Footer ───────────────────────────────────────── */
+function Footer() {
   return (
-    <footer className="border-t border-surface-200 py-10 px-6 sm:px-10">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-gradient-accent flex items-center justify-center text-white font-display text-sm">
-            C
-          </div>
-          <span className="font-display text-lg text-ink-900">Coordin.io</span>
-        </div>
-        <div className="flex items-center gap-6">
-          <Link href="/faq" className="text-[13px] text-ink-500 hover:text-ink-900">FAQ</Link>
-          <a href="mailto:hello@coordin.io" className="text-[13px] text-ink-500 hover:text-ink-900">Contact</a>
-        </div>
-      </div>
-      <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-surface-200">
-        <p className="text-[11px] text-ink-300 text-center">
-          &copy; {new Date().getFullYear()} Coordin.io. All rights reserved.
+    <footer style={{ borderTop: `1px solid ${lp.border}` }}>
+      <div className="px-6 sm:px-10 lg:px-16 max-w-[1200px] mx-auto py-8 flex items-center justify-between">
+        <p className="text-[12px]" style={{ color: lp.muted }}>
+          &copy; {new Date().getFullYear()} Coordin.io
         </p>
+        <div className="flex items-center gap-6">
+          <a href="#" className="text-[12px] transition-colors hover:opacity-70" style={{ color: lp.muted }}>
+            Privacy
+          </a>
+          <a href="#" className="text-[12px] transition-colors hover:opacity-70" style={{ color: lp.muted }}>
+            Terms
+          </a>
+          <a href="mailto:hello@coordin.io" className="text-[12px] transition-colors hover:opacity-70" style={{ color: lp.muted }}>
+            Contact
+          </a>
+        </div>
       </div>
     </footer>
   )
 }
 
-/* ── Use Case Section ──────────────────────────────── */
+/* ── Use Case Section ─────────────────────────────── */
 function UseCaseSection({
   number,
   title,
@@ -67,7 +125,7 @@ function UseCaseSection({
   outcomes,
   ctaLabel,
 }: {
-  number: number
+  number: string
   title: string
   problem: string
   solution: string
@@ -75,56 +133,80 @@ function UseCaseSection({
   ctaLabel: string
 }) {
   return (
-    <section className="py-16 border-b border-surface-200 last:border-0 animate-fade-in">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-baseline gap-4 mb-4">
-          <span className="text-[3rem] font-display text-accent-200 leading-none">{number}</span>
-          <h2 className="font-display text-[2rem] sm:text-[2.5rem] leading-[1.1] text-ink-900">
-            {title}
-          </h2>
-        </div>
-        <p className="italic text-ink-500 text-[15px] mb-4">{problem}</p>
-        <p className="text-[15px] text-ink-700 leading-relaxed mb-6">{solution}</p>
+    <section className="py-16 border-b last:border-0" style={{ borderColor: lp.border }}>
+      <div className="max-w-3xl mx-auto border-l-2 pl-6" style={{ borderColor: lp.border }}>
+        <p
+          className="text-[10px] font-medium tracking-[0.2em] uppercase mb-3"
+          style={{ color: lp.muted, fontFamily: "'Space Mono', monospace" }}
+        >
+          {number}
+        </p>
+        <h2
+          className="text-[1.6rem] sm:text-[2rem] font-light leading-[1.15] tracking-tight mb-4"
+          style={{ color: lp.text }}
+        >
+          {title}
+        </h2>
+        <p className="italic text-[15px] mb-4 leading-relaxed" style={{ color: lp.muted }}>
+          {problem}
+        </p>
+        <p className="text-[15px] leading-relaxed mb-6" style={{ color: lp.secondary }}>
+          {solution}
+        </p>
         <ul className="space-y-2 mb-8">
           {outcomes.map((item, i) => (
             <li key={i} className="flex items-start gap-2.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-500 mt-2 shrink-0" />
-              <span className="text-[14px] text-ink-600 leading-relaxed">{item}</span>
+              <span className="mt-[9px] shrink-0" style={{ color: lp.secondary }}>&ndash;</span>
+              <span className="text-[14px] leading-relaxed" style={{ color: lp.secondary }}>
+                {item}
+              </span>
             </li>
           ))}
         </ul>
         <Link
           href="/book-demo"
-          className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-accent-600 hover:text-accent-700"
+          className="inline-flex items-center gap-1.5 text-[14px] font-medium underline underline-offset-4 transition-opacity hover:opacity-70"
+          style={{ color: lp.text }}
         >
           {ctaLabel}
-          <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
     </section>
   )
 }
 
-/* ── Main Page ─────────────────────────────────────── */
+/* ── Main Page ────────────────────────────────────── */
 export default function UseCasesPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <MarketingNav />
+    <div className="min-h-screen" style={{ backgroundColor: lp.bg }}>
+      <Nav />
 
       {/* Hero */}
-      <section className="text-center pt-20 sm:pt-28 pb-12 px-6 sm:px-10 animate-fade-in">
-        <h1 className="font-display text-[3rem] sm:text-[4rem] leading-[1.05] text-ink-900 max-w-3xl mx-auto">
+      <section className="px-6 sm:px-10 lg:px-16 max-w-[1200px] mx-auto pt-20 sm:pt-28 pb-12">
+        <p
+          className="text-[10px] font-medium uppercase tracking-[0.2em] mb-6"
+          style={{ color: lp.muted, fontFamily: "'Space Mono', monospace" }}
+        >
+          Use cases
+        </p>
+        <h1
+          className="text-[clamp(2.2rem,5vw,3.8rem)] font-light leading-[1.1] tracking-tight max-w-[680px]"
+          style={{ color: lp.text }}
+        >
           5 workflows that run your practice
         </h1>
-        <p className="text-[17px] text-ink-500 max-w-2xl mx-auto mt-6 leading-relaxed">
+        <p
+          className="mt-6 text-[15px] sm:text-[17px] leading-relaxed max-w-[520px]"
+          style={{ color: lp.secondary }}
+        >
           Coordin replaces disconnected tools with one connected platform for quotes, projects, compliance, timesheets and practice oversight.
         </p>
       </section>
 
       {/* Use Cases */}
-      <div className="max-w-4xl mx-auto px-6 sm:px-10">
+      <div className="px-6 sm:px-10 lg:px-16 max-w-[1200px] mx-auto">
         <UseCaseSection
-          number={1}
+          number="01"
           title="Quote to Project"
           problem="Practices create quotes in disconnected documents — Word, Excel, email threads — losing assumptions, fee logic and audit trails along the way."
           solution="Coordin lets you create, send, track and convert quotes in one workflow. Quotes are built from RIBA-aligned templates, tracked through a clear lifecycle (Draft, Sent, Viewed, Accepted), and converted directly into live projects with all fee data intact."
@@ -139,7 +221,7 @@ export default function UseCasesPage() {
         />
 
         <UseCaseSection
-          number={2}
+          number="02"
           title="Project Health & Commercial Control"
           problem="Jobs drift off-track before directors ever see it — budgets overspend, invoices go unsent, and fee assumptions erode without visibility."
           solution="Coordin provides real-time project health scoring so you can see fee risk, overspend, billing gaps, overdue milestones and scope drift at a glance — before problems become losses."
@@ -154,7 +236,7 @@ export default function UseCasesPage() {
         />
 
         <UseCaseSection
-          number={3}
+          number="03"
           title="BRPD Compliance Workspace"
           problem="BRPD coordination is spread across spreadsheets, PDFs, email and shared drives — making it impossible to prove compliance or track readiness."
           solution="Coordin gives you a dedicated workspace to manage dutyholders, prescribed documents, evidence uploads, compliance actions and gateway readiness — all in one auditable location."
@@ -169,7 +251,7 @@ export default function UseCasesPage() {
         />
 
         <UseCaseSection
-          number={4}
+          number="04"
           title="Timesheets Linked to Real Work"
           problem="Timesheets are disconnected from real tasks — staff log hours into generic buckets with no link to projects, stages or deliverables."
           solution="Coordin lets staff book time against real tasks and RIBA stages so managers can see where effort is going, compare actuals to fee assumptions, and approve entries with confidence."
@@ -184,7 +266,7 @@ export default function UseCasesPage() {
         />
 
         <UseCaseSection
-          number={5}
+          number="05"
           title="Executive Practice Dashboard"
           problem="There is no single place to see projects, people, money and compliance together — directors rely on asking around or checking multiple tools."
           solution="Coordin provides an executive dashboard showing at-risk projects, open quotes, timesheet gaps, BRPD status and upcoming deadlines — all on one screen, updated in real time."
@@ -199,7 +281,7 @@ export default function UseCasesPage() {
         />
       </div>
 
-      <MarketingFooter />
+      <Footer />
     </div>
   )
 }

@@ -3,67 +3,120 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, CheckCircle, ChevronDown } from 'lucide-react'
+import { ArrowRight, CheckCircle, ChevronDown, Menu, X } from 'lucide-react'
 
-/* ── Shared Marketing Nav ──────────────────────────── */
-function MarketingNav() {
+/* ── Design tokens (matches Option C landing page) ── */
+const lp = {
+  bg: '#f8f7f4',
+  text: '#1a1a18',
+  secondary: '#6b6a65',
+  muted: '#8a8880',
+  border: '#d8d6d0',
+  accent: '#6366f1',
+}
+
+/* ── Nav ─────────────────────────────────────────── */
+function Nav() {
+  const [open, setOpen] = useState(false)
+
   return (
-    <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-surface-200/60">
-      <div className="flex items-center justify-between px-6 sm:px-10 py-3.5 max-w-7xl mx-auto">
+    <nav className="border-b" style={{ borderColor: lp.border }}>
+      <div className="flex items-center justify-between px-6 sm:px-10 lg:px-16 py-5 max-w-[1200px] mx-auto">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center text-white font-display text-lg">
+          <div className="w-8 h-8 rounded-lg bg-[#1a1a18] flex items-center justify-center text-white text-lg font-semibold">
             C
           </div>
-          <span className="font-display text-xl text-ink-900">Coordin.io</span>
+          <span className="text-xl font-light tracking-tight" style={{ color: lp.text }}>
+            Coordin.io
+          </span>
         </Link>
-        <div className="flex items-center gap-8">
-          <Link href="/use-cases" className="text-[13px] font-medium text-ink-500 hover:text-ink-900 hidden sm:block">
+
+        {/* Desktop links */}
+        <div className="hidden sm:flex items-center gap-8">
+          <Link href="/features/brpd" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
+            Features
+          </Link>
+          <Link href="/use-cases" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
             Use Cases
           </Link>
-          <Link href="/faq" className="text-[13px] font-medium text-ink-500 hover:text-ink-900 hidden sm:block">
+          <Link href="/faq" className="text-[13px] transition-colors" style={{ color: lp.secondary }}>
             FAQ
           </Link>
-          <Link href="/book-demo" className="text-[13px] font-medium text-ink-900 hidden sm:block">
-            Book a Demo
-          </Link>
-          <Link href="/demo-access" className="text-[13px] font-medium text-accent-600 hover:text-accent-700">
-            Try the Demo
+          <Link href="/login" className="text-[13px] font-medium" style={{ color: lp.text }}>
+            Sign In
           </Link>
         </div>
+
+        {/* Mobile: Sign In + hamburger */}
+        <div className="flex sm:hidden items-center gap-4">
+          <Link href="/login" className="text-[13px] font-medium" style={{ color: lp.text }}>
+            Sign In
+          </Link>
+          <button
+            onClick={() => setOpen(!open)}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            className="p-1"
+          >
+            {open ? <X className="w-5 h-5" style={{ color: lp.text }} /> : <Menu className="w-5 h-5" style={{ color: lp.text }} />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile menu */}
+      {open && (
+        <div className="sm:hidden border-t px-6 py-4 flex flex-col gap-4" style={{ borderColor: lp.border }}>
+          <Link href="/features/brpd" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            Features
+          </Link>
+          <Link href="/use-cases" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            Use Cases
+          </Link>
+          <Link href="/faq" onClick={() => setOpen(false)} className="text-[14px] py-1" style={{ color: lp.secondary }}>
+            FAQ
+          </Link>
+          <Link
+            href="/book-demo"
+            onClick={() => setOpen(false)}
+            className="inline-flex items-center gap-2 text-[14px] font-medium mt-1"
+            style={{ color: lp.text }}
+          >
+            Book a demo <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
     </nav>
   )
 }
 
-/* ── Shared Footer ─────────────────────────────────── */
-function MarketingFooter() {
+/* ── Footer ──────────────────────────────────────── */
+function Footer() {
   return (
-    <footer className="border-t border-surface-200 py-10 px-6 sm:px-10">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-gradient-accent flex items-center justify-center text-white font-display text-sm">
-            C
-          </div>
-          <span className="font-display text-lg text-ink-900">Coordin.io</span>
-        </div>
-        <div className="flex items-center gap-6">
-          <Link href="/faq" className="text-[13px] text-ink-500 hover:text-ink-900">FAQ</Link>
-          <a href="mailto:hello@coordin.io" className="text-[13px] text-ink-500 hover:text-ink-900">Contact</a>
-        </div>
-      </div>
-      <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-surface-200">
-        <p className="text-[11px] text-ink-300 text-center">
-          &copy; {new Date().getFullYear()} Coordin.io. All rights reserved.
+    <footer style={{ borderTop: `1px solid ${lp.border}` }}>
+      <div className="px-6 sm:px-10 lg:px-16 max-w-[1200px] mx-auto py-8 flex items-center justify-between">
+        <p className="text-[12px]" style={{ color: lp.muted }}>
+          &copy; {new Date().getFullYear()} Coordin.io
         </p>
+        <div className="flex items-center gap-6">
+          <a href="#" className="text-[12px] transition-colors hover:opacity-70" style={{ color: lp.muted }}>
+            Privacy
+          </a>
+          <a href="#" className="text-[12px] transition-colors hover:opacity-70" style={{ color: lp.muted }}>
+            Terms
+          </a>
+          <a href="mailto:hello@coordin.io" className="text-[12px] transition-colors hover:opacity-70" style={{ color: lp.muted }}>
+            Contact
+          </a>
+        </div>
       </div>
     </footer>
   )
 }
 
-/* ── Main Page ─────────────────────────────────────── */
+/* ── Main Page ───────────────────────────────────── */
 export default function BookDemoPage() {
   const router = useRouter()
   const [submitted, setSubmitted] = useState(false)
+  const [mobileMenu, setMobileMenu] = useState(false)
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -94,31 +147,58 @@ export default function BookDemoPage() {
     'Full platform demo',
   ]
 
-  return (
-    <div className="min-h-screen bg-white">
-      <MarketingNav />
+  /* shared input styles */
+  const inputStyle: React.CSSProperties = {
+    border: `1px solid ${lp.border}`,
+    color: lp.text,
+  }
 
-      <section className="max-w-lg mx-auto px-6 sm:px-10 pt-20 sm:pt-28 pb-20 animate-fade-in">
-        <h1 className="font-display text-[2.5rem] sm:text-[3rem] leading-[1.05] text-ink-900 text-center mb-3">
+  return (
+    <div style={{ backgroundColor: lp.bg, minHeight: '100vh' }}>
+      <Nav />
+
+      <section className="max-w-lg mx-auto px-6 sm:px-10 pt-20 sm:pt-28 pb-20">
+        <h1
+          className="text-[2.5rem] sm:text-[3rem] leading-[1.05] font-light tracking-tight text-center mb-3"
+          style={{ color: lp.text }}
+        >
           Book a full demo
         </h1>
-        <p className="text-[15px] text-ink-500 text-center mb-12 max-w-md mx-auto leading-relaxed">
+        <p
+          className="text-[15px] text-center mb-12 max-w-md mx-auto leading-relaxed"
+          style={{ color: lp.secondary }}
+        >
           See the workflow that matters most to your practice. Tell us what you&rsquo;d like to explore and we&rsquo;ll prepare a focused demo.
         </p>
 
         {submitted ? (
-          <div className="card-static shadow-premium p-8 animate-fade-in text-center">
+          <div
+            className="rounded-xl shadow-lg p-8 text-center"
+            style={{ backgroundColor: '#ffffff', border: `1px solid ${lp.border}` }}
+          >
             <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
-            <h3 className="font-display text-xl text-ink-900 mb-2">Demo booked.</h3>
-            <p className="text-[13px] text-ink-500">We&rsquo;ll be in touch within 24 hours. Redirecting to the demo&hellip;</p>
+            <h3 className="text-xl font-medium mb-2" style={{ color: lp.text }}>
+              Demo booked.
+            </h3>
+            <p className="text-[13px]" style={{ color: lp.secondary }}>
+              We&rsquo;ll be in touch within 24 hours. Redirecting to the demo&hellip;
+            </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="card-static shadow-premium p-6 sm:p-8 text-left space-y-5">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-xl shadow-lg p-6 sm:p-8 text-left space-y-5"
+            style={{ backgroundColor: '#ffffff', border: `1px solid ${lp.border}` }}
+          >
             {/* Name */}
             <div>
-              <label htmlFor="name" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="name"
+                className="block text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                style={{ color: lp.muted }}
+              >
                 Name <span className="text-red-400">*</span>
               </label>
               <input
@@ -128,13 +208,21 @@ export default function BookDemoPage() {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your full name"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-white text-[13px] focus:outline-none focus:ring-2 transition-shadow"
+                style={{
+                  ...inputStyle,
+                  '--tw-ring-color': lp.accent,
+                } as React.CSSProperties}
               />
             </div>
 
             {/* Work email */}
             <div>
-              <label htmlFor="email" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="email"
+                className="block text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                style={{ color: lp.muted }}
+              >
                 Work email <span className="text-red-400">*</span>
               </label>
               <input
@@ -144,13 +232,21 @@ export default function BookDemoPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@practice.com"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-white text-[13px] focus:outline-none focus:ring-2 transition-shadow"
+                style={{
+                  ...inputStyle,
+                  '--tw-ring-color': lp.accent,
+                } as React.CSSProperties}
               />
             </div>
 
             {/* Practice name */}
             <div>
-              <label htmlFor="practice" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="practice"
+                className="block text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                style={{ color: lp.muted }}
+              >
                 Practice name
               </label>
               <input
@@ -159,13 +255,21 @@ export default function BookDemoPage() {
                 value={practiceName}
                 onChange={e => setPracticeName(e.target.value)}
                 placeholder="Maple Architects"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-white text-[13px] focus:outline-none focus:ring-2 transition-shadow"
+                style={{
+                  ...inputStyle,
+                  '--tw-ring-color': lp.accent,
+                } as React.CSSProperties}
               />
             </div>
 
             {/* Your role */}
             <div>
-              <label htmlFor="role" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="role"
+                className="block text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                style={{ color: lp.muted }}
+              >
                 Your role
               </label>
               <div className="relative">
@@ -173,7 +277,11 @@ export default function BookDemoPage() {
                   id="role"
                   value={role}
                   onChange={e => setRole(e.target.value)}
-                  className="w-full appearance-none px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow pr-10"
+                  className="w-full appearance-none px-3.5 py-2.5 rounded-lg bg-white text-[13px] focus:outline-none focus:ring-2 transition-shadow pr-10"
+                  style={{
+                    ...inputStyle,
+                    '--tw-ring-color': lp.accent,
+                  } as React.CSSProperties}
                 >
                   <option value="">Select...</option>
                   <option value="practice_owner">Practice Owner</option>
@@ -183,13 +291,17 @@ export default function BookDemoPage() {
                   <option value="technologist">Technologist</option>
                   <option value="other">Other</option>
                 </select>
-                <ChevronDown className="w-4 h-4 text-ink-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: lp.muted }} />
               </div>
             </div>
 
             {/* Practice size */}
             <div>
-              <label htmlFor="size" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
+              <label
+                htmlFor="size"
+                className="block text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                style={{ color: lp.muted }}
+              >
                 Practice size
               </label>
               <div className="relative">
@@ -197,7 +309,11 @@ export default function BookDemoPage() {
                   id="size"
                   value={practiceSize}
                   onChange={e => setPracticeSize(e.target.value)}
-                  className="w-full appearance-none px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow pr-10"
+                  className="w-full appearance-none px-3.5 py-2.5 rounded-lg bg-white text-[13px] focus:outline-none focus:ring-2 transition-shadow pr-10"
+                  style={{
+                    ...inputStyle,
+                    '--tw-ring-color': lp.accent,
+                  } as React.CSSProperties}
                 >
                   <option value="">Select...</option>
                   <option value="1-5">1-5</option>
@@ -205,13 +321,16 @@ export default function BookDemoPage() {
                   <option value="16-30">16-30</option>
                   <option value="30+">30+</option>
                 </select>
-                <ChevronDown className="w-4 h-4 text-ink-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: lp.muted }} />
               </div>
             </div>
 
             {/* What do you want to see? */}
             <div>
-              <label className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-3">
+              <label
+                className="block text-[11px] font-medium uppercase tracking-wider mb-3"
+                style={{ color: lp.muted }}
+              >
                 What do you want to see?
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -224,9 +343,12 @@ export default function BookDemoPage() {
                       type="checkbox"
                       checked={interests.includes(option)}
                       onChange={() => toggleInterest(option)}
-                      className="w-4 h-4 rounded border-surface-300 text-accent-600 focus:ring-accent-500"
+                      className="w-4 h-4 rounded"
+                      style={{ accentColor: lp.accent }}
                     />
-                    <span className="text-[13px] text-ink-700 group-hover:text-ink-900">{option}</span>
+                    <span className="text-[13px]" style={{ color: lp.secondary }}>
+                      {option}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -234,8 +356,13 @@ export default function BookDemoPage() {
 
             {/* Current tools */}
             <div>
-              <label htmlFor="tools" className="block text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-1.5">
-                Current tools you use <span className="text-ink-300">(optional)</span>
+              <label
+                htmlFor="tools"
+                className="block text-[11px] font-medium uppercase tracking-wider mb-1.5"
+                style={{ color: lp.muted }}
+              >
+                Current tools you use{' '}
+                <span style={{ color: lp.border }}>(optional)</span>
               </label>
               <input
                 id="tools"
@@ -243,22 +370,31 @@ export default function BookDemoPage() {
                 value={currentTools}
                 onChange={e => setCurrentTools(e.target.value)}
                 placeholder="e.g. Excel, Xero, Monday.com"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-shadow"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-white text-[13px] focus:outline-none focus:ring-2 transition-shadow"
+                style={{
+                  ...inputStyle,
+                  '--tw-ring-color': lp.accent,
+                } as React.CSSProperties}
               />
             </div>
 
             {/* Submit */}
             <button
               type="submit"
-              className="w-full bg-gradient-accent text-white font-semibold text-[14px] py-3.5 rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-glow-indigo mt-2"
+              className="w-full text-white font-semibold text-[14px] py-3.5 rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mt-2"
+              style={{ backgroundColor: lp.text }}
             >
               Book my demo
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            <p className="text-center text-[13px] text-ink-500 mt-4">
+            <p className="text-center text-[13px] mt-4" style={{ color: lp.secondary }}>
               Or{' '}
-              <Link href="/demo-access" className="text-accent-600 hover:text-accent-700 font-medium">
+              <Link
+                href="/demo-access"
+                className="font-medium hover:opacity-70 transition-opacity"
+                style={{ color: lp.accent }}
+              >
                 explore the demo yourself &rarr;
               </Link>
             </p>
@@ -266,7 +402,7 @@ export default function BookDemoPage() {
         )}
       </section>
 
-      <MarketingFooter />
+      <Footer />
     </div>
   )
 }
