@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
@@ -10,7 +10,16 @@ import {
   GitBranch,
 } from 'lucide-react'
 
-const PROJECT_TABS = [
+interface TabDef {
+  label: string
+  href: string
+  icon: typeof LayoutDashboard
+  subRoutes: string[]
+  /** Only show this tab when project uses one of these frameworks */
+  frameworks?: string[]
+}
+
+const PROJECT_TABS: TabDef[] = [
   {
     label: 'Overview',
     href: '',
@@ -75,7 +84,8 @@ const PROJECT_TABS = [
     label: 'Stages',
     href: '/stages',
     icon: GitBranch,
-    subRoutes: ['/stages']
+    subRoutes: ['/stages'],
+    frameworks: ['RIBA'],
   },
 ]
 
@@ -86,15 +96,25 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const basePath = `/projects/${projectId}`
 
   const [projectName, setProjectName] = useState<string | null>(null)
+  const [workStageFramework, setWorkStageFramework] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then(res => res.json())
       .then(data => {
         if (data?.data?.project?.name) setProjectName(data.data.project.name)
+        if (data?.data?.project?.workStageFramework) setWorkStageFramework(data.data.project.workStageFramework)
       })
       .catch(() => {})
   }, [projectId])
+
+  // Filter tabs based on project framework
+  const visibleTabs = useMemo(() =>
+    PROJECT_TABS.filter(tab =>
+      !tab.frameworks || (workStageFramework && tab.frameworks.includes(workStageFramework))
+    ),
+    [workStageFramework]
+  )
 
   // Determine which tab is active
   const currentSubRoute = pathname.replace(basePath, '') || ''
@@ -113,7 +133,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       {/* Tab navigation */}
       <div className="mb-6 border-b border-surface-200">
         <nav className="flex gap-0 overflow-x-auto scrollbar-hide -mb-px" style={{ WebkitOverflowScrolling: 'touch' }}>
-          {PROJECT_TABS.map(tab => {
+          {visibleTabs.map(tab => {
             const isActive = tab.subRoutes.some(sr => currentSubRoute === sr)
             const tabHref = `${basePath}${tab.href}`
 
