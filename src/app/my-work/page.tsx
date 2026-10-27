@@ -8,9 +8,11 @@ import {
   Wallet, ChevronDown, ArrowUpDown, SlidersHorizontal,
   ClipboardList, FileCheck, ShieldCheck, MapPin, Bug,
   X, Filter, Calendar, BookOpen, ClipboardCheck, ArrowRight, FileWarning,
+  Check, XCircle, MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonRow, SkeletonStats } from '@/components/Skeleton'
+import { useToast } from '@/components/Toast'
 
 /* ═══════════════════════════════════════════════════════════
    Types
@@ -76,6 +78,7 @@ interface ReviewItem {
 
 interface ApprovalItem {
   id: string
+  instanceId: string | null  // approval engine instance ID — needed for approve/reject
   type: 'leave' | 'expense' | 'budget' | 'variation'
   title: string
   requester: string
@@ -822,10 +825,15 @@ export default function MyWorkPage() {
   const [reviewsLoading, setReviewsLoading] = useState(false)
   const [reviewsError, setReviewsError] = useState<string | null>(null)
 
+  const { toast } = useToast()
+
   const [approvals, setApprovals] = useState<ApprovalItem[]>([])
   const [approvalsLoaded, setApprovalsLoaded] = useState(false)
   const [approvalsLoading, setApprovalsLoading] = useState(false)
   const [approvalsError, setApprovalsError] = useState<string | null>(null)
+  const [approvalActioning, setApprovalActioning] = useState<string | null>(null) // instanceId being actioned
+  const [approvalComment, setApprovalComment] = useState('')
+  const [showCommentFor, setShowCommentFor] = useState<string | null>(null) // instanceId showing comment box
 
   const [observations, setObservations] = useState<ObservationItem[]>([])
   const [observationsLoaded, setObservationsLoaded] = useState(false)
@@ -1022,12 +1030,13 @@ export default function MyWorkPage() {
           }>
           for (const s of steps) {
             seenEntityIds.add(s.entityId)
-            const type = s.requestType === 'LEAVE_REQUEST' ? 'leave'
-              : s.requestType === 'EXPENSE_CLAIM' ? 'expense'
+            const type = s.requestType === 'LEAVE' ? 'leave'
+              : s.requestType === 'EXPENSE' ? 'expense'
               : s.requestType === 'BUDGET_REQUEST' ? 'budget'
               : 'variation'
             approvalItems.push({
               id: s.entityId,
+              instanceId: s.instanceId,
               type: type as ApprovalItem['type'],
               title: s.label || s.requestType.replace(/_/g, ' '),
               requester: s.submitter?.fullName || 'Unknown',
@@ -1054,6 +1063,7 @@ export default function MyWorkPage() {
             if (['SUBMITTED', 'UNDER_REVIEW'].includes(r.status) && !seenEntityIds.has(r.id)) {
               approvalItems.push({
                 id: r.id,
+                instanceId: null,
                 type: 'leave',
                 title: `${LEAVE_TYPE_LABELS[r.leaveType] || r.leaveType} - ${r.days} days`,
                 requester: r.profile?.fullName || 'Unknown',
@@ -1080,6 +1090,7 @@ export default function MyWorkPage() {
             if (['SUBMITTED', 'UNDER_REVIEW'].includes(c.status) && !seenEntityIds.has(c.id)) {
               approvalItems.push({
                 id: c.id,
+                instanceId: null,
                 type: 'expense',
                 title: c.description,
                 requester: c.profile?.fullName || 'Unknown',
@@ -1102,6 +1113,37 @@ export default function MyWorkPage() {
       setApprovalsLoading(false)
     }
   }, [approvalsLoaded, approvalsError])
+
+  const handleApprovalAction = async (instanceId: string, action: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES', comment?: string) => {
+    setApprovalActioning(instanceId)
+    try {
+      const res = await fetch(`/api/approvals/${instanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, comment: comment || undefined }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed' }))
+        throw new Error(err.error || 'Action failed')
+      }
+      const data = await res.json()
+      toast(
+        action === 'APPROVE' ? 'Approved successfully' : action === 'REJECT' ? 'Rejected' : 'Changes requested',
+        'success',
+      )
+      // Remove from list
+      setApprovals((prev) => prev.filter((a) => a.instanceId !== instanceId))
+      // Reset comment UI
+      setShowCommentFor(null)
+      setApprovalComment('')
+      // Refresh pending actions count
+      fetchPendingActions()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Action failed', 'error')
+    } finally {
+      setApprovalActioning(null)
+    }
+  }
 
   const fetchObservations = useCallback(async () => {
     if (observationsLoaded && !observationsError) return
@@ -1827,29 +1869,93 @@ export default function MyWorkPage() {
             {approvalsLoaded && !approvalsLoading && filteredApprovals.length > 0 && (
               <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
                 {filteredApprovals.map((approval) => (
-                  <div
-                    key={approval.id}
-                    className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5"
-                  >
-                    <div className={cn(
-                      'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                      approval.type === 'leave' ? 'bg-blue-50' : approval.type === 'expense' ? 'bg-emerald-50' : 'bg-violet-50',
-                    )}>
-                      {approval.type === 'leave' && <CalendarDays className="w-4 h-4 text-blue-500" />}
-                      {approval.type === 'expense' && <Wallet className="w-4 h-4 text-emerald-500" />}
-                      {approval.type === 'budget' && <FolderOpen className="w-4 h-4 text-violet-500" />}
-                      {approval.type === 'variation' && <FolderOpen className="w-4 h-4 text-violet-500" />}
+                  <div key={approval.id} className="px-4 sm:px-5 py-3.5">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className={cn(
+                        'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                        approval.type === 'leave' ? 'bg-blue-50' : approval.type === 'expense' ? 'bg-emerald-50' : 'bg-violet-50',
+                      )}>
+                        {approval.type === 'leave' && <CalendarDays className="w-4 h-4 text-blue-500" />}
+                        {approval.type === 'expense' && <Wallet className="w-4 h-4 text-emerald-500" />}
+                        {approval.type === 'budget' && <FolderOpen className="w-4 h-4 text-violet-500" />}
+                        {approval.type === 'variation' && <FolderOpen className="w-4 h-4 text-violet-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium text-ink-900 truncate">{approval.title}</p>
+                        <p className="text-[11px] text-ink-400 mt-0.5">
+                          {approval.type.charAt(0).toUpperCase() + approval.type.slice(1)} · {approval.requester} · {formatShortDate(approval.date)}
+                        </p>
+                      </div>
+                      {approval.amount && (
+                        <span className="text-[13px] font-semibold text-ink-900 shrink-0">{approval.amount}</span>
+                      )}
+                      {approval.instanceId ? (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleApprovalAction(approval.instanceId!, 'APPROVE')}
+                            disabled={approvalActioning === approval.instanceId}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleApprovalAction(approval.instanceId!, 'REJECT')}
+                            disabled={approvalActioning === approval.instanceId}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] font-medium bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => setShowCommentFor(showCommentFor === approval.instanceId ? null : approval.instanceId)}
+                            disabled={approvalActioning === approval.instanceId}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[12px] font-medium bg-ink-50 text-ink-600 hover:bg-ink-100 disabled:opacity-50 transition-colors"
+                            title="Add comment"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <StatusBadge status={approval.status} meta={LEAVE_STATUS_META} />
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-ink-900 truncate">{approval.title}</p>
-                      <p className="text-[11px] text-ink-400 mt-0.5">
-                        {approval.type.charAt(0).toUpperCase() + approval.type.slice(1)} · {approval.requester} · {formatShortDate(approval.date)}
-                      </p>
-                    </div>
-                    {approval.amount && (
-                      <span className="text-[13px] font-semibold text-ink-900 shrink-0">{approval.amount}</span>
+                    {/* Comment box */}
+                    {showCommentFor === approval.instanceId && (
+                      <div className="mt-2.5 ml-11 flex gap-2">
+                        <input
+                          type="text"
+                          value={approvalComment}
+                          onChange={(e) => setApprovalComment(e.target.value)}
+                          placeholder="Add a comment (optional)..."
+                          className="flex-1 text-[12px] px-3 py-1.5 border border-ink-200 rounded-md focus:outline-none focus:ring-1 focus:ring-accent-500"
+                        />
+                        <button
+                          onClick={() => handleApprovalAction(approval.instanceId!, 'APPROVE', approvalComment)}
+                          disabled={approvalActioning === approval.instanceId}
+                          className="text-[12px] px-2.5 py-1.5 rounded-md font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleApprovalAction(approval.instanceId!, 'REQUEST_CHANGES', approvalComment)}
+                          disabled={approvalActioning === approval.instanceId || !approvalComment.trim()}
+                          className="text-[12px] px-2.5 py-1.5 rounded-md font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                        >
+                          Request Changes
+                        </button>
+                        <button
+                          onClick={() => handleApprovalAction(approval.instanceId!, 'REJECT', approvalComment)}
+                          disabled={approvalActioning === approval.instanceId}
+                          className="text-[12px] px-2.5 py-1.5 rounded-md font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
                     )}
-                    <StatusBadge status={approval.status} meta={LEAVE_STATUS_META} />
+                    {approvalActioning === approval.instanceId && (
+                      <div className="mt-2 ml-11 text-[11px] text-ink-400">Processing...</div>
+                    )}
                   </div>
                 ))}
               </div>
