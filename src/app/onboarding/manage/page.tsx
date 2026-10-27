@@ -237,7 +237,7 @@ export default function OnboardingManagePage() {
 
   const fetchOffices = useCallback(async () => {
     try {
-      const res = await fetch('/api/offices')
+      const res = await fetch('/api/settings/offices')
       if (!res.ok) return
       const json = await res.json()
       const list = json.data?.offices ?? []
@@ -249,7 +249,15 @@ export default function OnboardingManagePage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchTemplates(), fetchAssignments(), fetchProbation(), fetchEmployees(), fetchOffices()])
+    try {
+      // Safety timeout: never let loading stay stuck for more than 15s
+      await Promise.race([
+        Promise.all([fetchTemplates(), fetchAssignments(), fetchProbation(), fetchEmployees(), fetchOffices()]),
+        new Promise((resolve) => setTimeout(resolve, 15000)),
+      ])
+    } catch {
+      // Swallow — individual fetches handle their own errors
+    }
     setLoading(false)
   }, [fetchTemplates, fetchAssignments, fetchProbation, fetchEmployees, fetchOffices])
 

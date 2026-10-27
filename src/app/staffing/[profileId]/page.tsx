@@ -237,6 +237,8 @@ export default function EmployeeProfilePage() {
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, string | number | null>>({})
   const [sendingOnboardingEmail, setSendingOnboardingEmail] = useState(false)
+  const [orgRoles, setOrgRoles] = useState<{ id: string; name: string; level: string | null }[]>([])
+  const [orgMembers, setOrgMembers] = useState<{ id: string; fullName: string; jobTitle: string | null }[]>([])
 
   const fetchProfile = useCallback(async () => {
     setLoading(true)
@@ -290,6 +292,28 @@ export default function EmployeeProfilePage() {
     if (!data) return
     const emp = data.employee
     const employment = data.employment
+
+    // Fetch roles and members for dropdowns (admin only)
+    if (data.isAdmin) {
+      fetch('/api/staffing?includeRoles=true')
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.data?.roles) setOrgRoles(d.data.roles)
+          if (d.data?.employees) {
+            setOrgMembers(
+              d.data.employees
+                .filter((e: { id: string }) => e.id !== profileId)
+                .map((e: { id: string; fullName: string; jobTitle: string | null }) => ({
+                  id: e.id,
+                  fullName: e.fullName,
+                  jobTitle: e.jobTitle,
+                }))
+            )
+          }
+        })
+        .catch(() => {})
+    }
+
     setEditForm({
       phone: emp.phone ?? '',
       emergencyName: emp.emergencyContact?.name ?? '',
@@ -299,6 +323,8 @@ export default function EmployeeProfilePage() {
       ...(data.isAdmin
         ? {
             jobTitle: emp.jobTitle ?? '',
+            roleId: emp.role?.id ?? '',
+            managerId: emp.manager?.id ?? '',
             department: emp.department ?? '',
             contractType: employment?.contractType ?? '',
             employmentType: employment?.employmentType ?? '',
@@ -337,6 +363,8 @@ export default function EmployeeProfilePage() {
     setSaving(true)
     try {
       // Build the payload, only sending non-empty changed fields
+      // Exception: roleId and managerId CAN be empty (to clear them)
+      const clearableFields = ['roleId', 'managerId']
       const payload: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(editForm)) {
         if (value !== '' && value !== null) {
@@ -349,6 +377,9 @@ export default function EmployeeProfilePage() {
           } else {
             payload[key] = value
           }
+        } else if (clearableFields.includes(key) && value === '') {
+          // Send empty string so the API can clear the field
+          payload[key] = ''
         }
       }
 
@@ -617,6 +648,8 @@ export default function EmployeeProfilePage() {
               editing={editing}
               editForm={editForm}
               onEditChange={(key, val) => setEditForm((prev) => ({ ...prev, [key]: val }))}
+              orgRoles={orgRoles}
+              orgMembers={orgMembers}
             />
           )}
           {activeTab === 'employment' && (
@@ -639,6 +672,9 @@ export default function EmployeeProfilePage() {
               assignments={onboardingAssignments}
               loading={onboardingLoading}
               onRefresh={fetchOnboarding}
+              isAdmin={isAdmin}
+              employeeName={emp.fullName}
+              startDate={emp.startDate}
             />
           )}
         </div>
@@ -656,11 +692,15 @@ function OverviewContent({
   editing,
   editForm,
   onEditChange,
+  orgRoles,
+  orgMembers,
 }: {
   data: EmployeeProfileData
   editing: boolean
   editForm: Record<string, string | number | null>
   onEditChange: (key: string, val: string) => void
+  orgRoles: { id: string; name: string; level: string | null }[]
+  orgMembers: { id: string; fullName: string; jobTitle: string | null }[]
 }) {
   const { employee: emp } = data
 
@@ -709,10 +749,42 @@ function OverviewContent({
         <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Organisation</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <FieldDisplay label="Office" value={emp.office ? `${emp.office.name}, ${emp.office.city}` : 'Not provided'} />
-          <FieldDisplay label="Role" value={displayValue(emp.role?.title)} />
+          {editing && data.isAdmin ? (
+            <FieldEdit
+              label="Staff level / Role"
+              value={String(editForm.roleId ?? '')}
+              onChange={(v) => onEditChange('roleId', v)}
+              type="select"
+              options={[
+                { value: '', label: 'Select role...' },
+                ...orgRoles.map((r) => ({
+                  value: r.id,
+                  label: r.level ? `${r.name} (${r.level})` : r.name,
+                })),
+              ]}
+            />
+          ) : (
+            <FieldDisplay label="Role" value={displayValue(emp.role?.title)} />
+          )}
           <FieldDisplay label="Department" value={displayValue(emp.department || emp.role?.department)} />
           <FieldDisplay label="Level" value={displayValue(emp.role?.level)} />
-          <FieldDisplay label="Line manager" value={displayValue(emp.manager?.fullName)} />
+          {editing && data.isAdmin ? (
+            <FieldEdit
+              label="Line manager"
+              value={String(editForm.managerId ?? '')}
+              onChange={(v) => onEditChange('managerId', v)}
+              type="select"
+              options={[
+                { value: '', label: 'No manager' },
+                ...orgMembers.map((m) => ({
+                  value: m.id,
+                  label: m.jobTitle ? `${m.fullName} (${m.jobTitle})` : m.fullName,
+                })),
+              ]}
+            />
+          ) : (
+            <FieldDisplay label="Line manager" value={displayValue(emp.manager?.fullName)} />
+          )}
           {editing && data.isAdmin ? (
             <FieldEdit
               label="Job title"
@@ -2245,10 +2317,13 @@ const TASK_STATUS_STYLES: Record<string, { label: string; color: string }> = {
 }
 
 function OnboardingContent({
-  profileId: _profileId,
+  profileId,
   assignments,
   loading,
   onRefresh,
+  isAdmin,
+  employeeName,
+  startDate: empStartDate,
 }: {
   profileId: string
   assignments: Array<{
@@ -2257,10 +2332,79 @@ function OnboardingContent({
   }>
   loading: boolean
   onRefresh: () => void
+  isAdmin: boolean
+  employeeName: string
+  startDate: string | null
 }) {
+  const { toast } = useToast()
   const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null)
   const [tasks, setTasks] = useState<Record<string, Array<{ stage: string; tasks: Array<Record<string, unknown>> }>>>({})
   const [taskLoading, setTaskLoading] = useState<string | null>(null)
+
+  // Assign form state
+  const [showAssignForm, setShowAssignForm] = useState(false)
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; roleLevel: string; isActive: boolean }>>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [assignStartDate, setAssignStartDate] = useState(
+    empStartDate ? new Date(empStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+  )
+  const [assigning, setAssigning] = useState(false)
+
+  const fetchTemplates = useCallback(async () => {
+    setTemplatesLoading(true)
+    try {
+      const res = await fetch('/api/onboarding/templates')
+      if (res.ok) {
+        const json = await res.json()
+        const tpls = (json.data?.templates ?? []).filter((t: { isActive: boolean }) => t.isActive)
+        setTemplates(tpls)
+        if (tpls.length > 0 && !selectedTemplate) {
+          setSelectedTemplate(tpls[0].id)
+        }
+      }
+    } catch { /* ignore */ } finally {
+      setTemplatesLoading(false)
+    }
+  }, [selectedTemplate])
+
+  const handleAssign = async () => {
+    if (!selectedTemplate || !assignStartDate) {
+      toast('Please select a template and start date', 'error')
+      return
+    }
+    setAssigning(true)
+    try {
+      const res = await fetch('/api/onboarding/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: selectedTemplate,
+          profileId,
+          startDate: assignStartDate,
+        }),
+      })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Failed to assign onboarding programme')
+      }
+      toast('Onboarding programme assigned successfully', 'success')
+      setShowAssignForm(false)
+      setSelectedTemplate('')
+      onRefresh()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to assign', 'error')
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+  const openAssignForm = () => {
+    setShowAssignForm(true)
+    if (templates.length === 0) {
+      fetchTemplates()
+    }
+  }
 
   const loadTasks = useCallback(async (assignmentId: string) => {
     if (tasks[assignmentId]) return
@@ -2301,12 +2445,83 @@ function OnboardingContent({
 
   if (assignments.length === 0) {
     return (
-      <div className="pt-6 text-center py-12">
-        <ClipboardList className="w-10 h-10 text-ink-300 mx-auto mb-3" />
-        <p className="text-[14px] text-ink-500">No onboarding assignments</p>
-        <p className="text-[12px] text-ink-400 mt-1">
-          This employee has not been assigned any onboarding programmes yet.
-        </p>
+      <div className="pt-6 space-y-6">
+        <div className="text-center py-12">
+          <ClipboardList className="w-10 h-10 text-ink-300 mx-auto mb-3" />
+          <p className="text-[14px] text-ink-500">No onboarding assignments</p>
+          <p className="text-[12px] text-ink-400 mt-1">
+            This employee has not been assigned any onboarding programmes yet.
+          </p>
+          {isAdmin && (
+            <button
+              onClick={openAssignForm}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Assign Onboarding Programme
+            </button>
+          )}
+        </div>
+
+        {/* Assign form */}
+        {showAssignForm && isAdmin && (
+          <div className="bg-ink-25 border border-ink-100 rounded-xl p-5 space-y-4 max-w-lg mx-auto">
+            <h4 className="text-[14px] font-semibold text-ink-900">Assign Onboarding Programme</h4>
+            <p className="text-[12px] text-ink-500">
+              Select a template and start date for {employeeName}&apos;s onboarding.
+            </p>
+
+            {templatesLoading ? (
+              <div className="py-4"><SkeletonRow /></div>
+            ) : templates.length === 0 ? (
+              <div className="py-4">
+                <p className="text-[13px] text-ink-400">
+                  No onboarding templates found. Create templates first in{' '}
+                  <a href="/onboarding/manage" className="text-blue-600 hover:underline">Onboarding Management</a>.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-[12px] font-medium text-ink-600 mb-1">Template</label>
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.roleLevel})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-ink-600 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={assignStartDate}
+                    onChange={(e) => setAssignStartDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={handleAssign}
+                    disabled={assigning}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
+                  >
+                    {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    {assigning ? 'Assigning...' : 'Assign'}
+                  </button>
+                  <button
+                    onClick={() => setShowAssignForm(false)}
+                    className="px-4 py-2 rounded-lg border border-ink-200 text-ink-600 text-[13px] font-medium hover:bg-ink-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -2315,10 +2530,80 @@ function OnboardingContent({
     <div className="pt-6 space-y-4">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-[14px] font-semibold text-ink-900">Onboarding Programmes</h3>
-        <button onClick={onRefresh} className="text-[12px] text-ink-500 hover:text-ink-700 flex items-center gap-1">
-          <RefreshCw className="w-3.5 h-3.5" /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={openAssignForm}
+              className="text-[12px] text-ink-600 hover:text-ink-800 flex items-center gap-1 px-2 py-1 rounded border border-ink-200 hover:bg-ink-50 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Assign
+            </button>
+          )}
+          <button onClick={onRefresh} className="text-[12px] text-ink-500 hover:text-ink-700 flex items-center gap-1">
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Inline assign form */}
+      {showAssignForm && isAdmin && (
+        <div className="bg-ink-25 border border-ink-100 rounded-xl p-5 space-y-4">
+          <h4 className="text-[14px] font-semibold text-ink-900">Assign Onboarding Programme</h4>
+          <p className="text-[12px] text-ink-500">
+            Select a template and start date for {employeeName}&apos;s onboarding.
+          </p>
+          {templatesLoading ? (
+            <div className="py-4"><SkeletonRow /></div>
+          ) : templates.length === 0 ? (
+            <div className="py-4">
+              <p className="text-[13px] text-ink-400">
+                No onboarding templates found. Create templates first in{' '}
+                <a href="/onboarding/manage" className="text-blue-600 hover:underline">Onboarding Management</a>.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Template</label>
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => setSelectedTemplate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} ({t.roleLevel})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-ink-600 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={assignStartDate}
+                  onChange={(e) => setAssignStartDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={handleAssign}
+                  disabled={assigning}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
+                >
+                  {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {assigning ? 'Assigning...' : 'Assign'}
+                </button>
+                <button
+                  onClick={() => setShowAssignForm(false)}
+                  className="px-4 py-2 rounded-lg border border-ink-200 text-ink-600 text-[13px] font-medium hover:bg-ink-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {assignments.map((a) => {
         const isExpanded = expandedAssignment === a.id

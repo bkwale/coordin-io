@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import {
   Users, AlertTriangle, RefreshCw, Briefcase, UserCheck, BarChart3,
   Calendar, Clock, FileText, ChevronDown, ChevronRight, Search,
   Building2, Shield, GraduationCap, ClipboardList, TrendingUp,
   UserPlus, Mail, X, AlertCircle, CheckCircle2, Timer,
   CalendarDays, BookOpen, Wrench, ChevronLeft, Eye, Download,
+  Pencil, Save, Loader2,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -677,6 +679,9 @@ export default function StaffingPage() {
             section={detailSection}
             onSectionChange={setDetailSection}
             onClose={() => setSelectedEmployeeId(null)}
+            employees={data?.employees ?? []}
+            toast={toast}
+            onRefresh={fetchData}
           />
         </div>
       </div>
@@ -1449,12 +1454,18 @@ function EmployeeDetailPanel({
   section,
   onSectionChange,
   onClose,
+  employees,
+  toast,
+  onRefresh,
 }: {
   detail: EmployeeDetail | null
   loading: boolean
   section: string
   onSectionChange: (s: string) => void
   onClose: () => void
+  employees: Employee[]
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void
+  onRefresh: () => void
 }) {
   if (loading) {
     return (
@@ -1522,7 +1533,7 @@ function EmployeeDetailPanel({
 
       {/* ── Section content ─────────────────────────────────── */}
       <div className="p-6 flex-1 overflow-y-auto">
-        {section === 'overview' && <OverviewSection detail={detail} />}
+        {section === 'overview' && <OverviewSection detail={detail} employees={employees} toast={toast} onRefresh={onRefresh} />}
         {section === 'projects' && <ProjectsSection detail={detail} />}
         {section === 'documents' && <DocumentsSection detail={detail} />}
         {section === 'training' && <TrainingSection detail={detail} />}
@@ -1536,7 +1547,7 @@ function EmployeeDetailPanel({
 
 /* ── Overview Section ──────────────────────────────────────────── */
 
-function OverviewSection({ detail }: { detail: EmployeeDetail }) {
+function OverviewSection({ detail, employees: _employees, toast: _toast, onRefresh: _onRefresh }: { detail: EmployeeDetail; employees?: Employee[]; toast?: (message: string, type?: 'success' | 'error' | 'info') => void; onRefresh?: () => void }) {
   const { employee: emp } = detail
 
   return (
