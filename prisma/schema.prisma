@@ -80,6 +80,7 @@ model Organisation {
   outboundInvoices    OutboundInvoice[]
   categorisationRules CategorisationRule[]
   xeroConnections     XeroConnection[]
+  selfServiceTokens   OnboardingSelfServiceToken[]
 
   @@map("organisations")
 }
@@ -305,6 +306,10 @@ model Profile {
 
   // RIBA Stage Tracking
   stageGatesAdvanced         StageGate[]            @relation("StageGateAdvancer")
+
+  // Self-Service Onboarding
+  selfServiceTokensReceived  OnboardingSelfServiceToken[] @relation("SelfServiceTokenProfile")
+  selfServiceTokensCreated   OnboardingSelfServiceToken[] @relation("SelfServiceTokenCreator")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -2395,6 +2400,7 @@ model OnboardingAssignment {
   template OnboardingTemplate @relation(fields: [templateId], references: [id])
 
   tasks OnboardingTask[]
+  selfServiceTokens OnboardingSelfServiceToken[]
 
   @@unique([templateId, profileId])
   @@map("onboarding_assignments")
@@ -2420,6 +2426,8 @@ model OnboardingTask {
   actionRequired          Boolean   @default(false) @map("action_required")
   acknowledgementRequired Boolean   @default(false) @map("acknowledgement_required")
   isAdHoc                 Boolean   @default(false) @map("is_ad_hoc") // True for individually assigned tasks
+  isSelfService           Boolean   @default(false) @map("is_self_service") // True for self-service onboarding steps
+  selfServiceStep         String?   @map("self_service_step") // PERSONAL_DETAILS, BANK_DETAILS, HMO_ENROLMENT, DOCUMENT_UPLOAD
   documentStatus          String?   @map("document_status") // NOT_SENT, SENT, VIEWED, ACKNOWLEDGED
   documentSentAt          DateTime? @map("document_sent_at")
   documentViewedAt        DateTime? @map("document_viewed_at")
@@ -3189,4 +3197,31 @@ model StageGate {
 
   @@index([projectId, advancedAt])
   @@map("stage_gates")
+}
+
+// ── Self-Service Onboarding ─────────────────────────────────
+// Secure, time-limited tokens for new starters to complete onboarding
+// before they have Coordin credentials. PT-reviewed design.
+
+model OnboardingSelfServiceToken {
+  id             String    @id @default(cuid())
+  organisationId String    @map("organisation_id")
+  profileId      String    @map("profile_id")    // The new starter's profile
+  assignmentId   String?   @map("assignment_id")  // Links to their onboarding assignment
+  token          String    @unique                 // crypto.randomBytes(32).toString('hex')
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")         // First access timestamp
+  completedAt    DateTime? @map("completed_at")    // All steps done
+  revokedAt      DateTime? @map("revoked_at")      // HR can revoke
+  createdById    String    @map("created_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id])
+  profile      Profile              @relation("SelfServiceTokenProfile", fields: [profileId], references: [id])
+  assignment   OnboardingAssignment? @relation(fields: [assignmentId], references: [id])
+  createdBy    Profile              @relation("SelfServiceTokenCreator", fields: [createdById], references: [id])
+
+  @@index([token])
+  @@index([profileId])
+  @@map("onboarding_self_service_tokens")
 }

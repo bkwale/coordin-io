@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, Plus, X, Check, Trash2,
   FileText, AlertCircle, Loader2, Shield, Settings,
   Calendar, CheckCircle2, AlertTriangle, Edit2, Save,
-  Building, MapPin, Send, Eye, FileCheck,
+  Building, MapPin, Send, Eye, FileCheck, Mail, ExternalLink,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -181,6 +181,10 @@ export default function OnboardingManagePage() {
     title: '', stage: 'BEFORE_START', category: '', description: '',
     dueDate: '', notifyEmployee: true, acknowledgementRequired: false,
   })
+
+  // Self-service invitation state
+  const [sendingInvite, setSendingInvite] = useState<string | null>(null) // profileId being sent
+  const [selfServiceStatus, setSelfServiceStatus] = useState<Record<string, { sent: boolean; completedSteps: number; totalSteps: number }>>({})
 
   // Probation state
   const [probationReviews, setProbationReviews] = useState<{
@@ -426,10 +430,17 @@ export default function OnboardingManagePage() {
         const json = await res.json()
         throw new Error(json.error || 'Failed to assign template')
       }
+      const assignJson = await res.json()
+      const newAssignmentId = assignJson.data?.assignment?.id
       toast('Template assigned successfully', 'success')
       setShowAssignForm(false)
+      const savedProfileId = assignForm.profileId
       setAssignForm({ templateId: '', profileId: '', startDate: '' })
       await fetchAssignments()
+      // Auto-send self-service invitation (Cagan: auto-trigger, no manual send)
+      if (savedProfileId && newAssignmentId) {
+        handleSendSelfServiceInvite(savedProfileId, newAssignmentId)
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to assign template', 'error')
     } finally {
@@ -523,6 +534,32 @@ export default function OnboardingManagePage() {
 
   const handleDocStatus = async (assignmentId: string, taskId: string, newStatus: string) => {
     await handleUpdateTask(assignmentId, taskId, { documentStatus: newStatus })
+  }
+
+  // ── Send self-service invitation ───────────────────────
+
+  const handleSendSelfServiceInvite = async (profileId: string, assignmentId: string) => {
+    setSendingInvite(profileId)
+    try {
+      const res = await fetch('/api/onboarding/self-service/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId, assignmentId }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error || 'Failed to send invitation')
+      }
+      toast('Self-service onboarding invitation sent', 'success')
+      setSelfServiceStatus(prev => ({
+        ...prev,
+        [profileId]: { sent: true, completedSteps: 0, totalSteps: 4 },
+      }))
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to send invitation', 'error')
+    } finally {
+      setSendingInvite(null)
+    }
   }
 
   // ── Render: Templates Tab ────────────────────────────────
@@ -990,15 +1027,51 @@ export default function OnboardingManagePage() {
                     })}
                   </div>
 
-                  {/* Add ad-hoc task button */}
+                  {/* Self-service invitation + ad-hoc task buttons */}
                   <div className="px-4 py-2 border-t border-ink-100">
-                    <button
-                      onClick={() => setShowAdHocForm(showAdHocForm === a.id ? null : a.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add Ad-Hoc Task
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => setShowAdHocForm(showAdHocForm === a.id ? null : a.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-purple-700 hover:bg-purple-50 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Ad-Hoc Task
+                      </button>
+
+                      {/* Self-service onboarding invitation */}
+                      {selfServiceStatus[a.employee.id]?.sent ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-green-700 bg-green-50 rounded-lg">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Self-Service Invite Sent
+                          {selfServiceStatus[a.employee.id]?.completedSteps > 0 && (
+                            <span className="text-[10px] text-green-600 ml-1">
+                              ({selfServiceStatus[a.employee.id].completedSteps}/{selfServiceStatus[a.employee.id].totalSteps} steps)
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleSendSelfServiceInvite(a.employee.id, a.id)}
+                          disabled={sendingInvite === a.employee.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {sendingInvite === a.employee.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Mail className="w-3.5 h-3.5" />
+                          )}
+                          Send Self-Service Invitation
+                        </button>
+                      )}
+
+                      {/* Link to view self-service welcome page */}
+                      {selfServiceStatus[a.employee.id]?.sent && (
+                        <span className="text-[11px] text-ink-400 flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" />
+                          Employee will complete onboarding via emailed link
+                        </span>
+                      )}
+                    </div>
 
                     {showAdHocForm === a.id && (
                       <div className="mt-3 p-4 bg-purple-50/50 border border-purple-200 rounded-xl space-y-3">

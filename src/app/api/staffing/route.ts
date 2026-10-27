@@ -271,6 +271,16 @@ async function fetchStaffingDashboard(
     } catch { /* Table may not exist yet */ }
   }
 
+  // ── Corporate roles for dropdown selectors ──────────────
+  let roles: { id: string; name: string; level: string }[] = []
+  try {
+    roles = await modulesPrisma.corporateRole.findMany({
+      where: { organisationId: orgId },
+      select: { id: true, name: true, level: true },
+      orderBy: { name: 'asc' },
+    })
+  } catch { /* Table may not exist yet */ }
+
   return {
     metrics: {
       totalEmployees: allProfiles.length,
@@ -292,5 +302,6 @@ async function fetchStaffingDashboard(
     byDepartment,
     expiringDocs: showUtilisation ? expiringDocs : [],
     employees: allProfiles.map(mapStaffingEmployee),
+    roles,
   }
 }

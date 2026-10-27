@@ -30,6 +30,7 @@ const MAIN_ITEMS = [
   { href: '/assets', label: 'Assets', icon: Package, featureKey: 'staffing' },
   { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt, featureKey: 'commercial' },
   { href: '/staffing', label: 'Staffing', icon: Users, featureKey: 'staffing' },
+  { href: '/onboarding/manage', label: 'Onboarding', icon: ClipboardList, featureKey: 'staffing' },
   { href: '/timesheets', label: 'Timesheets', icon: Clock, featureKey: 'timesheets' },
   { href: '/support-tickets', label: 'Support', icon: Ticket, featureKey: 'helpdesk' },
 ]

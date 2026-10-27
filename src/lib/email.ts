@@ -385,3 +385,95 @@ Complete your onboarding here: ${onboardingUrl}
 
 — Coordin.io`
 }
+
+// ── Send Self-Service Onboarding Invitation Email ──────────
+
+interface SelfServiceOnboardingEmailParams {
+  to: string
+  employeeName: string
+  organisationName: string
+  senderName: string
+  token: string
+  expiresAt: Date
+  startDate?: string | null
+}
+
+export async function sendSelfServiceOnboardingEmail(params: SelfServiceOnboardingEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { to, employeeName, organisationName, senderName, token, expiresAt, startDate } = params
+  const welcomeUrl = `${APP_URL}/onboarding/welcome/${token}`
+  const expiryDate = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
+  try {
+    const { data, error } = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject: `Complete your onboarding — ${organisationName}`,
+      html: buildSelfServiceHtml({ employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate }),
+      text: buildSelfServiceText({ employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate }),
+    })
+
+    if (error) {
+      console.error('[EMAIL] Resend error (self-service onboarding):', error)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, messageId: data?.id }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown email error'
+    console.error('[EMAIL] Send failed (self-service onboarding):', message)
+    return { success: false, error: message }
+  }
+}
+
+function buildSelfServiceHtml(params: {
+  employeeName: string; organisationName: string; senderName: string
+  welcomeUrl: string; expiryDate: string; startDate?: string | null
+}): string {
+  const { employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate } = params
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; color: #1a1a2e;">
+<p style="font-size: 16px; line-height: 1.6; font-weight: 600;">Welcome to ${organisationName}</p>
+<p style="font-size: 15px; line-height: 1.6;">Hi ${employeeName},</p>
+<p style="font-size: 15px; line-height: 1.6;">${senderName} has invited you to complete your onboarding${startDate ? ' ahead of your start date on <strong>' + startDate + '</strong>' : ''}. This takes about 10 minutes.</p>
+<p style="font-size: 15px; line-height: 1.6;">You'll need to:</p>
+<table style="width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px;">
+<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">1. Confirm your personal details</td></tr>
+<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">2. Submit your bank details for payroll</td></tr>
+<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">3. Enrol in health insurance (HMO)</td></tr>
+<tr><td style="padding: 8px 12px;">4. Confirm your documents</td></tr>
+</table>
+<a href="${welcomeUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; margin: 8px 0;">Start onboarding</a>
+<p style="font-size: 13px; color: #666; margin-top: 16px;">This link expires on ${expiryDate}. If it expires, ask your HR team to send a new one.</p>
+<p style="font-size: 13px; color: #666;">Your bank details are encrypted and only accessible to authorised HR and Payroll staff.</p>
+<p style="font-size: 12px; color: #999; margin-top: 24px;">— Coordin.io</p>
+</body></html>`
+}
+
+function buildSelfServiceText(params: {
+  employeeName: string; organisationName: string; senderName: string
+  welcomeUrl: string; expiryDate: string; startDate?: string | null
+}): string {
+  const { employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate } = params
+
+  return `Welcome to ${organisationName}
+
+Hi ${employeeName},
+
+${senderName} has invited you to complete your onboarding${startDate ? ' ahead of your start date on ' + startDate : ''}. This takes about 10 minutes.
+
+You'll need to:
+1. Confirm your personal details
+2. Submit your bank details for payroll
+3. Enrol in health insurance (HMO)
+4. Confirm your documents
+
+Start here: ${welcomeUrl}
+
+This link expires on ${expiryDate}. If it expires, ask your HR team to send a new one.
+
+Your bank details are encrypted and only accessible to authorised HR and Payroll staff.
+
+— Coordin.io`
+}

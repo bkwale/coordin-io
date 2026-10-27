@@ -12,12 +12,13 @@ import { ToastProvider } from '@/components/Toast'
 import { cn } from '@/lib/utils'
 
 const MARKETING_ROUTES = ['/', '/welcome', '/faq', '/demo-access', '/use-cases', '/features/brpd', '/features/quotes', '/book-demo', '/login', '/signup', '/forgot-password']
-const FULLSCREEN_PREFIXES = ['/activate', '/onboarding', '/admin']
+const FULLSCREEN_PREFIXES = ['/activate', '/admin', '/onboarding/welcome']
+const FULLSCREEN_EXACT = ['/onboarding']
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isMarketing = MARKETING_ROUTES.includes(pathname)
-  const isFullscreen = FULLSCREEN_PREFIXES.some(prefix => pathname.startsWith(prefix))
+  const isFullscreen = FULLSCREEN_PREFIXES.some(prefix => pathname.startsWith(prefix)) || FULLSCREEN_EXACT.includes(pathname)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Auto-collapse sidebar on tablet (md) breakpoints

@@ -368,7 +368,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (officeId !== null) profileData.officeId = officeId
 
     const managerId = optionalString(body.managerId as unknown, 'managerId', 50)
-    if (managerId !== null) profileData.managerId = managerId
+    if (managerId !== null) profileData.managerId = managerId || null
+
+    const roleId = optionalString(body.roleId as unknown, 'roleId', 50)
+    if (roleId !== null) profileData.roleId = roleId || null
 
     // EmployeeProfile fields
     const grade = optionalString(body.grade as unknown, 'grade', 100)
