@@ -1006,10 +1006,42 @@ export default function MyWorkPage() {
     setApprovalsLoading(true)
     setApprovalsError(null)
     try {
-      // Approvals aggregate leave + expenses + budgets + variations
       const approvalItems: ApprovalItem[] = []
+      const seenEntityIds = new Set<string>()
 
-      // Fetch leave requests with SUBMITTED/UNDER_REVIEW status (approver view)
+      // Primary source: approval engine — matches the pending actions banner
+      try {
+        const res = await fetch('/api/approvals')
+        if (res.ok) {
+          const json = await res.json()
+          const steps = (json.data?.approvals || []) as Array<{
+            stepId: string; instanceId: string; label: string;
+            requestType: string; entityId: string;
+            submitter: { id: string; fullName: string };
+            submittedAt: string; escalationDueAt: string | null
+          }>
+          for (const s of steps) {
+            seenEntityIds.add(s.entityId)
+            const type = s.requestType === 'LEAVE_REQUEST' ? 'leave'
+              : s.requestType === 'EXPENSE_CLAIM' ? 'expense'
+              : s.requestType === 'BUDGET_REQUEST' ? 'budget'
+              : 'variation'
+            approvalItems.push({
+              id: s.entityId,
+              type: type as ApprovalItem['type'],
+              title: s.label || s.requestType.replace(/_/g, ' '),
+              requester: s.submitter?.fullName || 'Unknown',
+              date: s.submittedAt,
+              amount: null,
+              status: 'PENDING',
+            })
+          }
+        }
+      } catch {
+        // Fall through to legacy fetches
+      }
+
+      // Fallback: items that bypass the approval engine (legacy direct submissions)
       try {
         const leaveRes = await fetch('/api/leave/requests')
         if (leaveRes.ok) {
@@ -1019,7 +1051,7 @@ export default function MyWorkPage() {
             days: number; profile?: { fullName: string }
           }>
           for (const r of requests) {
-            if (['SUBMITTED', 'UNDER_REVIEW'].includes(r.status)) {
+            if (['SUBMITTED', 'UNDER_REVIEW'].includes(r.status) && !seenEntityIds.has(r.id)) {
               approvalItems.push({
                 id: r.id,
                 type: 'leave',
@@ -1036,7 +1068,6 @@ export default function MyWorkPage() {
         // Skip
       }
 
-      // Fetch expense claims pending approval
       try {
         const expRes = await fetch('/api/expenses')
         if (expRes.ok) {
@@ -1046,7 +1077,7 @@ export default function MyWorkPage() {
             createdAt: string; profile?: { fullName: string }
           }>
           for (const c of claims) {
-            if (['SUBMITTED', 'UNDER_REVIEW'].includes(c.status)) {
+            if (['SUBMITTED', 'UNDER_REVIEW'].includes(c.status) && !seenEntityIds.has(c.id)) {
               approvalItems.push({
                 id: c.id,
                 type: 'expense',
