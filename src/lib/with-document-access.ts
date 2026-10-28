@@ -5,6 +5,9 @@ import { AuthError, NotFoundError, PermissionError, formatAPIError } from '@/lib
 import { prisma } from '@/lib/prisma'
 import type { OrgPermission } from '@/generated/prisma/client'
 
+const DEMO_COOKIE = 'coordin_demo_start'
+const DEMO_DURATION_MS = 10 * 60 * 1000 // 10 minutes
+
 /**
  * Context available inside a withDocumentAccess handler.
  */
@@ -29,6 +32,52 @@ type DocumentAccessHandler = (
 export function withDocumentAccess(handler: DocumentAccessHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
+      // 0. Demo mode — cookie-based 10-minute pass
+      const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
+      if (demoCookie) {
+        const demoStart = parseInt(demoCookie, 10)
+        if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+          const demoProfile = await prisma.profile.findFirst({
+            where: {
+              organisationId: 'demo_org_sterling_2026',
+              orgPermission: { in: ['OWNER', 'ADMIN'] },
+              status: 'ACTIVE',
+            },
+            include: {
+              organisation: true,
+              office: true,
+              corporateRole: true,
+              employeeProfile: true,
+            },
+          })
+
+          if (demoProfile) {
+            const demoUrl = new URL(request.url)
+            const demoSegs = demoUrl.pathname.split('/')
+            const demoDocIdx = demoSegs.indexOf('documents')
+            const demoDocId = demoDocIdx >= 0 ? demoSegs[demoDocIdx + 1] : undefined
+
+            if (!demoDocId) throw new NotFoundError('Document ID is required')
+
+            const demoDoc = await prisma.document.findUnique({
+              where: { id: demoDocId },
+              include: { project: true },
+            })
+
+            if (!demoDoc || demoDoc.project.organisationId !== 'demo_org_sterling_2026') {
+              throw new NotFoundError('Document not found')
+            }
+
+            return await handler(request, {
+              authUserId: 'demo-user',
+              profile: demoProfile as any,
+              document: demoDoc,
+              documentId: demoDocId,
+            })
+          }
+        }
+      }
+
       // 1. Verify Supabase session
       const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -119,6 +168,52 @@ type RevisionAccessHandler = (
 export function withRevisionAccess(handler: RevisionAccessHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
+      // 0. Demo mode — cookie-based 10-minute pass
+      const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
+      if (demoCookie) {
+        const demoStart = parseInt(demoCookie, 10)
+        if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+          const demoProfile = await prisma.profile.findFirst({
+            where: {
+              organisationId: 'demo_org_sterling_2026',
+              orgPermission: { in: ['OWNER', 'ADMIN'] },
+              status: 'ACTIVE',
+            },
+            include: {
+              organisation: true,
+              office: true,
+              corporateRole: true,
+              employeeProfile: true,
+            },
+          })
+
+          if (demoProfile) {
+            const demoUrl = new URL(request.url)
+            const demoSegs = demoUrl.pathname.split('/')
+            const demoRevIdx = demoSegs.indexOf('document-revisions')
+            const demoRevId = demoRevIdx >= 0 ? demoSegs[demoRevIdx + 1] : undefined
+
+            if (!demoRevId) throw new NotFoundError('Revision ID is required')
+
+            const demoRevision = await prisma.documentRevision.findUnique({
+              where: { id: demoRevId },
+              include: { document: { include: { project: true } } },
+            })
+
+            if (!demoRevision || demoRevision.document.project.organisationId !== 'demo_org_sterling_2026') {
+              throw new NotFoundError('Document revision not found')
+            }
+
+            return await handler(request, {
+              authUserId: 'demo-user',
+              profile: demoProfile as any,
+              revision: demoRevision as RevisionAccessContext['revision'],
+              revisionId: demoRevId,
+            })
+          }
+        }
+      }
+
       const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
 

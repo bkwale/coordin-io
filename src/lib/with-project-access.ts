@@ -6,6 +6,9 @@ import { AuthError, PermissionError, NotFoundError, formatAPIError } from '@/lib
 import { prisma } from '@/lib/prisma'
 import type { OrgPermission, ProjectRole } from '@/generated/prisma/client'
 
+const DEMO_COOKIE = 'coordin_demo_start'
+const DEMO_DURATION_MS = 10 * 60 * 1000 // 10 minutes
+
 /**
  * The context available inside a withProjectAccess handler.
  */
@@ -56,6 +59,61 @@ type ProjectAccessHandler = (
 export function withProjectAccess(handler: ProjectAccessHandler, options: WithProjectAccessOptions = {}) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
+      // 0. Demo mode — cookie-based 10-minute pass (no Supabase session needed)
+      const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
+      if (demoCookie) {
+        const demoStart = parseInt(demoCookie, 10)
+        if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+          const demoProfile = await prisma.profile.findFirst({
+            where: {
+              organisationId: 'demo_org_sterling_2026',
+              orgPermission: { in: ['OWNER', 'ADMIN'] },
+              status: 'ACTIVE',
+            },
+            include: {
+              organisation: true,
+              office: true,
+              corporateRole: true,
+              employeeProfile: true,
+            },
+          })
+
+          if (demoProfile) {
+            // Extract projectId from URL
+            const demoUrl = new URL(request.url)
+            const demoSegments = demoUrl.pathname.split('/')
+            const demoProjIdx = demoSegments.indexOf('projects')
+            const demoProjectId = demoProjIdx >= 0 ? demoSegments[demoProjIdx + 1] : undefined
+
+            if (!demoProjectId) {
+              throw new NotFoundError('Project ID is required')
+            }
+
+            // Verify project exists in demo org
+            const demoProject = await prisma.project.findFirst({
+              where: {
+                id: demoProjectId,
+                organisationId: 'demo_org_sterling_2026',
+              },
+              select: { id: true, organisationId: true, name: true },
+            })
+
+            if (!demoProject) {
+              throw new NotFoundError('Project not found')
+            }
+
+            return await handler(request, {
+              authUserId: 'demo-user',
+              profile: demoProfile as any,
+              project: demoProject,
+              membership: null,
+              projectId: demoProjectId,
+            })
+          }
+          // If no demo profile found, fall through to normal auth
+        }
+      }
+
       // 1. Verify Supabase session
       const supabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await supabase.auth.getUser()
