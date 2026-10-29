@@ -7,7 +7,7 @@ import { canPerform } from '@/lib/role-permissions'
 /** GET /api/settings/organisation — Get current user's organisation details */
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   if (!canPerform(profile.orgPermission, 'settings', 'view_org_settings')) {
-    throw new PermissionError('Only Practice Managers and above can view organisation settings')
+    throw new PermissionError('Only Project Leads and above can view organisation settings')
   }
   const org = await prisma.organisation.findUnique({
     where: { id: profile.organisationId },

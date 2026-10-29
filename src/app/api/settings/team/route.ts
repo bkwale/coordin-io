@@ -7,7 +7,7 @@ import { canPerform, getRoleLabel } from '@/lib/role-permissions'
 /** GET /api/settings/team — List team members for current organisation */
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   if (!canPerform(profile.orgPermission, 'settings', 'manage_team')) {
-    throw new PermissionError('Only Practice Managers and above can view team settings')
+    throw new PermissionError('Only Project Leads and above can view team settings')
   }
 
   const [members, offices] = await Promise.all([

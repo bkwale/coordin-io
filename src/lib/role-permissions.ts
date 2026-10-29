@@ -226,9 +226,9 @@ const MATRIX: PermissionMatrix = {
   'knowledge_base:edit_delete':   new Set(['ADMIN', 'OWNER']),
 
   // ── Settings ── (no lateral role gets system settings)
-  'settings:view_org_settings':   new Set(['ADMIN', 'OWNER']),
+  'settings:view_org_settings':   new Set(['MANAGER', 'ADMIN', 'OWNER']),
   'settings:edit_org_settings':   new Set(['ADMIN', 'OWNER']),
-  'settings:manage_team':         new Set(['HR', 'ADMIN', 'OWNER']),
+  'settings:manage_team':         new Set(['MANAGER', 'HR', 'ADMIN', 'OWNER']),
   'settings:billing_currency':    new Set(['OWNER']),
   'settings:integrations':        new Set(['ADMIN', 'OWNER']),
   'settings:ai_governance':       new Set(['OWNER']),
