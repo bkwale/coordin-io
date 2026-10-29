@@ -34,7 +34,7 @@ export const POST = withAuth(async (
 
   // Verify the training item exists and is mandatory
   const trainingItem = await prisma.trainingItem.findFirst({
-    where: { id: trainingId, mandatory: true },
+    where: { id: trainingId, organisationId: profile.organisationId, mandatory: true },
   })
 
   if (!trainingItem) {

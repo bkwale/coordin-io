@@ -9,7 +9,7 @@ import { withAuth } from '@/lib/with-auth'
  */
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   const items = await prisma.trainingItem.findMany({
-    where: { mandatory: true },
+    where: { organisationId: profile.organisationId, mandatory: true },
     orderBy: { createdAt: 'asc' },
     include: {
       completions: {

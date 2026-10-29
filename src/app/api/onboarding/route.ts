@@ -30,14 +30,14 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 
   // ── Training ──────────────────────────────────────────────
   const totalTraining = await prisma.trainingItem.count({
-    where: { mandatory: true },
+    where: { organisationId: orgId, mandatory: true },
   })
 
   const completedTraining = await prisma.trainingCompletion.count({
     where: {
       profileId: profile.id,
       completedAt: { not: null },
-      training: { mandatory: true },
+      training: { organisationId: orgId, mandatory: true },
     },
   })
 

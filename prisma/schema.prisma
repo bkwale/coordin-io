@@ -81,6 +81,7 @@ model Organisation {
   categorisationRules CategorisationRule[]
   xeroConnections     XeroConnection[]
   selfServiceTokens   OnboardingSelfServiceToken[]
+  trainingItems       TrainingItem[]
 
   @@map("organisations")
 }
@@ -532,6 +533,7 @@ model PolicyAcknowledgement {
 
 model TrainingItem {
   id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
   title           String
   description     String?
   mandatory       Boolean  @default(false)
@@ -539,7 +541,8 @@ model TrainingItem {
   contentUrl      String?  @map("content_url")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  completions TrainingCompletion[]
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  completions  TrainingCompletion[]
 
   @@map("training_items")
 }
