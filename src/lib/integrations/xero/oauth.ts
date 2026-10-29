@@ -34,8 +34,9 @@ const XERO_SCOPES = [
   'profile',
   'email',
   'offline_access',              // refresh tokens
-  'accounting.transactions',     // invoices, credit notes, payments
+  'accounting.invoices',         // invoices CRUD
   'accounting.contacts',         // contacts CRUD
+  'accounting.payments',         // payments
   'accounting.settings.read',    // chart of accounts, tax rates (read-only)
 ].join(' ')
 
