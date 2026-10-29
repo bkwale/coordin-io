@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError, PermissionError, ExternalServiceError } from '@/lib/errors'
-import { stripe, PLANS } from '@/lib/stripe'
+import { getStripe, PLANS } from '@/lib/stripe'
 
 /**
  * POST /api/billing/checkout — Create a Stripe Checkout session for plan upgrade.
@@ -48,7 +48,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   // Create or reuse Stripe customer
   let customerId = org.stripeCustomerId
   if (!customerId) {
-    const customer = await stripe.customers.create({
+    const customer = await getStripe().customers.create({
       name: org.name,
       metadata: { organisationId: org.id },
     })
@@ -62,7 +62,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   // Create Checkout Session
   try {
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: planDef.stripePriceId, quantity: 1 }],

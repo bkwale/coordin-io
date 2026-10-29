@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError, PermissionError, ExternalServiceError } from '@/lib/errors'
-import { stripe } from '@/lib/stripe'
+import { getStripe } from '@/lib/stripe'
 
 /**
  * POST /api/billing/portal — Create a Stripe Customer Portal session.
@@ -30,7 +30,7 @@ export const POST = withAuth(async (_request: NextRequest, { profile }) => {
   }
 
   try {
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await getStripe().billingPortal.sessions.create({
       customer: org.stripeCustomerId,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=billing`,
     })

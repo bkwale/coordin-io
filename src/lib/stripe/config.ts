@@ -1,9 +1,28 @@
 import Stripe from 'stripe'
 
-// ── Stripe SDK singleton ─────────────────────────────────────
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-10-28.acacia' as Stripe.LatestApiVersion,
-  typescript: true,
+// ── Stripe SDK singleton (lazy — avoids build-time crash) ────
+let _stripe: Stripe | null = null
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY
+    if (!key) {
+      throw new Error('STRIPE_SECRET_KEY is not set')
+    }
+    _stripe = new Stripe(key, {
+      apiVersion: '2024-10-28.acacia' as Stripe.LatestApiVersion,
+      typescript: true,
+    })
+  }
+  return _stripe
+}
+
+/** @deprecated Use getStripe() — kept for backward compat */
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    if (prop === 'then' || prop === Symbol.toPrimitive) return undefined
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop]
+  },
 })
 
 // ── Plan definitions ─────────────────────────────────────────
