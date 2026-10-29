@@ -74,6 +74,14 @@ model Organisation {
   supportTickets      SupportTicket[]
   features            OrganisationFeature[]
 
+  // Stripe Billing
+  stripeCustomerId    String?   @unique @map("stripe_customer_id")
+  subscriptionId      String?   @map("stripe_subscription_id")
+  subscriptionPlan    String    @default("free") @map("subscription_plan") // free, pro, enterprise
+  subscriptionStatus  String    @default("active") @map("subscription_status") // active, past_due, canceled, trialing, unpaid
+  currentPeriodEnd    DateTime? @map("current_period_end")
+  trialEndsAt         DateTime? @map("trial_ends_at")
+
   // E-Invoicing
   suppliers           Supplier[]
   inboundInvoices     InboundInvoice[]

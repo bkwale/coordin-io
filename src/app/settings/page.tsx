@@ -942,16 +942,25 @@ function BillingSection() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([])
+  const [billing, setBilling] = useState<{
+    plan: { id: string; name: string; priceMonthly: number }
+    subscription: { status: string; currentPeriodEnd: string | null; hasSubscription: boolean }
+    usage: { projects: { current: number; limit: number }; users: { current: number; limit: number } }
+    features: string[]
+  } | null>(null)
+  const [upgrading, setUpgrading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/settings/organisation')
-      .then((r) => {
-        if (!r.ok) throw new Error('Failed to load organisation')
-        return r.json()
-      })
-      .then((data) => {
-        setOrg(data)
-        setSelectedCurrencies(data.currencies || [])
+    Promise.all([
+      fetch('/api/settings/organisation').then((r) => r.ok ? r.json() : null),
+      fetch('/api/billing/status').then((r) => r.ok ? r.json() : null),
+    ])
+      .then(([orgData, billingData]) => {
+        if (orgData) {
+          setOrg(orgData)
+          setSelectedCurrencies(orgData.currencies || [])
+        }
+        if (billingData?.data) setBilling(billingData.data)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -991,6 +1000,85 @@ function BillingSection() {
       />
 
       <div className="space-y-6 mt-8">
+        {/* Subscription Plan */}
+        {billing && (
+          <FieldGroup label="Subscription Plan" hint="Manage your Coordin subscription">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg border border-surface-200">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[15px] font-semibold text-ink-900">{billing.plan.name}</span>
+                    <span className={cn(
+                      'px-2 py-0.5 rounded-full text-[11px] font-medium',
+                      billing.subscription.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                      billing.subscription.status === 'past_due' ? 'bg-amber-100 text-amber-700' :
+                      'bg-surface-100 text-ink-500'
+                    )}>
+                      {billing.subscription.status === 'active' ? 'Active' :
+                       billing.subscription.status === 'past_due' ? 'Past Due' :
+                       billing.subscription.status}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-ink-500 mt-1">
+                    {billing.plan.priceMonthly === 0 ? 'Free plan' : `£${(billing.plan.priceMonthly / 100).toFixed(0)}/month`}
+                    {billing.subscription.currentPeriodEnd && ` · Renews ${new Date(billing.subscription.currentPeriodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {billing.plan.id === 'free' && (
+                    <button
+                      onClick={async () => {
+                        setUpgrading(true)
+                        try {
+                          const res = await fetch('/api/billing/checkout', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ plan: 'pro' }),
+                          })
+                          const data = await res.json()
+                          if (data.data?.url) window.location.href = data.data.url
+                        } finally { setUpgrading(false) }
+                      }}
+                      disabled={upgrading}
+                      className="px-4 py-2 bg-accent-600 text-white text-[12px] font-medium rounded-lg hover:bg-accent-700 disabled:opacity-60 transition-colors"
+                    >
+                      {upgrading ? 'Loading…' : 'Upgrade to Pro'}
+                    </button>
+                  )}
+                  {billing.subscription.hasSubscription && (
+                    <button
+                      onClick={async () => {
+                        const res = await fetch('/api/billing/portal', { method: 'POST' })
+                        const data = await res.json()
+                        if (data.data?.url) window.location.href = data.data.url
+                      }}
+                      className="px-4 py-2 border border-surface-300 text-ink-700 text-[12px] font-medium rounded-lg hover:bg-surface-50 transition-colors"
+                    >
+                      Manage Billing
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Usage */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-surface-50 rounded-lg">
+                  <p className="text-[11px] text-ink-400 uppercase tracking-wide">Projects</p>
+                  <p className="text-[15px] font-semibold text-ink-900 mt-1">
+                    {billing.usage.projects.current} / {billing.usage.projects.limit === Infinity ? '∞' : billing.usage.projects.limit}
+                  </p>
+                </div>
+                <div className="p-3 bg-surface-50 rounded-lg">
+                  <p className="text-[11px] text-ink-400 uppercase tracking-wide">Team Members</p>
+                  <p className="text-[15px] font-semibold text-ink-900 mt-1">
+                    {billing.usage.users.current} / {billing.usage.users.limit === Infinity ? '∞' : billing.usage.users.limit}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </FieldGroup>
+        )}
+
         {/* Default Currency (read-only, set in Org Profile) */}
         <FieldGroup label="Default Currency" hint="Set in Organisation Profile">
           <div className="flex items-center gap-2 p-3 bg-surface-50 rounded-lg">
@@ -1332,14 +1420,119 @@ function RegionalSection() {
 
 // ── Section: Integrations ──────────────────────────────────
 
+interface IntegrationStatus {
+  xero: { connected: boolean; tenantName?: string; lastSync?: string; loading: boolean }
+  microsoft: { connected: boolean; userEmail?: string; services?: string[]; loading: boolean }
+  stripe: { connected: boolean; plan?: string; status?: string; loading: boolean }
+}
+
 function IntegrationsSection() {
-  const integrations = [
-    { name: 'Xero', description: 'Sync invoices and financial data', status: 'available', category: 'Accounting' },
-    { name: 'QuickBooks', description: 'Accounting and bookkeeping', status: 'available', category: 'Accounting' },
-    { name: 'Microsoft 365', description: 'Calendar, email and file sync', status: 'coming', category: 'Productivity' },
-    { name: 'Google Workspace', description: 'Calendar, email and drive', status: 'coming', category: 'Productivity' },
-    { name: 'Slack', description: 'Team notifications and alerts', status: 'available', category: 'Communication' },
-    { name: 'Revit', description: 'BIM model data sync', status: 'coming', category: 'Design Tools' },
+  const [status, setStatus] = useState<IntegrationStatus>({
+    xero: { connected: false, loading: true },
+    microsoft: { connected: false, loading: true },
+    stripe: { connected: false, loading: true },
+  })
+  const [connectingXero, setConnectingXero] = useState(false)
+  const [connectingMs, setConnectingMs] = useState(false)
+
+  useEffect(() => {
+    // Fetch all integration statuses in parallel
+    const fetchAll = async () => {
+      const [xeroRes, msRes, stripeRes] = await Promise.allSettled([
+        fetch('/api/integrations/xero').then(r => r.ok ? r.json() : null),
+        fetch('/api/integrations/microsoft').then(r => r.ok ? r.json() : null),
+        fetch('/api/billing/status').then(r => r.ok ? r.json() : null),
+      ])
+
+      setStatus({
+        xero: {
+          connected: xeroRes.status === 'fulfilled' && xeroRes.value?.data?.connection != null,
+          tenantName: xeroRes.status === 'fulfilled' ? xeroRes.value?.data?.connection?.xeroTenantName : undefined,
+          lastSync: xeroRes.status === 'fulfilled' ? xeroRes.value?.data?.connection?.lastSyncAt : undefined,
+          loading: false,
+        },
+        microsoft: {
+          connected: msRes.status === 'fulfilled' && msRes.value?.data?.connection != null,
+          userEmail: msRes.status === 'fulfilled' ? msRes.value?.data?.connection?.msUserEmail : undefined,
+          services: msRes.status === 'fulfilled' && msRes.value?.data?.connection
+            ? [
+                msRes.value.data.connection.syncCalendar && 'Calendar',
+                msRes.value.data.connection.syncFiles && 'Files',
+                msRes.value.data.connection.syncMail && 'Mail',
+              ].filter(Boolean) as string[]
+            : undefined,
+          loading: false,
+        },
+        stripe: {
+          connected: stripeRes.status === 'fulfilled' && stripeRes.value?.data?.subscription?.hasSubscription,
+          plan: stripeRes.status === 'fulfilled' ? stripeRes.value?.data?.plan?.name : undefined,
+          status: stripeRes.status === 'fulfilled' ? stripeRes.value?.data?.subscription?.status : undefined,
+          loading: false,
+        },
+      })
+    }
+
+    fetchAll()
+  }, [])
+
+  const connectXero = async () => {
+    setConnectingXero(true)
+    try {
+      const res = await fetch('/api/integrations/xero', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect' }) })
+      const data = await res.json()
+      if (data?.data?.authUrl) window.location.href = data.data.authUrl
+    } catch { /* toast error */ }
+    setConnectingXero(false)
+  }
+
+  const connectMicrosoft = async () => {
+    setConnectingMs(true)
+    try {
+      const res = await fetch('/api/integrations/microsoft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect' }) })
+      const data = await res.json()
+      if (data?.data?.authUrl) window.location.href = data.data.authUrl
+    } catch { /* toast error */ }
+    setConnectingMs(false)
+  }
+
+  const INTEGRATIONS = [
+    {
+      name: 'Xero',
+      description: 'Sync invoices and financial data with Xero',
+      category: 'Accounting',
+      connected: status.xero.connected,
+      loading: status.xero.loading,
+      detail: status.xero.tenantName ? `Connected to ${status.xero.tenantName}` : undefined,
+      onConnect: connectXero,
+      connecting: connectingXero,
+      available: true,
+    },
+    {
+      name: 'Microsoft 365',
+      description: 'Calendar, email and SharePoint/OneDrive file sync',
+      category: 'Productivity',
+      connected: status.microsoft.connected,
+      loading: status.microsoft.loading,
+      detail: status.microsoft.userEmail
+        ? `${status.microsoft.userEmail}${status.microsoft.services?.length ? ` · ${status.microsoft.services.join(', ')}` : ''}`
+        : undefined,
+      onConnect: connectMicrosoft,
+      connecting: connectingMs,
+      available: true,
+    },
+    {
+      name: 'Stripe',
+      description: 'Subscription billing and payment processing',
+      category: 'Billing',
+      connected: status.stripe.connected,
+      loading: status.stripe.loading,
+      detail: status.stripe.plan ? `${status.stripe.plan} plan · ${status.stripe.status}` : undefined,
+      onConnect: undefined, // Managed via Billing tab
+      available: true,
+    },
+    { name: 'QuickBooks', description: 'Accounting and bookkeeping', category: 'Accounting', connected: false, loading: false, available: false },
+    { name: 'Google Workspace', description: 'Calendar, email and Drive', category: 'Productivity', connected: false, loading: false, available: false },
+    { name: 'Slack', description: 'Team notifications and alerts', category: 'Communication', connected: false, loading: false, available: false },
   ]
 
   return (
@@ -1350,7 +1543,7 @@ function IntegrationsSection() {
       />
 
       <div className="mt-6 space-y-4">
-        {integrations.map((integration) => (
+        {INTEGRATIONS.map((integration) => (
           <div key={integration.name} className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
             <div className="flex-1">
               <div className="flex items-center gap-2">
@@ -1358,13 +1551,32 @@ function IntegrationsSection() {
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-200 text-ink-400 font-medium">
                   {integration.category}
                 </span>
+                {integration.connected && (
+                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                    <CheckCircle className="w-3 h-3" />
+                    Connected
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-ink-400 mt-1">{integration.description}</p>
+              {integration.detail && (
+                <p className="text-[11px] text-ink-500 mt-0.5 font-medium">{integration.detail}</p>
+              )}
             </div>
-            {integration.status === 'available' ? (
-              <button className="text-[12px] text-accent-600 hover:text-accent-700 font-medium px-3 py-1.5 border border-accent-200 rounded-lg hover:bg-accent-50 transition-colors">
-                Connect
+            {integration.loading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-ink-300" />
+            ) : integration.connected ? (
+              <span className="text-[11px] text-emerald-600 font-medium">Active</span>
+            ) : integration.available && integration.onConnect ? (
+              <button
+                onClick={integration.onConnect}
+                disabled={integration.connecting}
+                className="text-[12px] text-accent-600 hover:text-accent-700 font-medium px-3 py-1.5 border border-accent-200 rounded-lg hover:bg-accent-50 transition-colors disabled:opacity-50"
+              >
+                {integration.connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Connect'}
               </button>
+            ) : integration.available && integration.name === 'Stripe' ? (
+              <span className="text-[11px] text-ink-400 font-medium">See Billing tab</span>
             ) : (
               <span className="text-[11px] text-ink-300 font-medium">Coming Soon</span>
             )}
