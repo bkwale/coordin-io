@@ -1490,9 +1490,21 @@ function IntegrationsSection() {
     try {
       const res = await fetch('/api/integrations/microsoft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect' }) })
       const data = await res.json()
-      if (data?.data?.authUrl) window.location.href = data.data.authUrl
-    } catch { /* toast error */ }
-    setConnectingMs(false)
+      if (!res.ok) {
+        alert(data.error?.message || data.error || 'Failed to connect Microsoft 365')
+        setConnectingMs(false)
+        return
+      }
+      if (data?.data?.authUrl) {
+        window.location.href = data.data.authUrl
+      } else {
+        alert('No authorization URL returned — Microsoft integration may not be configured.')
+        setConnectingMs(false)
+      }
+    } catch {
+      alert('Network error — could not connect to Microsoft 365. Please try again.')
+      setConnectingMs(false)
+    }
   }
 
   const INTEGRATIONS = [
@@ -2024,7 +2036,7 @@ function ApprovalRoutesSection() {
       const res = await fetch('/api/approval-routes')
       if (!res.ok) throw new Error('Failed to load')
       const data = await res.json()
-      setRoutes(data.routes || [])
+      setRoutes(data.data?.routes || [])
     } catch {
       setError('Failed to load approval routes')
     } finally {
@@ -2128,7 +2140,7 @@ function ApprovalRoutesSection() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error?.message || 'Failed to create route')
+        alert(data.error?.message || data.error || 'Failed to create route')
         return
       }
       setShowCreate(false)

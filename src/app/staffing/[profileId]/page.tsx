@@ -757,10 +757,18 @@ function OverviewContent({
               type="select"
               options={[
                 { value: '', label: 'Select role...' },
-                ...orgRoles.map((r) => ({
-                  value: r.id,
-                  label: r.level ? `${r.name} (${r.level})` : r.name,
-                })),
+                ...(orgRoles.length > 0
+                  ? orgRoles.map((r) => ({
+                      value: r.id,
+                      label: r.level ? `${r.name} (${r.level})` : r.name,
+                    }))
+                  : [
+                      { value: '__default_staff', label: 'Team Member (Staff)' },
+                      { value: '__default_senior', label: 'Senior Staff' },
+                      { value: '__default_lead', label: 'Team Lead' },
+                      { value: '__default_manager', label: 'Manager' },
+                      { value: '__default_director', label: 'Director' },
+                    ]),
               ]}
             />
           ) : (
@@ -829,6 +837,197 @@ function OverviewContent({
           <p className="text-[13px] text-ink-400">Not provided</p>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ================================================================
+   PROBATION REVIEWS SECTION (embedded in Employment tab)
+   ================================================================ */
+
+interface ProbationReview {
+  id: string
+  reviewType: string
+  scheduledDate: string
+  completedDate: string | null
+  objectives: string | null
+  feedback: string | null
+  outcome: string | null
+  nextReviewDate: string | null
+  profile?: { id: string; fullName: string; jobTitle: string | null; startDate: string | null }
+}
+
+function ProbationReviewsSection({
+  profileId,
+  isAdmin,
+  hasHRAccess,
+}: {
+  profileId: string
+  isAdmin: boolean
+  hasHRAccess: boolean
+}) {
+  const [reviews, setReviews] = useState<ProbationReview[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    reviewType: 'Mid-Probation',
+    scheduledDate: '',
+    objectives: '',
+    feedback: '',
+    outcome: '',
+  })
+
+  const fetchReviews = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/staffing/probation?profileId=${profileId}`)
+      if (res.ok) {
+        const json = await res.json()
+        setReviews(json.data?.reviews ?? [])
+      }
+    } catch { /* ignore */ }
+    setLoading(false)
+  }, [profileId])
+
+  useEffect(() => {
+    fetchReviews()
+  }, [fetchReviews])
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.scheduledDate) return
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/staffing/probation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profileId,
+          reviewType: formData.reviewType,
+          scheduledDate: formData.scheduledDate,
+          objectives: formData.objectives || undefined,
+          feedback: formData.feedback || undefined,
+          outcome: formData.outcome || undefined,
+        }),
+      })
+      if (res.ok) {
+        setShowForm(false)
+        setFormData({ reviewType: 'Mid-Probation', scheduledDate: '', objectives: '', feedback: '', outcome: '' })
+        fetchReviews()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error?.message || err.error || 'Failed to create review')
+      }
+    } catch {
+      alert('Network error — could not create probation review.')
+    }
+    setSubmitting(false)
+  }
+
+  const canCreate = isAdmin || hasHRAccess
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">Probation Reviews</h4>
+        {canCreate && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1 text-[12px] text-brand-600 hover:text-brand-700 font-medium"
+          >
+            <Plus size={14} />
+            Schedule Review
+          </button>
+        )}
+      </div>
+
+      {showForm && canCreate && (
+        <form onSubmit={handleCreate} className="mb-4 p-3 bg-ink-50 border border-ink-200 rounded-lg space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Review type</label>
+              <select
+                value={formData.reviewType}
+                onChange={(e) => setFormData((p) => ({ ...p, reviewType: e.target.value }))}
+                className="w-full px-2 py-1.5 text-[13px] border border-ink-200 rounded bg-white"
+              >
+                <option value="Mid-Probation">Mid-Probation</option>
+                <option value="End-of-Probation">End-of-Probation</option>
+                <option value="Extension Review">Extension Review</option>
+                <option value="Monthly Check-in">Monthly Check-in</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Scheduled date *</label>
+              <input
+                type="date"
+                required
+                value={formData.scheduledDate}
+                onChange={(e) => setFormData((p) => ({ ...p, scheduledDate: e.target.value }))}
+                className="w-full px-2 py-1.5 text-[13px] border border-ink-200 rounded"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[12px] font-medium text-ink-600 mb-1">Objectives</label>
+            <textarea
+              value={formData.objectives}
+              onChange={(e) => setFormData((p) => ({ ...p, objectives: e.target.value }))}
+              rows={2}
+              className="w-full px-2 py-1.5 text-[13px] border border-ink-200 rounded"
+              placeholder="Review objectives..."
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-3 py-1.5 text-[12px] font-medium bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-50"
+            >
+              {submitting ? 'Creating...' : 'Create Review'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="px-3 py-1.5 text-[12px] font-medium text-ink-600 bg-white border border-ink-200 rounded hover:bg-ink-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="py-3"><SkeletonRow /><SkeletonRow /></div>
+      ) : reviews.length === 0 ? (
+        <p className="text-[13px] text-ink-400 py-2">No probation reviews scheduled yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {reviews.map((r) => (
+            <div key={r.id} className="p-3 bg-white border border-ink-200 rounded-lg">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[13px] font-medium text-ink-800">{r.reviewType}</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                  r.completedDate
+                    ? 'bg-green-50 text-green-700'
+                    : new Date(r.scheduledDate) < new Date()
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-blue-50 text-blue-700'
+                }`}>
+                  {r.completedDate ? 'Completed' : new Date(r.scheduledDate) < new Date() ? 'Overdue' : 'Scheduled'}
+                </span>
+              </div>
+              <div className="text-[12px] text-ink-500 space-y-0.5">
+                <p>Scheduled: {formatDate(r.scheduledDate)}</p>
+                {r.completedDate && <p>Completed: {formatDate(r.completedDate)}</p>}
+                {r.outcome && <p>Outcome: <span className="font-medium text-ink-700">{r.outcome}</span></p>}
+                {r.objectives && <p className="mt-1 text-ink-600">{r.objectives}</p>}
+                {r.feedback && <p className="mt-1 italic text-ink-500">{r.feedback}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -914,6 +1113,9 @@ function EmploymentContent({
           {renderField('End date', 'probationEndDate', formatDate(employment.probationEndDate), { type: 'date' })}
         </div>
       </div>
+
+      {/* Probation Reviews */}
+      <ProbationReviewsSection profileId={data.employee.id} isAdmin={data.isAdmin} hasHRAccess={data.hasHRAccess} />
 
       {/* Compensation */}
       <div>

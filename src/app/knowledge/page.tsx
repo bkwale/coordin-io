@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   BookOpen, Search, Plus, ChevronDown, ChevronUp,
   Tag, X, FileText,
@@ -33,12 +33,40 @@ export default function KnowledgeBasePage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
   const [topics, setTopics] = useState<KnowledgeTopic[]>(DEFAULT_TOPICS)
+  const [submitting, setSubmitting] = useState(false)
 
   // Add-topic form state
   const [formTitle, setFormTitle] = useState('')
   const [formCategory, setFormCategory] = useState<TopicCategory>('Custom')
   const [formContent, setFormContent] = useState('')
   const [formTags, setFormTags] = useState('')
+
+  /* ── Fetch custom articles from API on mount ──────── */
+
+  const fetchCustomArticles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/knowledge')
+      if (res.ok) {
+        const json = await res.json()
+        const articles: KnowledgeTopic[] = (json.data?.articles ?? []).map(
+          (a: { id: string; title: string; category: string; content: string; tags: string[] }) => ({
+            id: a.id,
+            title: a.title,
+            category: (a.category || 'Custom') as TopicCategory,
+            content: a.content,
+            tags: a.tags ?? [],
+          })
+        )
+        if (articles.length > 0) {
+          setTopics([...articles, ...DEFAULT_TOPICS])
+        }
+      }
+    } catch { /* fail silently — defaults are already loaded */ }
+  }, [])
+
+  useEffect(() => {
+    fetchCustomArticles()
+  }, [fetchCustomArticles])
 
   /* ── Filter logic ──────────────────────────────────── */
 
@@ -69,28 +97,57 @@ export default function KnowledgeBasePage() {
 
   /* ── Add topic ─────────────────────────────────────── */
 
-  const handleAddTopic = (e: React.FormEvent) => {
+  const handleAddTopic = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formTitle.trim() || !formContent.trim()) return
 
-    const newTopic: KnowledgeTopic = {
-      id: `custom-${Date.now()}`,
-      title: formTitle.trim(),
-      category: formCategory,
-      content: formContent.trim(),
-      tags: formTags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
-    }
+    const tags = formTags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
 
-    setTopics((prev) => [newTopic, ...prev])
-    setShowForm(false)
-    setFormTitle('')
-    setFormCategory('Custom')
-    setFormContent('')
-    setFormTags('')
-    setExpandedIds((prev) => new Set(prev).add(newTopic.id))
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formTitle.trim(),
+          category: formCategory,
+          content: formContent.trim(),
+          tags,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error?.message || err.error || 'Failed to save article')
+        setSubmitting(false)
+        return
+      }
+
+      const json = await res.json()
+      const saved = json.data?.article
+
+      const newTopic: KnowledgeTopic = {
+        id: saved?.id ?? `custom-${Date.now()}`,
+        title: formTitle.trim(),
+        category: formCategory,
+        content: formContent.trim(),
+        tags,
+      }
+
+      setTopics((prev) => [newTopic, ...prev])
+      setShowForm(false)
+      setFormTitle('')
+      setFormCategory('Custom')
+      setFormContent('')
+      setFormTags('')
+      setExpandedIds((prev) => new Set(prev).add(newTopic.id))
+    } catch {
+      alert('Network error — could not save article. Please try again.')
+    }
+    setSubmitting(false)
   }
 
   const cancelForm = () => {
@@ -243,7 +300,7 @@ export default function KnowledgeBasePage() {
             </button>
             <button
               type="submit"
-              disabled={!formTitle.trim() || !formContent.trim()}
+              disabled={!formTitle.trim() || !formContent.trim() || submitting}
               className={cn(
                 'flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium transition-colors',
                 !formTitle.trim() || !formContent.trim()
