@@ -79,8 +79,9 @@ model Organisation {
   inboundInvoices     InboundInvoice[]
   outboundInvoices    OutboundInvoice[]
   categorisationRules CategorisationRule[]
-  xeroConnections     XeroConnection[]
-  selfServiceTokens   OnboardingSelfServiceToken[]
+  xeroConnections        XeroConnection[]
+  microsoftConnections   MicrosoftConnection[]
+  selfServiceTokens      OnboardingSelfServiceToken[]
   trainingItems       TrainingItem[]
 
   @@map("organisations")
@@ -304,6 +305,7 @@ model Profile {
 
   // Xero Integration
   xeroConnections            XeroConnection[]       @relation("XeroConnector")
+  microsoftConnections       MicrosoftConnection[]  @relation("MicrosoftConnector")
 
   // RIBA Stage Tracking
   stageGatesAdvanced         StageGate[]            @relation("StageGateAdvancer")
@@ -3176,6 +3178,97 @@ enum XeroSyncStatus {
 enum XeroSyncDirection {
   TO_XERO    // Coordin → Xero
   FROM_XERO  // Xero → Coordin
+}
+
+// ═══════════════════════════════════════════════════════════
+// MICROSOFT GRAPH INTEGRATION — Single OAuth connection for
+// Outlook, SharePoint, OneDrive, Teams
+// ═══════════════════════════════════════════════════════════
+
+model MicrosoftConnection {
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+
+  // Azure AD tenant captured on consent
+  msTenantId      String   @map("ms_tenant_id")     // Azure AD tenant UUID
+  msTenantName    String?  @map("ms_tenant_name")    // e.g. "CWA Homes"
+  msUserId        String?  @map("ms_user_id")        // Connecting user's Graph ID
+  msUserEmail     String?  @map("ms_user_email")     // Connecting user's email
+
+  // OAuth 2.0 tokens (encrypted at rest)
+  accessToken     String   @db.Text @map("access_token")
+  refreshToken    String   @db.Text @map("refresh_token")
+  tokenExpiresAt  DateTime @map("token_expires_at")
+  scopes          String[] // e.g. ['Calendars.ReadWrite', 'Files.ReadWrite.All', ...]
+
+  // Per-service sync toggles
+  syncCalendar    Boolean  @default(true) @map("sync_calendar")    // Milestones → Outlook events
+  syncFiles       Boolean  @default(true) @map("sync_files")       // SharePoint / OneDrive documents
+  syncMail        Boolean  @default(false) @map("sync_mail")       // Read-only mail (opt-in)
+
+  // SharePoint site binding (set after first sync)
+  sharepointSiteId   String? @map("sharepoint_site_id")
+  sharepointSiteName String? @map("sharepoint_site_name")
+  sharepointSiteUrl  String? @map("sharepoint_site_url")
+
+  // Sync state
+  lastSyncAt      DateTime? @map("last_sync_at")
+  lastSyncStatus  MicrosoftSyncStatus @default(NEVER) @map("last_sync_status")
+  lastSyncError   String?   @map("last_sync_error")
+
+  // Connection lifecycle
+  connectedAt     DateTime  @default(now()) @map("connected_at")
+  connectedById   String    @map("connected_by_id")
+  disconnectedAt  DateTime? @map("disconnected_at")
+  active          Boolean   @default(true)
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id])
+  connectedBy     Profile      @relation("MicrosoftConnector", fields: [connectedById], references: [id])
+  syncLogs        MicrosoftSyncLog[]
+
+  @@unique([organisationId, msTenantId])
+  @@index([organisationId, active])
+  @@map("microsoft_connections")
+}
+
+model MicrosoftSyncLog {
+  id              String   @id @default(cuid())
+  connectionId    String   @map("connection_id")
+  direction       MicrosoftSyncDirection
+  service         MicrosoftService               // calendar, files, mail
+  entityType      String   @map("entity_type")   // 'event', 'file', 'message'
+  entityId        String   @map("entity_id")     // Coordin entity ID
+  msId            String?  @map("ms_id")         // Microsoft Graph entity ID
+  action          String   // 'create', 'update', 'delete', 'skip'
+  status          MicrosoftSyncStatus
+  error           String?
+  metadata        Json?    // Additional sync details
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  connection      MicrosoftConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, createdAt])
+  @@index([entityType, entityId])
+  @@map("microsoft_sync_logs")
+}
+
+enum MicrosoftSyncStatus {
+  NEVER
+  SUCCESS
+  PARTIAL
+  FAILED
+  IN_PROGRESS
+}
+
+enum MicrosoftSyncDirection {
+  TO_MICROSOFT    // Coordin → Microsoft
+  FROM_MICROSOFT  // Microsoft → Coordin
+}
+
+enum MicrosoftService {
+  CALENDAR
+  FILES
+  MAIL
 }
 
 // ═══════════════════════════════════════════════════════════

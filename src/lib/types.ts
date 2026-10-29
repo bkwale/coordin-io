@@ -911,7 +911,7 @@ export interface AISuggestedPrompt {
 }
 
 // ── Phase 3 Wave 4: Integrations Types ────────────────────
-export type IntegrationProvider = 'xero' | 'quickbooks' | 'outlook' | 'google_calendar' | 'sharepoint' | 'dropbox'
+export type IntegrationProvider = 'xero' | 'microsoft' | 'stripe' | 'quickbooks' | 'google' | 'slack' | 'hubspot' | 'breathehr' | 'charliehr' | 'dropbox'
 export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'syncing'
 
 export interface Integration {
