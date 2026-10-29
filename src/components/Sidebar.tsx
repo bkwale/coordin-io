@@ -23,6 +23,7 @@ import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
 const MAIN_ITEMS = [
   { href: '/my-work', label: 'My Work', icon: ClipboardList },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/ai', label: 'AI Teammate', icon: Sparkles },
   { href: '/projects', label: 'Projects', icon: FolderOpen, featureKey: 'projects' },
   { href: '/leave', label: 'Leave', icon: CalendarDays, featureKey: 'staffing' },
   { href: '/expenses', label: 'Expenses', icon: Wallet, featureKey: 'staffing' },
@@ -45,7 +46,6 @@ const MORE_ITEMS: NavItemDef[] = [
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
   { href: '/cpd', label: 'CPD', icon: GraduationCap },
   { href: '/opportunities', label: 'Opportunities', icon: Target },
-  { href: '/ai', label: 'AI Teammate', icon: Sparkles },
   { href: '/portal', label: 'Portal', icon: ExternalLink },
 ]
 
