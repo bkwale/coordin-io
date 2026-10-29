@@ -524,7 +524,7 @@ describe('Permission Matrix', () => {
       ['LEGAL', false],
       ['FINANCE', false],
       ['COMMERCIAL', false],
-      ['MANAGER', false],
+      ['MANAGER', true],
       ['MEMBER', false],
       ['VIEWER', false],
     ] as [OrgPermission, boolean][])(
@@ -543,7 +543,7 @@ describe('Permission Matrix', () => {
       ['LEGAL', false],
       ['FINANCE', false],
       ['COMMERCIAL', false],
-      ['MANAGER', false],
+      ['MANAGER', true],
       ['MEMBER', false],
       ['VIEWER', false],
     ] as [OrgPermission, boolean][])(
