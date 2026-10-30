@@ -4,9 +4,9 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import { recordAuditEvent } from '@/lib/audit'
 
-type StepName = 'PERSONAL_DETAILS' | 'BANK_DETAILS' | 'HMO_ENROLMENT' | 'DOCUMENT_UPLOAD'
+type StepName = 'PERSONAL_DETAILS' | 'BANK_DETAILS' | 'HMO_ENROLMENT' | 'DOCUMENT_UPLOAD' | 'EMERGENCY_CONTACTS' | 'POLICY_ACKNOWLEDGEMENT' | 'EQUIPMENT_REQUEST'
 
-const VALID_STEPS: StepName[] = ['PERSONAL_DETAILS', 'BANK_DETAILS', 'HMO_ENROLMENT', 'DOCUMENT_UPLOAD']
+const VALID_STEPS: StepName[] = ['PERSONAL_DETAILS', 'BANK_DETAILS', 'HMO_ENROLMENT', 'DOCUMENT_UPLOAD', 'EMERGENCY_CONTACTS', 'POLICY_ACKNOWLEDGEMENT', 'EQUIPMENT_REQUEST']
 
 /**
  * POST /api/onboarding/self-service/steps
@@ -100,6 +100,15 @@ export async function POST(request: NextRequest) {
         break
       case 'DOCUMENT_UPLOAD':
         await processDocumentUpload(selfServiceToken.profileId, data)
+        break
+      case 'EMERGENCY_CONTACTS':
+        await processEmergencyContacts(selfServiceToken.profileId, data)
+        break
+      case 'POLICY_ACKNOWLEDGEMENT':
+        await processPolicyAcknowledgement(selfServiceToken.profileId, selfServiceToken.organisationId, data)
+        break
+      case 'EQUIPMENT_REQUEST':
+        await processEquipmentRequest(selfServiceToken.profileId, selfServiceToken.organisationId, data)
         break
     }
   } catch (err) {
@@ -276,4 +285,99 @@ async function processDocumentUpload(profileId: string, data: Record<string, unk
     // Store reference to uploaded files if needed
     // For now, the upload endpoint already stores them
   }
+}
+
+async function processEmergencyContacts(profileId: string, data: Record<string, unknown>) {
+  const updates: Record<string, unknown> = {}
+  if (typeof data.emergencyName === 'string') updates.emergencyName = data.emergencyName.trim()
+  if (typeof data.emergencyPhone === 'string') updates.emergencyPhone = data.emergencyPhone.trim()
+  if (typeof data.emergencyRelation === 'string') updates.emergencyRelation = data.emergencyRelation.trim()
+
+  if (Object.keys(updates).length === 0) {
+    throw new Error('At least one emergency contact is required')
+  }
+
+  await modulesPrisma.employeeProfile.upsert({
+    where: { profileId },
+    create: { profileId, ...updates },
+    update: updates,
+  })
+}
+
+async function processPolicyAcknowledgement(profileId: string, organisationId: string, data: Record<string, unknown>) {
+  if (!Array.isArray(data.acknowledgedPolicies) || data.acknowledgedPolicies.length === 0) {
+    throw new Error('You must acknowledge at least one policy')
+  }
+
+  const policyIds = data.acknowledgedPolicies.filter((id: unknown) => typeof id === 'string')
+
+  for (const policyId of policyIds) {
+    // Look up the policy to get its revision
+    const policy = await modulesPrisma.policyDocument.findFirst({
+      where: { id: policyId as string, organisationId },
+      select: { id: true, revision: true },
+    })
+
+    if (!policy) continue
+
+    // Upsert the acknowledgement record
+    await modulesPrisma.policyAcknowledgement.upsert({
+      where: {
+        profileId_policyId_policyRevision: {
+          profileId,
+          policyId: policy.id,
+          policyRevision: policy.revision,
+        },
+      },
+      create: {
+        profileId,
+        policyId: policy.id,
+        policyRevision: policy.revision,
+        acknowledged: true,
+        acknowledgedAt: new Date(),
+      },
+      update: {
+        acknowledged: true,
+        acknowledgedAt: new Date(),
+      },
+    })
+
+    await recordAuditEvent({
+      organisationId,
+      actorId: profileId,
+      action: 'policy.acknowledged',
+      entityType: 'PolicyDocument',
+      entityId: policy.id,
+      metadata: { source: 'self_service_onboarding' },
+    })
+  }
+}
+
+async function processEquipmentRequest(profileId: string, organisationId: string, data: Record<string, unknown>) {
+  const items: string[] = []
+  if (Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (typeof item === 'string' && item.trim()) items.push(item.trim())
+    }
+  }
+  if (typeof data.notes === 'string' && data.notes.trim()) {
+    items.push(`Notes: ${data.notes.trim()}`)
+  }
+
+  if (items.length === 0) {
+    // Equipment request is optional — if nothing requested, just mark as done
+    return
+  }
+
+  await modulesPrisma.serviceRequest.create({
+    data: {
+      profileId,
+      organisationId,
+      requestType: 'EQUIPMENT',
+      title: 'New Starter Equipment Request',
+      description: items.join('\n'),
+      status: 'SUBMITTED',
+      priority: 'MEDIUM',
+    },
+  })
 }

@@ -11,12 +11,15 @@ import {
   Clock,
   FileText,
   Heart,
+  Laptop,
   Loader2,
   Lock,
   PartyPopper,
   Phone,
+  ScrollText,
   Shield,
   User,
+  Users,
 } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 
@@ -24,7 +27,7 @@ import { useToast } from '@/components/Toast'
 // Types
 // ────────────────────────────────────────────────────────
 
-type StepName = 'PERSONAL_DETAILS' | 'BANK_DETAILS' | 'HMO_ENROLMENT' | 'DOCUMENT_UPLOAD'
+type StepName = 'PERSONAL_DETAILS' | 'BANK_DETAILS' | 'HMO_ENROLMENT' | 'DOCUMENT_UPLOAD' | 'EMERGENCY_CONTACTS' | 'POLICY_ACKNOWLEDGEMENT' | 'EQUIPMENT_REQUEST'
 
 interface StepInfo {
   id: string
@@ -57,7 +60,7 @@ const STEP_CONFIG: Record<StepName, { icon: typeof User; label: string; descript
   PERSONAL_DETAILS: {
     icon: User,
     label: 'Personal Details',
-    description: 'Confirm your name, phone, and emergency contact',
+    description: 'Confirm your name and phone number',
   },
   BANK_DETAILS: {
     icon: Banknote,
@@ -73,6 +76,21 @@ const STEP_CONFIG: Record<StepName, { icon: typeof User; label: string; descript
     icon: FileText,
     label: 'Documents',
     description: 'Review and acknowledge required documents',
+  },
+  EMERGENCY_CONTACTS: {
+    icon: Users,
+    label: 'Emergency Contacts',
+    description: 'Provide emergency contact details',
+  },
+  POLICY_ACKNOWLEDGEMENT: {
+    icon: ScrollText,
+    label: 'Policy Acknowledgement',
+    description: 'Review and acknowledge company policies',
+  },
+  EQUIPMENT_REQUEST: {
+    icon: Laptop,
+    label: 'Equipment Request',
+    description: 'Request equipment you need to get started',
   },
 }
 
@@ -233,6 +251,9 @@ export default function SelfServiceWelcomePage() {
           <span>This link expires {new Date(data.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
 
+        {/* 7-day deadline countdown */}
+        <DeadlineCountdown token={token} />
+
         {/* Step cards */}
         <div className="space-y-3">
           {data.steps.map((step) => {
@@ -293,6 +314,7 @@ export default function SelfServiceWelcomePage() {
                       submitting={submitting}
                       onSubmit={(formData) => submitStep(step.step as StepName, formData)}
                       onCancel={() => setActiveStep(null)}
+                      token={token}
                     />
                   </div>
                 )}
@@ -312,6 +334,50 @@ export default function SelfServiceWelcomePage() {
 }
 
 // ────────────────────────────────────────────────────────
+// Deadline countdown
+// ────────────────────────────────────────────────────────
+
+function DeadlineCountdown({ token }: { token: string }) {
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/onboarding/self-service/progress?token=${token}`)
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json()
+          if (typeof json.data?.daysRemaining === 'number') {
+            setDaysRemaining(json.data.daysRemaining)
+          }
+        }
+      })
+      .catch(() => { /* silent */ })
+  }, [token])
+
+  if (daysRemaining === null) return null
+
+  const isUrgent = daysRemaining <= 2
+  const isWarning = daysRemaining <= 4
+
+  return (
+    <div className={`flex items-center gap-2 text-xs mb-6 p-3 rounded-lg border ${
+      isUrgent
+        ? 'bg-red-50 border-red-200 text-red-700'
+        : isWarning
+          ? 'bg-amber-50 border-amber-200 text-amber-700'
+          : 'bg-blue-50 border-blue-100 text-blue-700'
+    }`}>
+      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+      <span>
+        {daysRemaining === 0
+          ? 'Deadline: Please complete all steps today.'
+          : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining to complete onboarding.`
+        }
+      </span>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────
 // Step forms
 // ────────────────────────────────────────────────────────
 
@@ -320,11 +386,13 @@ function StepForm({
   submitting,
   onSubmit,
   onCancel,
+  token,
 }: {
   step: StepName
   submitting: boolean
   onSubmit: (data: Record<string, unknown>) => void
   onCancel: () => void
+  token: string
 }) {
   switch (step) {
     case 'PERSONAL_DETAILS':
@@ -335,6 +403,12 @@ function StepForm({
       return <HmoEnrolmentForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
     case 'DOCUMENT_UPLOAD':
       return <DocumentUploadForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
+    case 'EMERGENCY_CONTACTS':
+      return <EmergencyContactsForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
+    case 'POLICY_ACKNOWLEDGEMENT':
+      return <PolicyAcknowledgementForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} token={token} />
+    case 'EQUIPMENT_REQUEST':
+      return <EquipmentRequestForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
   }
 }
 
@@ -356,12 +430,9 @@ const inputClass = 'w-full rounded-md border border-gray-300 px-3 py-2 text-sm f
 function PersonalDetailsForm({ submitting, onSubmit, onCancel }: { submitting: boolean; onSubmit: (d: Record<string, unknown>) => void; onCancel: () => void }) {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
-  const [emergencyName, setEmergencyName] = useState('')
-  const [emergencyPhone, setEmergencyPhone] = useState('')
-  const [emergencyRelation, setEmergencyRelation] = useState('')
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ fullName, phone, emergencyName, emergencyPhone, emergencyRelation }) }} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ fullName, phone }) }} className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
         <User className="h-4 w-4 text-blue-600" />
         <h3 className="font-medium text-sm text-gray-900">Personal Details</h3>
@@ -377,21 +448,6 @@ function PersonalDetailsForm({ submitting, onSubmit, onCancel }: { submitting: b
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={`${inputClass} pl-9`} placeholder="+44 7xxx xxx xxx" />
           </div>
         </Field>
-      </div>
-
-      <div className="border-t border-gray-100 pt-4 mt-4">
-        <p className="text-xs text-gray-500 mb-3">Emergency Contact</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Name">
-            <input type="text" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={inputClass} placeholder="Contact name" />
-          </Field>
-          <Field label="Phone">
-            <input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={inputClass} placeholder="Phone number" />
-          </Field>
-          <Field label="Relationship">
-            <input type="text" value={emergencyRelation} onChange={(e) => setEmergencyRelation(e.target.value)} className={inputClass} placeholder="e.g. Spouse" />
-          </Field>
-        </div>
       </div>
 
       <FormButtons submitting={submitting} onCancel={onCancel} />
@@ -517,6 +573,174 @@ function DocumentUploadForm({ submitting, onSubmit, onCancel }: { submitting: bo
       </label>
 
       <FormButtons submitting={submitting} onCancel={onCancel} disabled={!acknowledged} />
+    </form>
+  )
+}
+
+// ── Emergency Contacts ──
+function EmergencyContactsForm({ submitting, onSubmit, onCancel }: { submitting: boolean; onSubmit: (d: Record<string, unknown>) => void; onCancel: () => void }) {
+  const [emergencyName, setEmergencyName] = useState('')
+  const [emergencyPhone, setEmergencyPhone] = useState('')
+  const [emergencyRelation, setEmergencyRelation] = useState('')
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ emergencyName, emergencyPhone, emergencyRelation }) }} className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Users className="h-4 w-4 text-blue-600" />
+        <h3 className="font-medium text-sm text-gray-900">Emergency Contacts</h3>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Please provide at least one emergency contact. This person will be contacted in case of an emergency at work.
+      </p>
+
+      <div className="border border-gray-200 rounded-lg p-4">
+        <p className="text-xs font-medium text-gray-500 mb-3">Primary Contact</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Name" required>
+            <input type="text" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={inputClass} placeholder="Contact name" required />
+          </Field>
+          <Field label="Phone" required>
+            <input type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={inputClass} placeholder="Phone number" required />
+          </Field>
+          <Field label="Relationship" required>
+            <input type="text" value={emergencyRelation} onChange={(e) => setEmergencyRelation(e.target.value)} className={inputClass} placeholder="e.g. Spouse, Parent" required />
+          </Field>
+        </div>
+      </div>
+
+      <FormButtons submitting={submitting} onCancel={onCancel} />
+    </form>
+  )
+}
+
+// ── Policy Acknowledgement ──
+interface PolicyItem {
+  id: string
+  title: string
+  category: string
+  mandatory: boolean
+}
+
+function PolicyAcknowledgementForm({ submitting, onSubmit, onCancel, token }: { submitting: boolean; onSubmit: (d: Record<string, unknown>) => void; onCancel: () => void; token: string }) {
+  const [policies, setPolicies] = useState<PolicyItem[]>([])
+  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({})
+  const [loadingPolicies, setLoadingPolicies] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/onboarding/self-service/policies?token=${token}`)
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json()
+          setPolicies(json.data?.policies || [])
+        }
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => setLoadingPolicies(false))
+  }, [token])
+
+  const mandatoryPolicies = policies.filter((p) => p.mandatory)
+  const allMandatoryAcked = mandatoryPolicies.length === 0 || mandatoryPolicies.every((p) => acknowledged[p.id])
+  const acknowledgedPolicies = Object.entries(acknowledged).filter(([, v]) => v).map(([k]) => k)
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ acknowledgedPolicies }) }} className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <ScrollText className="h-4 w-4 text-blue-600" />
+        <h3 className="font-medium text-sm text-gray-900">Policy Acknowledgement</h3>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Please review and acknowledge the following company policies. All mandatory policies must be acknowledged to proceed.
+      </p>
+
+      {loadingPolicies ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        </div>
+      ) : policies.length === 0 ? (
+        <div className="bg-gray-50 border border-gray-200 rounded-md p-4 text-sm text-gray-500 text-center">
+          No policies have been configured. You can skip this step.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {policies.map((policy) => (
+            <label key={policy.id} className="flex items-start gap-3 p-3 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={acknowledged[policy.id] || false}
+                onChange={(e) => setAcknowledged((prev) => ({ ...prev, [policy.id]: e.target.checked }))}
+                className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                  {policy.title}
+                  {policy.mandatory && <span className="text-red-500 ml-1">*</span>}
+                </p>
+                <p className="text-xs text-gray-400 capitalize">{policy.category.replace(/_/g, ' ').toLowerCase()}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
+
+      <FormButtons submitting={submitting} onCancel={onCancel} disabled={!allMandatoryAcked && policies.length > 0} />
+    </form>
+  )
+}
+
+// ── Equipment Request ──
+const EQUIPMENT_OPTIONS = [
+  { id: 'laptop', label: 'Laptop' },
+  { id: 'monitor', label: 'External Monitor' },
+  { id: 'keyboard', label: 'Keyboard & Mouse' },
+  { id: 'phone', label: 'Mobile Phone' },
+  { id: 'headset', label: 'Headset' },
+  { id: 'desk', label: 'Desk Setup' },
+  { id: 'chair', label: 'Office Chair' },
+]
+
+function EquipmentRequestForm({ submitting, onSubmit, onCancel }: { submitting: boolean; onSubmit: (d: Record<string, unknown>) => void; onCancel: () => void }) {
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [notes, setNotes] = useState('')
+
+  const items = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ items, notes }) }} className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Laptop className="h-4 w-4 text-blue-600" />
+        <h3 className="font-medium text-sm text-gray-900">Equipment Request</h3>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Select any equipment you need to get started. This is optional — you can skip if you don&apos;t need anything right now.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {EQUIPMENT_OPTIONS.map((item) => (
+          <label key={item.id} className="flex items-center gap-3 p-3 rounded-md border border-gray-200 hover:bg-gray-50 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selected[item.id] || false}
+              onChange={(e) => setSelected((prev) => ({ ...prev, [item.id]: e.target.checked }))}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">{item.label}</span>
+          </label>
+        ))}
+      </div>
+
+      <Field label="Additional Notes">
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className={`${inputClass} min-h-[80px]`}
+          placeholder="Any specific requirements or preferences (e.g. Mac vs Windows, screen size)..."
+        />
+      </Field>
+
+      <FormButtons submitting={submitting} onCancel={onCancel} />
     </form>
   )
 }

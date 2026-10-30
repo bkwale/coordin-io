@@ -8,7 +8,7 @@ import {
   Building2, Shield, GraduationCap, ClipboardList, TrendingUp,
   UserPlus, Mail, X, AlertCircle, CheckCircle2, Timer,
   CalendarDays, BookOpen, Wrench, ChevronLeft, Eye, Download,
-  Pencil, Save, Loader2,
+  Pencil, Save, Loader2, Upload, FileSpreadsheet,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
@@ -252,6 +252,17 @@ export default function StaffingPage() {
   const [assignSaving, setAssignSaving] = useState(false)
   const [inviteSending, setInviteSending] = useState<string | null>(null)
 
+  // Bulk import state
+  const [importOpen, setImportOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importMode, setImportMode] = useState<'new' | 'existing'>('new')
+  const [importLoading, setImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState<{
+    imported: number
+    updated: number
+    errors: { row: number; field: string; message: string }[]
+  } | null>(null)
+
   // Office holidays state
   const [officeHolidays, setOfficeHolidays] = useState<Record<string, { id: string; name: string; date: string }[]>>({})
   const [officeHolidaysLoading, setOfficeHolidaysLoading] = useState(false)
@@ -302,6 +313,35 @@ export default function StaffingPage() {
       setLoading(false)
     }
   }, [])
+
+  const handleImport = useCallback(async () => {
+    if (!importFile || importLoading) return
+    setImportLoading(true)
+    setImportResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', importFile)
+      formData.append('mode', importMode)
+      const res = await fetch('/api/staffing/import', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error?.message ?? json.error ?? 'Import failed')
+      }
+      setImportResult({
+        imported: json.data?.imported ?? 0,
+        updated: json.data?.updated ?? 0,
+        errors: json.data?.errors ?? [],
+      })
+      if ((json.data?.imported ?? 0) > 0 || (json.data?.updated ?? 0) > 0) {
+        toast(`Imported ${json.data?.imported ?? 0}, updated ${json.data?.updated ?? 0} employees`, 'success')
+        fetchData()
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Import failed', 'error')
+    } finally {
+      setImportLoading(false)
+    }
+  }, [importFile, importMode, importLoading, toast, fetchData])
 
   const fetchEmployeeDetail = useCallback(async (profileId: string) => {
     setDetailLoading(true)
@@ -1578,6 +1618,12 @@ export default function StaffingPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => { setImportOpen(true); setImportResult(null); setImportFile(null) }}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 text-[13px] font-medium text-ink-700 hover:bg-ink-50 transition-colors"
+          >
+            <Upload className="w-4 h-4" /> Import
+          </button>
+          <button
             onClick={fetchData}
             className="p-2 rounded-lg hover:bg-ink-50 transition-colors"
             title="Refresh"
@@ -1617,6 +1663,149 @@ export default function StaffingPage() {
       {activeTab === 'leave-admin' && renderLeaveAdminTab()}
       {activeTab === 'onboarding' && renderOnboardingTab()}
       {activeTab === 'reports' && renderReportsTab()}
+
+      {/* ── Import employees modal ──────────────────────────── */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[14px] font-semibold text-ink-900 flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-blue-500" /> Import Employees
+              </h3>
+              <button onClick={() => setImportOpen(false)} className="text-ink-400 hover:text-ink-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Template download */}
+            <div className="mb-4 p-3 bg-ink-25 rounded-lg">
+              <p className="text-[12px] text-ink-500 mb-2">
+                Download the CSV template, fill in employee details, then upload below.
+              </p>
+              <a
+                href="/api/staffing/import/template"
+                download
+                className="inline-flex items-center gap-2 text-[12px] font-medium text-blue-600 hover:text-blue-700"
+              >
+                <Download className="w-3.5 h-3.5" /> Download CSV template
+              </a>
+            </div>
+
+            {/* File upload */}
+            <div className="mb-4">
+              <label className="text-[12px] font-medium text-ink-600 block mb-1">CSV File</label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => {
+                  setImportFile(e.target.files?.[0] ?? null)
+                  setImportResult(null)
+                }}
+                className="w-full text-[13px] text-ink-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[12px] file:font-medium file:bg-ink-100 file:text-ink-700 hover:file:bg-ink-200 file:cursor-pointer"
+              />
+            </div>
+
+            {/* Mode toggle */}
+            <div className="mb-4">
+              <label className="text-[12px] font-medium text-ink-600 block mb-2">Import mode</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setImportMode('new')}
+                  className={`flex-1 text-[12px] font-medium px-3 py-2 rounded-lg border transition-colors ${
+                    importMode === 'new'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-ink-200 text-ink-500 hover:bg-ink-25'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                  New Employees
+                  <span className="block text-[10px] font-normal mt-0.5 opacity-70">Sends invitations</span>
+                </button>
+                <button
+                  onClick={() => setImportMode('existing')}
+                  className={`flex-1 text-[12px] font-medium px-3 py-2 rounded-lg border transition-colors ${
+                    importMode === 'existing'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-ink-200 text-ink-500 hover:bg-ink-25'
+                  }`}
+                >
+                  <UserCheck className="w-3.5 h-3.5 inline-block mr-1.5 -mt-0.5" />
+                  Existing Employees
+                  <span className="block text-[10px] font-normal mt-0.5 opacity-70">Registers as active</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Import result */}
+            {importResult && (
+              <div className="mb-4 space-y-3">
+                <div className="flex gap-3">
+                  {importResult.imported > 0 && (
+                    <div className="flex items-center gap-1.5 text-[12px] text-emerald-600">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {importResult.imported} imported
+                    </div>
+                  )}
+                  {importResult.updated > 0 && (
+                    <div className="flex items-center gap-1.5 text-[12px] text-blue-600">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {importResult.updated} updated
+                    </div>
+                  )}
+                </div>
+                {importResult.errors.length > 0 && (
+                  <div>
+                    <p className="text-[12px] font-medium text-red-600 mb-1.5 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> {importResult.errors.length} error{importResult.errors.length !== 1 ? 's' : ''}
+                    </p>
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-red-200">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="bg-red-50 text-red-700">
+                            <th className="text-left px-2 py-1 font-medium">Row</th>
+                            <th className="text-left px-2 py-1 font-medium">Field</th>
+                            <th className="text-left px-2 py-1 font-medium">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-red-100">
+                          {importResult.errors.map((err, i) => (
+                            <tr key={i} className="text-red-600">
+                              <td className="px-2 py-1">{err.row}</td>
+                              <td className="px-2 py-1">{err.field}</td>
+                              <td className="px-2 py-1">{err.message}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setImportOpen(false)}
+                className="px-4 py-2 text-[13px] text-ink-600 hover:text-ink-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={!importFile || importLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium text-white bg-ink-900 rounded-lg hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {importLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</>
+                ) : (
+                  <><Upload className="w-4 h-4" /> Import</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       expiresAt: true,
       revokedAt: true,
       completedAt: true,
+      createdAt: true,
     },
   })
 
@@ -65,11 +66,18 @@ export async function GET(request: NextRequest) {
   const completedCount = steps.filter((s: { status: string }) => s.status === 'COMPLETED').length
   const totalCount = steps.length
 
+  // Calculate 7-day deadline from token creation
+  const deadline = new Date(selfServiceToken.createdAt)
+  deadline.setDate(deadline.getDate() + 7)
+  const daysRemaining = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+
   return success({
     steps,
     completedCount,
     totalCount,
     allCompleted: totalCount > 0 && completedCount === totalCount,
     overallCompleted: selfServiceToken.completedAt !== null,
+    deadline: deadline.toISOString(),
+    daysRemaining,
   })
 }
