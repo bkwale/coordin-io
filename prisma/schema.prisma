@@ -2283,8 +2283,28 @@ model ProbationReview {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   profile Profile @relation(fields: [profileId], references: [id])
+  goals   ProbationGoal[]
 
   @@map("probation_reviews")
+}
+
+model ProbationGoal {
+  id              String   @id @default(cuid())
+  reviewId        String   @map("review_id")
+  title           String
+  description     String?
+  targetDate      DateTime? @map("target_date")
+  status          String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, NOT_MET
+  evidence        String?  // Evidence or notes of achievement
+  completedAt     DateTime? @map("completed_at")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  review ProbationReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@map("probation_goals")
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2633,6 +2653,7 @@ model ApprovalRoute {
   isActive         Boolean             @default(true) @map("is_active")
   priority         Int                 @default(0) // Higher = checked first
   conditions       Json?               // e.g. { "minAmount": 5000, "department": "Design" }
+  ccRecipientIds   String[]            @default([]) @map("cc_recipient_ids")
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
 
@@ -2654,6 +2675,8 @@ model ApprovalRouteStep {
   approverType           ApproverType @map("approver_type")
   approverRole           String?      @map("approver_role") // OrgPermission value if approverType=ROLE
   approverId             String?      @map("approver_id") // Profile ID if approverType=SPECIFIC_PERSON
+  approverIds            String[]    @default([]) @map("approver_ids") // Multiple approvers for AND logic
+  requireAll             Boolean     @default(false) @map("require_all") // true = AND (all must approve), false = OR (any one approves)
   canSkipIfSameAsPrevious Boolean     @default(false) @map("can_skip_if_same_as_previous")
   escalationDays         Int?         @map("escalation_days") // Auto-escalate after N days
 
@@ -2671,6 +2694,7 @@ model ApprovalInstance {
   requestType      ApprovalRequestType @map("request_type")
   entityId         String              @map("entity_id") // FK to the entity being approved
   submitterId      String              @map("submitter_id")
+  ccRecipientIds   String[]            @default([]) @map("cc_recipient_ids")
   currentStepOrder Int                 @default(1) @map("current_step_order")
   status           String              @default("IN_PROGRESS") // IN_PROGRESS, APPROVED, REJECTED, CANCELLED
   completedAt      DateTime?           @map("completed_at")
@@ -2696,6 +2720,8 @@ model ApprovalStepInstance {
   stepOrder         Int                @map("step_order")
   label             String             @default("")
   approverId        String?            @map("approver_id") // Resolved approver Profile ID
+  approverIds     String[]           @default([]) @map("approver_ids") // Resolved approver IDs for AND steps
+  approvedByIds   String[]           @default([]) @map("approved_by_ids") // Who has approved so far (AND logic)
   status            ApprovalStepStatus @default(PENDING)
   comment           String?
   actionedAt        DateTime?          @map("actioned_at")

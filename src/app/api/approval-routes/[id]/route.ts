@@ -55,6 +55,11 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if ('isActive' in body) data.isActive = body.isActive === true
   if ('priority' in body) data.priority = optionalNumber(body.priority, 'Priority', { min: 0, max: 100 }) ?? 0
   if ('conditions' in body) data.conditions = body.conditions && typeof body.conditions === 'object' ? body.conditions as any : null
+  if ('ccRecipientIds' in body) {
+    data.ccRecipientIds = Array.isArray(body.ccRecipientIds)
+      ? body.ccRecipientIds.filter((id: unknown) => typeof id === 'string' && id.length > 0)
+      : []
+  }
 
   // Wrap default-unsetting + update in a transaction to avoid race
   const route = await prisma.$transaction(async (tx: any) => {

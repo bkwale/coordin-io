@@ -69,6 +69,9 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const isDefault = body.isDefault === true
   const priority = optionalNumber(body.priority, 'Priority', { min: 0, max: 100 }) ?? 0
   const conditions = validateConditions(body.conditions)
+  const ccRecipientIds = Array.isArray(body.ccRecipientIds)
+    ? body.ccRecipientIds.filter((id: unknown) => typeof id === 'string' && id.length > 0)
+    : []
 
   // Validate steps
   const steps = body.steps
@@ -100,6 +103,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         isDefault,
         priority,
         conditions: conditions as any,
+        ccRecipientIds,
       },
     })
 
@@ -115,6 +119,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
           ] as const),
           approverRole: optionalString(step.approverRole, 'Approver role', 50) ?? null,
           approverId: step.approverId ?? null,
+          approverIds: Array.isArray(step.approverIds) ? step.approverIds.filter((id: unknown) => typeof id === 'string') : [],
+          requireAll: step.requireAll === true,
           canSkipIfSameAsPrevious: step.canSkipIfSameAsPrevious === true,
           escalationDays: optionalNumber(step.escalationDays, 'Escalation days', { min: 1, max: 30 }) ?? null,
         },

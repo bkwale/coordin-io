@@ -22,6 +22,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     where: { id },
     include: {
       profile: { select: { id: true, fullName: true, jobTitle: true, startDate: true } },
+      goals: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
     },
   })
 

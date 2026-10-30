@@ -1978,6 +1978,7 @@ interface ApprovalRoute {
   isActive: boolean
   priority: number
   conditions: Record<string, unknown> | null
+  ccRecipientIds: string[]
   steps: ApprovalRouteStep[]
 }
 
@@ -1988,6 +1989,8 @@ interface ApprovalRouteStep {
   approverType: string
   approverRole: string | null
   approverId: string | null
+  approverIds: string[]
+  requireAll: boolean
   canSkipIfSameAsPrevious: boolean
   escalationDays: number | null
 }
@@ -2017,7 +2020,7 @@ function ApprovalRoutesSection() {
 
   // Edit route state
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
-  const [editRouteForm, setEditRouteForm] = useState({ name: '', isDefault: false, isActive: true, priority: 0 })
+  const [editRouteForm, setEditRouteForm] = useState({ name: '', isDefault: false, isActive: true, priority: 0, ccRecipientIds: [] as string[] })
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -2027,8 +2030,9 @@ function ApprovalRoutesSection() {
     requestType: 'LEAVE' as string,
     isDefault: false,
     priority: 0,
-    steps: [{ label: 'Step 1', approverType: 'LINE_MANAGER', approverRole: '', approverId: '', canSkipIfSameAsPrevious: false, escalationDays: '' }] as Array<{
-      label: string; approverType: string; approverRole: string; approverId: string; canSkipIfSameAsPrevious: boolean; escalationDays: string
+    ccRecipientIds: [] as string[],
+    steps: [{ label: 'Step 1', approverType: 'LINE_MANAGER', approverRole: '', approverId: '', approverIds: [] as string[], requireAll: false, canSkipIfSameAsPrevious: false, escalationDays: '' }] as Array<{
+      label: string; approverType: string; approverRole: string; approverId: string; approverIds: string[]; requireAll: boolean; canSkipIfSameAsPrevious: boolean; escalationDays: string
     }>,
   })
 
@@ -2089,6 +2093,7 @@ function ApprovalRoutesSection() {
       isDefault: route.isDefault,
       isActive: route.isActive,
       priority: route.priority,
+      ccRecipientIds: route.ccRecipientIds ?? [],
     })
     setEditError(null)
     setExpandedId(route.id)
@@ -2112,6 +2117,7 @@ function ApprovalRoutesSection() {
           isDefault: editRouteForm.isDefault,
           isActive: editRouteForm.isActive,
           priority: editRouteForm.priority,
+          ccRecipientIds: editRouteForm.ccRecipientIds,
         }),
       })
       if (!res.ok) {
@@ -2136,11 +2142,14 @@ function ApprovalRoutesSection() {
         requestType: newRoute.requestType,
         isDefault: newRoute.isDefault,
         priority: newRoute.priority,
+        ccRecipientIds: newRoute.ccRecipientIds,
         steps: newRoute.steps.map(s => ({
           label: s.label,
           approverType: s.approverType,
           approverRole: s.approverRole || undefined,
           approverId: s.approverId || undefined,
+          approverIds: s.approverIds.length > 0 ? s.approverIds : undefined,
+          requireAll: s.requireAll || undefined,
           canSkipIfSameAsPrevious: s.canSkipIfSameAsPrevious,
           escalationDays: s.escalationDays ? parseInt(s.escalationDays) : undefined,
         })),
@@ -2157,8 +2166,8 @@ function ApprovalRoutesSection() {
       }
       setShowCreate(false)
       setNewRoute({
-        name: '', requestType: 'LEAVE', isDefault: false, priority: 0,
-        steps: [{ label: 'Step 1', approverType: 'LINE_MANAGER', approverRole: '', approverId: '', canSkipIfSameAsPrevious: false, escalationDays: '' }],
+        name: '', requestType: 'LEAVE', isDefault: false, priority: 0, ccRecipientIds: [],
+        steps: [{ label: 'Step 1', approverType: 'LINE_MANAGER', approverRole: '', approverId: '', approverIds: [], requireAll: false, canSkipIfSameAsPrevious: false, escalationDays: '' }],
       })
       fetchRoutes()
     } catch {
@@ -2174,7 +2183,7 @@ function ApprovalRoutesSection() {
       steps: [...prev.steps, {
         label: `Step ${prev.steps.length + 1}`,
         approverType: 'LINE_MANAGER',
-        approverRole: '', approverId: '',
+        approverRole: '', approverId: '', approverIds: [], requireAll: false,
         canSkipIfSameAsPrevious: false, escalationDays: '',
       }],
     }))
@@ -2273,6 +2282,49 @@ function ApprovalRoutesSection() {
             </div>
           </div>
 
+          {/* CC Recipients */}
+          <div>
+            <label className="block text-[11px] font-semibold text-ink-500 uppercase mb-1">CC Recipients</label>
+            <p className="text-[11px] text-ink-400 mb-2">These people will be notified when requests are submitted and completed on this route.</p>
+            <select
+              onChange={e => {
+                const val = e.target.value
+                if (val && !newRoute.ccRecipientIds.includes(val)) {
+                  setNewRoute(prev => ({ ...prev, ccRecipientIds: [...prev.ccRecipientIds, val] }))
+                }
+                e.target.value = ''
+              }}
+              className="w-full px-3 py-1.5 border border-surface-200 rounded-md text-sm mb-2"
+              defaultValue=""
+            >
+              <option value="">Add CC recipient...</option>
+              {orgMembers
+                .filter(m => !newRoute.ccRecipientIds.includes(m.id))
+                .map(m => (
+                  <option key={m.id} value={m.id}>{m.fullName} ({m.email})</option>
+                ))}
+            </select>
+            {newRoute.ccRecipientIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {newRoute.ccRecipientIds.map(id => {
+                  const member = orgMembers.find(m => m.id === id)
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-full">
+                      {member?.fullName ?? id}
+                      <button
+                        type="button"
+                        onClick={() => setNewRoute(prev => ({ ...prev, ccRecipientIds: prev.ccRecipientIds.filter(r => r !== id) }))}
+                        className="text-blue-400 hover:text-blue-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Steps */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -2344,6 +2396,60 @@ function ApprovalRoutesSection() {
                     Skip if same approver
                   </label>
                 </div>
+                {/* Require All Approvers toggle */}
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1 text-xs text-ink-500">
+                    <input
+                      type="checkbox"
+                      checked={step.requireAll}
+                      onChange={e => updateStep(idx, 'requireAll', e.target.checked)}
+                    />
+                    Require all approvers (AND logic)
+                  </label>
+                </div>
+                {/* Multi-approver picker for AND + SPECIFIC_PERSON */}
+                {step.requireAll && step.approverType === 'SPECIFIC_PERSON' && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-ink-500 uppercase">Approvers (all must approve)</label>
+                    <select
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val && !step.approverIds.includes(val)) {
+                          updateStep(idx, 'approverIds', [...step.approverIds, val])
+                        }
+                        e.target.value = ''
+                      }}
+                      className="w-full px-2 py-1 border border-surface-200 rounded text-sm"
+                      defaultValue=""
+                    >
+                      <option value="">Add approver...</option>
+                      {orgMembers
+                        .filter(m => !step.approverIds.includes(m.id))
+                        .map(m => (
+                          <option key={m.id} value={m.id}>{m.fullName} ({m.email})</option>
+                        ))}
+                    </select>
+                    {step.approverIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {step.approverIds.map(id => {
+                          const member = orgMembers.find(m => m.id === id)
+                          return (
+                            <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 text-[11px] font-medium rounded-full">
+                              {member?.fullName ?? id}
+                              <button
+                                type="button"
+                                onClick={() => updateStep(idx, 'approverIds', step.approverIds.filter((r: string) => r !== id))}
+                                className="text-purple-400 hover:text-purple-600"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -2475,6 +2581,47 @@ function ApprovalRoutesSection() {
                             Active
                           </label>
                         </div>
+                        {/* CC Recipients (edit) */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-ink-500 uppercase mb-1">CC Recipients</label>
+                          <select
+                            onChange={e => {
+                              const val = e.target.value
+                              if (val && !editRouteForm.ccRecipientIds.includes(val)) {
+                                setEditRouteForm(prev => ({ ...prev, ccRecipientIds: [...prev.ccRecipientIds, val] }))
+                              }
+                              e.target.value = ''
+                            }}
+                            className="w-full px-3 py-1.5 border border-surface-200 rounded-md text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white mb-2"
+                            defaultValue=""
+                          >
+                            <option value="">Add CC recipient...</option>
+                            {orgMembers
+                              .filter(m => !editRouteForm.ccRecipientIds.includes(m.id))
+                              .map(m => (
+                                <option key={m.id} value={m.id}>{m.fullName} ({m.email})</option>
+                              ))}
+                          </select>
+                          {editRouteForm.ccRecipientIds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {editRouteForm.ccRecipientIds.map(id => {
+                                const member = orgMembers.find(m => m.id === id)
+                                return (
+                                  <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-full">
+                                    {member?.fullName ?? id}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditRouteForm(prev => ({ ...prev, ccRecipientIds: prev.ccRecipientIds.filter(r => r !== id) }))}
+                                      className="text-blue-400 hover:text-blue-600"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex gap-2 pt-1">
                           <button
                             onClick={saveEditRoute}
@@ -2498,12 +2645,26 @@ function ApprovalRoutesSection() {
                         <div className="text-xs text-ink-400">
                           Priority: {route.priority} | Conditions: {route.conditions ? JSON.stringify(route.conditions) : 'None'}
                         </div>
+                        {route.ccRecipientIds && route.ccRecipientIds.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            <span className="text-[11px] text-ink-400 font-medium">CC:</span>
+                            {route.ccRecipientIds.map(id => {
+                              const member = orgMembers.find(m => m.id === id)
+                              return (
+                                <span key={id} className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-medium rounded-full">
+                                  {member?.fullName ?? id}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="text-ink-400 border-b border-surface-100">
                               <th className="text-left py-1 font-medium">#</th>
                               <th className="text-left py-1 font-medium">Label</th>
                               <th className="text-left py-1 font-medium">Approver Type</th>
+                              <th className="text-left py-1 font-medium">Mode</th>
                               <th className="text-left py-1 font-medium">Skip if Same</th>
                               <th className="text-left py-1 font-medium">Escalation</th>
                             </tr>
@@ -2513,7 +2674,8 @@ function ApprovalRoutesSection() {
                               <tr key={step.id} className="border-b border-surface-50 text-ink-600">
                                 <td className="py-1.5">{step.stepOrder}</td>
                                 <td className="py-1.5">{step.label}</td>
-                                <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}{step.approverId ? ` — ${orgMembers.find(m => m.id === step.approverId)?.fullName || step.approverId}` : ''}</td>
+                                <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}{step.approverId ? ` — ${orgMembers.find(m => m.id === step.approverId)?.fullName || step.approverId}` : ''}{step.approverIds && step.approverIds.length > 1 ? ` — ${step.approverIds.map(id => orgMembers.find(m => m.id === id)?.fullName || id).join(', ')}` : ''}</td>
+                                <td className="py-1.5">{step.requireAll ? <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 text-[10px] font-semibold rounded">ALL</span> : <span className="text-ink-400">Any</span>}</td>
                                 <td className="py-1.5">{step.canSkipIfSameAsPrevious ? 'Yes' : 'No'}</td>
                                 <td className="py-1.5">{step.escalationDays ? `${step.escalationDays} days` : '—'}</td>
                               </tr>
@@ -4061,6 +4223,84 @@ const RESPONSIBLE_ROLES = [
   { value: 'EMPLOYEE', label: 'Employee' },
 ]
 
+function ProbationDurationConfig() {
+  const [months, setMonths] = useState<number>(3)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/settings/probation')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.data?.settings?.defaultProbationMonths) {
+          setMonths(data.data.settings.defaultProbationMonths)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    setSaved(false)
+    try {
+      const res = await fetch('/api/settings/probation', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultProbationMonths: months }),
+      })
+      if (res.ok) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return null
+
+  return (
+    <div className="p-4 bg-surface-50 rounded-lg border border-surface-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] font-medium text-ink-900">Default Probation Duration</p>
+          <p className="text-[11px] text-ink-400 mt-0.5">
+            Applied to new employees unless overridden on their profile
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={months}
+              onChange={(e) => setMonths(Math.max(1, Math.min(12, parseInt(e.target.value) || 1)))}
+              min={1}
+              max={12}
+              className="w-16 px-2 py-1.5 border border-surface-200 rounded-lg text-[13px] text-center focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+            />
+            <span className="text-[13px] text-ink-500">months</span>
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-ink-900 text-white text-[12px] font-medium rounded-lg hover:bg-ink-800 disabled:opacity-60 transition-colors"
+          >
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            Save
+          </button>
+          {saved && (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+              <CheckCircle className="w-3.5 h-3.5" /> Saved
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function OnboardingSection() {
   const [templates, setTemplates] = useState<OnboardingTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -4249,6 +4489,8 @@ function OnboardingSection() {
         title="Onboarding Templates"
         description="Manage onboarding templates and task options for new employees."
       />
+
+      <ProbationDurationConfig />
 
       {error && (
         <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-[12px] text-red-700">

@@ -45,6 +45,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     where,
     include: {
       profile: { select: { id: true, fullName: true, jobTitle: true, startDate: true } },
+      _count: { select: { goals: true } },
     },
     orderBy: { scheduledDate: 'asc' },
     take: 100,

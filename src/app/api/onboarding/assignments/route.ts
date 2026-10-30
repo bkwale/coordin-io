@@ -6,6 +6,7 @@ import { requireString, requireDate, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError, ConflictError } from '@/lib/errors'
 import { recordAuditEvent } from '@/lib/audit'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { getEffectiveProbationMonths } from '@/lib/org-settings'
 
 /**
  * GET /api/onboarding/assignments — List onboarding assignments.
@@ -237,7 +238,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       // Always use the assignment's startDate for new probation reviews —
       // empProfile.probationStartDate may be stale from prior data
       const probStart = startDate
-      const probMonths = empProfile?.probationLength ?? 3
+      const probMonths = await getEffectiveProbationMonths(empProfile?.probationLength, profile.organisationId)
 
       const milestones: { type: string; daysOffset: number }[] = []
       if (probMonths >= 1) milestones.push({ type: '30-day', daysOffset: 30 })

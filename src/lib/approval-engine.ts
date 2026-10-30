@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
+import { notifyMentions } from '@/lib/mentions'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import type {
   ApprovalRequestType,
@@ -135,6 +136,38 @@ async function resolveApprover(
   }
 }
 
+/**
+ * Resolve multiple approvers for an AND step.
+ * Returns an array of profile IDs.
+ */
+async function resolveApprovers(
+  step: { approverType: ApproverType; approverRole: string | null; approverId: string | null; approverIds?: string[] },
+  context: SubmitContext,
+): Promise<string[]> {
+  // If explicit approverIds are set (SPECIFIC_PERSON with multiple), use those
+  if (step.approverIds && step.approverIds.length > 0) {
+    return step.approverIds
+  }
+
+  // For ROLE type with requireAll, find ALL people with that role
+  if (step.approverType === 'ROLE' && step.approverRole) {
+    const people = await prisma.profile.findMany({
+      where: {
+        organisationId: context.organisationId,
+        orgPermission: step.approverRole as any,
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    return people.map((p: { id: string }) => p.id)
+  }
+
+  // Fall back to single approver resolution
+  const single = await resolveApprover(step, context)
+  return single ? [single] : []
+}
+
 // ── Create Approval Instance ─────────────────────────────────
 
 /**
@@ -163,6 +196,7 @@ export async function createApprovalInstance(
         submitterId: context.submitterId,
         currentStepOrder: 1,
         status: 'IN_PROGRESS',
+        ccRecipientIds: route.ccRecipientIds ?? [],
       },
     })
 
@@ -170,6 +204,13 @@ export async function createApprovalInstance(
     let previousApproverId: string | null = null
     for (const step of route.steps) {
       const approverId = await resolveApprover(step, context)
+
+      // AND step: resolve multiple approvers
+      const isAndStep = (step as any).requireAll === true
+      let stepApproverIds: string[] = []
+      if (isAndStep) {
+        stepApproverIds = await resolveApprovers(step as any, context)
+      }
 
       // Skip if same as previous and canSkipIfSameAsPrevious is true
       const shouldSkip = step.canSkipIfSameAsPrevious &&
@@ -185,7 +226,9 @@ export async function createApprovalInstance(
           instanceId: inst.id,
           stepOrder: step.stepOrder,
           label: step.label,
-          approverId,
+          approverId: isAndStep ? null : approverId,
+          approverIds: isAndStep ? stepApproverIds : (approverId ? [approverId] : []),
+          approvedByIds: [],
           status: shouldSkip ? 'SKIPPED' : 'PENDING',
           escalationDueAt: shouldSkip ? null : (step.stepOrder === 1 ? escalationDueAt : null),
         },
@@ -214,6 +257,18 @@ export async function createApprovalInstance(
       body: `A ${context.requestType.toLowerCase().replace('_', ' ')} request needs your approval.`,
       linkUrl: `/approvals`,
     })
+  }
+
+  // Notify CC recipients about new approval request
+  const ccIds = (route.ccRecipientIds ?? []) as string[]
+  for (const ccId of ccIds) {
+    await createNotification({
+      profileId: ccId,
+      type: NOTIFICATION_EVENTS.APPROVAL_REQUESTED,
+      title: `CC: ${context.requestType.toLowerCase().replace('_', ' ')} submitted for approval`,
+      body: `You are CC'd on a ${context.requestType.toLowerCase().replace('_', ' ')} request.`,
+      linkUrl: `/approvals`,
+    }).catch(() => {})
   }
 
   return instance.id
@@ -269,7 +324,23 @@ export async function processApprovalStep(
     }
 
     // Verify the approver matches (or is admin)
-    if (effectiveStep.approverId && effectiveStep.approverId !== approverId) {
+    const stepApproverIds = (effectiveStep.approverIds as string[] ?? [])
+    if (stepApproverIds.length > 1) {
+      // AND step: check if approver is in the approverIds list
+      if (!stepApproverIds.includes(approverId)) {
+        const approverProfile = await tx.profile.findUnique({
+          where: { id: approverId },
+          select: { orgPermission: true },
+        })
+        if (!approverProfile || !['ADMIN', 'OWNER'].includes(approverProfile.orgPermission)) {
+          throw new Error('You are not an assigned approver for this step')
+        }
+      }
+      // Check if already approved
+      if ((effectiveStep.approvedByIds as string[] ?? []).includes(approverId)) {
+        throw new Error('You have already approved this step')
+      }
+    } else if (effectiveStep.approverId && effectiveStep.approverId !== approverId) {
       const approverProfile = await tx.profile.findUnique({
         where: { id: approverId },
         select: { orgPermission: true },
@@ -319,6 +390,36 @@ export async function processApprovalStep(
         _requestType: instance.requestType,
         _nextApproverId: null as string | null,
       }
+    }
+
+    // AND step: check if all approvers have approved
+    const isAndStep = (effectiveStep.approverIds as string[] ?? []).length > 1
+    if (action === 'APPROVE' && isAndStep) {
+      const currentApproved = [...(effectiveStep.approvedByIds as string[] ?? []), approverId]
+      const allApproverIds = effectiveStep.approverIds as string[]
+      const allApproved = allApproverIds.every((id: string) => currentApproved.includes(id))
+
+      if (!allApproved) {
+        // Not everyone has approved yet — record this approval and stay on step
+        await tx.approvalStepInstance.update({
+          where: { id: effectiveStep.id },
+          data: {
+            approvedByIds: currentApproved,
+            comment: comment ? `${effectiveStep.comment ? effectiveStep.comment + '\n' : ''}${approverId}: ${comment}` : effectiveStep.comment,
+          },
+        })
+
+        return {
+          instanceStatus: 'IN_PROGRESS' as const,
+          stepStatus: 'PENDING' as ApprovalStepStatus,
+          nextStepOrder: effectiveStep.stepOrder, // stays on same step
+          isComplete: false,
+          _submitterId: instance.submitterId,
+          _requestType: instance.requestType,
+          _nextApproverId: null as string | null,
+        }
+      }
+      // All approved — fall through to normal advance logic below
     }
 
     // APPROVE — advance to next step or complete
@@ -397,6 +498,42 @@ export async function processApprovalStep(
       body: `Your ${result._requestType.toLowerCase().replace('_', ' ')} request has been fully approved.`,
       linkUrl: `/approvals`,
     }).catch(() => {})
+  }
+
+  // Notify CC recipients on completion/rejection
+  if (result.isComplete) {
+    const inst = await prisma.approvalInstance.findUnique({
+      where: { id: instanceId },
+      select: { ccRecipientIds: true },
+    })
+    const ccIds = (inst?.ccRecipientIds ?? []) as string[]
+    for (const ccId of ccIds) {
+      await createNotification({
+        profileId: ccId,
+        type: NOTIFICATION_EVENTS.APPROVAL_COMPLETED,
+        title: `CC: ${result._requestType.toLowerCase().replace('_', ' ')} ${result.instanceStatus.toLowerCase()}`,
+        body: `A ${result._requestType.toLowerCase().replace('_', ' ')} request you were CC'd on has been ${result.instanceStatus.toLowerCase()}.`,
+        linkUrl: `/approvals`,
+      }).catch(() => {})
+    }
+  }
+
+  // Notify @mentioned users in the comment
+  if (comment) {
+    const approverProfile = await prisma.profile.findUnique({
+      where: { id: approverId },
+      select: { fullName: true, organisationId: true },
+    })
+    if (approverProfile) {
+      await notifyMentions(comment, {
+        organisationId: approverProfile.organisationId,
+        mentionedById: approverId,
+        mentionedByName: approverProfile.fullName,
+        entityType: result._requestType.toLowerCase().replace('_', ' '),
+        entityId: instanceId,
+        linkUrl: '/approvals',
+      }).catch(() => {})
+    }
   }
 
   return {

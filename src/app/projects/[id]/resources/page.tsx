@@ -41,6 +41,7 @@ interface ResourcePlanData {
   members: Member[]
   weeks: Week[]
   currentWorkStage: number
+  timesheetActuals: Record<string, number> // profileId::weekStart -> hours
 }
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -211,6 +212,22 @@ export default function ResourcePlanningPage() {
     }, 0)
   }
 
+  // Actual hours helpers
+  const actuals = data?.timesheetActuals ?? {}
+
+  const getActual = (profileId: string, weekStart: string): number => {
+    return actuals[getAllocationKey(profileId, weekStart)] ?? 0
+  }
+
+  const getRowActualTotal = (profileId: string): number => {
+    if (!data) return 0
+    return data.weeks.reduce((sum, week) => sum + getActual(profileId, week.start), 0)
+  }
+
+  const getColActualTotal = (weekStart: string): number => {
+    return displayedMembers.reduce((sum, m) => sum + getActual(m.profileId, weekStart), 0)
+  }
+
   /* ── Render ─────────────────────────────────────────────── */
 
   if (loading && !data) {
@@ -337,6 +354,10 @@ export default function ResourcePlanningPage() {
                           : alloc?.hoursAllocated?.toString() ?? ''
                         const isSaving = saving === key
 
+                        const actualHours = getActual(member.profileId, week.start)
+                        const planned = alloc?.hoursAllocated ?? 0
+                        const overAllocated = actualHours > 0 && planned > 0 && actualHours > planned
+
                         return (
                           <td key={week.start} className="py-1.5 px-1 text-center">
                             <div className="relative">
@@ -364,6 +385,14 @@ export default function ResourcePlanningPage() {
                                 <Loader2 className="w-3 h-3 animate-spin absolute top-1/2 right-1 -translate-y-1/2 text-accent-500" />
                               )}
                             </div>
+                            {actualHours > 0 && (
+                              <p className={cn(
+                                'text-[10px] mt-0.5 font-medium',
+                                overAllocated ? 'text-amber-600' : 'text-ink-400',
+                              )}>
+                                {actualHours}h actual
+                              </p>
+                            )}
                           </td>
                         )
                       })}
@@ -376,6 +405,17 @@ export default function ResourcePlanningPage() {
                         )}>
                           {rowTotal > 0 ? `${rowTotal}h` : '—'}
                         </span>
+                        {(() => {
+                          const rowActual = getRowActualTotal(member.profileId)
+                          return rowActual > 0 ? (
+                            <p className={cn(
+                              'text-[10px] font-medium mt-0.5',
+                              rowActual > rowTotal ? 'text-amber-600' : 'text-ink-400',
+                            )}>
+                              {rowActual}h actual
+                            </p>
+                          ) : null
+                        })()}
                       </td>
                     </tr>
                   )
@@ -393,6 +433,7 @@ export default function ResourcePlanningPage() {
                   </td>
                   {data.weeks.map(week => {
                     const total = getColTotal(week.start)
+                    const colActual = getColActualTotal(week.start)
                     return (
                       <td key={week.start} className="py-2.5 px-1 text-center">
                         <span className={cn(
@@ -401,6 +442,14 @@ export default function ResourcePlanningPage() {
                         )}>
                           {total > 0 ? `${total}h` : '—'}
                         </span>
+                        {colActual > 0 && (
+                          <p className={cn(
+                            'text-[10px] font-medium mt-0.5',
+                            colActual > total ? 'text-amber-600' : 'text-ink-400',
+                          )}>
+                            {colActual}h actual
+                          </p>
+                        )}
                       </td>
                     )
                   })}
@@ -408,6 +457,12 @@ export default function ResourcePlanningPage() {
                     <span className="text-xs font-bold text-ink-800">
                       {displayedMembers.reduce((sum, m) => sum + getRowTotal(m.profileId), 0)}h
                     </span>
+                    {(() => {
+                      const grandActual = displayedMembers.reduce((sum, m) => sum + getRowActualTotal(m.profileId), 0)
+                      return grandActual > 0 ? (
+                        <p className="text-[10px] font-medium text-ink-400 mt-0.5">{grandActual}h actual</p>
+                      ) : null
+                    })()}
                   </td>
                 </tr>
               )}
@@ -460,9 +515,11 @@ export default function ResourcePlanningPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-[10px] text-ink-400">
+      <div className="flex items-center gap-4 text-[10px] text-ink-400 flex-wrap">
         <span>Click any cell to enter hours · Tab/Enter to save · Esc to cancel</span>
         <span className="text-red-500 font-medium">Red total = over 40h/week</span>
+        <span className="text-ink-400 font-medium">Grey = timesheet actuals within plan</span>
+        <span className="text-amber-600 font-medium">Amber = actuals exceed planned hours</span>
       </div>
     </div>
   )

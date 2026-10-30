@@ -45,6 +45,29 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
     orderBy: [{ weekStarting: 'asc' }, { profile: { fullName: 'asc' } }],
   })
 
+  // Aggregate actual timesheet hours for this project, grouped by profileId and week
+  const timesheetActuals = await modulesPrisma.timesheetEntry.findMany({
+    where: {
+      projectId,
+      week: {
+        weekStarting: { gte: weekStart, lt: weekEnd },
+        organisationId: profile.organisationId,
+      },
+    },
+    select: {
+      hours: true,
+      week: { select: { profileId: true, weekStarting: true } },
+    },
+  })
+
+  // Aggregate into a map: profileId::weekStart -> totalActualHours
+  const actualsMap: Record<string, number> = {}
+  for (const entry of timesheetActuals) {
+    const weekKey = entry.week.weekStarting.toISOString().split('T')[0]
+    const key = `${entry.week.profileId}::${weekKey}`
+    actualsMap[key] = (actualsMap[key] || 0) + entry.hours
+  }
+
   // Fetch project members for the allocation dropdown
   const members = await prisma.projectMembership.findMany({
     where: { projectId },
@@ -72,7 +95,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
 
   return success({
     allocations,
-    members: members.map((m) => ({
+    members: members.map((m: { profile: { id: string; fullName: string; jobTitle: string | null }; projectRole: string | null }) => ({
       profileId: m.profile.id,
       fullName: m.profile.fullName,
       jobTitle: m.profile.jobTitle,
@@ -80,6 +103,7 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
     })),
     weeks,
     currentWorkStage: project.currentWorkStage,
+    timesheetActuals: actualsMap,
   })
 })
 
