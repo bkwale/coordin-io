@@ -363,7 +363,8 @@ export default function StaffingPage() {
     try {
       const monday = getMonday(new Date())
       monday.setDate(monday.getDate() + weekOffset * 7)
-      const res = await fetch(`/api/staffing/allocations?weekStarting=${monday.toISOString()}&weeks=4`)
+      const mondayStr = monday.toISOString().split('T')[0]
+      const res = await fetch(`/api/staffing/allocations?weekStarting=${mondayStr}&weeks=4`)
       if (!res.ok) throw new Error('Failed to load allocations')
       const json = await res.json()
       setAllocationsData(json.data)

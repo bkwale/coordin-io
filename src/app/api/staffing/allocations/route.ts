@@ -33,16 +33,18 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const projectIdFilter = url.searchParams.get('projectId')
   const weeksCount = parseInt(url.searchParams.get('weeks') ?? '4', 10)
 
-  // Default to current week's Monday
+  // Default to current week's Monday — always normalise to UTC midnight
   const now = new Date()
   let weekStart: Date
   if (weekParam) {
-    weekStart = new Date(weekParam)
+    // Accept date-only "2026-10-26" or full ISO — always normalise to UTC midnight
+    const dateOnly = weekParam.split('T')[0]
+    weekStart = new Date(dateOnly + 'T00:00:00.000Z')
   } else {
-    weekStart = new Date(now)
-    weekStart.setDate(now.getDate() - now.getDay() + 1) // Monday
+    weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const day = weekStart.getUTCDay()
+    weekStart.setUTCDate(weekStart.getUTCDate() - day + (day === 0 ? -6 : 1)) // Monday
   }
-  weekStart.setHours(0, 0, 0, 0)
 
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + weeksCount * 7)
@@ -152,7 +154,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     approvedLeave,
     employees: activeEmployees,
     projects: activeProjects,
-    weekStarting: weekStart.toISOString(),
+    weekStarting: weekStart.toISOString().split('T')[0] + 'T00:00:00.000Z',
     weeksCount,
     timesheetActuals,
   })

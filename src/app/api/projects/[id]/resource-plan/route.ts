@@ -24,11 +24,11 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
   const weeksCount = parseInt(url.searchParams.get('weeks') ?? '6', 10)
   const offsetDays = parseInt(url.searchParams.get('offset') ?? '0', 10) * 7
 
-  // Current week's Monday + offset
+  // Current week's Monday + offset — always use UTC to avoid timezone key mismatches
   const now = new Date()
-  const weekStart = new Date(now)
-  weekStart.setDate(now.getDate() - now.getDay() + 1 + offsetDays)
-  weekStart.setHours(0, 0, 0, 0)
+  const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const day = weekStart.getUTCDay()
+  weekStart.setUTCDate(weekStart.getUTCDate() - day + (day === 0 ? -6 : 1) + offsetDays)
 
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + weeksCount * 7)
