@@ -217,15 +217,20 @@ export default function TimesheetsPage() {
   const loadWeek = useCallback(async () => {
     setLoading(true)
     try {
-      // Load user profile
-      const meRes = await fetch('/api/me')
+      // Parallelize independent fetches — profile, projects, and timesheets list
+      const [meRes, projRes, res] = await Promise.all([
+        fetch('/api/me'),
+        fetch('/api/projects?pageSize=100'),
+        fetch(`/api/timesheets?page=1&pageSize=52`),
+      ])
+
+      // Process user profile
       if (meRes.ok) {
         const meData = await meRes.json()
         setUserProfile(meData.data?.profile || null)
       }
 
-      // Load projects
-      const projRes = await fetch('/api/projects?pageSize=100')
+      // Process projects
       if (projRes.ok) {
         const projData = await projRes.json()
         setProjects(
@@ -237,8 +242,7 @@ export default function TimesheetsPage() {
         )
       }
 
-      // Load current week
-      const res = await fetch(`/api/timesheets?page=1&pageSize=52`)
+      // Process timesheets
       if (!res.ok) throw new Error('Failed to load timesheets')
       const data = await res.json()
       const allWeeks: TimesheetWeek[] = data.data?.weeks || []

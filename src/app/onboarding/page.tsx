@@ -156,20 +156,20 @@ export default function OnboardingPage() {
   const [groupedTasks, setGroupedTasks] = useState<Record<string, OnboardingTask[]>>({})
 
   // ── Check for template assignment ─────────────────────
-  const checkAssignment = useCallback(async () => {
+  const checkAssignment = useCallback(async (): Promise<AssignmentData | null> => {
     try {
       const res = await fetch('/api/onboarding/assignments?mine=true&status=ACTIVE')
-      if (!res.ok) return false
+      if (!res.ok) return null
       const json = await res.json()
       const assignments = json.data?.assignments ?? []
       if (assignments.length > 0) {
         setHasAssignment(true)
         setAssignment(assignments[0])
-        return true
+        return assignments[0]
       }
-      return false
+      return null
     } catch {
-      return false
+      return null
     }
   }, [])
 
@@ -288,8 +288,11 @@ export default function OnboardingPage() {
       setLoading(true)
       try {
         // Check for template-based assignment first
-        const hasTemplateBased = await checkAssignment()
-        if (!hasTemplateBased) {
+        const foundAssignment = await checkAssignment()
+        if (foundAssignment) {
+          // Load tasks before releasing loading state to avoid empty flash
+          await fetchAssignmentTasks(foundAssignment.id)
+        } else {
           // Fall back to legacy wizard
           await Promise.all([fetchProgress(), fetchPolicies(), fetchTraining()])
         }
@@ -300,14 +303,20 @@ export default function OnboardingPage() {
       }
     }
     init()
-  }, [checkAssignment, fetchProgress, fetchPolicies, fetchTraining])
+  }, [checkAssignment, fetchAssignmentTasks, fetchProgress, fetchPolicies, fetchTraining])
 
-  // Load tasks when assignment is available
+  // Reload tasks when assignment changes (e.g. after a task status update)
+  const assignmentId = assignment?.id
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
   useEffect(() => {
-    if (assignment?.id) {
-      fetchAssignmentTasks(assignment.id)
+    if (!initialLoadDone && assignmentId) {
+      setInitialLoadDone(true)
+      return // Skip — already loaded during init
     }
-  }, [assignment?.id, fetchAssignmentTasks])
+    if (assignmentId && initialLoadDone) {
+      fetchAssignmentTasks(assignmentId)
+    }
+  }, [assignmentId, fetchAssignmentTasks, initialLoadDone])
 
   // ── Acknowledge a policy ──────────────────────────────
   async function acknowledgePolicy(policyId: string) {
