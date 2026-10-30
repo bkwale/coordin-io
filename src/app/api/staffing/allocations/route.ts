@@ -104,6 +104,35 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     orderBy: { fullName: 'asc' },
   })
 
+  // Aggregate actual timesheet hours for the same period
+  let timesheetActuals: Record<string, number> = {}
+  try {
+    const timesheetEntries = await modulesPrisma.timesheetEntry.findMany({
+      where: {
+        week: {
+          weekStarting: { gte: weekStart, lt: weekEnd },
+          organisationId: profile.organisationId,
+          ...(profileIdFilter ? { profileId: profileIdFilter } : {}),
+        },
+        ...(projectIdFilter ? { projectId: projectIdFilter } : {}),
+      },
+      select: {
+        hours: true,
+        projectId: true,
+        week: { select: { profileId: true, weekStarting: true } },
+      },
+    })
+
+    for (const entry of timesheetEntries) {
+      const weekKey = entry.week.weekStarting.toISOString().split('T')[0]
+      // Keyed by profileId::weekStart for the grid (total across all projects)
+      const key = `${entry.week.profileId}::${weekKey}`
+      timesheetActuals[key] = (timesheetActuals[key] || 0) + entry.hours
+    }
+  } catch {
+    // Timesheet tables may not exist yet
+  }
+
   // Active projects for the project dropdown
   const activeProjects = await modulesPrisma.project.findMany({
     where: {
@@ -125,6 +154,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     projects: activeProjects,
     weekStarting: weekStart.toISOString(),
     weeksCount,
+    timesheetActuals,
   })
 })
 

@@ -127,6 +127,7 @@ interface AllocationsData {
   projects: { id: string; name: string; code: string | null }[]
   weekStarting: string
   weeksCount: number
+  timesheetActuals?: Record<string, number>
 }
 
 interface ProbationReview {
@@ -792,7 +793,8 @@ export default function StaffingPage() {
       )
     }
 
-    const { employees: allocEmployees, projects: allocProjects, allocations: allocs, approvedLeave } = allocationsData
+    const { employees: allocEmployees, projects: allocProjects, allocations: allocs, approvedLeave, timesheetActuals: tsActuals } = allocationsData
+    const actuals = tsActuals ?? {}
 
     // Build week columns
     const startDate = new Date(allocationsData.weekStarting)
@@ -890,6 +892,9 @@ export default function StaffingPage() {
                       total += hours
                       const onLeave = empLeave?.has(weekKey)
                       const overAllocated = hours > 40
+                      const actualKey = `${emp.id}::${weekKey}`
+                      const actualHours = actuals[actualKey] ?? 0
+                      const overActual = actualHours > hours && hours > 0
                       return (
                         <td key={w} className="text-center px-3 py-3">
                           {onLeave && (
@@ -900,6 +905,11 @@ export default function StaffingPage() {
                           }`}>
                             {hours > 0 ? `${hours}h` : '-'}
                           </span>
+                          {actualHours > 0 && (
+                            <span className={`block text-[10px] ${overActual ? 'text-amber-600 font-medium' : 'text-green-600'}`}>
+                              {actualHours}h actual
+                            </span>
+                          )}
                           {overAllocated && (
                             <span className="block text-[10px] text-red-500">Over</span>
                           )}
