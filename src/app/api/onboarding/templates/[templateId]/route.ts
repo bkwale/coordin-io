@@ -51,6 +51,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       isActive: template.isActive,
       totalItems: template.items.length,
       assignmentCount: template._count.assignments,
+      items: template.items,
       groupedItems,
       createdAt: template.createdAt,
       updatedAt: template.updatedAt,
