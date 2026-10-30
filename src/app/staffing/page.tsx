@@ -1117,7 +1117,7 @@ export default function StaffingPage() {
   }
 
   function renderOnboardingTab() {
-    const onboardingEmployees = data!.employees.filter((e) => e.status === 'ONBOARDING' || (e.status === 'ACTIVE' && !e.onboardingComplete))
+    const onboardingEmployees = data!.employees.filter((e) => e.status === 'ONBOARDING')
     const recentJoiners = data!.employees
       .filter((e) => e.startDate && daysUntil(e.startDate) > -90)
       .sort((a, b) => new Date(b.startDate!).getTime() - new Date(a.startDate!).getTime())

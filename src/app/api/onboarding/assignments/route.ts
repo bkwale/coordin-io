@@ -81,7 +81,12 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     const total = tasks.length
     const completed = tasks.filter((t: { status: string }) => t.status === 'COMPLETED' || t.status === 'WAIVED').length
     const overdue = tasks.filter((t: { status: string; dueDate: Date | null }) =>
-      t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'COMPLETED' && t.status !== 'WAIVED'
+      t.dueDate && (() => {
+        const due = new Date(t.dueDate); due.setHours(0,0,0,0);
+        const now = new Date(); now.setHours(0,0,0,0);
+        return due < now;
+      })()
+      && t.status !== 'COMPLETED' && t.status !== 'WAIVED'
     ).length
 
     // Stage breakdown
@@ -229,14 +234,24 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         select: { probationStartDate: true, probationLength: true },
       })
 
-      const probStart = empProfile?.probationStartDate ?? startDate
+      // Always use the assignment's startDate for new probation reviews —
+      // empProfile.probationStartDate may be stale from prior data
+      const probStart = startDate
       const probMonths = empProfile?.probationLength ?? 3
 
       const milestones: { type: string; daysOffset: number }[] = []
       if (probMonths >= 1) milestones.push({ type: '30-day', daysOffset: 30 })
       if (probMonths >= 2) milestones.push({ type: '60-day', daysOffset: 60 })
       if (probMonths >= 3) milestones.push({ type: '90-day', daysOffset: 90 })
-      milestones.push({ type: 'final', daysOffset: probMonths * 30 })
+      // Add final review — but skip if it would duplicate an existing milestone
+      const finalOffset = probMonths * 30
+      if (!milestones.some((m) => m.daysOffset === finalOffset)) {
+        milestones.push({ type: 'final', daysOffset: finalOffset })
+      } else {
+        // Replace the duplicate with 'final' (probation completion is more important)
+        const idx = milestones.findIndex((m) => m.daysOffset === finalOffset)
+        milestones[idx] = { type: 'final', daysOffset: finalOffset }
+      }
 
       for (const milestone of milestones) {
         const scheduledDate = new Date(probStart)
@@ -250,8 +265,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         })
       }
 
-      // Set probation fields on employee profile if not already set
-      if (!empProfile?.probationStartDate) {
+      // Always sync probation dates from the assignment's start date
+      {
         const probEnd = new Date(probStart)
         probEnd.setMonth(probEnd.getMonth() + probMonths)
         await modulesPrisma.employeeProfile.upsert({

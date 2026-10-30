@@ -286,13 +286,18 @@ export default function OnboardingPage() {
   useEffect(() => {
     async function init() {
       setLoading(true)
-      // Check for template-based assignment first
-      const hasTemplateBased = await checkAssignment()
-      if (!hasTemplateBased) {
-        // Fall back to legacy wizard
-        await Promise.all([fetchProgress(), fetchPolicies(), fetchTraining()])
+      try {
+        // Check for template-based assignment first
+        const hasTemplateBased = await checkAssignment()
+        if (!hasTemplateBased) {
+          // Fall back to legacy wizard
+          await Promise.all([fetchProgress(), fetchPolicies(), fetchTraining()])
+        }
+      } catch {
+        setError('Could not load your onboarding. Please refresh the page.')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     init()
   }, [checkAssignment, fetchProgress, fetchPolicies, fetchTraining])
@@ -442,7 +447,13 @@ export default function OnboardingPage() {
 
   // ── Template-based onboarding view ────────────────────
   if (hasAssignment && assignment) {
-    const stageOrder = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION']
+    // Preferred order for known stages, then any additional stages from the data
+    const KNOWN_STAGES = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION']
+    const dataStages = Object.keys(groupedTasks)
+    const stageOrder = [
+      ...KNOWN_STAGES.filter((s) => dataStages.includes(s)),
+      ...dataStages.filter((s) => !KNOWN_STAGES.includes(s)),
+    ]
     const allTasks = stageOrder.flatMap((s) => groupedTasks[s] ?? [])
     const completedCount = allTasks.filter((t) => t.status === 'COMPLETED' || t.status === 'WAIVED').length
     const totalCount = allTasks.length
@@ -495,7 +506,11 @@ export default function OnboardingPage() {
                 <div className="space-y-2">
                   {tasks.map((task) => {
                     const isDone = task.status === 'COMPLETED' || task.status === 'WAIVED'
-                    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !isDone
+                    const isOverdue = task.dueDate && (() => {
+                      const due = new Date(task.dueDate); due.setHours(0,0,0,0);
+                      const now = new Date(); now.setHours(0,0,0,0);
+                      return due < now;
+                    })() && !isDone
                     return (
                       <div
                         key={task.id}

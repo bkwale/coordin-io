@@ -140,7 +140,19 @@ async function fetchStaffingDashboard(
 
   // ── MANAGER+ continues with full dashboard ────────────────
   const activeEmployees = allProfiles.filter((p) => p.status === 'ACTIVE')
-  const onboardingEmployees = allProfiles.filter((p) => p.status === 'ONBOARDING')
+  // Count from actual assignments, not profile status
+  let onboardingCount = 0
+  try {
+    onboardingCount = await modulesPrisma.onboardingAssignment.count({
+      where: {
+        organisationId: orgId,
+        status: 'ACTIVE',
+      },
+    })
+  } catch {
+    // Fallback to profile status count if table doesn't exist
+    onboardingCount = allProfiles.filter((p) => p.status === 'ONBOARDING').length
+  }
 
   // ── By-office breakdown ────────────────────────────────────
   const byOffice: Record<string, { name: string; count: number }> = {}
@@ -285,7 +297,7 @@ async function fetchStaffingDashboard(
     metrics: {
       totalEmployees: allProfiles.length,
       activeEmployees: activeEmployees.length,
-      onboarding: onboardingEmployees.length,
+      onboarding: onboardingCount,
       // Utilisation metrics — zeroed for MANAGER, populated for HR+
       avgUtilisation,
       overAllocated,
