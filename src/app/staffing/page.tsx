@@ -235,6 +235,22 @@ export default function StaffingPage() {
   // Onboarding tab state
   const [probationReviews, setProbationReviews] = useState<ProbationReview[]>([])
   const [probationLoading, setProbationLoading] = useState(false)
+  const [onboardingAssignments, setOnboardingAssignments] = useState<Array<{
+    id: string; profileId: string; status: string; progress: number; startDate: string; completedAt: string | null
+    employee: { fullName: string; jobTitle: string | null; email: string | null; startDate: string | null }
+    template: { id: string; name: string }
+    taskSummary: { total: number; completed: number; overdue: number }
+    stageBreakdown: Record<string, { total: number; completed: number }>
+  }>>([])
+  const [onboardingTemplates, setOnboardingTemplates] = useState<Array<{
+    id: string; name: string; roleLevel: string | null; description: string | null; isDefault: boolean
+    stageCounts: Record<string, number>; totalItems: number; assignmentCount: number
+  }>>([])
+  const [onboardingLoading, setOnboardingLoading] = useState(false)
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false)
+  const [assignForm, setAssignForm] = useState({ profileId: '', templateId: '', startDate: '' })
+  const [assignSaving, setAssignSaving] = useState(false)
+  const [inviteSending, setInviteSending] = useState<string | null>(null)
 
   // Office holidays state
   const [officeHolidays, setOfficeHolidays] = useState<Record<string, { id: string; name: string; date: string }[]>>({})
@@ -379,11 +395,34 @@ export default function StaffingPage() {
     }
   }, [activeTab, fetchAllocations])
 
+  const fetchOnboardingData = useCallback(async () => {
+    setOnboardingLoading(true)
+    try {
+      const [assignRes, tmplRes] = await Promise.all([
+        fetch('/api/onboarding/assignments'),
+        fetch('/api/onboarding/templates'),
+      ])
+      if (assignRes.ok) {
+        const aj = await assignRes.json()
+        setOnboardingAssignments(aj.data?.assignments ?? [])
+      }
+      if (tmplRes.ok) {
+        const tj = await tmplRes.json()
+        setOnboardingTemplates(tj.data?.templates ?? [])
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setOnboardingLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (activeTab === 'onboarding') {
       fetchProbationReviews()
+      fetchOnboardingData()
     }
-  }, [activeTab, fetchProbationReviews])
+  }, [activeTab, fetchProbationReviews, fetchOnboardingData])
 
   useEffect(() => {
     if (activeTab === 'leave-admin') {
@@ -1030,6 +1069,53 @@ export default function StaffingPage() {
      RENDER — Onboarding Tab
      ================================================================ */
 
+  async function handleAssignTemplate() {
+    if (!assignForm.profileId || !assignForm.templateId || !assignForm.startDate) {
+      toast('Please fill in all fields', 'error')
+      return
+    }
+    setAssignSaving(true)
+    try {
+      const res = await fetch('/api/onboarding/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assignForm),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Failed to assign template')
+      }
+      toast('Onboarding template assigned', 'success')
+      setAssignDialogOpen(false)
+      setAssignForm({ profileId: '', templateId: '', startDate: '' })
+      fetchOnboardingData()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to assign template', 'error')
+    } finally {
+      setAssignSaving(false)
+    }
+  }
+
+  async function handleSendInvite(profileId: string, assignmentId?: string) {
+    setInviteSending(profileId)
+    try {
+      const res = await fetch('/api/onboarding/self-service/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profileId, assignmentId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error ?? 'Failed to send invitation')
+      }
+      toast('Self-service onboarding invitation sent', 'success')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Failed to send invitation', 'error')
+    } finally {
+      setInviteSending(null)
+    }
+  }
+
   function renderOnboardingTab() {
     const onboardingEmployees = data!.employees.filter((e) => e.status === 'ONBOARDING' || (e.status === 'ACTIVE' && !e.onboardingComplete))
     const recentJoiners = data!.employees
@@ -1037,69 +1123,208 @@ export default function StaffingPage() {
       .sort((a, b) => new Date(b.startDate!).getTime() - new Date(a.startDate!).getTime())
       .slice(0, 10)
 
+    const activeAssignments = onboardingAssignments.filter((a) => a.status === 'ACTIVE')
+    const completedAssignments = onboardingAssignments.filter((a) => a.status === 'COMPLETED')
+
     return (
       <div className="space-y-6">
-        {/* ── Onboarding employees ───────────────────────────── */}
+        {/* ── Active onboarding assignments ──────────────────── */}
         <div className="bg-white rounded-xl border border-ink-100 p-5">
-          <h3 className="text-[14px] font-semibold text-ink-900 mb-4 flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-blue-500" />
-            Currently onboarding ({onboardingEmployees.length})
-          </h3>
-          {onboardingEmployees.length === 0 ? (
-            <p className="text-[13px] text-ink-400">No employees currently in onboarding.</p>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[14px] font-semibold text-ink-900 flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-blue-500" />
+              Active onboarding ({activeAssignments.length})
+            </h3>
+            <button
+              onClick={() => setAssignDialogOpen(true)}
+              className="text-[12px] font-medium text-white bg-ink-900 px-3 py-1.5 rounded-lg hover:bg-ink-800"
+            >
+              + Assign template
+            </button>
+          </div>
+
+          {onboardingLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-16 bg-ink-100 animate-pulse rounded-lg" />
+              ))}
+            </div>
+          ) : activeAssignments.length === 0 && onboardingEmployees.length === 0 ? (
+            <p className="text-[13px] text-ink-400">No employees currently in onboarding. Assign a template to get started.</p>
           ) : (
             <div className="space-y-3">
-              {onboardingEmployees.map((emp) => (
-                <div key={emp.id} className="flex items-center justify-between p-3 bg-ink-25 rounded-lg">
-                  <div>
-                    <p className="text-[13px] font-medium text-ink-900">{emp.fullName}</p>
-                    <p className="text-[11px] text-ink-400">{emp.jobTitle ?? 'No role'} | Started {formatDate(emp.startDate)}</p>
+              {activeAssignments.map((a) => (
+                <div key={a.id} className="p-4 bg-ink-25 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-[13px] font-medium text-ink-900">{a.employee?.fullName ?? 'Unknown'}</p>
+                      <p className="text-[11px] text-ink-400">
+                        {a.employee?.jobTitle ?? 'No role'} · Template: {a.template?.name ?? '—'} · Started {formatDate(a.startDate)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSendInvite(a.profileId, a.id)}
+                        disabled={inviteSending === a.profileId}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        {inviteSending === a.profileId ? (
+                          <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Sending...</span>
+                        ) : (
+                          <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> Send invite</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {emp.onboardingComplete ? (
-                      <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">Complete</span>
-                    ) : (
-                      <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-600">In progress</span>
+                  {/* Progress bar */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-ink-100 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all"
+                        style={{ width: `${a.progress ?? 0}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] font-medium text-ink-500 w-8 text-right">{a.progress ?? 0}%</span>
+                  </div>
+                  {/* Task summary */}
+                  <div className="flex gap-4 mt-2 text-[11px] text-ink-500">
+                    <span>{a.taskSummary?.completed ?? 0}/{a.taskSummary?.total ?? 0} tasks done</span>
+                    {(a.taskSummary?.overdue ?? 0) > 0 && (
+                      <span className="text-red-500 font-medium">{a.taskSummary.overdue} overdue</span>
                     )}
                   </div>
                 </div>
               ))}
+              {/* Show employees with status ONBOARDING but no assignment */}
+              {onboardingEmployees
+                .filter((emp) => !activeAssignments.some((a) => a.profileId === emp.id))
+                .map((emp) => (
+                  <div key={emp.id} className="flex items-center justify-between p-3 bg-ink-25 rounded-lg">
+                    <div>
+                      <p className="text-[13px] font-medium text-ink-900">{emp.fullName}</p>
+                      <p className="text-[11px] text-ink-400">{emp.jobTitle ?? 'No role'} | Started {formatDate(emp.startDate)}</p>
+                    </div>
+                    <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-600">No template assigned</span>
+                  </div>
+                ))}
             </div>
           )}
         </div>
 
-        {/* ── Onboarding checklist template ──────────────────── */}
-        <div className="bg-white rounded-xl border border-ink-100 p-5">
-          <h3 className="text-[14px] font-semibold text-ink-900 mb-4 flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-ink-400" />
-            Standard onboarding checklist
-          </h3>
-          <div className="space-y-2">
-            {[
-              { label: 'Employment contract signed', category: 'Documents' },
-              { label: 'Right to work verified', category: 'Documents' },
-              { label: 'DBS check submitted', category: 'Documents' },
-              { label: 'Payroll details submitted', category: 'Payroll' },
-              { label: 'Bank details provided', category: 'Payroll' },
-              { label: 'IT equipment issued', category: 'IT Setup' },
-              { label: 'Email and system access created', category: 'IT Setup' },
-              { label: 'Software licences assigned', category: 'IT Setup' },
-              { label: 'Health & safety induction', category: 'Training' },
-              { label: 'Fire safety briefing', category: 'Training' },
-              { label: 'Company policies acknowledged', category: 'Policies' },
-              { label: 'Data protection / GDPR training', category: 'Training' },
-              { label: 'Line manager introduction', category: 'Orientation' },
-              { label: 'Team introductions', category: 'Orientation' },
-              { label: 'Probation objectives set', category: 'Probation' },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-3 py-1.5 text-[12px]">
-                <div className="w-4 h-4 rounded border border-ink-300 shrink-0" />
-                <span className="text-ink-700 flex-1">{item.label}</span>
-                <span className="text-ink-400 text-[11px]">{item.category}</span>
+        {/* ── Assign template dialog ────────────────────────── */}
+        {assignDialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[14px] font-semibold text-ink-900">Assign onboarding template</h3>
+                <button onClick={() => setAssignDialogOpen(false)} className="text-ink-400 hover:text-ink-600"><X className="w-4 h-4" /></button>
               </div>
-            ))}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[12px] font-medium text-ink-600 block mb-1">Employee</label>
+                  <select
+                    value={assignForm.profileId}
+                    onChange={(e) => setAssignForm((f) => ({ ...f, profileId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                  >
+                    <option value="">Select employee...</option>
+                    {data!.employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>{emp.fullName} — {emp.jobTitle ?? 'No role'}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-ink-600 block mb-1">Template</label>
+                  <select
+                    value={assignForm.templateId}
+                    onChange={(e) => setAssignForm((f) => ({ ...f, templateId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                  >
+                    <option value="">Select template...</option>
+                    {onboardingTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.totalItems} items){t.isDefault ? ' ★ Default' : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-medium text-ink-600 block mb-1">Start date</label>
+                  <input
+                    type="date"
+                    value={assignForm.startDate}
+                    onChange={(e) => setAssignForm((f) => ({ ...f, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-5">
+                <button
+                  onClick={() => setAssignDialogOpen(false)}
+                  className="px-4 py-2 text-[13px] text-ink-600 hover:text-ink-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssignTemplate}
+                  disabled={assignSaving}
+                  className="px-4 py-2 text-[13px] font-medium text-white bg-ink-900 rounded-lg hover:bg-ink-800 disabled:opacity-50"
+                >
+                  {assignSaving ? 'Assigning...' : 'Assign'}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ── Templates overview ─────────────────────────────── */}
+        {onboardingTemplates.length > 0 && (
+          <div className="bg-white rounded-xl border border-ink-100 p-5">
+            <h3 className="text-[14px] font-semibold text-ink-900 mb-4 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-ink-400" />
+              Onboarding templates ({onboardingTemplates.length})
+            </h3>
+            <div className="space-y-2">
+              {onboardingTemplates.map((t) => (
+                <div key={t.id} className="flex items-center justify-between p-3 bg-ink-25 rounded-lg">
+                  <div>
+                    <p className="text-[13px] font-medium text-ink-900">{t.name} {t.isDefault && <span className="text-[10px] text-blue-500 ml-1">★ Default</span>}</p>
+                    <p className="text-[11px] text-ink-400">
+                      {t.totalItems} items · {t.assignmentCount} assignment{t.assignmentCount !== 1 ? 's' : ''}
+                      {t.description && t.description !== 'Not provided' ? ` · ${t.description}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {Object.entries(t.stageCounts ?? {}).map(([stage, count]) => (
+                      <span key={stage} className="text-[10px] px-2 py-0.5 bg-ink-100 rounded-full text-ink-500">
+                        {stage}: {count as number}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Completed assignments ──────────────────────────── */}
+        {completedAssignments.length > 0 && (
+          <div className="bg-white rounded-xl border border-ink-100 p-5">
+            <h3 className="text-[14px] font-semibold text-ink-900 mb-4 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              Completed onboarding ({completedAssignments.length})
+            </h3>
+            <div className="space-y-2">
+              {completedAssignments.map((a) => (
+                <div key={a.id} className="flex items-center justify-between p-3 bg-emerald-25 rounded-lg">
+                  <div>
+                    <p className="text-[13px] font-medium text-ink-900">{a.employee?.fullName ?? 'Unknown'}</p>
+                    <p className="text-[11px] text-ink-400">{a.template?.name} · Completed {a.completedAt ? formatDate(a.completedAt) : '—'}</p>
+                  </div>
+                  <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">Complete</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Probation reviews ──────────────────────────────── */}
         <div className="bg-white rounded-xl border border-ink-100 p-5">

@@ -2013,6 +2013,7 @@ function ApprovalRoutesSection() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [orgMembers, setOrgMembers] = useState<Array<{ id: string; fullName: string; email: string }>>([])
 
   // Edit route state
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null)
@@ -2045,6 +2046,17 @@ function ApprovalRoutesSection() {
   }, [])
 
   useEffect(() => { fetchRoutes() }, [fetchRoutes])
+
+  // Fetch org members for SPECIFIC_PERSON picker
+  useEffect(() => {
+    fetch('/api/staffing')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const emps = data?.data?.employees || []
+        setOrgMembers(emps.map((e: { id: string; fullName: string; email?: string }) => ({ id: e.id, fullName: e.fullName, email: e.email || '' })))
+      })
+      .catch(() => {/* silent */})
+  }, [])
 
   const toggleActive = async (route: ApprovalRoute) => {
     try {
@@ -2304,6 +2316,18 @@ function ApprovalRoutesSection() {
                       placeholder="Role (e.g. HR)"
                     />
                   )}
+                  {step.approverType === 'SPECIFIC_PERSON' && (
+                    <select
+                      value={step.approverId}
+                      onChange={e => updateStep(idx, 'approverId', e.target.value)}
+                      className="px-2 py-1 border border-surface-200 rounded text-sm col-span-2"
+                    >
+                      <option value="">Select person...</option>
+                      {orgMembers.map(m => (
+                        <option key={m.id} value={m.id}>{m.fullName} ({m.email})</option>
+                      ))}
+                    </select>
+                  )}
                   <input
                     value={step.escalationDays}
                     onChange={e => updateStep(idx, 'escalationDays', e.target.value)}
@@ -2489,7 +2513,7 @@ function ApprovalRoutesSection() {
                               <tr key={step.id} className="border-b border-surface-50 text-ink-600">
                                 <td className="py-1.5">{step.stepOrder}</td>
                                 <td className="py-1.5">{step.label}</td>
-                                <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}</td>
+                                <td className="py-1.5">{APPROVER_TYPE_LABELS[step.approverType] || step.approverType}{step.approverRole ? ` (${step.approverRole})` : ''}{step.approverId ? ` — ${orgMembers.find(m => m.id === step.approverId)?.fullName || step.approverId}` : ''}</td>
                                 <td className="py-1.5">{step.canSkipIfSameAsPrevious ? 'Yes' : 'No'}</td>
                                 <td className="py-1.5">{step.escalationDays ? `${step.escalationDays} days` : '—'}</td>
                               </tr>
