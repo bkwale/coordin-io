@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ChevronRight, User, Users, Calendar, Clock,
@@ -153,6 +153,7 @@ function timeAgo(iso: string): string {
 
 export default function TaskDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const taskId = params.id as string
   const { toast } = useToast()
 
@@ -187,8 +188,10 @@ export default function TaskDetailPage() {
   const [priorityOpen, setPriorityOpen] = useState(false)
   const [newItemMandatory, setNewItemMandatory] = useState(true)
   const [newItemAssignee, setNewItemAssignee] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
-  /* ── Task actions (duplicate, archive, restore) ─────── */
+  /* ── Task actions (duplicate, archive, restore, delete) ── */
 
   async function handleDuplicate() {
     setActionLoading(true)
@@ -206,21 +209,20 @@ export default function TaskDetailPage() {
     }
   }
 
-  async function handleArchive() {
-    setActionLoading(true)
+  async function handleDeleteTask() {
+    setDeleteLoading(true)
     try {
       const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error?.message || 'Failed to archive')
+        throw new Error(body.error?.message || 'Failed to delete task')
       }
-      toast('Task archived', 'success')
-      fetchTask()
+      toast('Task deleted', 'success')
+      router.push(`/projects/${task?.projectId}/tasks`)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to archive', 'error')
-    } finally {
-      setActionLoading(false)
-      setActionMenuOpen(false)
+      toast(err instanceof Error ? err.message : 'Failed to delete task', 'error')
+      setDeleteLoading(false)
+      setDeleteConfirm(false)
     }
   }
 
@@ -669,15 +671,7 @@ export default function TaskDetailPage() {
               >
                 <Copy className="w-4 h-4 text-ink-400" /> Duplicate
               </button>
-              {!task.archivedAt ? (
-                <button
-                  onClick={handleArchive}
-                  disabled={actionLoading}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
-                >
-                  <Archive className="w-4 h-4" /> Archive
-                </button>
-              ) : (
+              {task.archivedAt && (
                 <button
                   onClick={handleRestore}
                   disabled={actionLoading}
@@ -685,6 +679,33 @@ export default function TaskDetailPage() {
                 >
                   <ArchiveRestore className="w-4 h-4 text-ink-400" /> Restore
                 </button>
+              )}
+              {!deleteConfirm ? (
+                <button
+                  onClick={() => setDeleteConfirm(true)}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              ) : (
+                <div className="px-4 py-2.5 space-y-2">
+                  <p className="text-[12px] text-red-600 font-medium">Delete this task permanently?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDeleteTask}
+                      disabled={deleteLoading}
+                      className="flex-1 px-3 py-1.5 text-[12px] font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleteLoading ? 'Deleting…' : 'Confirm'}
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(false)}
+                      className="flex-1 px-3 py-1.5 text-[12px] font-medium text-ink-600 bg-ink-100 rounded-lg hover:bg-ink-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}

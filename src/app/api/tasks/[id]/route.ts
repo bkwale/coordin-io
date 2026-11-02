@@ -270,36 +270,35 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
 })
 
 /**
- * DELETE /api/tasks/[id] — Soft-delete (archive) a task.
- * Sets archivedAt timestamp. Only MANAGER+ or task owner can archive.
+ * DELETE /api/tasks/[id] — Delete a task and its checklist items + comments.
+ * Only MANAGER+ or task owner can delete.
  */
 export const DELETE = withTaskAccess(async (request: NextRequest, { task: currentTask, taskId, profile }) => {
-  // Only task owner, project manager, or MANAGER+ can archive
+  // Only task owner, project manager, or MANAGER+ can delete
   const isOwner = currentTask.ownerId === profile.id
   const isManager = canPerform(profile.orgPermission, 'tasks', 'create_edit_project')
 
   if (!isOwner && !isManager) {
-    throw new PermissionError('Only the task owner or a manager can archive tasks')
+    throw new PermissionError('Only the task owner or a manager can delete tasks')
   }
 
-  if (currentTask.archivedAt) {
-    throw new ValidationError('Task is already archived')
-  }
-
-  const task = await prisma.task.update({
-    where: { id: taskId },
-    data: { archivedAt: new Date() },
-  })
+  // Cascade delete in a transaction: dependencies, checklist items, comments, then the task
+  await prisma.$transaction([
+    prisma.taskDependency.deleteMany({ where: { OR: [{ taskId }, { dependsOnId: taskId }] } }),
+    prisma.taskChecklistItem.deleteMany({ where: { taskId } }),
+    prisma.taskComment.deleteMany({ where: { taskId } }),
+    prisma.task.delete({ where: { id: taskId } }),
+  ])
 
   await recordAuditEvent({
     organisationId: profile.organisationId,
     actorId: profile.id,
-    action: AuditActions.TASK_STATUS_CHANGED,
+    action: AuditActions.TASK_DELETED,
     entityType: 'task',
-    entityId: task.id,
-    metadata: { action: 'archived' },
+    entityId: taskId,
+    metadata: { title: currentTask.title },
     ipAddress: request.headers.get('x-forwarded-for') || undefined,
   })
 
-  return success({ task })
+  return success({ deleted: true })
 })
