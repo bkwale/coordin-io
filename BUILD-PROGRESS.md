@@ -1252,3 +1252,14 @@ Vercel stays. Pro plan: 300s default / 800s max per function. `maxDuration = 300
 **Fixes during verification:** nameless people / null lists no longer fail the run; duplicate completion messages; stage lines merged by name; page rendered fullscreen outside the app shell.
 
 **Next (Sprint 2):** rules engine + questionnaire; `confirm` endpoint that applies `OrganisationFeature` flags for a real org; "Switch on Coordin" enabled.
+
+### AI Sprint 1.7 — UK + Poland practice setup (COMPLETE, 4 Nov 2026)
+
+Jurisdiction table in `map-practice.ts` (EE / GB / PL / ES / OTHER): compliance framework + label, stage convention, currency, authority term, CPD body, invoicing reason, default integrations, accounting options, registry question. Crawler learned UK and Polish page names; prompt v0.3 handles Estonian/English/Polish and maps places to local planning authority / gmina+powiat. Chartered badges: VA 7/8, RIBA, ARB, IARP, uprawnienia.
+
+**Verified on production:**
+- **UK — Proctor & Matthews (London):** 12 people, 2 founding directors, 30 local planning authorities (Newham, Medway, Cotswold District, Brighton & Hove…), 3 live projects incl. one at planning approval, Building Regs + BSA, BRPD gateways on, RIBA 0–7, GBP. 25s.
+- **Poland — JEMS Architekci (Warszawa):** 5 partners all with uprawnienia, 4 gminy (Kraków, Warszawa, Gdańsk as miasta na prawach powiatu; Wilanów → Warszawa), 1 in progress, Prawo budowlane + warunki techniczne, koncepcja → projekt budowlany → wykonawczy, KSeF on, PLN. 17.6s.
+- bbgk.pl (redirect loop on their side) → graceful failure in 3.5s.
+
+**Rules engine datasets for UK (Approved Docs + BRPD gateways) and PL (Prawo budowlane + warunki techniczne) are separate work, ~1 week each, after the Estonian engine is validated in Sprint 2.**
