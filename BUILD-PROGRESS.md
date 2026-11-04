@@ -1263,3 +1263,13 @@ Jurisdiction table in `map-practice.ts` (EE / GB / PL / ES / OTHER): compliance 
 - bbgk.pl (redirect loop on their side) → graceful failure in 3.5s.
 
 **Rules engine datasets for UK (Approved Docs + BRPD gateways) and PL (Prawo budowlane + warunki techniczne) are separate work, ~1 week each, after the Estonian engine is validated in Sprint 2.**
+
+### AI Sprint 0 close-out + crawler hardening (4 Nov 2026, evening)
+
+- **Ehitisregister probe:** public API supports building search by owner/name and detail by EHR code (address, cadastral, use, area, storeys, energy class, geometry). No designer search; permits/documents need ID-card login. Registry-code import replaced by **EHR enrichment** (Sprint 3.3); owner-name import kept for construction companies/municipalities; designer portfolio via architect's own EHR login → Sprint 5+ (Smart-ID). Notes: `private/ai-samples/ehr-probe-2026-11-04.md`.
+- **Planning-conditions PDFs:** 10 collected across Viljandi, Kambja, Rapla, Viimsi. 9 are the national Ehitisregister template (§26, buildings); 1 is a municipal letter format for road/infrastructure (§99). Extractor needs two shapes.
+- **Rules-engine fixtures:** 68 Ehitusseadustik fixtures across 10 disciplines (permit tiers, design/supervision, fire TP1/2/3, nZEB + exemptions, EV, sound, accessibility 2027, infrastructure, planning, EIA/radon, work types) in `src/lib/rules/__tests__/ee.fixtures.ts`. Contract tests pass; engine tests skip until Sprint 2.
+- **Crawler hardening** (`src/lib/ai/crawl.ts`): manual redirect following with loop detection; 403/429/503 retry as a browser; http/https and www variants; sitemap + nav-link discovery ranked people > about > contact > projects; exclusion list; thin-page detection with meta/JSON-LD fallback; headless render via `RENDER_API_URL` (default r.jina.ai) when text is thin; specific failure classes (`dns`, `blocked`, `down`, `redirect_loop`, `js_app`, `not_html`, `empty`) with user-facing messages. JS-app sites (koko.ee, kavakava.ee) now read without rendering; allianss.eu and jems.pl used the renderer.
+- **Model output cap** raised 4K → 8K; prompt v0.4 caps list lengths. Large practices (onearchitects.fi, jems.pl) were truncating mid-JSON.
+- **Regression runner** `scripts/ai-regression.mts` over the production pipeline; 16-site list in `scripts/regression-sites.txt`; snapshots in `private/ai-samples/practice/`. Result: 13/16 OK; hga.ee down (503), bbgk.pl redirect loop (correctly named), ninja-studio.ee unreachable from the sandbox only.
+- `FEATURE_REGISTRY` moved to `src/lib/feature-registry.ts` (no Prisma import) so scripts, tests and client code can use it.
