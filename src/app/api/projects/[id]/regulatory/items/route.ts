@@ -25,7 +25,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
 
   const last = await prisma.complianceItem.findFirst({ where: { registerId: register.id }, orderBy: { sortOrder: 'desc' } })
   const item = await prisma.complianceItem.create({
-    data: { registerId: register.id, requirement, section, citation: citation ?? null, source: source ?? null, addedByArchitect: true, confidence: 'architect', sortOrder: (last?.sortOrder ?? 0) + 10 },
+    data: { registerId: register.id, requirement, section, citation: citation ?? null, source: source ?? null, addedByArchitect: true, origin: 'ARCHITECT', confidence: 'architect', sortOrder: (last?.sortOrder ?? 0) + 10 },
   })
 
   await recordAuditEvent({

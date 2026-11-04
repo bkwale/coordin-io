@@ -72,11 +72,11 @@ const tx = {
       return { count: before - db.items.length }
     }),
     createMany: vi.fn(async ({ data }: Item) => {
-      for (const d of data) db.items.push({ id: nextId('item'), status: 'NOT_STARTED', addedByArchitect: false, ...d })
+      for (const d of data) db.items.push({ id: nextId('item'), status: 'NOT_STARTED', addedByArchitect: false, origin: 'RULE', ...d })
       return { count: data.length }
     }),
     create: vi.fn(async ({ data }: Item) => {
-      const row = { id: nextId('item'), status: 'NOT_STARTED', addedByArchitect: false, ...data }
+      const row = { id: nextId('item'), status: 'NOT_STARTED', addedByArchitect: false, origin: 'RULE', ...data }
       db.items.push(row)
       return row
     }),
@@ -126,7 +126,8 @@ vi.mock('@/lib/with-project-access', () => ({
   },
 }))
 
-const { GET, POST, STALE_PREFIX } = await import('@/app/api/projects/[id]/regulatory/route')
+const { GET, POST } = await import('@/app/api/projects/[id]/regulatory/route')
+const { STALE_PREFIX } = await import('@/lib/rules/apply')
 const { POST: POST_ITEM } = await import('@/app/api/projects/[id]/regulatory/items/route')
 const { match, getRuleSet } = await import('@/lib/rules')
 
@@ -185,7 +186,7 @@ describe('POST /api/projects/[id]/regulatory', () => {
     expect(db.registers).toHaveLength(1)
     expect(db.registers[0].registerType).toBe('REGULATORY')
     expect(db.items).toHaveLength(26)
-    expect(db.items.every((i) => i.ruleId && i.citation && i.ruleSetVersion === 'EE-1.0' && i.addedByArchitect === false)).toBe(true)
+    expect(db.items.every((i) => i.ruleId && i.citation && i.ruleSetVersion === 'EE-1.0' && i.origin === 'RULE')).toBe(true)
     expect(body.diff).toEqual({ added: expect.arrayContaining(['EE.PERMIT.BUILDING_PERMIT']), removed: [] })
     expect(audit).toHaveBeenCalledTimes(1)
     const meta = audit.mock.calls[0][0].metadata
@@ -215,10 +216,10 @@ describe('POST /api/projects/[id]/regulatory', () => {
 
   it('re-run preserves architect-added items and deletes untouched generated items no longer applicable', async () => {
     await post(BLOCK)
-    db.items.push({ id: 'arch-1', registerId: db.registers[0].id, requirement: 'Local noise bylaw', addedByArchitect: true, ruleId: null, sortOrder: 9999 })
+    db.items.push({ id: 'arch-1', registerId: db.registers[0].id, requirement: 'Local noise bylaw', addedByArchitect: true, origin: 'ARCHITECT', ruleId: null, sortOrder: 9999 })
     await post(DETACHED)
     expect(db.items.find((i) => i.id === 'arch-1')).toBeTruthy()
-    expect(db.items.filter((i) => !i.addedByArchitect)).toHaveLength(26)
+    expect(db.items.filter((i) => i.origin === 'RULE')).toHaveLength(26)
     const blockOnly = match(BLOCK as any, getRuleSet('EE')!).map((c) => c.ruleId).filter((id) => !match(DETACHED as any, getRuleSet('EE')!).some((c) => c.ruleId === id))
     expect(db.items.some((i) => blockOnly.includes(i.ruleId))).toBe(false)
   })
@@ -238,7 +239,7 @@ describe('POST /api/projects/[id]/regulatory', () => {
     expect(kept!.confidence).toBe('stale')
     expect(kept!.because.startsWith(STALE_PREFIX)).toBe(true)
     if (originalBecause) expect(kept!.because).toContain(originalBecause)
-    expect(db.items.filter((i) => !i.addedByArchitect)).toHaveLength(27) // 26 + 1 kept
+    expect(db.items.filter((i) => i.origin === 'RULE')).toHaveLength(27) // 26 + 1 kept
     // the other block-only items were untouched → deleted
     expect(db.items.filter((i) => blockOnly.includes(i.ruleId))).toHaveLength(1)
     // GET reports it
@@ -258,6 +259,19 @@ describe('POST /api/projects/[id]/regulatory', () => {
     expect(back.confidence).not.toBe('stale')
     expect(back.because ?? '').not.toContain(STALE_PREFIX)
     expect(back.status).toBe('IN_PROGRESS')
+  })
+
+  it('re-run never touches MUNICIPALITY items (Sprint 3 contract)', async () => {
+    await post(DETACHED)
+    db.items.push({ id: 'muni-1', registerId: db.registers[0].id, requirement: 'Max height 6.5 m', origin: 'MUNICIPALITY', addedByArchitect: false, ruleId: null, status: 'NOT_STARTED', citation: 'PT nr 2611802/03126 p.4', sortOrder: 5000 })
+    await post(BLOCK)
+    const m = db.items.find((i) => i.id === 'muni-1')
+    expect(m).toBeTruthy()
+    expect(m!.confidence).toBeUndefined()
+    expect(m!.because ?? '').not.toContain(STALE_PREFIX)
+    const body = (await json(await get())).data
+    expect(body.municipal).toHaveLength(1)
+    expect(body.counts.municipal).toBe(1)
   })
 
   it('only PROJECT_LEAD can generate or add items; any member can read', async () => {
@@ -292,7 +306,7 @@ describe('GET /api/projects/[id]/regulatory', () => {
   it('returns null register before first run', async () => {
     const body = (await json(await get())).data
     expect(body.register).toBeNull()
-    expect(body.counts).toEqual({ generated: 0, added: 0, stale: 0 })
+    expect(body.counts).toEqual({ generated: 0, added: 0, municipal: 0, stale: 0 })
     expect(body.disciplineLabels.permit.et).toBe('Load ja teatised')
   })
 
@@ -305,7 +319,7 @@ describe('GET /api/projects/[id]/regulatory', () => {
     expect(Object.values(body.grouped).flat()).toHaveLength(26)
     expect(body.grouped.permit.length).toBeGreaterThan(0)
     expect(body.added).toHaveLength(1)
-    expect(body.counts).toEqual({ generated: 26, added: 1, stale: 0 })
+    expect(body.counts).toEqual({ generated: 26, added: 1, municipal: 0, stale: 0 })
   })
 })
 
@@ -328,8 +342,9 @@ describe('POST /api/projects/[id]/regulatory/items', () => {
     expect(res.status).toBe(201)
     const item = (await json(res)).data.item
     expect(item.addedByArchitect).toBe(true)
+    expect(item.origin).toBe('ARCHITECT')
     expect(item.confidence).toBe('architect')
-    expect(item.sortOrder).toBeGreaterThan(Math.max(...db.items.filter((i) => !i.addedByArchitect).map((i) => i.sortOrder)))
+    expect(item.sortOrder).toBeGreaterThan(Math.max(...db.items.filter((i) => i.origin === 'RULE').map((i) => i.sortOrder)))
     const call = audit.mock.calls.find((c) => c[0].action === 'ai.checklist_item_added_by_architect')!
     expect(call[0].metadata.ruleSetVersion).toBe('EE-1.0')
   })
