@@ -1273,3 +1273,17 @@ Jurisdiction table in `map-practice.ts` (EE / GB / PL / ES / OTHER): compliance 
 - **Model output cap** raised 4K → 8K; prompt v0.4 caps list lengths. Large practices (onearchitects.fi, jems.pl) were truncating mid-JSON.
 - **Regression runner** `scripts/ai-regression.mts` over the production pipeline; 16-site list in `scripts/regression-sites.txt`; snapshots in `private/ai-samples/practice/`. Result: 13/16 OK; hga.ee down (503), bbgk.pl redirect loop (correctly named), ninja-studio.ee unreachable from the sandbox only.
 - `FEATURE_REGISTRY` moved to `src/lib/feature-registry.ts` (no Prisma import) so scripts, tests and client code can use it.
+
+### AI Sprint 2 — Rules Engine + Regulatory Checklist (COMPLETE, 4 Nov 2026)
+
+**Built.** Deterministic rules engine with the first jurisdiction dataset, versioned project profiles, and a Regulatory subtab under Compliance where an architect answers 18 parameters and gets a cited checklist. No LLM anywhere in this path — the engine is pure `match(params, ruleSet)`.
+
+- `src/lib/rules/` — `types.ts`, `engine.ts` (`match`, `groupByDiscipline`, `diffChecklists`), `schema.ts` (zod), `index.ts` (registry: `getRuleSet(jurisdiction)`), `datasets/ee.ts` (`EE-1.0`, 82 rules, 10 disciplines, § citations, EN + ET titles, `because()` rationale, confidence per rule). 71/71 tests green incl. 68 Sprint 0 fixtures.
+- Schema (migration `ai_sprint2_project_profiles_and_rule_provenance`): `ProjectProfile` (versioned per project, `@@unique([projectId, version])`), `ComplianceRegisterType.REGULATORY`, provenance on `ComplianceItem` (`ruleId, ruleSetVersion, citation, titleLocal, because, confidence, addedByArchitect, aiRunId`).
+- API: `GET/POST /api/projects/[id]/regulatory` — POST writes a new profile version, runs the engine, upserts the REGULATORY register in one transaction (architect-added items preserved; generated items no longer applicable removed; surviving items keep status/evidence), returns `diff {added, removed}` and audits `ai.project_configured` with every citation. `POST /api/projects/[id]/regulatory/items` — architect adds a missing obligation (`addedByArchitect: true`, audited) which feeds dataset improvement.
+- UI `/projects/[id]/regulatory` (Compliance → Regulatory): questionnaire left; right-hand checklist grouped by discipline with § citation, source, rationale, confidence badge (`low` renders as "verify"), EN/ET toggle, non-dismissible "organiser, not a legal opinion" notice stamped with rule-set version and date, "since last run: +N / −N" with new items highlighted, "Add missing item".
+- Verified on production (CWA project): detached house 160 m² → 26 obligations; re-run as 5-storey block 2400 m²/24 flats → 48 obligations, +32/−10, kasutusteatis correctly replaced by kasutusluba; add-missing-item persisted.
+
+**Fixed along the way.** (1) Project tab highlighting — Overview's empty route matched every sub-route, so all project tabs showed Overview active (pre-existing). (2) Re-run transaction timing out on PgBouncer — writes now batched (`createMany` + parallel updates) with a 30 s transaction timeout.
+
+**Still open in Sprint 2.** Laila validation of the 68 fixtures; `confirm` endpoint for practice-setup ("Switch on Coordin" → OrganisationFeature flags). UK (`GB-1.0`) and Poland (`PL-1.0`) datasets slot into the registry once EE is validated.
