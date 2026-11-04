@@ -7,10 +7,15 @@ export interface CrawledPage {
 }
 
 const CANDIDATE_PATHS = [
-  '/', '/about', '/about/', '/about-us', '/meist', '/büroo', '/buroo', '/studio',
-  '/people', '/team', '/inimesed', '/tiim', '/meeskond',
-  '/projects', '/projektid', '/tood', '/work', '/portfolio',
-  '/contact', '/kontakt',
+  '/',
+  // about
+  '/about', '/about/', '/about-us', '/studio', '/practice', '/meist', '/büroo', '/buroo', '/o-nas', '/pracownia', '/biuro',
+  // people
+  '/people', '/team', '/our-team', '/inimesed', '/tiim', '/meeskond', '/zespol', '/zespół', '/ludzie',
+  // work
+  '/projects', '/work', '/portfolio', '/projektid', '/tood', '/realizacje', '/projekty', '/prace',
+  // contact
+  '/contact', '/contact-us', '/kontakt',
 ]
 
 const CRAWL_TTL = 60 * 60 * 24 // 24h
@@ -96,7 +101,7 @@ export async function crawlPractice(input: string, onStage?: (s: { name: string;
       for (const m of html.matchAll(/href=["']([^"']+)["']/gi)) {
         try {
           const u = new URL(m[1], base)
-          if (u.hostname === base.hostname && /about|meist|people|team|inimesed|tiim|projekt|project|work|kontakt|contact|studio|büroo|buroo/i.test(u.pathname)) {
+          if (u.hostname === base.hostname && /about|meist|people|team|inimesed|tiim|projekt|project|work|kontakt|contact|studio|büroo|buroo|practice|o-nas|pracownia|biuro|zespol|zesp|ludzie|realizacje|prace/i.test(u.pathname)) {
             extra.push(u.pathname)
           }
         } catch { /* ignore */ }

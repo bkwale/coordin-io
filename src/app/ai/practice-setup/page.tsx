@@ -28,7 +28,11 @@ type Mapping = {
   headline: { name: string; city: string | null; country: string | null; founded: number | null; teamSize: number; partners: string[]; chartered: number }
   jurisdiction: string
   complianceFramework: string | null
+  complianceLabel?: string | null
   stageConvention: string | null
+  stageLabel?: string | null
+  currency?: string | null
+  authorityTerm?: string
   modules: Module[]
   municipalityProfiles: string[]
   integrations: { key: string; label: string; reason: string }[]
@@ -124,7 +128,7 @@ export default function PracticeSetupDemo() {
           push({ kind: 'ai', text: 'I couldn’t read that one. Try another URL, or we can set up manually.' })
         } else if (data.mapping) {
           const h = data.mapping.headline
-          push({ kind: 'ai', text: `${h.name}${h.city ? `, ${h.city}` : ''}${h.founded ? `, since ${h.founded}` : ''}. ${h.teamSize ? `${h.teamSize} people` : 'Team not listed'}${h.partners.length ? ` — ${h.partners.slice(0, 3).join(', ')} as partners` : ''}. ${data.mapping.municipalityProfiles.length ? `Working across ${data.mapping.municipalityProfiles.length} municipalities.` : ''} Everything on the right is yours to change.` })
+          push({ kind: 'ai', text: `${h.name}${h.city ? `, ${h.city}` : ''}${h.founded ? `, since ${h.founded}` : ''}. ${h.teamSize ? `${h.teamSize} people` : 'Team not listed'}${h.partners.length ? ` — ${h.partners.slice(0, 3).join(', ')} as partners` : ''}. ${data.mapping.municipalityProfiles.length ? `Working across ${data.mapping.municipalityProfiles.length} ${data.mapping.authorityTerm || 'municipalities'}.` : ''} Everything on the right is yours to change.` })
           setTimeout(() => askNext(data.mapping!, 0), 900)
         }
       }
@@ -278,7 +282,7 @@ function Workspace({ profile, mapping, answers }: { profile: Profile; mapping: M
           <Stat label="Team" value={h.teamSize || '—'} />
           <Stat label="Partners" value={h.partners.length || '—'} hint={h.partners.slice(0, 3).join(', ')} />
           <Stat label="Chartered" value={h.chartered || '—'} />
-          <Stat label="Municipalities" value={munis.length || '—'} />
+          <Stat label={cap(mapping.authorityTerm || 'Municipalities')} value={munis.length || '—'} />
         </div>
         {mapping.warnings.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{mapping.warnings.map((w) => <span key={w} className="text-[11px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">{w}</span>)}</div>}
       </Panel>) },
@@ -304,7 +308,7 @@ function Workspace({ profile, mapping, answers }: { profile: Profile; mapping: M
         <MixBars mix={mix} />
       </Panel>) },
     { key: 'compliance', node: (
-      <Panel icon={<ShieldCheck className="w-4 h-4" />} title="Compliance" sub={mapping.complianceFramework === 'ehitusseadustik' ? 'Ehitusseadustik framework · Estonian 4-stage (eskiis → tööprojekt)' : mapping.complianceFramework === 'brpd' ? 'BRPD / Building Safety Act · RIBA stages' : 'Framework to confirm'}>
+      <Panel icon={<ShieldCheck className="w-4 h-4" />} title="Compliance" sub={[mapping.complianceLabel || 'Framework to confirm', mapping.stageLabel].filter(Boolean).join(' · ')}>
         {munis.length > 0 ? <div className="flex flex-wrap gap-1.5">{munis.map((m) => <span key={m} className="text-[12px] px-2.5 py-1 rounded-md bg-accent-50 text-accent-700 border border-accent-100">{m}</span>)}</div> : <div className="text-[12px] text-ink-300">{answers.municipalities ? `Municipalities: ${answers.municipalities}` : 'No locations found in project titles — I’ll ask.'}</div>}
         {profile.heritageWork?.value && <div className="mt-3 text-[12px] text-ink-500 flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-green-600" />Heritage conditions enabled — {srcText(profile.heritageWork.source)?.split(' — ').pop()?.slice(0, 90)}</div>}
       </Panel>) },
@@ -368,5 +372,15 @@ function MixBars({ mix }: { mix: Record<string, number> }) {
   if (!entries.length) return <div className="text-[12px] text-ink-300">No project list found.</div>
   return <div className="space-y-1">{entries.map(([k, n]) => <div key={k} className="flex items-center gap-2 text-[12px]"><span className="w-24 text-ink-500">{labels[k] || k}</span><div className="flex-1 h-2 rounded bg-surface-100 overflow-hidden"><div className="h-full bg-accent-400" style={{ width: `${(n / max) * 100}%` }} /></div><span className="w-6 text-right text-ink-500">{n}</span></div>)}</div>
 }
+function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 function initials(n: string) { return n.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase() }
-function shortChartered(c: string) { const m = c.match(/(\d)/); return m ? `VA ${m[1]}` : 'chartered' }
+function shortChartered(c: string) {
+  const l = c.toLowerCase()
+  if (/volitatud|diplomeeritud|chartered architect \d/.test(l)) { const m = c.match(/(\d)/); return m ? `VA ${m[1]}` : 'chartered' }
+  if (/riba/.test(l)) return 'RIBA'
+  if (/arb/.test(l)) return 'ARB'
+  if (/iarp/.test(l)) return 'IARP'
+  if (/uprawnienia/.test(l)) return 'uprawnienia'
+  if (/eal/.test(l)) return 'EAL'
+  return c.length > 14 ? 'chartered' : c
+}

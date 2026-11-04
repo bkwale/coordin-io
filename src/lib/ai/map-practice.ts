@@ -24,9 +24,13 @@ export interface PracticeMapping {
     partners: string[]
     chartered: number
   }
-  jurisdiction: 'EE' | 'GB' | 'ES' | 'OTHER'
-  complianceFramework: 'ehitusseadustik' | 'brpd' | 'cte' | null
-  stageConvention: 'estonian_4_stage' | 'riba' | null
+  jurisdiction: 'EE' | 'GB' | 'PL' | 'ES' | 'OTHER'
+  complianceFramework: 'ehitusseadustik' | 'brpd' | 'prawo_budowlane' | 'cte' | null
+  complianceLabel: string | null
+  stageConvention: 'estonian_4_stage' | 'riba' | 'polish_3_stage' | null
+  stageLabel: string | null
+  currency: 'EUR' | 'GBP' | 'PLN' | null
+  authorityTerm: string
   modules: ModuleDecision[]
   municipalityProfiles: string[]
   integrations: { key: string; label: string; reason: string }[]
@@ -36,9 +40,71 @@ export interface PracticeMapping {
 
 const v = <T,>(f: { value: T | null } | undefined | null): T | null => (f ? f.value : null)
 
+const STAGE_LABEL: Record<string, string> = {
+  estonian_4_stage: 'Estonian 4-stage convention (eskiis → eelprojekt → põhiprojekt → tööprojekt)',
+  riba: 'RIBA Plan of Work stages 0–7',
+  polish_3_stage: 'Polish convention (koncepcja → projekt budowlany → projekt wykonawczy)',
+  other: 'Stage tracking (convention to confirm)',
+}
+
+interface JurisdictionConfig {
+  name: string
+  framework: PracticeMapping['complianceFramework']
+  frameworkLabel: string | null
+  stage: PracticeMapping['stageConvention']
+  currency: PracticeMapping['currency']
+  authorityTerm: string
+  cpdBody: string
+  invoicingReason: string
+  integrations: PracticeMapping['integrations']
+  accountingOptions: string[]
+  placeOptions: string[]
+  registryQuestion: PracticeMapping['followUpQuestions'][number] | null
+}
+
+const JURIS: Record<PracticeMapping['jurisdiction'], JurisdictionConfig> = {
+  EE: {
+    name: 'Estonian', framework: 'ehitusseadustik', frameworkLabel: 'Ehitusseadustik', stage: 'estonian_4_stage', currency: 'EUR',
+    authorityTerm: 'municipalities', cpdBody: 'EAL', invoicingReason: 'e-arve ready — Estonian e-invoicing',
+    integrations: [{ key: 'merit_aktiva', label: 'Merit Aktiva', reason: 'Estonian SME default accounting' }, { key: 'ehitisregister', label: 'Ehitisregister', reason: 'Import project history by registry code' }],
+    accountingOptions: ['Merit Aktiva', 'Directo', 'Xero', 'Other'], placeOptions: ['Tallinn', 'Tartu', 'Pärnu', 'Across Estonia'],
+    registryQuestion: { id: 'ehr_import', question: 'Import your project history from Ehitisregister? (needs your registry code)', options: ['Yes', 'Not now'] },
+  },
+  GB: {
+    name: 'UK', framework: 'brpd', frameworkLabel: 'Building Regulations + Building Safety Act', stage: 'riba', currency: 'GBP',
+    authorityTerm: 'local planning authorities', cpdBody: 'RIBA/ARB', invoicingReason: 'Inbound + outbound invoicing, VAT-ready',
+    integrations: [{ key: 'xero', label: 'Xero', reason: 'UK practice default accounting' }, { key: 'planning_portal', label: 'Planning Portal', reason: 'Application tracking' }],
+    accountingOptions: ['Xero', 'QuickBooks', 'Sage', 'Other'], placeOptions: ['London', 'South East', 'Midlands', 'Across the UK'],
+    registryQuestion: { id: 'companies_house', question: 'Pull company details from Companies House? (needs your company number)', options: ['Yes', 'Not now'] },
+  },
+  PL: {
+    name: 'Polish', framework: 'prawo_budowlane', frameworkLabel: 'Prawo budowlane + warunki techniczne', stage: 'polish_3_stage', currency: 'PLN',
+    authorityTerm: 'gminy', cpdBody: 'IARP', invoicingReason: 'KSeF structured e-invoicing — mandatory in Poland',
+    integrations: [{ key: 'ksef', label: 'KSeF', reason: 'National e-invoicing system' }, { key: 'fakturownia', label: 'Fakturownia / wFirma', reason: 'Polish SME invoicing' }],
+    accountingOptions: ['Fakturownia', 'wFirma', 'Comarch Optima', 'Other'], placeOptions: ['Warszawa', 'Kraków', 'Wrocław', 'Across Poland'],
+    registryQuestion: { id: 'krs_import', question: 'Pull company details from KRS / CEIDG? (needs your NIP)', options: ['Yes', 'Not now'] },
+  },
+  ES: {
+    name: 'Spanish', framework: 'cte', frameworkLabel: 'Código Técnico de la Edificación', stage: null, currency: 'EUR',
+    authorityTerm: 'municipios', cpdBody: 'COAM/COAC', invoicingReason: 'Inbound + outbound invoicing',
+    integrations: [], accountingOptions: ['Holded', 'Sage', 'Other'], placeOptions: ['Madrid', 'Barcelona', 'Valencia', 'Across Spain'], registryQuestion: null,
+  },
+  OTHER: {
+    name: 'this', framework: null, frameworkLabel: null, stage: null, currency: null,
+    authorityTerm: 'local authorities', cpdBody: 'professional body', invoicingReason: 'Inbound + outbound invoicing',
+    integrations: [], accountingOptions: ['Xero', 'QuickBooks', 'Other'], placeOptions: ['Capital', 'Regional', 'Nationwide'], registryQuestion: null,
+  },
+}
+
 export function mapPracticeProfile(p: PracticeProfile): PracticeMapping {
   const country = (v(p.practice.country) || '').toUpperCase()
-  const jurisdiction: PracticeMapping['jurisdiction'] = country === 'EE' ? 'EE' : country === 'GB' || country === 'UK' ? 'GB' : country === 'ES' ? 'ES' : 'OTHER'
+  const host = (v(p.practice.website) || '').toLowerCase()
+  const jurisdiction: PracticeMapping['jurisdiction'] =
+    country === 'EE' || host.endsWith('.ee') ? 'EE'
+    : country === 'GB' || country === 'UK' || host.endsWith('.uk') ? 'GB'
+    : country === 'PL' || host.endsWith('.pl') ? 'PL'
+    : country === 'ES' ? 'ES' : 'OTHER'
+  const J = JURIS[jurisdiction]
 
   const people = p.people || []
   const partners = people.filter((x) => x.partner).map((x) => x.name)
@@ -50,7 +116,7 @@ export function mapPracticeProfile(p: PracticeProfile): PracticeMapping {
   const active = v(p.activeProjects) || []
   const heritage = Boolean(v(p.heritageWork)) || mix.heritage > 0
   const caps = (v(p.statedCapabilities) || []).map((s) => s.toLowerCase())
-  const stage = (v(p.signals?.stageConvention) as PracticeMapping['stageConvention']) ?? (jurisdiction === 'EE' ? 'estonian_4_stage' : jurisdiction === 'GB' ? 'riba' : null)
+  const stage = (v(p.signals?.stageConvention) as PracticeMapping['stageConvention']) ?? J.stage
 
   const modules: ModuleDecision[] = []
   const on = (key: string, label: string, reason: string, evidence?: string) => modules.push({ key, label, on: true, reason, evidence })
@@ -62,9 +128,11 @@ export function mapPracticeProfile(p: PracticeProfile): PracticeMapping {
   on('approvals', FEATURE_REGISTRY.approvals.label, 'Core — sign-off routing')
 
   // Compliance
-  const framework: PracticeMapping['complianceFramework'] = jurisdiction === 'EE' ? 'ehitusseadustik' : jurisdiction === 'GB' ? 'brpd' : jurisdiction === 'ES' ? 'cte' : null
-  if (framework) on('compliance', FEATURE_REGISTRY.compliance.label, framework === 'ehitusseadustik' ? 'Ehitusseadustik framework — Estonian practice' : framework === 'brpd' ? 'BRPD / Building Safety Act — UK practice' : 'CTE framework — Spanish practice', munis.length ? `${munis.length} municipalities from project list` : undefined)
+  const framework = J.framework
+  if (framework) on('compliance', FEATURE_REGISTRY.compliance.label, `${J.frameworkLabel} — ${J.name} practice`, munis.length ? `${munis.length} ${J.authorityTerm} from project list` : undefined)
   else off('compliance', FEATURE_REGISTRY.compliance.label, 'Jurisdiction not identified — ask')
+  if (jurisdiction === 'GB') on('brpd', 'BRPD gateways (Building Safety Act)', 'UK practice — higher-risk building duties apply')
+  if (jurisdiction === 'PL') on('ksef', 'KSeF e-invoicing', 'Mandatory structured e-invoicing in Poland')
 
   if (heritage) on('heritage_conditions', 'Heritage conditions', 'Historic-environment work found', p.heritageWork?.source ? String(typeof p.heritageWork.source === 'string' ? p.heritageWork.source : p.heritageWork.source?.quote) : undefined)
   else off('heritage_conditions', 'Heritage conditions', 'No heritage work stated')
@@ -87,44 +155,42 @@ export function mapPracticeProfile(p: PracticeProfile): PracticeMapping {
   if (teamSize >= 3) {
     on('staffing', FEATURE_REGISTRY.staffing.label, `${teamSize}-person team`, people.some((x) => x.onLeave) ? 'one person on leave — leave module needed' : undefined)
     on('timesheets', FEATURE_REGISTRY.timesheets.label, 'Multiple concurrent projects')
-    on('riba_tracking', 'Stage tracking & resource plan', stage === 'riba' ? 'RIBA stages' : 'Estonian 4-stage convention (eskiis → tööprojekt)')
+    on('riba_tracking', 'Stage tracking & resource plan', STAGE_LABEL[stage ?? 'other'])
   } else {
     off('staffing', FEATURE_REGISTRY.staffing.label, `${teamSize || 'Small'}-person studio — HR module not needed yet`)
     off('timesheets', FEATURE_REGISTRY.timesheets.label, 'Small studio — ask')
     on('riba_tracking', 'Stage tracking & resource plan', 'Stage tracking still useful for a small studio')
   }
-  if (chartered > 0) on('cpd', 'CPD & competence', `${chartered} chartered architect${chartered > 1 ? 's' : ''} — EAL CPD requirements`)
+  if (chartered > 0) on('cpd', 'CPD & competence', `${chartered} chartered architect${chartered > 1 ? 's' : ''} — ${J.cpdBody} CPD requirements`)
   else off('cpd', 'CPD & competence', 'No chartered status shown — ask')
 
   // Finance
-  on('invoicing', FEATURE_REGISTRY.invoicing.label, jurisdiction === 'EE' ? 'e-arve ready — Estonian e-invoicing' : 'Inbound + outbound invoicing')
-  if (munis.length >= 5) on('expenses', 'Expenses', `Travel across ${munis.length} municipalities`)
+  on('invoicing', FEATURE_REGISTRY.invoicing.label, J.invoicingReason)
+  if (munis.length >= 5) on('expenses', 'Expenses', `Travel across ${munis.length} ${J.authorityTerm}`)
   else off('expenses', 'Expenses', 'Few locations — ask')
 
   // Off by jurisdiction
   if (jurisdiction !== 'GB') off('brpd', 'BRPD (UK Building Safety Act)', 'No UK work')
-  if (jurisdiction === 'EE') off('multi_currency', 'Multi-currency', 'EUR only')
+  if (jurisdiction !== 'PL') off('ksef', 'KSeF e-invoicing', 'Poland only')
+  if (J.currency) off('multi_currency', 'Multi-currency', `${J.currency} only`)
 
-  const integrations: PracticeMapping['integrations'] = []
-  if (jurisdiction === 'EE') integrations.push({ key: 'merit_aktiva', label: 'Merit Aktiva', reason: 'Estonian SME default accounting' })
-  if (jurisdiction === 'GB') integrations.push({ key: 'xero', label: 'Xero', reason: 'UK practice default' })
-  integrations.push({ key: 'microsoft365', label: 'Microsoft 365', reason: 'Outlook + SharePoint' })
-  if (jurisdiction === 'EE') integrations.push({ key: 'ehitisregister', label: 'Ehitisregister', reason: 'Import project history by registry code' })
+  const integrations: PracticeMapping['integrations'] = [...J.integrations, { key: 'microsoft365', label: 'Microsoft 365', reason: 'Outlook + SharePoint' }]
 
   const followUpQuestions: PracticeMapping['followUpQuestions'] = [
     { id: 'fee_approver', question: partners.length ? `Who signs off fee quotes — any partner, or ${partners[0]} only?` : 'Who signs off fee quotes?', options: partners.length ? ['Any partner', `${partners[0]} only`, 'Partners + finance'] : ['Owner', 'Owner + finance'] },
     { id: 'timesheet_cadence', question: 'Timesheets weekly or daily, and who approves?', options: ['Weekly, partner approves', 'Daily, project lead approves', 'We don’t do timesheets'] },
-    { id: 'accounting', question: 'Which accounting software?', options: jurisdiction === 'EE' ? ['Merit Aktiva', 'Directo', 'Xero', 'Other'] : ['Xero', 'QuickBooks', 'Sage', 'Other'] },
+    { id: 'accounting', question: 'Which accounting software?', options: J.accountingOptions },
     { id: 'files', question: 'Where do project files live?', options: ['SharePoint / OneDrive', 'Google Drive', 'Local server', 'Dropbox'] },
   ]
-  if (jurisdiction === 'EE') followUpQuestions.push({ id: 'ehr_import', question: 'Import your project history from Ehitisregister? (needs your registry code)', options: ['Yes', 'Not now'] })
-  if (!munis.length) followUpQuestions.unshift({ id: 'municipalities', question: 'Which municipalities do you work in most?', options: ['Tallinn', 'Tartu', 'Pärnu', 'Across Estonia'] })
+  if (J.registryQuestion) followUpQuestions.push(J.registryQuestion)
+  if (!munis.length) followUpQuestions.unshift({ id: 'municipalities', question: `Which ${J.authorityTerm} do you work in most?`, options: J.placeOptions })
   if (!active.length) followUpQuestions.unshift({ id: 'active', question: 'Any projects on site right now?', options: ['Yes, 1–2', 'Yes, 3+', 'None at the moment'] })
 
   const warnings: string[] = []
   if (!v(p.practice.legalName)) warnings.push('Legal name not found on site')
   if (!teamSize) warnings.push('No team page found — people list empty')
-  if (munis.length === 0 && jurisdiction === 'EE') warnings.push('No locations in project titles — municipalities unknown')
+  if (munis.length === 0 && jurisdiction !== 'OTHER') warnings.push(`No locations in project titles — ${J.authorityTerm} unknown`)
+  if (jurisdiction === 'OTHER') warnings.push('Country not identified — compliance framework to confirm')
 
   return {
     headline: {
@@ -138,7 +204,11 @@ export function mapPracticeProfile(p: PracticeProfile): PracticeMapping {
     },
     jurisdiction,
     complianceFramework: framework,
+    complianceLabel: J.frameworkLabel,
     stageConvention: stage,
+    stageLabel: STAGE_LABEL[stage ?? 'other'],
+    currency: J.currency,
+    authorityTerm: J.authorityTerm,
     modules,
     municipalityProfiles: munis,
     integrations,

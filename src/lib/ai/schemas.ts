@@ -65,7 +65,7 @@ export const PracticeProfileSchema = z.object({
   signals: z.object({
     accountingSoftware: Sourced(z.string()).optional(),
     fileStorage: Sourced(z.string()).optional(),
-    stageConvention: Sourced(z.enum(['estonian_4_stage', 'riba', 'other'])).optional(),
+    stageConvention: Sourced(z.enum(['estonian_4_stage', 'riba', 'polish_3_stage', 'other'])).optional(),
   }),
 })
 
