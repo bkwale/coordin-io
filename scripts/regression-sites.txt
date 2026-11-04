@@ -1,0 +1,20 @@
+# Estonia
+salto.ee
+vndl.ee
+koko.ee
+kauss.ee
+kavakava.ee
+pluss.ee
+threeplusone.ee
+part.archi
+allianss.eu
+hga.ee
+ata.ee
+onearchitects.fi
+ninja-studio.ee
+# UK
+proctorandmatthews.com
+# Poland
+jems.pl
+# known-bad (should FAIL with a specific reason)
+bbgk.pl

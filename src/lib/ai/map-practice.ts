@@ -3,7 +3,7 @@
  * No LLM here. Every decision carries a human-readable reason so the UI
  * can show "why" next to each module.
  */
-import { FEATURE_REGISTRY, type FeatureKey } from '@/lib/feature-flags'
+import { FEATURE_REGISTRY, type FeatureKey } from '@/lib/feature-registry'
 import type { PracticeProfile } from './schemas'
 
 export interface ModuleDecision {
