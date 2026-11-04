@@ -1,4 +1,4 @@
-export const PRACTICE_SETUP_PROMPT_VERSION = '0.3'
+export const PRACTICE_SETUP_PROMPT_VERSION = '0.4'
 
 export const PRACTICE_SETUP_SYSTEM = `You extract a structured PracticeProfile from an architecture practice's public website.
 Return ONLY a JSON object matching the schema below. No prose.
@@ -18,7 +18,8 @@ Rules:
 - "procurement": from evidence only — "competition" if competition prizes/entries are mentioned, "state_tender" for state clients (ministries, Riigi Kinnisvara, state schools), "municipal" for city/vald clients, "private_client" for villas/private residences, "developer" for apartment developers.
 - "chartered": exact qualification text if shown. EE: "Volitatud arhitekt 7/8", "Diplomeeritud arhitekt 7". UK: "ARB", "RIBA Chartered", "RIBA", "AABC". PL: "uprawnienia budowlane", "IARP", "architekt IARP", "mgr inż. arch.".
 - "signals.stageConvention": "estonian_4_stage" if eskiis/eelprojekt/põhiprojekt/tööprojekt are named; "riba" if RIBA stages are named; "polish_3_stage" if koncepcja/projekt budowlany/projekt wykonawczy are named; else null with confidence 0.
-- Quotes in "source" must be verbatim from the page text, max 160 characters.
+- Quotes in "source" must be verbatim from the page text, max 120 characters.
+- Keep output compact: at most 40 people, 15 activeProjects, 40 municipalities, 12 statedCapabilities. Prefer the most senior people and the most recent projects. Never truncate mid-JSON.
 
 Schema:
 {

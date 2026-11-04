@@ -27,7 +27,7 @@ async function mistral(req: ChatRequest, model: string): Promise<ChatResult> {
     body: JSON.stringify({
       model,
       temperature: req.temperature ?? 0.1,
-      max_tokens: req.maxTokens ?? 4000,
+      max_tokens: req.maxTokens ?? 8192,
       ...(req.json ? { response_format: { type: 'json_object' } } : {}),
       messages: [
         { role: 'system', content: req.system },
@@ -48,7 +48,7 @@ async function claude(req: ChatRequest, model: string): Promise<ChatResult> {
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model,
-      max_tokens: req.maxTokens ?? 4000,
+      max_tokens: req.maxTokens ?? 8192,
       temperature: req.temperature ?? 0.1,
       system: req.system + (req.json ? '\nRespond with a single JSON object and nothing else.' : ''),
       messages: [{ role: 'user', content: req.user }],
