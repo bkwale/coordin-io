@@ -1287,3 +1287,17 @@ Jurisdiction table in `map-practice.ts` (EE / GB / PL / ES / OTHER): compliance 
 **Fixed along the way.** (1) Project tab highlighting — Overview's empty route matched every sub-route, so all project tabs showed Overview active (pre-existing). (2) Re-run transaction timing out on PgBouncer — writes now batched (`createMany` + parallel updates) with a 30 s transaction timeout.
 
 **Still open in Sprint 2.** Laila validation of the 68 fixtures; `confirm` endpoint for practice-setup ("Switch on Coordin" → OrganisationFeature flags). UK (`GB-1.0`) and Poland (`PL-1.0`) datasets slot into the registry once EE is validated.
+
+### AI Sprint 2.4 — PT QA sign-off fixes (4 Nov 2026, evening)
+
+Purple Team QA (Crispin lead; Majors, Suleyman, Schneier, Fadell, Norman). No veto. Six fixes applied, all under test (1549 tests green):
+
+- **Evidence never silently lost.** Re-run deletes a no-longer-applicable generated item only if it is `NOT_STARTED`; anything the architect has touched is kept, flagged `confidence: 'stale'`, rationale prefixed "[No longer applies with current parameters]", and un-flagged automatically if the parameters bring it back. GET reports `counts.stale`; UI shows a notice and a "no longer applies" badge.
+- **Only `PROJECT_LEAD` can generate / re-run / add items.** Any member can read. (Schneier.)
+- **Heated and enclosed net area follow gross area (≈90 %) until edited** — stops energy rules running on the 150 m² default. (Crispin.)
+- **Outdated rule-set banner** when the register's version ≠ current dataset version. (Suleyman.)
+- GB/PL disabled in the jurisdiction select until their datasets exist; no "new" badges on first run. (Norman.)
+- Prisma errors hitting the `default:` branch now log their code + meta. (Majors.)
+- Overview dashboard card: "N regulatory obligations · jurisdiction · rule set · M to verify"; Compliance tab lands on Regulatory.
+
+Decision recorded: keep-and-flag over delete (Crispin) — Fadell's "delete but confirm" deferred. ET toggle translates titles only; rationale remains English for now (tooltip says so).
