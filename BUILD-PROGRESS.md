@@ -1301,3 +1301,17 @@ Purple Team QA (Crispin lead; Majors, Suleyman, Schneier, Fadell, Norman). No ve
 - Overview dashboard card: "N regulatory obligations · jurisdiction · rule set · M to verify"; Compliance tab lands on Regulatory.
 
 Decision recorded: keep-and-flag over delete (Crispin) — Fadell's "delete but confirm" deferred. ET toggle translates titles only; rationale remains English for now (tooltip says so).
+
+### AI Sprint 3 — in progress on branch `sprint-3` (4 Nov 2026)
+
+Workflow change: all Sprint 3 work on the `sprint-3` branch → Vercel preview URL → Wale walks it → merge to `main`. Two stray Vercel projects that were triple-building every push were deleted; Speed Insights Plus (unused, $10/mo) switched off.
+
+**3.0 Commit zero (done).** Regulatory write path extracted to `src/lib/rules/apply.ts` (`applyProjectParameters`). `ComplianceItemOrigin { RULE, MUNICIPALITY, ARCHITECT }` added with backfill; the stale-item sweep keys on `origin = RULE`, so municipality conditions are never touched by a re-run (tested).
+
+**3.A Practice-setup confirm — "Switch on Coordin" (done).** `POST /api/ai/practice-setup/confirm { runId, organisationId, overrides }` applies the run's module decisions as `OrganisationFeature` flags (alias `expenses → spend_management`; keys with no registry switch are reported as skipped), writes a versioned `PracticeProfile` with `sourceRunId`, marks the run `APPLIED`, audits every decision with its reason and whether it was AI or architect. Demo page: module tiles are tappable overrides, workspace picker, result line. 11 tests.
+
+**3.B1 Day-one model pass (done, Karpathy).** `PlanningConditionsSchema` (page-sourced, units as extracted) + prompt `pt-0.2`. All 10 private PDFs: document number 10/10, date 10/10, legal basis 10/10, EHR code 10/10, height 10/10, storeys 10/10 (two derived from the model's own quote). Normaliser handles decimal commas, wrapped enums, booleans-in-strings, quote-only numbers. `parseJson` repairs `max_tokens` truncation by dropping the unfinished array element. Max tokens 16k for this surface. Median 33 s, max 68 s. Record: `private/ai-samples/pt-accuracy.md`.
+
+**3.R Practice setup from registry number (done, added on Wale's ask).** `src/lib/registry/` — Äriregister (keyless: autocomplete + company card) and Companies House (needs `COMPANIES_HOUSE_API_KEY`). One `CompanyFacts` shape: legal name, reg code, status, legal form, registered date, address, EMTAK/SIC activity, `isArchitecturePractice`, board **names only** (personal ID codes are deliberately never captured), capital. Registry facts overlay the website profile at confidence 1.0 (registry beats website); registry-only path builds the profile with **no model call**. Demo input accepts a URL, a registry code, or both ("salto.ee 11038879"). What a registry does *not* give: project history — that stays website / portfolio upload / (EE, later) Smart-ID + Ehitisregister.
+
+**Next:** 3.B2 extract + confirm API and ConfirmationReview UI; 3.C EHR enrichment; 3.D demo org + Laila.
