@@ -9,7 +9,7 @@ import {
   CheckCircle2, Clock, Eye, PauseCircle,
   Plus, X, Loader2, Building2, Shield,
   Milestone, MessageSquare, Target, CalendarDays,
-  Pencil, ExternalLink, BarChart3, Archive, Trash2,
+  Pencil, ExternalLink, BarChart3, Archive, Trash2, ShieldCheck,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -591,6 +591,9 @@ export default function ProjectDashboard() {
           suffix={metrics.daysToTarget === null ? 'N/A' : undefined}
         />
       </div>
+
+      {/* ── Regulatory checklist card ─────────────────── */}
+      <RegulatoryCard projectId={projectId} />
 
       {/* ── Blocked alert ─────────────────────────────── */}
       {blockedTasks > 0 && (
@@ -1681,5 +1684,64 @@ function UpdateFormModal({ projectId, onClose, onSuccess }: {
         </form>
       </div>
     </div>
+  )
+}
+
+
+function RegulatoryCard({ projectId }: { projectId: string }) {
+  const [state, setState] = useState<{ loaded: boolean; version: string | null; generated: number; added: number; verify: number; updatedAt: string | null; jurisdiction: string | null }>({ loaded: false, version: null, generated: 0, added: 0, verify: 0, updatedAt: null, jurisdiction: null })
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/regulatory`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        const d = body?.data
+        if (!d) { setState((s) => ({ ...s, loaded: true })); return }
+        const items = Object.values(d.grouped ?? {}).flat() as Array<{ confidence: string | null }>
+        setState({
+          loaded: true,
+          version: d.register?.templateVersion ?? null,
+          generated: d.counts?.generated ?? 0,
+          added: d.counts?.added ?? 0,
+          verify: items.filter((i) => i.confidence === 'low').length,
+          updatedAt: d.register?.updatedAt ?? null,
+          jurisdiction: d.profile?.parameters?.jurisdiction ?? null,
+        })
+      })
+      .catch(() => setState((s) => ({ ...s, loaded: true })))
+  }, [projectId])
+
+  if (!state.loaded) return null
+  const href = `/projects/${projectId}/regulatory`
+  if (!state.version) {
+    return (
+      <Link href={href} className="block bg-white rounded-xl border border-dashed border-accent-200 px-5 py-4 hover:border-accent-400 transition-colors">
+        <div className="flex items-center gap-3">
+          <span className="w-9 h-9 rounded-lg bg-accent-50 text-accent-600 flex items-center justify-center shrink-0"><ShieldCheck className="w-[18px] h-[18px]" /></span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-semibold text-ink-900">Regulatory checklist not generated yet</p>
+            <p className="text-[12px] text-ink-400">Answer a few project parameters and get every obligation with its legal citation.</p>
+          </div>
+          <span className="text-[12px] text-accent-600 font-medium flex items-center gap-1 shrink-0">Generate <ArrowRight className="w-3.5 h-3.5" /></span>
+        </div>
+      </Link>
+    )
+  }
+  return (
+    <Link href={href} className="block bg-white rounded-xl border border-ink-100 px-5 py-4 hover:border-accent-300 transition-colors">
+      <div className="flex items-center gap-3">
+        <span className="w-9 h-9 rounded-lg bg-accent-50 text-accent-600 flex items-center justify-center shrink-0"><ShieldCheck className="w-[18px] h-[18px]" /></span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-ink-900">
+            {state.generated + state.added} regulatory obligations
+            <span className="ml-2 text-[11px] font-normal text-ink-400">{state.jurisdiction ? `${state.jurisdiction} · ` : ''}rule set {state.version}{state.updatedAt ? ` · ${new Date(state.updatedAt).toLocaleDateString()}` : ''}</span>
+          </p>
+          <p className="text-[12px] text-ink-400">
+            {state.generated} from the rule set{state.added ? ` · ${state.added} added by the practice` : ''}
+            {state.verify ? <span className="ml-2 inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="w-3 h-3" />{state.verify} to verify</span> : null}
+          </p>
+        </div>
+        <span className="text-[12px] text-accent-600 font-medium flex items-center gap-1 shrink-0">Open <ArrowRight className="w-3.5 h-3.5" /></span>
+      </div>
+    </Link>
   )
 }
