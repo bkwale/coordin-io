@@ -76,7 +76,48 @@ export function parseJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   const body = fenced ? fenced[1] : text
   const start = body.indexOf('{')
+  if (start === -1) throw new Error('No JSON object in model output')
   const end = body.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('No JSON object in model output')
-  return JSON.parse(body.slice(start, end + 1))
+  if (end > start) {
+    try { return JSON.parse(body.slice(start, end + 1)) } catch { /* fall through to repair */ }
+  }
+  // Truncated (max_tokens) or malformed: cut back to the last complete value and close open brackets.
+  const repaired = repairTruncatedJson(body.slice(start))
+  if (repaired !== null) return repaired
+  throw new Error('Model output was not valid JSON and could not be repaired')
+}
+
+/** Best-effort repair for model output cut mid-array/object (max_tokens). Cuts back to the last
+ *  COMPLETE value boundary — a closing bracket, or a closing quote that ends a value — so a half-written
+ *  element is dropped rather than kept with truncated text. Returns null if nothing parses. */
+export function repairTruncatedJson(s: string): unknown | null {
+  const candidates: number[] = []
+  let inStr = false, esc = false
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') {
+        inStr = false
+        const next = s.slice(i + 1).match(/^\s*([,}\]]|$)/)
+        if (next) candidates.push(i) // closing quote of a VALUE (not a key)
+      }
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === '}' || c === ']') candidates.push(i)
+    else if (/[0-9el]/.test(c) && /^\s*([,}\]]|$)/.test(s.slice(i + 1))) candidates.push(i) // end of number/true/false/null
+  }
+  for (let k = candidates.length - 1; k >= 0 && k >= candidates.length - 400; k--) {
+    const head = s.slice(0, candidates[k] + 1)
+    const st: string[] = []; let q = false, e = false
+    for (const ch of head) { if (q) { if (e) e = false; else if (ch === '\\') e = true; else if (ch === '"') q = false; continue } if (ch === '"') q = true; else if (ch === '{' || ch === '[') st.push(ch); else if (ch === '}' || ch === ']') st.pop() }
+    if (q) continue
+    // An unfinished object that is an array element (e.g. a half-written condition) is dropped, not closed.
+    if (st.length >= 2 && st[st.length - 1] === '{' && st[st.length - 2] === '[') continue
+    const closing = st.reverse().map((b) => (b === '{' ? '}' : ']')).join('')
+    try { return JSON.parse(head + closing) } catch { /* earlier candidate */ }
+  }
+  return null
 }
