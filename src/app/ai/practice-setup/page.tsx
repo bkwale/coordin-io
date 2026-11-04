@@ -66,6 +66,7 @@ export default function PracticeSetupDemo() {
   const [busy, setBusy] = useState(false)
   const chatEnd = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const finalisedRef = useRef<string | null>(null)
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
 
@@ -83,7 +84,7 @@ export default function PracticeSetupDemo() {
   async function start(raw: string) {
     const u = raw.trim()
     if (!u || busy) return
-    setBusy(true); setRun(null); setAnswers({}); setQIndex(-1); setUrl(u)
+    setBusy(true); setRun(null); setAnswers({}); setQIndex(-1); setUrl(u); finalisedRef.current = null
     push({ kind: 'user', text: u })
     replaceBuild('BUILDING', [{ text: `Reading ${hostOf(u)}`, status: 'running' }])
     try {
@@ -106,13 +107,17 @@ export default function PracticeSetupDemo() {
       if (!res.ok) return
       const { data } = (await res.json()) as { data: Run }
       setRun(data)
-      const lines = (data.stages || []).map((s) => ({
+      const byName = new Map<string, Stage>()
+      for (const st of data.stages || []) byName.set(st.name === 'fetch' ? `fetch:${st.detail}` : st.name, st)
+      const lines = Array.from(byName.values()).map((s) => ({
         text: s.name === 'fetch' ? `Fetched ${s.detail}` : s.name === 'read' ? `Read ${s.detail}` : `${STAGE_LABEL[s.name] || s.name}${s.detail && s.name !== 'extract' ? ` — ${s.detail}` : ''}`,
         status: s.status, ms: s.ms,
       }))
       replaceBuild('BUILDING', lines.length ? lines : [{ text: `Reading ${hostOf(data.inputSummary)}`, status: 'running' }])
       if (data.status === 'AWAITING_CONFIRMATION' || data.status === 'FAILED') {
         if (pollRef.current) clearInterval(pollRef.current)
+        if (finalisedRef.current === data.id) return
+        finalisedRef.current = data.id
         setBusy(false)
         if (data.status === 'FAILED') {
           push({ kind: 'error', text: data.error || 'Could not read that site.' })

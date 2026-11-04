@@ -49,7 +49,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
   const stages: Stage[] = []
   const t0 = Date.now()
   const push = async (s: Omit<Stage, 'at'>) => {
-    const idx = stages.findIndex((x) => x.name === s.name && x.detail === s.detail && x.status === 'running')
+    const idx = s.name === 'fetch' ? -1 : stages.findIndex((x) => x.name === s.name)
     const entry: Stage = { ...s, at: new Date().toISOString() }
     if (idx >= 0) stages[idx] = entry
     else stages.push(entry)
