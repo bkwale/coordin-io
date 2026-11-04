@@ -78,6 +78,8 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
     }
 
     const existing = new Map((await tx.complianceItem.findMany({ where: { registerId: register.id, addedByArchitect: false } })).map((i) => [i.ruleId, i]))
+    const toCreate: Array<Record<string, unknown>> = []
+    const toUpdate: Array<{ id: string; data: Record<string, unknown> }> = []
     let order = 0
     for (const c of checklist) {
       order += 10
@@ -87,11 +89,14 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
         comments: c.requirement ?? null, sortOrder: order,
       }
       const ex = existing.get(c.ruleId)
-      if (ex) await tx.complianceItem.update({ where: { id: ex.id }, data })
-      else await tx.complianceItem.create({ data: { ...data, registerId: register.id } })
+      if (ex) toUpdate.push({ id: ex.id, data })
+      else toCreate.push({ ...data, registerId: register.id })
     }
+    if (toCreate.length) await tx.complianceItem.createMany({ data: toCreate as any })
+    // Updates run in parallel inside the same transaction — status/evidence on surviving items is preserved
+    await Promise.all(toUpdate.map((u) => tx.complianceItem.update({ where: { id: u.id }, data: u.data })))
     return { newProfile, registerId: register.id, before }
-  })
+  }, { maxWait: 10_000, timeout: 30_000 })
 
   const diff = diffChecklists(result.before, checklist)
 
