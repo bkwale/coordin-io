@@ -66,6 +66,31 @@ export default function PracticeSetupDemo() {
     { kind: 'ai', text: 'Give me a practice’s website and I’ll set up Coordin for them — watch it come together on the right. Team, projects, municipalities, compliance, modules. Then I’ll ask a few questions a website can’t answer.' },
   ])
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({})
+  const [orgs, setOrgs] = useState<Array<{ id: string; name: string }>>([])
+  const [orgId, setOrgId] = useState('')
+  const [applying, setApplying] = useState(false)
+  const [applied, setApplied] = useState<{ organisationId: string; appliedCount: number; skippedKeys: string[]; profileVersion: number } | null>(null)
+  useEffect(() => {
+    fetch('/api/admin/organisations').then((r) => (r.ok ? r.json() : null)).then((b) => {
+      const list = (b?.data ?? b ?? []) as Array<{ id: string; name: string }>
+      if (Array.isArray(list)) setOrgs(list.map((o) => ({ id: o.id, name: o.name })))
+    }).catch(() => {})
+  }, [])
+
+  async function switchOn() {
+    if (!run || !orgId) return
+    setApplying(true)
+    try {
+      const res = await fetch('/api/ai/practice-setup/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: run.id, organisationId: orgId, overrides }) })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || 'Could not apply')
+      setApplied(body.data)
+      setRun((r) => (r ? { ...r, status: 'APPLIED' } : r))
+      push({ kind: 'ai', text: `Done — ${body.data.appliedCount} modules applied to ${orgs.find((o) => o.id === orgId)?.name ?? 'the workspace'} (practice profile v${body.data.profileVersion}).${body.data.skippedKeys.length ? ` Noted but not switchable yet: ${body.data.skippedKeys.join(', ')}.` : ''} Every decision is in the audit trail.` })
+    } catch (e) { push({ kind: 'ai', text: `Couldn’t switch on: ${e instanceof Error ? e.message : 'unknown error'}` }) }
+    finally { setApplying(false) }
+  }
   const [qIndex, setQIndex] = useState(-1)
   const [busy, setBusy] = useState(false)
   const chatEnd = useRef<HTMLDivElement>(null)
@@ -137,7 +162,7 @@ export default function PracticeSetupDemo() {
 
   function askNext(m: Mapping, i: number) {
     const q = m.followUpQuestions[i]
-    if (!q) { push({ kind: 'ai', text: 'That’s everything I need. In the real product you’d press “Switch on Coordin” now — on this demo page it stays read-only.' }); setQIndex(99); return }
+    if (!q) { push({ kind: 'ai', text: 'That’s everything I need. Press “Switch on Coordin” on the right to apply these modules to a workspace.' }); setQIndex(99); return }
     setQIndex(i)
     push({ kind: 'ai', text: q.question })
     push({ kind: 'chips', qid: q.id, options: q.options })
@@ -155,7 +180,7 @@ export default function PracticeSetupDemo() {
 
   function reset() {
     if (pollRef.current) clearInterval(pollRef.current)
-    setRun(null); setUrl(''); setAnswers({}); setQIndex(-1); setBusy(false)
+    setRun(null); setUrl(''); setAnswers({}); setOverrides({}); setApplied(null); setQIndex(-1); setBusy(false)
     setMsgs([{ kind: 'ai', text: 'Reset. Give me another practice’s website.' }])
   }
 
@@ -232,7 +257,28 @@ export default function PracticeSetupDemo() {
                 <p className="text-[13px]">{busy ? 'Reading the practice…' : 'Your workspace appears here as we talk.'}</p>
               </div>
             )}
-            {ready && <Workspace profile={profile!} mapping={mapping!} answers={answers} />}
+            {ready && (
+              <>
+                <div className={cn('mb-4 rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3', applied ? 'border-green-200 bg-green-50' : 'border-accent-200 bg-accent-50/50')}>
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="text-[13px] font-semibold text-ink-900">{applied ? 'Coordin is switched on' : 'Switch on Coordin'}</div>
+                    <div className="text-[11px] text-ink-500">{applied ? `${applied.appliedCount} modules applied · profile v${applied.profileVersion} · audited` : 'Tap any module tile below to change the decision, pick the workspace, then apply. Nothing is written until you do.'}</div>
+                  </div>
+                  {!applied && (
+                    <>
+                      <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="text-[12px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white max-w-[220px]">
+                        <option value="">Workspace…</option>
+                        {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                      <button onClick={switchOn} disabled={!orgId || applying || run?.status !== 'AWAITING_CONFIRMATION'} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-500 text-white text-[13px] font-medium hover:bg-accent-600 disabled:opacity-50">
+                        {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}Switch on Coordin
+                      </button>
+                    </>
+                  )}
+                </div>
+                <Workspace profile={profile!} mapping={mapping!} answers={answers} overrides={overrides} onToggle={applied ? undefined : (key, on) => setOverrides((o) => ({ ...o, [key]: on }))} />
+              </>
+            )}
           </div>
         </div>
       </main>
@@ -265,13 +311,14 @@ function Message({ m, onChip }: { m: Msg; onChip: (qid: string, text: string) =>
 }
 
 // ── Workspace panels (real extracted data) ───────────────────────────────────
-function Workspace({ profile, mapping, answers }: { profile: Profile; mapping: Mapping; answers: Record<string, string> }) {
+function Workspace({ profile, mapping, answers, overrides = {}, onToggle }: { profile: Profile; mapping: Mapping; answers: Record<string, string>; overrides?: Record<string, boolean>; onToggle?: (key: string, on: boolean) => void }) {
   const h = mapping.headline
   const active = profile.activeProjects?.value || []
   const mix = profile.projectMix?.value || {}
   const munis = mapping.municipalityProfiles
-  const on = mapping.modules.filter((m) => m.on)
-  const off = mapping.modules.filter((m) => !m.on)
+  const effective = mapping.modules.map((m) => ({ ...m, on: Object.prototype.hasOwnProperty.call(overrides, m.key) ? overrides[m.key] : m.on, overridden: Object.prototype.hasOwnProperty.call(overrides, m.key) }))
+  const on = effective.filter((m) => m.on)
+  const off = effective.filter((m) => !m.on)
   const [shown, setShown] = useState(0)
   useEffect(() => { setShown(0); const t = setInterval(() => setShown((s) => (s >= 8 ? (clearInterval(t), s) : s + 1)), 220); return () => clearInterval(t) }, [profile])
 
@@ -319,8 +366,8 @@ function Workspace({ profile, mapping, answers }: { profile: Profile; mapping: M
     { key: 'modules', node: (
       <Panel icon={<Blocks className="w-4 h-4" />} title="Modules" sub={`${on.length} switched on · ${off.length} off`}>
         <div className="grid grid-cols-3 gap-2">
-          {on.map((m) => <ModuleTile key={m.key} m={m} />)}
-          {off.map((m) => <ModuleTile key={m.key} m={m} />)}
+          {on.map((m) => <ModuleTile key={m.key} m={m} onToggle={onToggle} />)}
+          {off.map((m) => <ModuleTile key={m.key} m={m} onToggle={onToggle} />)}
         </div>
       </Panel>) },
     { key: 'integrations', node: (
@@ -357,12 +404,13 @@ function Stat({ label, value, hint }: { label: string; value: string | number; h
 function Tag({ children, tone = 'ink' }: { children: React.ReactNode; tone?: 'ink' | 'accent' | 'amber' }) {
   return <span className={cn('text-[10px] px-1.5 py-0.5 rounded border', tone === 'accent' ? 'bg-accent-50 text-accent-700 border-accent-100' : tone === 'amber' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-surface-100 text-ink-500 border-surface-200')}>{children}</span>
 }
-function ModuleTile({ m }: { m: Module }) {
+function ModuleTile({ m, onToggle }: { m: Module & { overridden?: boolean }; onToggle?: (key: string, on: boolean) => void }) {
+  const Tag = onToggle ? 'button' : 'div'
   return (
-    <div className={cn('rounded-lg border px-3 py-2 transition-colors', m.on ? 'border-accent-200 bg-accent-50/60' : 'border-surface-200 bg-surface-50 opacity-60')}>
-      <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-900">{m.on ? <Check className="w-3.5 h-3.5 text-accent-600" /> : <X className="w-3.5 h-3.5 text-ink-300" />}{m.label}</div>
+    <Tag type={onToggle ? 'button' : undefined} onClick={onToggle ? () => onToggle(m.key, !m.on) : undefined} title={onToggle ? (m.on ? 'Tap to switch off' : 'Tap to switch on') : undefined} className={cn('text-left w-full rounded-lg border px-3 py-2 transition-colors', m.on ? 'border-accent-200 bg-accent-50/60' : 'border-surface-200 bg-surface-50 opacity-60', onToggle && 'hover:border-accent-400 cursor-pointer', m.overridden && 'ring-1 ring-amber-300')}>
+      <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-900">{m.on ? <Check className="w-3.5 h-3.5 text-accent-600" /> : <X className="w-3.5 h-3.5 text-ink-300" />}{m.label}{m.overridden && <span className="ml-auto text-[10px] text-amber-700">changed by you</span>}</div>
       <div className="text-[11px] text-ink-400 leading-snug mt-0.5">{m.reason}{m.evidence ? ` · ${m.evidence}` : ''}</div>
-    </div>
+    </Tag>
   )
 }
 function MixBars({ mix }: { mix: Record<string, number> }) {
