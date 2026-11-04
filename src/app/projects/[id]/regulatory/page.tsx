@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { ShieldCheck, Loader2, Plus, Check, AlertTriangle, Info, RefreshCw, ChevronDown, ChevronRight, Scale } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
+import { DocumentPrefill } from '@/components/ai/DocumentPrefill'
 
 /* ── Types ──────────────────────────────────────────────── */
 type Params = {
@@ -19,7 +20,7 @@ type Params = {
   seasonalUseOnly?: boolean; temporary?: boolean; placeOfWorship?: boolean; county?: string
 }
 type Item = { id: string; ruleId: string | null; requirement: string; titleLocal: string | null; citation: string | null; source: string | null; because: string | null; confidence: string | null; comments: string | null; status: string; section: string | null; addedByArchitect: boolean; ruleSetVersion: string | null }
-type Data = { profile: { version: number; parameters: Params; ruleSetVersion: string | null; createdAt: string } | null; register: { id: string; name: string; templateVersion: string | null; updatedAt: string } | null; grouped: Record<string, Item[]>; added: Item[]; disciplineLabels: Record<string, { en: string; et: string }>; counts: { generated: number; added: number; stale: number }; currentRuleSetVersion: string | null; outdated: boolean }
+type Data = { profile: { version: number; parameters: Params; ruleSetVersion: string | null; createdAt: string } | null; register: { id: string; name: string; templateVersion: string | null; updatedAt: string } | null; grouped: Record<string, Item[]>; added: Item[]; disciplineLabels: Record<string, { en: string; et: string }>; municipal: Item[]; counts: { generated: number; added: number; municipal: number; stale: number }; currentRuleSetVersion: string | null; outdated: boolean }
 
 const DEFAULTS: Params = { jurisdiction: 'EE', buildingType: 'detached_house', workType: 'new_build', grossFloorArea: 160, height: 7, storeys: 2, heatedArea: 150, enclosedNetArea: 150, detailedPlanExists: false, urbanArea: false }
 
@@ -50,6 +51,8 @@ export default function RegulatoryPage() {
   useEffect(() => { load() }, [load])
 
   const [areaEdited, setAreaEdited] = useState({ heated: false, enclosed: false })
+  const [pendingRun, setPendingRun] = useState<{ runId: string; acceptedConditions: number[] } | null>(null)
+  const [bounds, setBounds] = useState<{ maxHeightM: number | null; maxStoreys: number | null }>({ maxHeightM: null, maxStoreys: null })
   const set = <K extends keyof Params>(k: K, v: Params[K]) => setForm((f) => {
     const next = { ...f, [k]: v }
     // Heated / enclosed net area follow gross area until the architect edits them — prevents energy rules running on a stale 150 m² default.
@@ -64,6 +67,17 @@ export default function RegulatoryPage() {
   async function generate() {
     setRunning(true); setDiff(null)
     try {
+      if (pendingRun) {
+        // Confirm the document run: profile + engine + accepted municipal conditions, all server-side and audited
+        const res = await fetch(`/api/projects/${projectId}/setup/confirm`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: pendingRun.runId, parameters: form, acceptedConditions: pendingRun.acceptedConditions }) })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body.error || 'Could not confirm')
+        setDiff(body.data.profileVersion > 1 ? body.data.diff : null)
+        toast(`Checklist generated — ${body.data.ruleItems} obligations from ${body.data.ruleSetVersion} + ${body.data.municipalItems} municipal conditions`, 'success')
+        setPendingRun(null)
+        await load()
+        return
+      }
       const res = await fetch(`/api/projects/${projectId}/regulatory`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parameters: form }) })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Could not generate')
@@ -82,13 +96,18 @@ export default function RegulatoryPage() {
     setNewItem({ requirement: '', section: 'other', citation: '' }); setAdding(false); await load()
   }
 
-  const total = data ? data.counts.generated + data.counts.added : 0
+  const total = data ? data.counts.generated + data.counts.added + (data.counts.municipal ?? 0) : 0
   const disciplines = useMemo(() => Object.keys(data?.grouped ?? {}), [data])
 
   return (
     <div className="flex gap-6 items-start">
       {/* ── Questionnaire ─────────────────────────────────── */}
       <aside className="w-[340px] shrink-0 rounded-xl border border-surface-200 bg-white p-5 sticky top-4">
+        <DocumentPrefill
+          projectId={projectId}
+          onApplyValues={(values, b) => { setForm((f) => ({ ...f, ...(values as Partial<Params>) })); setBounds(b) }}
+          onPending={setPendingRun}
+        />
         <div className="flex items-center gap-2 mb-1"><Scale className="w-4 h-4 text-accent-600" /><h2 className="text-[14px] font-semibold text-ink-900">Project parameters</h2></div>
         <p className="text-[11px] text-ink-400 mb-4">Answer what you know. The engine only uses deterministic rules — no AI judgement.</p>
 
@@ -97,8 +116,8 @@ export default function RegulatoryPage() {
         <Field label="Work"><Select value={form.workType} onChange={(v) => set('workType', v as Params['workType'])} options={[['new_build', 'New build'], ['extension', 'Extension'], ['reconstruction', 'Reconstruction'], ['change_of_use', 'Change of use'], ['demolition', 'Demolition']]} /></Field>
         <div className="grid grid-cols-3 gap-2">
           <Field label="Gross m²"><Num value={form.grossFloorArea} onChange={(v) => set('grossFloorArea', v)} /></Field>
-          <Field label="Height m"><Num value={form.height} onChange={(v) => set('height', v)} step={0.1} /></Field>
-          <Field label="Storeys"><Num value={form.storeys} onChange={(v) => set('storeys', v)} /></Field>
+          <Field label="Height m" hint={bounds.maxHeightM != null ? `≤ ${bounds.maxHeightM} per PT` : undefined}><Num value={form.height} onChange={(v) => set('height', v)} step={0.1} invalid={bounds.maxHeightM != null && form.height > bounds.maxHeightM} /></Field>
+          <Field label="Storeys" hint={bounds.maxStoreys != null ? `≤ ${bounds.maxStoreys} per PT` : undefined}><Num value={form.storeys} onChange={(v) => set('storeys', v)} invalid={bounds.maxStoreys != null && form.storeys > bounds.maxStoreys} /></Field>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Heated m²" hint={areaEdited.heated ? undefined : '≈ 90% of gross'}><Num value={form.heatedArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, heated: true })); set('heatedArea', v) }} /></Field>
@@ -124,9 +143,9 @@ export default function RegulatoryPage() {
         </div>
         {form.jurisdiction === 'EE' && <Field label="County"><Select value={form.county ?? ''} onChange={(v) => set('county', v || undefined)} options={[['', '—'], ...EE_COUNTIES.map((c) => [c, c] as [string, string])]} /></Field>}
 
-        <button onClick={generate} disabled={running} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent-500 text-white text-[13px] font-medium hover:bg-accent-600 disabled:opacity-50">
+        <button onClick={generate} disabled={running || (bounds.maxHeightM != null && form.height > bounds.maxHeightM) || (bounds.maxStoreys != null && form.storeys > bounds.maxStoreys)} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent-500 text-white text-[13px] font-medium hover:bg-accent-600 disabled:opacity-50">
           {running ? <Loader2 className="w-4 h-4 animate-spin" /> : data?.register ? <RefreshCw className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-          {data?.register ? 'Re-run checklist' : 'Generate checklist'}
+          {pendingRun ? 'Confirm & generate checklist' : data?.register ? 'Re-run checklist' : 'Generate checklist'}
         </button>
         {data?.profile && <p className="mt-2 text-[11px] text-ink-400">Profile v{data.profile.version} · {new Date(data.profile.createdAt).toLocaleDateString()}</p>}
       </aside>
@@ -201,6 +220,12 @@ export default function RegulatoryPage() {
                   </section>
                 )
               })}
+              {data.municipal.length > 0 && (
+                <section className="rounded-xl border border-amber-200 bg-white">
+                  <div className="px-4 py-3 text-[13px] font-semibold text-ink-900">Municipal conditions <span className="text-[11px] text-ink-400 font-normal">{data.municipal.length} · from {data.municipal[0]?.citation?.split(' p.')[0] ?? 'planning conditions'}</span></div>
+                  <ul className="border-t border-surface-100">{data.municipal.map((i) => <Row key={i.id} item={i} lang={lang} />)}</ul>
+                </section>
+              )}
               {data.added.length > 0 && (
                 <section className="rounded-xl border border-accent-200 bg-white">
                   <div className="px-4 py-3 text-[13px] font-semibold text-ink-900">Added by the practice <span className="text-[11px] text-ink-400 font-normal">{data.added.length}</span></div>
@@ -240,7 +265,7 @@ function Row({ item, lang, isNew }: { item: Item; lang: 'en' | 'et'; isNew?: boo
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block mb-2"><span className="block text-[11px] text-ink-500 mb-1">{label}{hint && <span className="ml-1 text-ink-300">· {hint}</span>}</span>{children}</label> }
 function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: Array<[string, string] | [string, string, boolean]> }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white">{options.map(([v, l, disabled]) => <option key={v} value={v} disabled={!!disabled}>{l}</option>)}</select> }
-function Num({ value, onChange, step = 1 }: { value: number; onChange: (v: number) => void; step?: number }) { return <input type="number" step={step} min={0} value={Number.isFinite(value) ? value : 0} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white" /> }
+function Num({ value, onChange, step = 1, invalid }: { value: number; onChange: (v: number) => void; step?: number; invalid?: boolean }) { return <input type="number" step={step} min={0} value={Number.isFinite(value) ? value : 0} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className={cn('w-full text-[13px] px-2.5 py-1.5 rounded-md border bg-white', invalid ? 'border-red-400 bg-red-50' : 'border-surface-300')} /> }
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return <button type="button" onClick={() => onChange(!value)} className="w-full flex items-center justify-between text-[12px] text-ink-700 py-1"><span>{label}</span><span className={cn('inline-block w-8 h-4 rounded-full relative shrink-0 transition-colors', value ? 'bg-accent-500' : 'bg-surface-300')}><span className={cn('absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all', value ? 'left-[18px]' : 'left-0.5')} /></span></button>
 }

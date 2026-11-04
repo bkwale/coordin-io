@@ -1689,7 +1689,7 @@ function UpdateFormModal({ projectId, onClose, onSuccess }: {
 
 
 function RegulatoryCard({ projectId }: { projectId: string }) {
-  const [state, setState] = useState<{ loaded: boolean; version: string | null; generated: number; added: number; verify: number; updatedAt: string | null; jurisdiction: string | null }>({ loaded: false, version: null, generated: 0, added: 0, verify: 0, updatedAt: null, jurisdiction: null })
+  const [state, setState] = useState<{ loaded: boolean; version: string | null; generated: number; added: number; municipal: number; verify: number; updatedAt: string | null; jurisdiction: string | null }>({ loaded: false, version: null, generated: 0, added: 0, municipal: 0, verify: 0, updatedAt: null, jurisdiction: null })
   useEffect(() => {
     fetch(`/api/projects/${projectId}/regulatory`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -1702,6 +1702,7 @@ function RegulatoryCard({ projectId }: { projectId: string }) {
           version: d.register?.templateVersion ?? null,
           generated: d.counts?.generated ?? 0,
           added: d.counts?.added ?? 0,
+          municipal: d.counts?.municipal ?? 0,
           verify: items.filter((i) => i.confidence === 'low').length,
           updatedAt: d.register?.updatedAt ?? null,
           jurisdiction: d.profile?.parameters?.jurisdiction ?? null,
@@ -1732,11 +1733,11 @@ function RegulatoryCard({ projectId }: { projectId: string }) {
         <span className="w-9 h-9 rounded-lg bg-accent-50 text-accent-600 flex items-center justify-center shrink-0"><ShieldCheck className="w-[18px] h-[18px]" /></span>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-ink-900">
-            {state.generated + state.added} regulatory obligations
+            {state.generated + state.added + state.municipal} regulatory obligations
             <span className="ml-2 text-[11px] font-normal text-ink-400">{state.jurisdiction ? `${state.jurisdiction} · ` : ''}rule set {state.version}{state.updatedAt ? ` · ${new Date(state.updatedAt).toLocaleDateString()}` : ''}</span>
           </p>
           <p className="text-[12px] text-ink-400">
-            {state.generated} from the rule set{state.added ? ` · ${state.added} added by the practice` : ''}
+            {state.generated} from the rule set{state.municipal ? ` · ${state.municipal} from the municipality` : ''}{state.added ? ` · ${state.added} added by the practice` : ''}
             {state.verify ? <span className="ml-2 inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="w-3 h-3" />{state.verify} to verify</span> : null}
           </p>
         </div>

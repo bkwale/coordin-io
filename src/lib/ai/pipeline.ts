@@ -22,6 +22,8 @@ export interface RunAIOptions<S extends ZodTypeAny> {
   ingest: (push: (s: Omit<Stage, 'at'>) => Promise<void>) => Promise<{ system: string; user: string; inputForHash: string }>
   schema: S
   /** Optional light normalisation before Zod parse. */
+  /** Output token cap for this surface (default 8192). */
+  maxTokens?: number
   normalise?: (raw: unknown) => unknown
   /** Optional deterministic enrichment after validation (e.g. registry facts overlay). May push a stage. */
   enrich?: (output: z.infer<S>, push: (s: Omit<Stage, 'at'>) => Promise<void>) => Promise<z.infer<S>>
@@ -68,7 +70,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
 
     await push({ name: 'extract', status: 'running', detail: 'reading with AI' })
     const te = Date.now()
-    const result = await chat({ system, user, json: true })
+    const result = await chat({ system, user, json: true, maxTokens: opts.maxTokens })
     const raw = parseJson(result.text)
     const normalised = opts.normalise ? opts.normalise(raw) : raw
     const parsed = opts.schema.safeParse(normalised)
