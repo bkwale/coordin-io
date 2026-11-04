@@ -28,6 +28,11 @@ interface TabDef {
   frameworks?: string[]
 }
 
+/** True when a project sub-route belongs to a tab. The empty route ('' = Overview dashboard) only matches exactly — never as a prefix. */
+export function tabMatchesRoute(routes: string[], subRoute: string): boolean {
+  return routes.some(r => subRoute === r || (r !== '' && subRoute.startsWith(r + '/')))
+}
+
 const PROJECT_TABS: TabDef[] = [
   {
     label: 'Overview',
@@ -140,8 +145,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const currentSubRoute = pathname.replace(basePath, '') || ''
 
   const activeTab = useMemo(() =>
-    visibleTabs.find(tab => tab.routes.some(r => currentSubRoute === r || (r !== '' && currentSubRoute.startsWith(r + '/'))))
-      ?? visibleTabs[0],
+    visibleTabs.find(tab => tabMatchesRoute(tab.routes, currentSubRoute)) ?? visibleTabs[0],
     [visibleTabs, currentSubRoute]
   )
 
