@@ -75,22 +75,22 @@ model Organisation {
   features            OrganisationFeature[]
 
   // Stripe Billing
-  stripeCustomerId    String?   @unique @map("stripe_customer_id")
-  subscriptionId      String?   @map("stripe_subscription_id")
-  subscriptionPlan    String    @default("free") @map("subscription_plan") // free, pro, enterprise
-  subscriptionStatus  String    @default("active") @map("subscription_status") // active, past_due, canceled, trialing, unpaid
-  currentPeriodEnd    DateTime? @map("current_period_end")
-  trialEndsAt         DateTime? @map("trial_ends_at")
+  stripeCustomerId   String?   @unique @map("stripe_customer_id")
+  subscriptionId     String?   @map("stripe_subscription_id")
+  subscriptionPlan   String    @default("free") @map("subscription_plan") // free, pro, enterprise
+  subscriptionStatus String    @default("active") @map("subscription_status") // active, past_due, canceled, trialing, unpaid
+  currentPeriodEnd   DateTime? @map("current_period_end")
+  trialEndsAt        DateTime? @map("trial_ends_at")
 
   // E-Invoicing
-  suppliers           Supplier[]
-  inboundInvoices     InboundInvoice[]
-  outboundInvoices    OutboundInvoice[]
-  categorisationRules CategorisationRule[]
-  xeroConnections        XeroConnection[]
-  microsoftConnections   MicrosoftConnection[]
-  selfServiceTokens      OnboardingSelfServiceToken[]
-  trainingItems       TrainingItem[]
+  suppliers            Supplier[]
+  inboundInvoices      InboundInvoice[]
+  outboundInvoices     OutboundInvoice[]
+  categorisationRules  CategorisationRule[]
+  xeroConnections      XeroConnection[]
+  microsoftConnections MicrosoftConnection[]
+  selfServiceTokens    OnboardingSelfServiceToken[]
+  trainingItems        TrainingItem[]
 
   @@map("organisations")
 }
@@ -104,12 +104,12 @@ model Office {
   isHeadOffice   Boolean  @default(false) @map("is_head_office")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  organisation    Organisation     @relation(fields: [organisationId], references: [id])
-  profiles        Profile[]
-  projects        Project[]
-  serviceRequests      ServiceRequest[]      @relation("ServiceRequestOffice")
-  publicHolidays       PublicHoliday[]
-  onboardingTemplates  OnboardingTemplate[]
+  organisation        Organisation         @relation(fields: [organisationId], references: [id])
+  profiles            Profile[]
+  projects            Project[]
+  serviceRequests     ServiceRequest[]     @relation("ServiceRequestOffice")
+  publicHolidays      PublicHoliday[]
+  onboardingTemplates OnboardingTemplate[]
 
   @@map("offices")
 }
@@ -141,10 +141,10 @@ enum HolidayType {
 model BlackoutDate {
   id             String   @id @default(cuid())
   organisationId String   @map("organisation_id")
-  name           String   // e.g. "Year-end close", "Audit week"
+  name           String // e.g. "Year-end close", "Audit week"
   startDate      DateTime @map("start_date")
   endDate        DateTime @map("end_date")
-  reason         String?  // optional extended description
+  reason         String? // optional extended description
   createdById    String?  @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
 
@@ -227,10 +227,10 @@ model Profile {
   projectMemberships ProjectMembership[]
 
   // Tasks
-  tasksOwned             Task[]              @relation("TaskOwner")
-  tasksReviewing         Task[]              @relation("TaskReviewer")
-  taskComments           TaskComment[]
-  checklistAssignments   TaskChecklistItem[] @relation("ChecklistAssignee")
+  tasksOwned           Task[]              @relation("TaskOwner")
+  tasksReviewing       Task[]              @relation("TaskReviewer")
+  taskComments         TaskComment[]
+  checklistAssignments TaskChecklistItem[] @relation("ChecklistAssignee")
 
   // Documents
   documentsAuthored DocumentRevision[] @relation("DocAuthor")
@@ -292,35 +292,35 @@ model Profile {
   feeQuotesCreated FeeQuote[] @relation("feeQuotesCreated")
 
   // Approval Engine
-  approvalSubmissions        ApprovalInstance[]     @relation("ApprovalSubmitter")
-  approvalStepsAsApprover    ApprovalStepInstance[] @relation("ApprovalStepApprover")
-  approvalStepsEscalatedTo   ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
-  externalLinksCreated       ExternalLink[]         @relation("ExternalLinkCreator")
-  blackoutDatesCreated       BlackoutDate[]         @relation("BlackoutDateCreatedBy")
+  approvalSubmissions      ApprovalInstance[]     @relation("ApprovalSubmitter")
+  approvalStepsAsApprover  ApprovalStepInstance[] @relation("ApprovalStepApprover")
+  approvalStepsEscalatedTo ApprovalStepInstance[] @relation("ApprovalStepEscalatedTo")
+  externalLinksCreated     ExternalLink[]         @relation("ExternalLinkCreator")
+  blackoutDatesCreated     BlackoutDate[]         @relation("BlackoutDateCreatedBy")
 
   // Support Tickets
-  supportTicketsSubmitted    SupportTicket[]        @relation("ticketSubmitter")
-  supportTicketReplies       SupportTicketReply[]   @relation("ticketReplyAuthor")
+  supportTicketsSubmitted SupportTicket[]      @relation("ticketSubmitter")
+  supportTicketReplies    SupportTicketReply[] @relation("ticketReplyAuthor")
 
   // Feature flags
-  featuresEnabled            OrganisationFeature[]  @relation("featureEnabler")
+  featuresEnabled OrganisationFeature[] @relation("featureEnabler")
 
   // E-Invoicing
-  suppliersCreated           Supplier[]             @relation("SupplierCreator")
-  inboundInvoicesCreated     InboundInvoice[]       @relation("InboundInvoiceCreator")
-  inboundInvoicesApproved    InboundInvoice[]       @relation("InboundInvoiceApprover")
-  outboundInvoicesCreated    OutboundInvoice[]      @relation("OutboundInvoiceCreator")
+  suppliersCreated        Supplier[]        @relation("SupplierCreator")
+  inboundInvoicesCreated  InboundInvoice[]  @relation("InboundInvoiceCreator")
+  inboundInvoicesApproved InboundInvoice[]  @relation("InboundInvoiceApprover")
+  outboundInvoicesCreated OutboundInvoice[] @relation("OutboundInvoiceCreator")
 
   // Xero Integration
-  xeroConnections            XeroConnection[]       @relation("XeroConnector")
-  microsoftConnections       MicrosoftConnection[]  @relation("MicrosoftConnector")
+  xeroConnections      XeroConnection[]      @relation("XeroConnector")
+  microsoftConnections MicrosoftConnection[] @relation("MicrosoftConnector")
 
   // RIBA Stage Tracking
-  stageGatesAdvanced         StageGate[]            @relation("StageGateAdvancer")
+  stageGatesAdvanced StageGate[] @relation("StageGateAdvancer")
 
   // Self-Service Onboarding
-  selfServiceTokensReceived  OnboardingSelfServiceToken[] @relation("SelfServiceTokenProfile")
-  selfServiceTokensCreated   OnboardingSelfServiceToken[] @relation("SelfServiceTokenCreator")
+  selfServiceTokensReceived OnboardingSelfServiceToken[] @relation("SelfServiceTokenProfile")
+  selfServiceTokensCreated  OnboardingSelfServiceToken[] @relation("SelfServiceTokenCreator")
 
   // Notification preferences — JSON blob: { "task.assigned": { email: true, inApp: true }, ... }
   notificationPreferences Json? @default("{}") @map("notification_preferences")
@@ -391,10 +391,10 @@ model EmployeeProfile {
   probationStartDate  DateTime? @map("probation_start_date")
   probationEndDate    DateTime? @map("probation_end_date")
   availabilityStatus  String?   @map("availability_status") // AVAILABLE, ON_LEAVE, ON_SITE, UNAVAILABLE
-  grade               String?   // Staff grade: Senior Management, Management, Senior Staff, Staff, etc.
+  grade               String? // Staff grade: Senior Management, Management, Senior Staff, Staff, etc.
 
   // Leave policy override — if set, this employee uses this specific policy instead of grade/default
-  leavePolicyId       String?   @map("leave_policy_id")
+  leavePolicyId String? @map("leave_policy_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -405,26 +405,26 @@ model EmployeeProfile {
 }
 
 model ConfidentialEmployeeData {
-  id                  String  @id @default(cuid())
-  profileId           String  @unique @map("profile_id")
+  id        String @id @default(cuid())
+  profileId String @unique @map("profile_id")
 
   // Compensation
-  salary              Float?
-  salaryFrequency     String?   @map("salary_frequency")
-  salaryCurrency      String?   @map("salary_currency")
-  benefits            String?
+  salary          Float?
+  salaryFrequency String? @map("salary_frequency")
+  salaryCurrency  String? @map("salary_currency")
+  benefits        String?
 
   // Insurance & Health
-  hmoProvider         String?   @map("hmo_provider")
-  hmoPlan             String?   @map("hmo_plan")
-  dependants          Int?      @default(0)
+  hmoProvider String? @map("hmo_provider")
+  hmoPlan     String? @map("hmo_plan")
+  dependants  Int?    @default(0)
 
   // Pension
-  pensionProvider     String?   @map("pension_provider")
-  pensionContribution Float?    @map("pension_contribution")
+  pensionProvider     String? @map("pension_provider")
+  pensionContribution Float?  @map("pension_contribution")
 
   // Contract
-  noticePeriod        String?   @map("notice_period")
+  noticePeriod String? @map("notice_period")
 
   // Bank Details
   bankAccountName     String?   @map("bank_account_name")
@@ -448,16 +448,16 @@ model ConfidentialEmployeeData {
 }
 
 model Invitation {
-  id             String    @id @default(cuid())
-  organisationId String    @map("organisation_id")
-  token          String    @unique // Generated via crypto.randomBytes — NOT cuid
+  id             String        @id @default(cuid())
+  organisationId String        @map("organisation_id")
+  token          String        @unique // Generated via crypto.randomBytes — NOT cuid
   email          String
-  fullName       String    @map("full_name")
-  jobTitle       String?   @map("job_title")
-  officeId       String?   @map("office_id")
-  roleId         String?   @map("role_id")
-  managerId      String?   @map("manager_id")
-  startDate      DateTime? @map("start_date")
+  fullName       String        @map("full_name")
+  jobTitle       String?       @map("job_title")
+  officeId       String?       @map("office_id")
+  roleId         String?       @map("role_id")
+  managerId      String?       @map("manager_id")
+  startDate      DateTime?     @map("start_date")
   annualLeave    Float?        @map("annual_leave")
   orgPermission  OrgPermission @default(MEMBER) @map("org_permission")
 
@@ -551,7 +551,7 @@ model TrainingItem {
   contentUrl      String?  @map("content_url")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   completions  TrainingCompletion[]
 
   @@map("training_items")
@@ -679,9 +679,9 @@ model Project {
   soaVersions          SOAVersion[]
   keyMetrics           KeyMetric[]
   feeQuotes            FeeQuote[]
-  inboundInvoices      InboundInvoice[] @relation("InboundInvoiceProject")
-  outboundInvoices     OutboundInvoice[] @relation("OutboundInvoiceProject")
-  categorisationRules  CategorisationRule[] @relation("CategorisationRuleProject")
+  inboundInvoices      InboundInvoice[]      @relation("InboundInvoiceProject")
+  outboundInvoices     OutboundInvoice[]     @relation("OutboundInvoiceProject")
+  categorisationRules  CategorisationRule[]  @relation("CategorisationRuleProject")
   stageGates           StageGate[]
   briefSections        ProjectBriefSection[]
 
@@ -873,7 +873,7 @@ model Task {
   milestoneId String? @map("milestone_id")
 
   // Extended fields (Sprint 1 — BUG-07)
-  deliverable  String? // Expected output / deliverable description
+  deliverable   String? // Expected output / deliverable description
   sharepointUrl String? @map("sharepoint_url") // Link to SharePoint folder/doc
 
   // Dates
@@ -895,8 +895,8 @@ model Task {
 
   checklistItems TaskChecklistItem[]
   comments       TaskComment[]
-  dependsOn      TaskDependency[] @relation("DependentTask")
-  dependedOnBy   TaskDependency[] @relation("DependencyTarget")
+  dependsOn      TaskDependency[]    @relation("DependentTask")
+  dependedOnBy   TaskDependency[]    @relation("DependencyTarget")
 
   @@map("tasks")
 }
@@ -951,11 +951,11 @@ model TaskComment {
 
 // Sprint 1 — BUG-07: Task dependencies
 model TaskDependency {
-  id           String             @id @default(cuid())
-  taskId       String             @map("task_id")
-  dependsOnId  String             @map("depends_on_id")
-  type         TaskDependencyType @default(BLOCKS)
-  createdAt    DateTime           @default(now()) @map("created_at")
+  id          String             @id @default(cuid())
+  taskId      String             @map("task_id")
+  dependsOnId String             @map("depends_on_id")
+  type        TaskDependencyType @default(BLOCKS)
+  createdAt   DateTime           @default(now()) @map("created_at")
 
   task      Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
   dependsOn Task @relation("DependencyTarget", fields: [dependsOnId], references: [id], onDelete: Cascade)
@@ -965,8 +965,8 @@ model TaskDependency {
 }
 
 enum TaskDependencyType {
-  BLOCKS   // dependsOn must complete before task can start
-  RELATED  // informational link, no blocking
+  BLOCKS // dependsOn must complete before task can start
+  RELATED // informational link, no blocking
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1094,16 +1094,16 @@ enum LeaveType {
 }
 
 model LeavePolicy {
-  id                String   @id @default(cuid())
-  organisationId    String   @map("organisation_id")
-  name              String   // e.g., "Default", "Senior Staff", "Probation"
-  leaveType         String   @map("leave_type") // ANNUAL, SICK, etc.
-  entitlementDays   Int      @map("entitlement_days")
-  carryOverDays     Int      @default(0) @map("carry_over_days")
-  grade             String?  // If set, applies to employees with this grade
-  isDefault         Boolean  @default(false) @map("is_default")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(cuid())
+  organisationId  String   @map("organisation_id")
+  name            String // e.g., "Default", "Senior Staff", "Probation"
+  leaveType       String   @map("leave_type") // ANNUAL, SICK, etc.
+  entitlementDays Int      @map("entitlement_days")
+  carryOverDays   Int      @default(0) @map("carry_over_days")
+  grade           String? // If set, applies to employees with this grade
+  isDefault       Boolean  @default(false) @map("is_default")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@index([organisationId, leaveType])
   @@map("leave_policies")
@@ -1152,12 +1152,12 @@ model ServiceRequest {
   dynamicFields  Json?    @map("dynamic_fields") // Type-specific extra fields
 
   // Relations
-  profile      Profile      @relation("RequestSubmitter", fields: [profileId], references: [id])
-  approver     Profile?     @relation("RequestApprover", fields: [approverId], references: [id])
-  assignedTo   Profile?     @relation("RequestAssignee", fields: [assignedToId], references: [id])
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  project      Project?     @relation(fields: [projectId], references: [id])
-  office       Office?      @relation("ServiceRequestOffice", fields: [officeId], references: [id])
+  profile      Profile              @relation("RequestSubmitter", fields: [profileId], references: [id])
+  approver     Profile?             @relation("RequestApprover", fields: [approverId], references: [id])
+  assignedTo   Profile?             @relation("RequestAssignee", fields: [assignedToId], references: [id])
+  organisation Organisation         @relation(fields: [organisationId], references: [id])
+  project      Project?             @relation(fields: [projectId], references: [id])
+  office       Office?              @relation("ServiceRequestOffice", fields: [officeId], references: [id])
   items        ServiceRequestItem[]
 
   @@map("service_requests")
@@ -1322,7 +1322,7 @@ model AssetAssignment {
 model AssetConditionHistory {
   id        String   @id @default(cuid())
   assetId   String   @map("asset_id")
-  condition String   // NEW, GOOD, REPAIR_REQUIRED, DAMAGED, LOST, RETIRED
+  condition String // NEW, GOOD, REPAIR_REQUIRED, DAMAGED, LOST, RETIRED
   changedBy String   @map("changed_by")
   changedAt DateTime @default(now()) @map("changed_at")
   notes     String?
@@ -1765,35 +1765,35 @@ enum InvoiceStatus {
 }
 
 model FeeQuote {
-  id              String          @id @default(cuid())
-  organisationId  String          @map("organisation_id")
-  projectId       String?         @map("project_id")  // optional — quotes can exist before project
-  quoteNumber     String          @map("quote_number")
-  title           String
-  clientName      String          @map("client_name")
-  clientEmail     String?         @map("client_email")
-  clientAddress   String?         @map("client_address")
-  description     String?
-  status          FeeQuoteStatus  @default(DRAFT)
-  netTotal        Float           @default(0) @map("net_total")
-  taxRate         Float           @default(0) @map("tax_rate")
-  taxAmount       Float           @default(0) @map("tax_amount")
-  grossTotal      Float           @default(0) @map("gross_total")
-  currency        Currency        @default(GBP)
-  validUntil      DateTime?       @map("valid_until")
-  sentAt          DateTime?       @map("sent_at")
-  acceptedAt      DateTime?       @map("accepted_at")
-  rejectedAt      DateTime?       @map("rejected_at")
-  notes           String?
-  termsAndConditions String?      @map("terms_and_conditions")
-  createdById     String          @map("created_by_id")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  id                 String         @id @default(cuid())
+  organisationId     String         @map("organisation_id")
+  projectId          String?        @map("project_id") // optional — quotes can exist before project
+  quoteNumber        String         @map("quote_number")
+  title              String
+  clientName         String         @map("client_name")
+  clientEmail        String?        @map("client_email")
+  clientAddress      String?        @map("client_address")
+  description        String?
+  status             FeeQuoteStatus @default(DRAFT)
+  netTotal           Float          @default(0) @map("net_total")
+  taxRate            Float          @default(0) @map("tax_rate")
+  taxAmount          Float          @default(0) @map("tax_amount")
+  grossTotal         Float          @default(0) @map("gross_total")
+  currency           Currency       @default(GBP)
+  validUntil         DateTime?      @map("valid_until")
+  sentAt             DateTime?      @map("sent_at")
+  acceptedAt         DateTime?      @map("accepted_at")
+  rejectedAt         DateTime?      @map("rejected_at")
+  notes              String?
+  termsAndConditions String?        @map("terms_and_conditions")
+  createdById        String         @map("created_by_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  project      Project?     @relation(fields: [projectId], references: [id])
-  createdBy    Profile      @relation("feeQuotesCreated", fields: [createdById], references: [id])
-  lineItems    FeeQuoteLineItem[]
+  organisation    Organisation       @relation(fields: [organisationId], references: [id])
+  project         Project?           @relation(fields: [projectId], references: [id])
+  createdBy       Profile            @relation("feeQuotesCreated", fields: [createdById], references: [id])
+  lineItems       FeeQuoteLineItem[]
   outboundInvoice OutboundInvoice?
 
   @@map("fee_quotes")
@@ -1804,9 +1804,9 @@ model FeeQuoteLineItem {
   quoteId     String   @map("quote_id")
   description String
   quantity    Float    @default(1)
-  unitPrice   Float   @map("unit_price")
-  total       Float   @default(0)
-  sortOrder   Int     @default(0) @map("sort_order")
+  unitPrice   Float    @map("unit_price")
+  total       Float    @default(0)
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -2214,15 +2214,15 @@ model ResourceAllocation {
 }
 
 model ProjectBriefSection {
-  id           String   @id @default(cuid())
-  projectId    String   @map("project_id")
-  sectionKey   String   @map("section_key") // e.g. client_requirements, site_information
-  content      String   @default("")
-  status       String   @default("not_started") // not_started, draft, complete, approved
-  approvedBy   String?  @map("approved_by")
-  lastUpdated  DateTime? @map("last_updated")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id          String    @id @default(cuid())
+  projectId   String    @map("project_id")
+  sectionKey  String    @map("section_key") // e.g. client_requirements, site_information
+  content     String    @default("")
+  status      String    @default("not_started") // not_started, draft, complete, approved
+  approvedBy  String?   @map("approved_by")
+  lastUpdated DateTime? @map("last_updated")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id])
 
@@ -2282,24 +2282,24 @@ model ProbationReview {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  profile Profile @relation(fields: [profileId], references: [id])
+  profile Profile         @relation(fields: [profileId], references: [id])
   goals   ProbationGoal[]
 
   @@map("probation_reviews")
 }
 
 model ProbationGoal {
-  id              String   @id @default(cuid())
-  reviewId        String   @map("review_id")
-  title           String
-  description     String?
-  targetDate      DateTime? @map("target_date")
-  status          String   @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, NOT_MET
-  evidence        String?  // Evidence or notes of achievement
-  completedAt     DateTime? @map("completed_at")
-  sortOrder       Int      @default(0) @map("sort_order")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id          String    @id @default(cuid())
+  reviewId    String    @map("review_id")
+  title       String
+  description String?
+  targetDate  DateTime? @map("target_date")
+  status      String    @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, NOT_MET
+  evidence    String? // Evidence or notes of achievement
+  completedAt DateTime? @map("completed_at")
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   review ProbationReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 
@@ -2379,7 +2379,7 @@ model OnboardingTemplate {
   roleLevel      String?  @map("role_level") // Which role this template targets
   description    String?
   officeId       String?  @map("office_id") // Regional scoping — null = all offices
-  region         String?  // e.g. "UK", "NG" — for broader regional filtering
+  region         String? // e.g. "UK", "NG" — for broader regional filtering
   isDefault      Boolean  @default(false) @map("is_default")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -2394,14 +2394,14 @@ model OnboardingTemplate {
 }
 
 model OnboardingTemplateItem {
-  id               String   @id @default(cuid())
-  templateId       String   @map("template_id")
-  stage            String // BEFORE_START, DAY_ONE, ROLE_SPECIFIC, PROBATION
-  category         String? // e.g. "IT Setup", "Health & Safety", "Project Orientation"
-  title            String
-  description      String?
-  responsibleRole  String?  @map("responsible_role") // HR, MANAGER, IT, EMPLOYEE
-  daysFromStart    Int      @default(0) @map("days_from_start") // Offset from employee start date
+  id                      String    @id @default(cuid())
+  templateId              String    @map("template_id")
+  stage                   String // BEFORE_START, DAY_ONE, ROLE_SPECIFIC, PROBATION
+  category                String? // e.g. "IT Setup", "Health & Safety", "Project Orientation"
+  title                   String
+  description             String?
+  responsibleRole         String?   @map("responsible_role") // HR, MANAGER, IT, EMPLOYEE
+  daysFromStart           Int       @default(0) @map("days_from_start") // Offset from employee start date
   requiresEvidence        Boolean   @default(false) @map("requires_evidence")
   requiresApproval        Boolean   @default(false) @map("requires_approval")
   notifyEmployee          Boolean   @default(false) @map("notify_employee")
@@ -2432,7 +2432,7 @@ model OnboardingAssignment {
 
   template OnboardingTemplate @relation(fields: [templateId], references: [id])
 
-  tasks OnboardingTask[]
+  tasks             OnboardingTask[]
   selfServiceTokens OnboardingSelfServiceToken[]
 
   @@unique([templateId, profileId])
@@ -2645,19 +2645,19 @@ enum ApprovalStepStatus {
 /// Template defining an approval workflow for a given request type.
 /// Organisations can have multiple routes per type with conditions (e.g. amount thresholds).
 model ApprovalRoute {
-  id               String              @id @default(cuid())
-  organisationId   String              @map("organisation_id")
-  requestType      ApprovalRequestType @map("request_type")
-  name             String // e.g. "Standard Leave", "Large Expense (>£5k)"
-  isDefault        Boolean             @default(false) @map("is_default")
-  isActive         Boolean             @default(true) @map("is_active")
-  priority         Int                 @default(0) // Higher = checked first
-  conditions       Json?               // e.g. { "minAmount": 5000, "department": "Design" }
-  ccRecipientIds   String[]            @default([]) @map("cc_recipient_ids")
-  createdAt        DateTime            @default(now()) @map("created_at")
-  updatedAt        DateTime            @updatedAt @map("updated_at")
+  id             String              @id @default(cuid())
+  organisationId String              @map("organisation_id")
+  requestType    ApprovalRequestType @map("request_type")
+  name           String // e.g. "Standard Leave", "Large Expense (>£5k)"
+  isDefault      Boolean             @default(false) @map("is_default")
+  isActive       Boolean             @default(true) @map("is_active")
+  priority       Int                 @default(0) // Higher = checked first
+  conditions     Json? // e.g. { "minAmount": 5000, "department": "Design" }
+  ccRecipientIds String[]            @default([]) @map("cc_recipient_ids")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
 
-  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   steps        ApprovalRouteStep[]
   instances    ApprovalInstance[]
 
@@ -2668,17 +2668,17 @@ model ApprovalRoute {
 /// A step within an approval route template.
 /// Steps execute in stepOrder; each step must be approved before advancing.
 model ApprovalRouteStep {
-  id                     String       @id @default(cuid())
-  routeId                String       @map("route_id")
-  stepOrder              Int          @map("step_order")
-  label                  String       @default("") // e.g. "Line Manager Review"
-  approverType           ApproverType @map("approver_type")
-  approverRole           String?      @map("approver_role") // OrgPermission value if approverType=ROLE
-  approverId             String?      @map("approver_id") // Profile ID if approverType=SPECIFIC_PERSON
-  approverIds            String[]    @default([]) @map("approver_ids") // Multiple approvers for AND logic
-  requireAll             Boolean     @default(false) @map("require_all") // true = AND (all must approve), false = OR (any one approves)
-  canSkipIfSameAsPrevious Boolean     @default(false) @map("can_skip_if_same_as_previous")
-  escalationDays         Int?         @map("escalation_days") // Auto-escalate after N days
+  id                      String       @id @default(cuid())
+  routeId                 String       @map("route_id")
+  stepOrder               Int          @map("step_order")
+  label                   String       @default("") // e.g. "Line Manager Review"
+  approverType            ApproverType @map("approver_type")
+  approverRole            String?      @map("approver_role") // OrgPermission value if approverType=ROLE
+  approverId              String?      @map("approver_id") // Profile ID if approverType=SPECIFIC_PERSON
+  approverIds             String[]     @default([]) @map("approver_ids") // Multiple approvers for AND logic
+  requireAll              Boolean      @default(false) @map("require_all") // true = AND (all must approve), false = OR (any one approves)
+  canSkipIfSameAsPrevious Boolean      @default(false) @map("can_skip_if_same_as_previous")
+  escalationDays          Int?         @map("escalation_days") // Auto-escalate after N days
 
   route ApprovalRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
@@ -2701,11 +2701,11 @@ model ApprovalInstance {
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
 
-  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  route        ApprovalRoute          @relation(fields: [routeId], references: [id])
-  submitter    Profile                @relation("ApprovalSubmitter", fields: [submitterId], references: [id])
-  steps        ApprovalStepInstance[]
-  inboundInvoices InboundInvoice[]    @relation("InboundInvoiceApproval")
+  organisation    Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  route           ApprovalRoute          @relation(fields: [routeId], references: [id])
+  submitter       Profile                @relation("ApprovalSubmitter", fields: [submitterId], references: [id])
+  steps           ApprovalStepInstance[]
+  inboundInvoices InboundInvoice[]       @relation("InboundInvoiceApproval")
 
   @@index([organisationId, status])
   @@index([entityId, requestType])
@@ -2715,19 +2715,19 @@ model ApprovalInstance {
 
 /// An individual step instance within an active approval workflow.
 model ApprovalStepInstance {
-  id                String             @id @default(cuid())
-  instanceId        String             @map("instance_id")
-  stepOrder         Int                @map("step_order")
-  label             String             @default("")
-  approverId        String?            @map("approver_id") // Resolved approver Profile ID
+  id              String             @id @default(cuid())
+  instanceId      String             @map("instance_id")
+  stepOrder       Int                @map("step_order")
+  label           String             @default("")
+  approverId      String?            @map("approver_id") // Resolved approver Profile ID
   approverIds     String[]           @default([]) @map("approver_ids") // Resolved approver IDs for AND steps
   approvedByIds   String[]           @default([]) @map("approved_by_ids") // Who has approved so far (AND logic)
-  status            ApprovalStepStatus @default(PENDING)
-  comment           String?
-  actionedAt        DateTime?          @map("actioned_at")
-  escalationDueAt   DateTime?          @map("escalation_due_at")
-  escalatedToId     String?            @map("escalated_to_id") // If escalated, who got it
-  createdAt         DateTime           @default(now()) @map("created_at")
+  status          ApprovalStepStatus @default(PENDING)
+  comment         String?
+  actionedAt      DateTime?          @map("actioned_at")
+  escalationDueAt DateTime?          @map("escalation_due_at")
+  escalatedToId   String?            @map("escalated_to_id") // If escalated, who got it
+  createdAt       DateTime           @default(now()) @map("created_at")
 
   instance    ApprovalInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
   approver    Profile?         @relation("ApprovalStepApprover", fields: [approverId], references: [id])
@@ -2793,23 +2793,23 @@ enum TicketCategory {
 }
 
 model SupportTicket {
-  id              String          @id @default(cuid())
-  organisationId  String
-  submitterId     String
-  title           String          @db.VarChar(200)
-  description     String          @db.Text
-  status          TicketStatus    @default(OPEN)
-  priority        TicketPriority  @default(MEDIUM)
-  category        TicketCategory  @default(OTHER)
-  page            String?         @db.VarChar(500)
-  screenshotUrl   String?         @db.Text
-  resolvedAt      DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id             String         @id @default(cuid())
+  organisationId String
+  submitterId    String
+  title          String         @db.VarChar(200)
+  description    String         @db.Text
+  status         TicketStatus   @default(OPEN)
+  priority       TicketPriority @default(MEDIUM)
+  category       TicketCategory @default(OTHER)
+  page           String?        @db.VarChar(500)
+  screenshotUrl  String?        @db.Text
+  resolvedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  organisation    Organisation    @relation(fields: [organisationId], references: [id])
-  submitter       Profile         @relation("ticketSubmitter", fields: [submitterId], references: [id])
-  replies         SupportTicketReply[]
+  organisation Organisation         @relation(fields: [organisationId], references: [id])
+  submitter    Profile              @relation("ticketSubmitter", fields: [submitterId], references: [id])
+  replies      SupportTicketReply[]
 
   @@index([organisationId, status])
   @@index([submitterId])
@@ -2824,26 +2824,26 @@ model SupportTicketReply {
   isStaff   Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author    Profile       @relation("ticketReplyAuthor", fields: [authorId], references: [id])
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author Profile       @relation("ticketReplyAuthor", fields: [authorId], references: [id])
 
   @@index([ticketId])
   @@map("support_ticket_replies")
 }
 
 model OrganisationFeature {
-  id              String    @id @default(cuid())
-  organisationId  String    @map("organisation_id")
-  featureKey      String    @map("feature_key")
-  enabled         Boolean   @default(false)
-  config          Json      @default("{}")
-  enabledAt       DateTime? @map("enabled_at")
-  enabledBy       String?   @map("enabled_by")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id             String    @id @default(cuid())
+  organisationId String    @map("organisation_id")
+  featureKey     String    @map("feature_key")
+  enabled        Boolean   @default(false)
+  config         Json      @default("{}")
+  enabledAt      DateTime? @map("enabled_at")
+  enabledBy      String?   @map("enabled_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  enabledByProfile Profile?    @relation("featureEnabler", fields: [enabledBy], references: [id])
+  organisation     Organisation @relation(fields: [organisationId], references: [id])
+  enabledByProfile Profile?     @relation("featureEnabler", fields: [enabledBy], references: [id])
 
   @@unique([organisationId, featureKey])
   @@index([organisationId])
@@ -2855,30 +2855,30 @@ model OrganisationFeature {
 // Separate from the existing outbound Invoice model (fee invoices to clients).
 
 model Supplier {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  name            String
-  vatNumber       String?  @map("vat_number")
-  peppolId        String?  @map("peppol_id")
-  country         String?  // ISO 3166-1 alpha-2
-  address         String?
-  defaultAccountCode String? @map("default_account_code")
-  paymentTermsDays   Int?    @map("payment_terms_days")
-  contactEmail    String?  @map("contact_email")
-  contactPhone    String?  @map("contact_phone")
-  notes           String?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  createdById     String?  @map("created_by_id")
+  id                 String   @id @default(cuid())
+  organisationId     String   @map("organisation_id")
+  name               String
+  vatNumber          String?  @map("vat_number")
+  peppolId           String?  @map("peppol_id")
+  country            String? // ISO 3166-1 alpha-2
+  address            String?
+  defaultAccountCode String?  @map("default_account_code")
+  paymentTermsDays   Int?     @map("payment_terms_days")
+  contactEmail       String?  @map("contact_email")
+  contactPhone       String?  @map("contact_phone")
+  notes              String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdById        String?  @map("created_by_id")
 
   // Xero sync
-  xeroContactId   String?  @map("xero_contact_id") // Xero Contact UUID
+  xeroContactId String? @map("xero_contact_id") // Xero Contact UUID
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  createdBy       Profile?     @relation("SupplierCreator", fields: [createdById], references: [id])
-  inboundInvoices InboundInvoice[]
-  outboundInvoices OutboundInvoice[]
+  organisation        Organisation         @relation(fields: [organisationId], references: [id])
+  createdBy           Profile?             @relation("SupplierCreator", fields: [createdById], references: [id])
+  inboundInvoices     InboundInvoice[]
+  outboundInvoices    OutboundInvoice[]
   categorisationRules CategorisationRule[] @relation("SupplierRules")
 
   @@unique([organisationId, vatNumber])
@@ -2888,74 +2888,74 @@ model Supplier {
 }
 
 model InboundInvoice {
-  id              String               @id @default(cuid())
-  organisationId  String               @map("organisation_id")
-  supplierId      String?              @map("supplier_id")
-  projectId       String?              @map("project_id")
+  id             String  @id @default(cuid())
+  organisationId String  @map("organisation_id")
+  supplierId     String? @map("supplier_id")
+  projectId      String? @map("project_id")
 
   // Core invoice data
-  invoiceNumber   String               @map("invoice_number")
-  documentType    InboundDocumentType   @default(INVOICE) @map("document_type")
-  invoiceDate     DateTime             @map("invoice_date")
-  dueDate         DateTime?            @map("due_date")
-  currency        Currency             @default(EUR)
+  invoiceNumber String              @map("invoice_number")
+  documentType  InboundDocumentType @default(INVOICE) @map("document_type")
+  invoiceDate   DateTime            @map("invoice_date")
+  dueDate       DateTime?           @map("due_date")
+  currency      Currency            @default(EUR)
 
   // Amounts
-  netAmount       Float                @map("net_amount")
-  vatAmount       Float                @default(0) @map("vat_amount")
-  grossAmount     Float                @map("gross_amount")
+  netAmount   Float @map("net_amount")
+  vatAmount   Float @default(0) @map("vat_amount")
+  grossAmount Float @map("gross_amount")
 
   // VAT / reverse charge
-  reverseCharge   Boolean              @default(false) @map("reverse_charge")
-  vatExemptionReason String?           @map("vat_exemption_reason")
-  vatBreakdown    Json?                @map("vat_breakdown") // Array of { rate, taxableAmount, vatAmount }
+  reverseCharge      Boolean @default(false) @map("reverse_charge")
+  vatExemptionReason String? @map("vat_exemption_reason")
+  vatBreakdown       Json?   @map("vat_breakdown") // Array of { rate, taxableAmount, vatAmount }
 
   // Source tracking
   source          InboundInvoiceSource @default(MANUAL_ENTRY)
   sourceFileUrl   String?              @map("source_file_url")
   peppolMessageId String?              @map("peppol_message_id")
-  rawXml          String?              @db.Text @map("raw_xml")
+  rawXml          String?              @map("raw_xml") @db.Text
 
   // Supplier info from parsed data (before matching to Supplier record)
-  parsedSupplierName    String?        @map("parsed_supplier_name")
-  parsedSupplierVat     String?        @map("parsed_supplier_vat")
-  parsedBuyerName       String?        @map("parsed_buyer_name")
-  parsedBuyerVat        String?        @map("parsed_buyer_vat")
+  parsedSupplierName String? @map("parsed_supplier_name")
+  parsedSupplierVat  String? @map("parsed_supplier_vat")
+  parsedBuyerName    String? @map("parsed_buyer_name")
+  parsedBuyerVat     String? @map("parsed_buyer_vat")
 
   // Linked credit note
-  linkedInvoiceNumber String?          @map("linked_invoice_number")
+  linkedInvoiceNumber String? @map("linked_invoice_number")
 
   // Categorisation
-  overallConfidence Float?             @map("overall_confidence")
-  unmatchedLines    Int                @default(0) @map("unmatched_lines")
+  overallConfidence Float? @map("overall_confidence")
+  unmatchedLines    Int    @default(0) @map("unmatched_lines")
 
   // Status + approval
-  status          InboundInvoiceStatus @default(RECEIVED)
-  approvalInstanceId String?           @map("approval_instance_id")
-  approvedAt      DateTime?            @map("approved_at")
-  approvedById    String?              @map("approved_by_id")
+  status             InboundInvoiceStatus @default(RECEIVED)
+  approvalInstanceId String?              @map("approval_instance_id")
+  approvedAt         DateTime?            @map("approved_at")
+  approvedById       String?              @map("approved_by_id")
 
   // Accounting sync
-  accountingSystem  String?            @map("accounting_system") // XERO, DATEV, etc.
-  externalId        String?            @map("external_id") // ID in external accounting system
-  syncedAt          DateTime?          @map("synced_at")
-  syncError         String?            @map("sync_error")
+  accountingSystem String?   @map("accounting_system") // XERO, DATEV, etc.
+  externalId       String?   @map("external_id") // ID in external accounting system
+  syncedAt         DateTime? @map("synced_at")
+  syncError        String?   @map("sync_error")
 
   // Parsing errors
-  parseErrors     Json?                @map("parse_errors") // String array
+  parseErrors Json? @map("parse_errors") // String array
 
-  notes           String?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-  createdById     String?              @map("created_by_id")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdById String?  @map("created_by_id")
 
-  organisation    Organisation         @relation(fields: [organisationId], references: [id])
-  supplier        Supplier?            @relation(fields: [supplierId], references: [id])
-  project         Project?             @relation("InboundInvoiceProject", fields: [projectId], references: [id])
-  createdBy       Profile?             @relation("InboundInvoiceCreator", fields: [createdById], references: [id])
-  approvedBy      Profile?             @relation("InboundInvoiceApprover", fields: [approvedById], references: [id])
+  organisation     Organisation         @relation(fields: [organisationId], references: [id])
+  supplier         Supplier?            @relation(fields: [supplierId], references: [id])
+  project          Project?             @relation("InboundInvoiceProject", fields: [projectId], references: [id])
+  createdBy        Profile?             @relation("InboundInvoiceCreator", fields: [createdById], references: [id])
+  approvedBy       Profile?             @relation("InboundInvoiceApprover", fields: [approvedById], references: [id])
   approvalInstance ApprovalInstance?    @relation("InboundInvoiceApproval", fields: [approvalInstanceId], references: [id])
-  lineItems       InboundInvoiceLine[]
+  lineItems        InboundInvoiceLine[]
 
   @@index([organisationId, status])
   @@index([organisationId, supplierId])
@@ -2965,13 +2965,13 @@ model InboundInvoice {
 }
 
 model InboundInvoiceLine {
-  id              String   @id @default(cuid())
-  invoiceId       String   @map("invoice_id")
-  description     String
-  quantity        Float    @default(1)
-  unitPrice       Float    @map("unit_price")
-  vatRate         Float    @default(0) @map("vat_rate")
-  lineTotal       Float    @map("line_total")
+  id                 String  @id @default(cuid())
+  invoiceId          String  @map("invoice_id")
+  description        String
+  quantity           Float   @default(1)
+  unitPrice          Float   @map("unit_price")
+  vatRate            Float   @default(0) @map("vat_rate")
+  lineTotal          Float   @map("line_total")
   vatExemptionReason String? @map("vat_exemption_reason")
 
   // Categorisation
@@ -2981,31 +2981,31 @@ model InboundInvoiceLine {
   ruleId                String? @map("rule_id") // Which CategorisationRule matched
   costCode              String? @map("cost_code")
 
-  sortOrder       Int      @default(0) @map("sort_order")
-  createdAt       DateTime @default(now()) @map("created_at")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  invoice         InboundInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice InboundInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
   @@map("inbound_invoice_lines")
 }
 
 model CategorisationRule {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
-  projectId       String?  @map("project_id")
-  supplierId      String?  @map("supplier_id")
-  keyword         String?  // Match against line item description
-  accountCode     String   @map("account_code")
-  priority        Int      @default(0) // Higher = evaluated first
-  active          Boolean  @default(true)
-  description     String?  // Human-readable label
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  projectId      String?  @map("project_id")
+  supplierId     String?  @map("supplier_id")
+  keyword        String? // Match against line item description
+  accountCode    String   @map("account_code")
+  priority       Int      @default(0) // Higher = evaluated first
+  active         Boolean  @default(true)
+  description    String? // Human-readable label
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  project         Project?     @relation("CategorisationRuleProject", fields: [projectId], references: [id])
-  supplier        Supplier?    @relation("SupplierRules", fields: [supplierId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  project      Project?     @relation("CategorisationRuleProject", fields: [projectId], references: [id])
+  supplier     Supplier?    @relation("SupplierRules", fields: [supplierId], references: [id])
 
   @@index([organisationId])
   @@index([organisationId, supplierId])
@@ -3030,14 +3030,14 @@ enum InboundInvoiceSource {
 }
 
 enum InboundInvoiceStatus {
-  RECEIVED        // Just arrived, not yet categorised
-  CATEGORISED     // Auto-categorised, awaiting review
-  PENDING_REVIEW  // Sent for manual review
-  APPROVED        // Approved for payment
-  SYNCED          // Posted to accounting system
-  PAID            // Payment confirmed
-  REJECTED        // Rejected
-  VOIDED          // Cancelled/voided
+  RECEIVED // Just arrived, not yet categorised
+  CATEGORISED // Auto-categorised, awaiting review
+  PENDING_REVIEW // Sent for manual review
+  APPROVED // Approved for payment
+  SYNCED // Posted to accounting system
+  PAID // Payment confirmed
+  REJECTED // Rejected
+  VOIDED // Cancelled/voided
 
   @@map("inbound_invoice_status")
 }
@@ -3057,61 +3057,61 @@ enum OutboundInvoiceStatus {
 }
 
 model OutboundInvoice {
-  id              String                @id @default(cuid())
-  organisationId  String                @map("organisation_id")
-  sourceQuoteId   String?               @unique @map("source_quote_id") // FK to FeeQuote (1:1)
-  supplierId      String?               @map("supplier_id") // Client/recipient (Supplier model doubles as contact)
-  projectId       String?               @map("project_id")
+  id             String  @id @default(cuid())
+  organisationId String  @map("organisation_id")
+  sourceQuoteId  String? @unique @map("source_quote_id") // FK to FeeQuote (1:1)
+  supplierId     String? @map("supplier_id") // Client/recipient (Supplier model doubles as contact)
+  projectId      String? @map("project_id")
 
   // Core invoice data
-  invoiceNumber   String                @map("invoice_number")
-  documentType    InboundDocumentType   @default(INVOICE) @map("document_type") // Reuse: INVOICE or CREDIT_NOTE
-  invoiceDate     DateTime              @map("invoice_date")
-  dueDate         DateTime?             @map("due_date")
-  currency        Currency              @default(GBP)
+  invoiceNumber String              @map("invoice_number")
+  documentType  InboundDocumentType @default(INVOICE) @map("document_type") // Reuse: INVOICE or CREDIT_NOTE
+  invoiceDate   DateTime            @map("invoice_date")
+  dueDate       DateTime?           @map("due_date")
+  currency      Currency            @default(GBP)
 
   // Amounts
-  netAmount       Float                 @map("net_amount")
-  vatAmount       Float                 @default(0) @map("vat_amount")
-  grossAmount     Float                 @map("gross_amount")
-  taxRate         Float                 @default(0) @map("tax_rate")
+  netAmount   Float @map("net_amount")
+  vatAmount   Float @default(0) @map("vat_amount")
+  grossAmount Float @map("gross_amount")
+  taxRate     Float @default(0) @map("tax_rate")
 
   // Client info (denormalised for PDF/email — may differ from Supplier record)
-  clientName      String                @map("client_name")
-  clientEmail     String?               @map("client_email")
-  clientAddress   String?               @map("client_address")
+  clientName    String  @map("client_name")
+  clientEmail   String? @map("client_email")
+  clientAddress String? @map("client_address")
 
   // Status + lifecycle
-  status          OutboundInvoiceStatus @default(DRAFT)
-  sentAt          DateTime?             @map("sent_at")
-  viewedAt        DateTime?             @map("viewed_at")
-  paidAt          DateTime?             @map("paid_at")
+  status   OutboundInvoiceStatus @default(DRAFT)
+  sentAt   DateTime?             @map("sent_at")
+  viewedAt DateTime?             @map("viewed_at")
+  paidAt   DateTime?             @map("paid_at")
 
   // Content
-  notes           String?
-  termsAndConditions String?            @map("terms_and_conditions")
+  notes              String?
+  termsAndConditions String? @map("terms_and_conditions")
 
   // UBL XML (generated for Peppol sending)
-  ublXml          String?               @db.Text @map("ubl_xml")
+  ublXml String? @map("ubl_xml") @db.Text
 
   // Accounting sync
-  accountingSystem  String?             @map("accounting_system")
-  externalId        String?             @map("external_id")
-  syncedAt          DateTime?           @map("synced_at")
-  syncError         String?             @map("sync_error")
+  accountingSystem String?   @map("accounting_system")
+  externalId       String?   @map("external_id")
+  syncedAt         DateTime? @map("synced_at")
+  syncError        String?   @map("sync_error")
 
   // Metadata
-  createdById     String                @map("created_by_id")
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  organisation    Organisation          @relation(fields: [organisationId], references: [id])
-  sourceQuote     FeeQuote?             @relation(fields: [sourceQuoteId], references: [id])
-  supplier        Supplier?             @relation(fields: [supplierId], references: [id])
-  project         Project?              @relation("OutboundInvoiceProject", fields: [projectId], references: [id])
-  createdBy       Profile               @relation("OutboundInvoiceCreator", fields: [createdById], references: [id])
-  lineItems       OutboundInvoiceLine[]
+  organisation Organisation          @relation(fields: [organisationId], references: [id])
+  sourceQuote  FeeQuote?             @relation(fields: [sourceQuoteId], references: [id])
+  supplier     Supplier?             @relation(fields: [supplierId], references: [id])
+  project      Project?              @relation("OutboundInvoiceProject", fields: [projectId], references: [id])
+  createdBy    Profile               @relation("OutboundInvoiceCreator", fields: [createdById], references: [id])
+  lineItems    OutboundInvoiceLine[]
 
   @@index([organisationId, status])
   @@index([organisationId, projectId])
@@ -3124,13 +3124,13 @@ model OutboundInvoiceLine {
   invoiceId   String   @map("invoice_id")
   description String
   quantity    Float    @default(1)
-  unitPrice   Float   @map("unit_price")
-  vatRate     Float   @default(0) @map("vat_rate")
-  lineTotal   Float   @map("line_total")
-  sortOrder   Int     @default(0) @map("sort_order")
+  unitPrice   Float    @map("unit_price")
+  vatRate     Float    @default(0) @map("vat_rate")
+  lineTotal   Float    @map("line_total")
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  invoice     OutboundInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice OutboundInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
   @@map("outbound_invoice_lines")
@@ -3141,40 +3141,40 @@ model OutboundInvoiceLine {
 // ═══════════════════════════════════════════════════════════
 
 model XeroConnection {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
+  id             String @id @default(cuid())
+  organisationId String @map("organisation_id")
 
   // Xero tenant (organisation) details
-  xeroTenantId    String   @map("xero_tenant_id") // Xero organisation UUID
-  xeroTenantName  String?  @map("xero_tenant_name")
-  xeroTenantType  String?  @map("xero_tenant_type") // ORGANISATION, COMPANY, etc.
+  xeroTenantId   String  @map("xero_tenant_id") // Xero organisation UUID
+  xeroTenantName String? @map("xero_tenant_name")
+  xeroTenantType String? @map("xero_tenant_type") // ORGANISATION, COMPANY, etc.
 
   // OAuth 2.0 tokens (encrypted at rest)
-  accessToken     String   @db.Text @map("access_token")
-  refreshToken    String   @db.Text @map("refresh_token")
-  tokenExpiresAt  DateTime @map("token_expires_at")
-  scopes          String[] // e.g. ['accounting.invoices', 'accounting.contacts', 'offline_access']
+  accessToken    String   @map("access_token") @db.Text
+  refreshToken   String   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime @map("token_expires_at")
+  scopes         String[] // e.g. ['accounting.invoices', 'accounting.contacts', 'offline_access']
 
   // Sync configuration
-  syncInbound     Boolean  @default(true) @map("sync_inbound")   // Sync inbound invoices → Xero as ACCPAY
-  syncOutbound    Boolean  @default(true) @map("sync_outbound")  // Sync outbound invoices → Xero as ACCREC
-  syncContacts    Boolean  @default(true) @map("sync_contacts")  // Sync suppliers ↔ Xero contacts
-  defaultAccountCode String? @map("default_account_code")        // Xero account code for new invoices
+  syncInbound        Boolean @default(true) @map("sync_inbound") // Sync inbound invoices → Xero as ACCPAY
+  syncOutbound       Boolean @default(true) @map("sync_outbound") // Sync outbound invoices → Xero as ACCREC
+  syncContacts       Boolean @default(true) @map("sync_contacts") // Sync suppliers ↔ Xero contacts
+  defaultAccountCode String? @map("default_account_code") // Xero account code for new invoices
 
   // Sync state
-  lastSyncAt      DateTime? @map("last_sync_at")
-  lastSyncStatus  XeroSyncStatus @default(NEVER) @map("last_sync_status")
-  lastSyncError   String?   @map("last_sync_error")
+  lastSyncAt     DateTime?      @map("last_sync_at")
+  lastSyncStatus XeroSyncStatus @default(NEVER) @map("last_sync_status")
+  lastSyncError  String?        @map("last_sync_error")
 
   // Connection lifecycle
-  connectedAt     DateTime  @default(now()) @map("connected_at")
-  connectedById   String    @map("connected_by_id")
-  disconnectedAt  DateTime? @map("disconnected_at")
-  active          Boolean   @default(true)
+  connectedAt    DateTime  @default(now()) @map("connected_at")
+  connectedById  String    @map("connected_by_id")
+  disconnectedAt DateTime? @map("disconnected_at")
+  active         Boolean   @default(true)
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  connectedBy     Profile      @relation("XeroConnector", fields: [connectedById], references: [id])
-  syncLogs        XeroSyncLog[]
+  organisation Organisation  @relation(fields: [organisationId], references: [id])
+  connectedBy  Profile       @relation("XeroConnector", fields: [connectedById], references: [id])
+  syncLogs     XeroSyncLog[]
 
   @@unique([organisationId, xeroTenantId])
   @@index([organisationId, active])
@@ -3182,19 +3182,19 @@ model XeroConnection {
 }
 
 model XeroSyncLog {
-  id              String   @id @default(cuid())
-  connectionId    String   @map("connection_id")
-  direction       XeroSyncDirection
-  entityType      String   @map("entity_type") // 'invoice', 'contact', 'credit_note'
-  entityId        String   @map("entity_id")    // Coordin entity ID
-  xeroId          String?  @map("xero_id")      // Xero entity UUID
-  action          String   // 'create', 'update', 'skip'
-  status          XeroSyncStatus
-  error           String?
-  metadata        Json?    // Additional sync details
-  createdAt       DateTime @default(now()) @map("created_at")
+  id           String            @id @default(cuid())
+  connectionId String            @map("connection_id")
+  direction    XeroSyncDirection
+  entityType   String            @map("entity_type") // 'invoice', 'contact', 'credit_note'
+  entityId     String            @map("entity_id") // Coordin entity ID
+  xeroId       String?           @map("xero_id") // Xero entity UUID
+  action       String // 'create', 'update', 'skip'
+  status       XeroSyncStatus
+  error        String?
+  metadata     Json? // Additional sync details
+  createdAt    DateTime          @default(now()) @map("created_at")
 
-  connection      XeroConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connection XeroConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@index([connectionId, createdAt])
   @@index([entityType, entityId])
@@ -3210,8 +3210,8 @@ enum XeroSyncStatus {
 }
 
 enum XeroSyncDirection {
-  TO_XERO    // Coordin → Xero
-  FROM_XERO  // Xero → Coordin
+  TO_XERO // Coordin → Xero
+  FROM_XERO // Xero → Coordin
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3220,25 +3220,25 @@ enum XeroSyncDirection {
 // ═══════════════════════════════════════════════════════════
 
 model MicrosoftConnection {
-  id              String   @id @default(cuid())
-  organisationId  String   @map("organisation_id")
+  id             String @id @default(cuid())
+  organisationId String @map("organisation_id")
 
   // Azure AD tenant captured on consent
-  msTenantId      String   @map("ms_tenant_id")     // Azure AD tenant UUID
-  msTenantName    String?  @map("ms_tenant_name")    // e.g. "CWA Homes"
-  msUserId        String?  @map("ms_user_id")        // Connecting user's Graph ID
-  msUserEmail     String?  @map("ms_user_email")     // Connecting user's email
+  msTenantId   String  @map("ms_tenant_id") // Azure AD tenant UUID
+  msTenantName String? @map("ms_tenant_name") // e.g. "CWA Homes"
+  msUserId     String? @map("ms_user_id") // Connecting user's Graph ID
+  msUserEmail  String? @map("ms_user_email") // Connecting user's email
 
   // OAuth 2.0 tokens (encrypted at rest)
-  accessToken     String   @db.Text @map("access_token")
-  refreshToken    String   @db.Text @map("refresh_token")
-  tokenExpiresAt  DateTime @map("token_expires_at")
-  scopes          String[] // e.g. ['Calendars.ReadWrite', 'Files.ReadWrite.All', ...]
+  accessToken    String   @map("access_token") @db.Text
+  refreshToken   String   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime @map("token_expires_at")
+  scopes         String[] // e.g. ['Calendars.ReadWrite', 'Files.ReadWrite.All', ...]
 
   // Per-service sync toggles
-  syncCalendar    Boolean  @default(true) @map("sync_calendar")    // Milestones → Outlook events
-  syncFiles       Boolean  @default(true) @map("sync_files")       // SharePoint / OneDrive documents
-  syncMail        Boolean  @default(false) @map("sync_mail")       // Read-only mail (opt-in)
+  syncCalendar Boolean @default(true) @map("sync_calendar") // Milestones → Outlook events
+  syncFiles    Boolean @default(true) @map("sync_files") // SharePoint / OneDrive documents
+  syncMail     Boolean @default(false) @map("sync_mail") // Read-only mail (opt-in)
 
   // SharePoint site binding (set after first sync)
   sharepointSiteId   String? @map("sharepoint_site_id")
@@ -3246,19 +3246,19 @@ model MicrosoftConnection {
   sharepointSiteUrl  String? @map("sharepoint_site_url")
 
   // Sync state
-  lastSyncAt      DateTime? @map("last_sync_at")
-  lastSyncStatus  MicrosoftSyncStatus @default(NEVER) @map("last_sync_status")
-  lastSyncError   String?   @map("last_sync_error")
+  lastSyncAt     DateTime?           @map("last_sync_at")
+  lastSyncStatus MicrosoftSyncStatus @default(NEVER) @map("last_sync_status")
+  lastSyncError  String?             @map("last_sync_error")
 
   // Connection lifecycle
-  connectedAt     DateTime  @default(now()) @map("connected_at")
-  connectedById   String    @map("connected_by_id")
-  disconnectedAt  DateTime? @map("disconnected_at")
-  active          Boolean   @default(true)
+  connectedAt    DateTime  @default(now()) @map("connected_at")
+  connectedById  String    @map("connected_by_id")
+  disconnectedAt DateTime? @map("disconnected_at")
+  active         Boolean   @default(true)
 
-  organisation    Organisation @relation(fields: [organisationId], references: [id])
-  connectedBy     Profile      @relation("MicrosoftConnector", fields: [connectedById], references: [id])
-  syncLogs        MicrosoftSyncLog[]
+  organisation Organisation       @relation(fields: [organisationId], references: [id])
+  connectedBy  Profile            @relation("MicrosoftConnector", fields: [connectedById], references: [id])
+  syncLogs     MicrosoftSyncLog[]
 
   @@unique([organisationId, msTenantId])
   @@index([organisationId, active])
@@ -3266,20 +3266,20 @@ model MicrosoftConnection {
 }
 
 model MicrosoftSyncLog {
-  id              String   @id @default(cuid())
-  connectionId    String   @map("connection_id")
-  direction       MicrosoftSyncDirection
-  service         MicrosoftService               // calendar, files, mail
-  entityType      String   @map("entity_type")   // 'event', 'file', 'message'
-  entityId        String   @map("entity_id")     // Coordin entity ID
-  msId            String?  @map("ms_id")         // Microsoft Graph entity ID
-  action          String   // 'create', 'update', 'delete', 'skip'
-  status          MicrosoftSyncStatus
-  error           String?
-  metadata        Json?    // Additional sync details
-  createdAt       DateTime @default(now()) @map("created_at")
+  id           String                 @id @default(cuid())
+  connectionId String                 @map("connection_id")
+  direction    MicrosoftSyncDirection
+  service      MicrosoftService // calendar, files, mail
+  entityType   String                 @map("entity_type") // 'event', 'file', 'message'
+  entityId     String                 @map("entity_id") // Coordin entity ID
+  msId         String?                @map("ms_id") // Microsoft Graph entity ID
+  action       String // 'create', 'update', 'delete', 'skip'
+  status       MicrosoftSyncStatus
+  error        String?
+  metadata     Json? // Additional sync details
+  createdAt    DateTime               @default(now()) @map("created_at")
 
-  connection      MicrosoftConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connection MicrosoftConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@index([connectionId, createdAt])
   @@index([entityType, entityId])
@@ -3295,8 +3295,8 @@ enum MicrosoftSyncStatus {
 }
 
 enum MicrosoftSyncDirection {
-  TO_MICROSOFT    // Coordin → Microsoft
-  FROM_MICROSOFT  // Microsoft → Coordin
+  TO_MICROSOFT // Coordin → Microsoft
+  FROM_MICROSOFT // Microsoft → Coordin
 }
 
 enum MicrosoftService {
@@ -3313,12 +3313,12 @@ model StageGate {
   id               String   @id @default(cuid())
   projectId        String   @map("project_id")
   fromStage        Int      @map("from_stage") // RIBA stage number (0-7), -1 for initial
-  toStage          Int      @map("to_stage")   // RIBA stage number (0-7)
+  toStage          Int      @map("to_stage") // RIBA stage number (0-7)
   advancedById     String   @map("advanced_by_id")
   advancedAt       DateTime @default(now()) @map("advanced_at")
   signOffNotes     String?  @map("sign_off_notes")
   prerequisitesMet Json?    @map("prerequisites_met") // JSON array of completed prerequisite task titles
-  attachments      Json?    // JSON array of { name, url } supporting documents
+  attachments      Json? // JSON array of { name, url } supporting documents
   isRollback       Boolean  @default(false) @map("is_rollback")
   createdAt        DateTime @default(now()) @map("created_at")
 
@@ -3336,22 +3336,85 @@ model StageGate {
 model OnboardingSelfServiceToken {
   id             String    @id @default(cuid())
   organisationId String    @map("organisation_id")
-  profileId      String    @map("profile_id")    // The new starter's profile
-  assignmentId   String?   @map("assignment_id")  // Links to their onboarding assignment
-  token          String    @unique                 // crypto.randomBytes(32).toString('hex')
+  profileId      String    @map("profile_id") // The new starter's profile
+  assignmentId   String?   @map("assignment_id") // Links to their onboarding assignment
+  token          String    @unique // crypto.randomBytes(32).toString('hex')
   expiresAt      DateTime  @map("expires_at")
-  usedAt         DateTime? @map("used_at")         // First access timestamp
-  completedAt    DateTime? @map("completed_at")    // All steps done
-  revokedAt      DateTime? @map("revoked_at")      // HR can revoke
+  usedAt         DateTime? @map("used_at") // First access timestamp
+  completedAt    DateTime? @map("completed_at") // All steps done
+  revokedAt      DateTime? @map("revoked_at") // HR can revoke
   createdById    String    @map("created_by_id")
   createdAt      DateTime  @default(now()) @map("created_at")
 
-  organisation Organisation        @relation(fields: [organisationId], references: [id])
-  profile      Profile              @relation("SelfServiceTokenProfile", fields: [profileId], references: [id])
+  organisation Organisation          @relation(fields: [organisationId], references: [id])
+  profile      Profile               @relation("SelfServiceTokenProfile", fields: [profileId], references: [id])
   assignment   OnboardingAssignment? @relation(fields: [assignmentId], references: [id])
-  createdBy    Profile              @relation("SelfServiceTokenCreator", fields: [createdById], references: [id])
+  createdBy    Profile               @relation("SelfServiceTokenCreator", fields: [createdById], references: [id])
 
   @@index([token])
   @@index([profileId])
   @@map("onboarding_self_service_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════
+// AI LAYER — Sprint 1 (Nov 2026)
+// ═══════════════════════════════════════════════════════════
+
+enum AIRunSurface {
+  PRACTICE_SETUP
+  PROJECT_SETUP
+  EXTRACTION
+  DRAFT
+}
+
+enum AIRunStatus {
+  QUEUED
+  RUNNING
+  AWAITING_CONFIRMATION
+  APPLIED
+  FAILED
+}
+
+model AIRun {
+  id             String       @id @default(cuid())
+  organisationId String?      @map("organisation_id") // null for platform-admin demo runs
+  projectId      String?      @map("project_id")
+  surface        AIRunSurface
+  status         AIRunStatus  @default(QUEUED)
+  model          String?
+  promptVersion  String       @map("prompt_version")
+  inputHash      String       @map("input_hash")
+  inputSummary   String       @map("input_summary") // e.g. the URL
+  stages         Json         @default("[]") // [{name, status, ms, detail}]
+  output         Json?
+  mapping        Json? // deterministic config derived from output
+  confidence     Float?
+  citations      Json?
+  error          String?
+  latencyMs      Int?         @map("latency_ms")
+  tokensUsed     Int?         @map("tokens_used")
+  createdBy      String       @map("created_by") // auth user id or profile id
+  confirmedBy    String?      @map("confirmed_by")
+  confirmedAt    DateTime?    @map("confirmed_at")
+  appliedAt      DateTime?    @map("applied_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@index([organisationId, createdAt])
+  @@index([surface, status])
+  @@map("ai_runs")
+}
+
+model PracticeProfile {
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  version        Int      @default(1)
+  data           Json
+  sourceRunId    String?  @map("source_run_id")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organisationId, version])
+  @@index([organisationId])
+  @@map("practice_profiles")
 }

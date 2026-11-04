@@ -188,6 +188,11 @@ export const AuditActions = {
   APPROVAL_ROUTE_CREATED: 'approval.route_created',
   APPROVAL_ROUTE_UPDATED: 'approval.route_updated',
 
+  // AI layer
+  AI_PRACTICE_SETUP_RUN: 'ai.practice_setup_run',
+  AI_PRACTICE_CONFIGURED: 'ai.practice_configured',
+  AI_PROJECT_CONFIGURED: 'ai.project_configured',
+
   // Audit trail
   AUDIT_EXPORTED: 'audit.exported',
 } as const
@@ -416,6 +421,11 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'approval.cancelled': 'Cancelled approval workflow',
   'approval.route_created': 'Created approval route',
   'approval.route_updated': 'Updated approval route',
+
+  // AI
+  'ai.practice_setup_run': 'Ran AI practice setup',
+  'ai.practice_configured': 'Applied AI practice configuration',
+  'ai.project_configured': 'Applied AI project configuration',
 
   // Audit
   'audit.exported': 'Exported audit trail',

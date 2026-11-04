@@ -30,7 +30,8 @@
     "stripe": "^23.0.1",
     "unpdf": "^1.9.1",
     "xmldom": "^0.6.0",
-    "xpath": "^0.0.35"
+    "xpath": "^0.0.35",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

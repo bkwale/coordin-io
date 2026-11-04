@@ -245,3 +245,18 @@ That last question is the validation evidence for Eurostars and EIC.
 - Confidence threshold for "ask vs guess" — start at 0.8, tune with real documents.
 - Which "AI-drafted" artefacts can be auto-cleared by edit, and which need explicit approval? Fee quotes and compliance statements: explicit. Tasks and checklist items: edit clears.
 - Pricing: is AI setup included, or a paid tier? Lean: included — it's the acquisition engine, not the product.
+
+---
+
+## 8. Estonian infrastructure moat (added 4 Nov)
+
+Estonia's public infrastructure is X-Road (registry data exchange) + national e-ID (ID-card, Mobile-ID, Smart-ID). KSI blockchain underpins integrity of some registries but is not the integration surface. The surfaces that matter for Coordin:
+
+| Hook | Value | Timing |
+|---|---|---|
+| Ehitisregister via X-Road | Practice project history + permit status by registry code → practice setup and project import | Sprint 3 (if Sprint 0 probe passes) |
+| Smart-ID / ID-card auth | Bank-grade login; digitally signed checklist sign-offs (legally binding in EE) | Post-demo, Sprint 5+ |
+| e-ehitus (state digital permit platform) | Checklist maps to what the architect submits; integration target and competitive reference | Research Sprint 2 |
+| e-arve (mandatory public-sector e-invoicing) | UBL generator already built; one config step | Flag in integrations UI |
+
+Design rule now: every entity that could come from a registry (practice, project, building) carries an optional `registryCode` / `ehrCode` field from Sprint 1 so later imports attach cleanly.
