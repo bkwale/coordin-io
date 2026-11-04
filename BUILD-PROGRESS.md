@@ -1182,3 +1182,61 @@ All 5 marketing subpages restyled to match the Option C landing page design lang
 **Content preserved:** All original content — 6 BRPD features, 5 quote templates, quote lifecycle, 5 use cases, 8 FAQ items, full booking form with all fields — carried over with zero changes.
 
 **Verification:** 0 type errors. Commit df0fb12 pushed.
+
+---
+
+## AI Layer — Spec, Review, and Work Plan (4 Nov 2026)
+
+**Status:** Planned. Sprint 0 (discovery) starts 4 Nov. Build sprints 1–4 run 9 Nov – 4 Dec. Target: EAL AI working group demo w/c 7 Dec; Eurostars Call 12 opens 17 Dec.
+
+**Documents:**
+- `docs/ai-spec-v1.md` — full product spec (three surfaces, worked example, architecture, governance)
+- `docs/ai-work-plan.md` — sprint-by-sprint plan with exit criteria
+
+### What changes
+
+The "AI Teammate" chat concept is retired. AI becomes the front door and the configuration layer:
+
+| Surface | Input | Output |
+|---|---|---|
+| **A — Practice Setup** | Website URL (+ optional registry code) | Configured workspace: feature flags, compliance framework, stage convention, approval routes, integrations — pending confirmation |
+| **B — Project Setup** | Brief, planning-conditions PDF, or 18-parameter questionnaire | Configured project: deterministic Ehitusseadustik checklist with § citations, stages, milestones, document register, consultants — pending confirmation |
+| **C — In-module AI** | Tier 1 (reads: drawing title blocks, Info In triage, minutes → actions) · Tier 2 (watches: design-change re-check, regulatory monitor, overrun warning) · Tier 3 (drafts: fee proposal, compliance statement, client narrative) | Bounded pipelines, each audited and marked AI-generated |
+
+Tier 2 and 3 are specced but out of scope before March 2027.
+
+### Core rules (from Purple Team review, 4 Nov)
+
+- One pipeline abstraction (`runAI` → `AIRun`) — every surface is a client of it. No one-off extractors.
+- LLM proposes, deterministic code disposes. The rules engine never calls a model.
+- Every LLM output is a Zod-typed schema with per-field `confidence` and `source`. Nothing free-text into the database.
+- One `ConfirmationReview` component renders `{field, value, confidence, source, userOverride}` for every surface. Source-linking is the trust mechanism, not polish.
+- Every AI action → `AIRun` record with model, prompt version, citations, and the human who confirmed. Audit export includes it.
+- Rule-version stamp + non-dismissible "does not replace professional judgement" notice on every generated checklist. Architect can add items the engine missed; additions are logged. Required before live-project use.
+- Rate limiter + per-org daily budget on `/api/ai/*`. 24h crawl cache. Model-down fallback path — product still works without AI.
+- SLO: 95% of practice setups < 60s; zero silent failures.
+- Regression suite: 17 real practice websites as snapshot tests; every prompt change re-runs them.
+
+### New schema (sprints 1–2)
+
+`AIRun`, `PracticeProfile` (versioned), `ProjectProfile` (versioned — enables Tier 2), `MunicipalityProfile` (79 seeded), `RuleSet` (versioned, cited), `aiRunId` + `addedByArchitect` on `ChecklistItem`, `AIGenerated` flag on Task/Document.
+
+### Infrastructure decision
+
+Vercel stays. Pro plan: 300s default / 800s max per function. `maxDuration = 300` on `/api/ai/*`. Background-job pattern used for UX (close tab, return), not for timeouts. Mistral (EU-hosted) primary, Claude fallback.
+
+### Sprint summary
+
+| Sprint | Dates | Exit criterion |
+|---|---|---|
+| 0 — Discovery | 4–6 Nov | 17 hand-run practice profiles saved; confidence threshold calibrated; Ehitisregister go/no-go; 40+ rules-engine test fixtures written; PT PDFs requested from Laila/Ülar |
+| 1 — Foundation + Practice Setup | 9–13 Nov | Paste salto.ee in production → confirmed workspace < 10 min. Regression suite stable. Audit visible |
+| 2 — Rules Engine | 16–20 Nov | Questionnaire → cited checklist. All branch tests green. Laila has reviewed test cases (TRL 5 evidence) |
+| 3 — Project Setup from documents | 23–27 Nov | Brief + PT PDF → project with traceable checklist. Laila onboarded as live user. Ehitisregister import if probe passed |
+| 4 — Hardening + Demo | 30 Nov – 4 Dec | Crispin pass, SLOs met, 10-concurrent-URL load test, audit export, demo rehearsed and timed. Half the sprint is buffer |
+
+### Validation partners
+
+- **Laila** — one-person studio; rules-engine test-case reviewer (sprint 2); first live user (sprint 3); demo rehearsal audience (sprint 4)
+- **Ülar Mark** — Urban Mark OÜ, former EAL chairman; EAL AI working group route to the demo; source of planning-conditions PDFs
+- **Salto Architects** — worked example in the spec (11-person, 16 municipalities); demo org seeded from their public profile
