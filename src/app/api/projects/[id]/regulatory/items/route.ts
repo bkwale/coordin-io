@@ -39,4 +39,4 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   })
 
   return success({ item }, 201)
-})
+}, { minProjectRole: 'PROJECT_LEAD' })

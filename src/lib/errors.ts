@@ -187,6 +187,7 @@ export function fromPrismaError(error: unknown): AppError {
         return new DatabaseError('A database configuration error occurred')
 
       default:
+        console.error('[PrismaError]', JSON.stringify({ code: error.code, meta: (error as { meta?: unknown }).meta, message: error.message?.split('\n').slice(-1)[0] }))
         return new DatabaseError('A database error occurred')
     }
   }

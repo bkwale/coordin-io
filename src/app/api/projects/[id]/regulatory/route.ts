@@ -9,6 +9,9 @@ import { ProjectParametersSchema } from '@/lib/rules/schema'
 
 export const dynamic = 'force-dynamic'
 
+/** Prefix on `because` for generated items that no longer apply but were kept because the architect had worked on them. */
+export const STALE_PREFIX = '[No longer applies with current parameters]'
+
 const REGISTER_NAME: Record<string, string> = { EE: 'Ehitusseadustik checklist', GB: 'Building Regulations checklist', PL: 'Prawo budowlane checklist', ES: 'CTE checklist' }
 
 /**
@@ -23,6 +26,8 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
   const items = register?.items ?? []
   const generated = items.filter((i) => !i.addedByArchitect)
   const added = items.filter((i) => i.addedByArchitect)
+  const jurisdiction = (profile?.parameters as { jurisdiction?: string } | null)?.jurisdiction
+  const currentRuleSetVersion = jurisdiction ? getRuleSet(jurisdiction as Parameters<typeof getRuleSet>[0])?.version ?? null : null
   const grouped: Record<string, typeof items> = {}
   for (const i of generated) (grouped[i.section ?? 'other'] ??= []).push(i)
   return success({
@@ -31,7 +36,9 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
     grouped,
     added,
     disciplineLabels: DISCIPLINE_LABELS,
-    counts: { generated: generated.length, added: added.length },
+    counts: { generated: generated.length, added: added.length, stale: generated.filter((i) => i.confidence === 'stale').length },
+    currentRuleSetVersion,
+    outdated: !!(register?.templateVersion && currentRuleSetVersion && register.templateVersion !== currentRuleSetVersion),
   })
 })
 
@@ -72,9 +79,16 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
       })
     } else {
       await tx.complianceRegister.update({ where: { id: register.id }, data: { templateVersion: ruleSet.version, description: `Generated from ${ruleSet.version} (profile v${version})` } })
-      // keep status/evidence of items that survive; drop generated items no longer applicable
-      const keepIds = new Set(checklist.map((c) => c.ruleId))
-      await tx.complianceItem.deleteMany({ where: { registerId: register.id, addedByArchitect: false, OR: [{ ruleId: null }, { ruleId: { notIn: Array.from(keepIds) } }] } })
+      // Generated items no longer applicable: delete only if untouched; if the architect has
+      // started/evidenced/completed them, keep and flag — evidence is never silently destroyed.
+      const keepIds = Array.from(new Set(checklist.map((c) => c.ruleId)))
+      const stale = { registerId: register.id, addedByArchitect: false, OR: [{ ruleId: null }, { ruleId: { notIn: keepIds } }] }
+      await tx.complianceItem.deleteMany({ where: { ...stale, status: 'NOT_STARTED' } })
+      const touched = await tx.complianceItem.findMany({ where: { ...stale, NOT: { status: 'NOT_STARTED' } } })
+      await Promise.all(touched.map((i) => tx.complianceItem.update({
+        where: { id: i.id },
+        data: { because: `${STALE_PREFIX} ${(i.because ?? '').replace(STALE_PREFIX, '').trim()}`.trim(), confidence: 'stale' },
+      })))
     }
 
     const existing = new Map((await tx.complianceItem.findMany({ where: { registerId: register.id, addedByArchitect: false } })).map((i) => [i.ruleId, i]))
@@ -126,4 +140,4 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
     disciplineLabels: DISCIPLINE_LABELS,
     diff: { added: diff.added.map((i) => i.ruleId), removed: diff.removed.map((i) => i.ruleId) },
   })
-})
+}, { minProjectRole: 'PROJECT_LEAD' })

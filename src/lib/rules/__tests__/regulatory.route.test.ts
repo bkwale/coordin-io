@@ -20,6 +20,7 @@ const nextId = (p: string) => `${p}-${++idSeq}`
 function matchWhere(row: Item, where: Item): boolean {
   return Object.entries(where).every(([k, v]) => {
     if (k === 'OR') return (v as Item[]).some((w) => matchWhere(row, w))
+    if (k === 'NOT') return !matchWhere(row, v as Item)
     if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
       if ('notIn' in v) return !(v.notIn as unknown[]).includes(row[k])
       if ('in' in v) return (v.in as unknown[]).includes(row[k])
@@ -71,11 +72,11 @@ const tx = {
       return { count: before - db.items.length }
     }),
     createMany: vi.fn(async ({ data }: Item) => {
-      for (const d of data) db.items.push({ id: nextId('item'), status: 'PENDING', addedByArchitect: false, ...d })
+      for (const d of data) db.items.push({ id: nextId('item'), status: 'NOT_STARTED', addedByArchitect: false, ...d })
       return { count: data.length }
     }),
     create: vi.fn(async ({ data }: Item) => {
-      const row = { id: nextId('item'), status: 'PENDING', addedByArchitect: false, ...data }
+      const row = { id: nextId('item'), status: 'NOT_STARTED', addedByArchitect: false, ...data }
       db.items.push(row)
       return row
     }),
@@ -104,14 +105,19 @@ vi.mock('@/lib/audit', () => ({
   AuditActions: { AI_PROJECT_CONFIGURED: 'ai.project_configured' },
 }))
 
+const ctx = { role: 'PROJECT_LEAD' }
+const ROLE_RANK: Record<string, number> = { PROJECT_LEAD: 0, PROJECT_ARCHITECT: 1, DESIGN_LEAD: 2, SENIOR_ARCHITECT: 3, ARCHITECT: 4, TEAM_MEMBER: 5, EXTERNAL_CONSULTANT: 6, CONTRACTOR: 7 }
 vi.mock('@/lib/with-project-access', () => ({
-  withProjectAccess: (handler: any) => async (req: any) => {
+  withProjectAccess: (handler: any, opts?: { minProjectRole?: string }) => async (req: any) => {
     try {
+      if (opts?.minProjectRole && ROLE_RANK[ctx.role] > ROLE_RANK[opts.minProjectRole]) {
+        return new Response(JSON.stringify({ error: 'Insufficient project role' }), { status: 403 })
+      }
       return await handler(req, {
         authUserId: 'auth-1',
         profile: { id: 'actor-1' },
         project: { id: 'project-1', organisationId: 'org-1' },
-        membership: { projectRole: 'PROJECT_LEAD' },
+        membership: { projectRole: ctx.role },
         projectId: 'project-1',
       })
     } catch (err: any) {
@@ -120,7 +126,7 @@ vi.mock('@/lib/with-project-access', () => ({
   },
 }))
 
-const { GET, POST } = await import('@/app/api/projects/[id]/regulatory/route')
+const { GET, POST, STALE_PREFIX } = await import('@/app/api/projects/[id]/regulatory/route')
 const { POST: POST_ITEM } = await import('@/app/api/projects/[id]/regulatory/items/route')
 const { match, getRuleSet } = await import('@/lib/rules')
 
@@ -134,7 +140,7 @@ const json = async (r: Response) => (await r.json()) as any
 
 beforeEach(() => {
   db.profiles = []; db.registers = []; db.items = []; idSeq = 0
-  audit.mockClear(); transactionOpts.length = 0
+  audit.mockClear(); transactionOpts.length = 0; ctx.role = 'PROJECT_LEAD'
   for (const m of Object.values(tx.complianceItem)) m.mockClear()
 })
 
@@ -207,15 +213,69 @@ describe('POST /api/projects/[id]/regulatory', () => {
     expect(permitAfter.because).toMatch(/2400/)
   })
 
-  it('re-run preserves architect-added items and drops generated items no longer applicable', async () => {
+  it('re-run preserves architect-added items and deletes untouched generated items no longer applicable', async () => {
     await post(BLOCK)
     db.items.push({ id: 'arch-1', registerId: db.registers[0].id, requirement: 'Local noise bylaw', addedByArchitect: true, ruleId: null, sortOrder: 9999 })
     await post(DETACHED)
     expect(db.items.find((i) => i.id === 'arch-1')).toBeTruthy()
     expect(db.items.filter((i) => !i.addedByArchitect)).toHaveLength(26)
-    // nothing from the block-only set survives
     const blockOnly = match(BLOCK as any, getRuleSet('EE')!).map((c) => c.ruleId).filter((id) => !match(DETACHED as any, getRuleSet('EE')!).some((c) => c.ruleId === id))
     expect(db.items.some((i) => blockOnly.includes(i.ruleId))).toBe(false)
+  })
+
+  it('re-run KEEPS and flags no-longer-applicable items the architect had worked on (evidence never silently lost)', async () => {
+    await post(BLOCK)
+    const blockOnly = match(BLOCK as any, getRuleSet('EE')!).map((c) => c.ruleId).filter((id) => !match(DETACHED as any, getRuleSet('EE')!).some((c) => c.ruleId === id))
+    const worked = db.items.find((i) => i.ruleId === blockOnly[0])!
+    worked.status = 'COMPLIANT'; worked.comments = 'Evidence: fire cert #123'
+    const originalBecause = worked.because
+
+    await post(DETACHED)
+    const kept = db.items.find((i) => i.id === worked.id)
+    expect(kept).toBeTruthy()
+    expect(kept!.status).toBe('COMPLIANT')
+    expect(kept!.comments).toBe('Evidence: fire cert #123')
+    expect(kept!.confidence).toBe('stale')
+    expect(kept!.because.startsWith(STALE_PREFIX)).toBe(true)
+    if (originalBecause) expect(kept!.because).toContain(originalBecause)
+    expect(db.items.filter((i) => !i.addedByArchitect)).toHaveLength(27) // 26 + 1 kept
+    // the other block-only items were untouched → deleted
+    expect(db.items.filter((i) => blockOnly.includes(i.ruleId))).toHaveLength(1)
+    // GET reports it
+    const body = (await json(await get())).data
+    expect(body.counts.stale).toBe(1)
+  })
+
+  it('a flagged item is un-flagged when parameters make it applicable again', async () => {
+    await post(BLOCK)
+    const blockOnly = match(BLOCK as any, getRuleSet('EE')!).map((c) => c.ruleId).filter((id) => !match(DETACHED as any, getRuleSet('EE')!).some((c) => c.ruleId === id))
+    const worked = db.items.find((i) => i.ruleId === blockOnly[0])!
+    worked.status = 'IN_PROGRESS'
+    await post(DETACHED)
+    expect(db.items.find((i) => i.id === worked.id)!.confidence).toBe('stale')
+    await post(BLOCK)
+    const back = db.items.find((i) => i.id === worked.id)!
+    expect(back.confidence).not.toBe('stale')
+    expect(back.because ?? '').not.toContain(STALE_PREFIX)
+    expect(back.status).toBe('IN_PROGRESS')
+  })
+
+  it('only PROJECT_LEAD can generate or add items; any member can read', async () => {
+    await post(DETACHED)
+    ctx.role = 'EXTERNAL_CONSULTANT'
+    expect((await post(BLOCK)).status).toBe(403)
+    expect((await postItem({ requirement: 'x' })).status).toBe(403)
+    expect((await get()).status).toBe(200)
+    expect(db.profiles).toHaveLength(1)
+  })
+
+  it('GET flags an outdated checklist when the rule set has moved on', async () => {
+    await post(DETACHED)
+    expect((await json(await get())).data.outdated).toBe(false)
+    db.registers[0].templateVersion = 'EE-0.9'
+    const body = (await json(await get())).data
+    expect(body.outdated).toBe(true)
+    expect(body.currentRuleSetVersion).toBe('EE-1.0')
   })
 
   it('runs the write inside one transaction with an extended timeout (PgBouncer fix)', async () => {
@@ -232,7 +292,7 @@ describe('GET /api/projects/[id]/regulatory', () => {
   it('returns null register before first run', async () => {
     const body = (await json(await get())).data
     expect(body.register).toBeNull()
-    expect(body.counts).toEqual({ generated: 0, added: 0 })
+    expect(body.counts).toEqual({ generated: 0, added: 0, stale: 0 })
     expect(body.disciplineLabels.permit.et).toBe('Load ja teatised')
   })
 
@@ -245,7 +305,7 @@ describe('GET /api/projects/[id]/regulatory', () => {
     expect(Object.values(body.grouped).flat()).toHaveLength(26)
     expect(body.grouped.permit.length).toBeGreaterThan(0)
     expect(body.added).toHaveLength(1)
-    expect(body.counts).toEqual({ generated: 26, added: 1 })
+    expect(body.counts).toEqual({ generated: 26, added: 1, stale: 0 })
   })
 })
 

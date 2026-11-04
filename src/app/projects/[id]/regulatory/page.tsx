@@ -19,7 +19,7 @@ type Params = {
   seasonalUseOnly?: boolean; temporary?: boolean; placeOfWorship?: boolean; county?: string
 }
 type Item = { id: string; ruleId: string | null; requirement: string; titleLocal: string | null; citation: string | null; source: string | null; because: string | null; confidence: string | null; comments: string | null; status: string; section: string | null; addedByArchitect: boolean; ruleSetVersion: string | null }
-type Data = { profile: { version: number; parameters: Params; ruleSetVersion: string | null; createdAt: string } | null; register: { id: string; name: string; templateVersion: string | null; updatedAt: string } | null; grouped: Record<string, Item[]>; added: Item[]; disciplineLabels: Record<string, { en: string; et: string }>; counts: { generated: number; added: number } }
+type Data = { profile: { version: number; parameters: Params; ruleSetVersion: string | null; createdAt: string } | null; register: { id: string; name: string; templateVersion: string | null; updatedAt: string } | null; grouped: Record<string, Item[]>; added: Item[]; disciplineLabels: Record<string, { en: string; et: string }>; counts: { generated: number; added: number; stale: number }; currentRuleSetVersion: string | null; outdated: boolean }
 
 const DEFAULTS: Params = { jurisdiction: 'EE', buildingType: 'detached_house', workType: 'new_build', grossFloorArea: 160, height: 7, storeys: 2, heatedArea: 150, enclosedNetArea: 150, detailedPlanExists: false, urbanArea: false }
 
@@ -44,12 +44,21 @@ export default function RegulatoryPage() {
     if (!res.ok) { setLoading(false); return }
     const { data } = await res.json()
     setData(data)
-    if (data.profile?.parameters) setForm({ ...DEFAULTS, ...data.profile.parameters })
+    if (data.profile?.parameters) { setForm({ ...DEFAULTS, ...data.profile.parameters }); setAreaEdited({ heated: true, enclosed: true }) }
     setLoading(false)
   }, [projectId])
   useEffect(() => { load() }, [load])
 
-  const set = <K extends keyof Params>(k: K, v: Params[K]) => setForm((f) => ({ ...f, [k]: v }))
+  const [areaEdited, setAreaEdited] = useState({ heated: false, enclosed: false })
+  const set = <K extends keyof Params>(k: K, v: Params[K]) => setForm((f) => {
+    const next = { ...f, [k]: v }
+    // Heated / enclosed net area follow gross area until the architect edits them — prevents energy rules running on a stale 150 m² default.
+    if (k === 'grossFloorArea' && typeof v === 'number') {
+      if (!areaEdited.heated) next.heatedArea = Math.round(v * 0.9)
+      if (!areaEdited.enclosed) next.enclosedNetArea = Math.round(v * 0.9)
+    }
+    return next
+  })
   const isBlock = form.buildingType === 'apartment_block'
 
   async function generate() {
@@ -58,7 +67,7 @@ export default function RegulatoryPage() {
       const res = await fetch(`/api/projects/${projectId}/regulatory`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parameters: form }) })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Could not generate')
-      setDiff(body.data.diff)
+      setDiff(body.data.profile?.version > 1 ? body.data.diff : null) // first run: everything is new, badges carry no information
       toast(`Checklist generated — ${Object.values(body.data.grouped as Record<string, unknown[]>).reduce((a, l) => a + l.length, 0)} obligations from ${body.data.ruleSetVersion}`, 'success')
       await load()
     } catch (e) { toast(e instanceof Error ? e.message : 'Failed', 'error') }
@@ -83,7 +92,7 @@ export default function RegulatoryPage() {
         <div className="flex items-center gap-2 mb-1"><Scale className="w-4 h-4 text-accent-600" /><h2 className="text-[14px] font-semibold text-ink-900">Project parameters</h2></div>
         <p className="text-[11px] text-ink-400 mb-4">Answer what you know. The engine only uses deterministic rules — no AI judgement.</p>
 
-        <Field label="Jurisdiction"><Select value={form.jurisdiction} onChange={(v) => set('jurisdiction', v as Params['jurisdiction'])} options={[['EE', 'Estonia — Ehitusseadustik'], ['GB', 'UK (rule set coming)'], ['PL', 'Poland (rule set coming)']]} /></Field>
+        <Field label="Jurisdiction"><Select value={form.jurisdiction} onChange={(v) => set('jurisdiction', v as Params['jurisdiction'])} options={[['EE', 'Estonia — Ehitusseadustik'], ['GB', 'UK — rule set coming', true], ['PL', 'Poland — rule set coming', true]]} /></Field>
         <Field label="Building type"><Select value={form.buildingType} onChange={(v) => set('buildingType', v as Params['buildingType'])} options={[['detached_house', 'Detached house'], ['semi_detached', 'Semi-detached'], ['terraced', 'Terraced'], ['apartment_block', 'Apartment block'], ['non_residential', 'Non-residential'], ['other', 'Other']]} /></Field>
         <Field label="Work"><Select value={form.workType} onChange={(v) => set('workType', v as Params['workType'])} options={[['new_build', 'New build'], ['extension', 'Extension'], ['reconstruction', 'Reconstruction'], ['change_of_use', 'Change of use'], ['demolition', 'Demolition']]} /></Field>
         <div className="grid grid-cols-3 gap-2">
@@ -92,8 +101,8 @@ export default function RegulatoryPage() {
           <Field label="Storeys"><Num value={form.storeys} onChange={(v) => set('storeys', v)} /></Field>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Field label="Heated m²"><Num value={form.heatedArea ?? 0} onChange={(v) => set('heatedArea', v)} /></Field>
-          <Field label="Enclosed net m²"><Num value={form.enclosedNetArea ?? 0} onChange={(v) => set('enclosedNetArea', v)} /></Field>
+          <Field label="Heated m²" hint={areaEdited.heated ? undefined : '≈ 90% of gross'}><Num value={form.heatedArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, heated: true })); set('heatedArea', v) }} /></Field>
+          <Field label="Enclosed net m²" hint={areaEdited.enclosed ? undefined : '≈ 90% of gross'}><Num value={form.enclosedNetArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, enclosed: true })); set('enclosedNetArea', v) }} /></Field>
         </div>
         {isBlock && <div className="grid grid-cols-2 gap-2">
           <Field label="Apartments"><Num value={form.apartments ?? 0} onChange={(v) => set('apartments', v)} /></Field>
@@ -140,13 +149,24 @@ export default function RegulatoryPage() {
               </div>
             </div>
 
+            {data.outdated && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] text-red-800 flex items-center gap-2 mb-4">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>Rule set updated: this checklist was generated with <b>{data.register.templateVersion}</b>; current is <b>{data.currentRuleSetVersion}</b>. Re-run to pick up the changes.</span>
+              </div>
+            )}
+            {data.counts.stale > 0 && (
+              <div className="rounded-lg border border-surface-300 bg-surface-50 px-4 py-2.5 text-[12px] text-ink-600 mb-4">
+                {data.counts.stale} item{data.counts.stale > 1 ? 's' : ''} no longer appl{data.counts.stale > 1 ? 'y' : 'ies'} with the current parameters but {data.counts.stale > 1 ? 'were' : 'was'} kept because you had started work on {data.counts.stale > 1 ? 'them' : 'it'}. Mark as not applicable to clear.
+              </div>
+            )}
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-[15px] font-semibold text-ink-900">{data.register.name}</h2>
                 <p className="text-[11px] text-ink-400">{data.counts.generated} obligations from the rule set · {data.counts.added} added by the practice{diff && (diff.added.length || diff.removed.length) ? ` · since last run: +${diff.added.length} / −${diff.removed.length}` : ''}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setLang(lang === 'en' ? 'et' : 'en')} className="text-[11px] px-2 py-1 rounded-md border border-surface-300 text-ink-500 hover:text-ink-900">{lang === 'en' ? 'ET' : 'EN'}</button>
+                <button onClick={() => setLang(lang === 'en' ? 'et' : 'en')} title="Titles in Estonian; rationale stays in English for now" className="text-[11px] px-2 py-1 rounded-md border border-surface-300 text-ink-500 hover:text-ink-900">{lang === 'en' ? 'ET' : 'EN'}</button>
                 <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-md border border-surface-300 text-ink-700 hover:border-accent-400"><Plus className="w-3.5 h-3.5" />Add missing item</button>
               </div>
             </div>
@@ -199,15 +219,17 @@ export default function RegulatoryPage() {
 function Row({ item, lang, isNew }: { item: Item; lang: 'en' | 'et'; isNew?: boolean }) {
   const title = lang === 'et' && item.titleLocal ? item.titleLocal : item.requirement
   const conf = item.confidence
+  const stale = conf === 'stale'
   return (
-    <li className={cn('px-4 py-2.5 flex gap-3 items-start border-b border-surface-100 last:border-0', isNew && 'bg-green-50/40')}>
+    <li className={cn('px-4 py-2.5 flex gap-3 items-start border-b border-surface-100 last:border-0', isNew && 'bg-green-50/40', stale && 'opacity-70')}>
       <span className={cn('mt-1 w-4 h-4 rounded flex items-center justify-center shrink-0', item.status === 'COMPLIANT' ? 'bg-green-100 text-green-700' : 'bg-surface-100 text-ink-300')}><Check className="w-3 h-3" /></span>
       <div className="flex-1 min-w-0">
         <div className="text-[13px] text-ink-900">{title}{item.addedByArchitect && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-accent-50 text-accent-700 border border-accent-100">practice</span>}</div>
         {(item.because || item.comments) && <div className="text-[11px] text-ink-500 mt-0.5">{item.because}{item.because && item.comments ? ' · ' : ''}{item.comments}</div>}
         <div className="text-[11px] text-ink-400 mt-0.5 font-mono">{item.citation}{item.source ? ` — ${item.source}` : ''}</div>
       </div>
-      {conf && conf !== 'architect' && (
+      {stale && <span className="text-[10px] px-1.5 py-0.5 rounded border shrink-0 bg-surface-100 text-ink-500 border-surface-300">no longer applies</span>}
+      {conf && conf !== 'architect' && !stale && (
         <span title={`Dataset confidence: ${conf}`} className={cn('text-[10px] px-1.5 py-0.5 rounded border shrink-0', conf === 'high' ? 'bg-green-50 text-green-700 border-green-200' : conf === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200')}>
           {conf === 'low' ? <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" />verify</span> : conf}
         </span>
@@ -216,8 +238,8 @@ function Row({ item, lang, isNew }: { item: Item; lang: 'en' | 'et'; isNew?: boo
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block mb-2"><span className="block text-[11px] text-ink-500 mb-1">{label}</span>{children}</label> }
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white">{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> }
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block mb-2"><span className="block text-[11px] text-ink-500 mb-1">{label}{hint && <span className="ml-1 text-ink-300">· {hint}</span>}</span>{children}</label> }
+function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: Array<[string, string] | [string, string, boolean]> }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white">{options.map(([v, l, disabled]) => <option key={v} value={v} disabled={!!disabled}>{l}</option>)}</select> }
 function Num({ value, onChange, step = 1 }: { value: number; onChange: (v: number) => void; step?: number }) { return <input type="number" step={step} min={0} value={Number.isFinite(value) ? value : 0} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white" /> }
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return <button type="button" onClick={() => onChange(!value)} className="w-full flex items-center justify-between text-[12px] text-ink-700 py-1"><span>{label}</span><span className={cn('inline-block w-8 h-4 rounded-full relative shrink-0 transition-colors', value ? 'bg-accent-500' : 'bg-surface-300')}><span className={cn('absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all', value ? 'left-[18px]' : 'left-0.5')} /></span></button>
