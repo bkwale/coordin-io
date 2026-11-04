@@ -77,8 +77,9 @@ const PROJECT_TABS: TabDef[] = [
     label: 'Compliance',
     href: '/brpd',
     icon: ShieldCheck,
-    routes: ['/brpd', '/brpd/changelog', '/building-regs', '/design-risks'],
+    routes: ['/regulatory', '/brpd', '/brpd/changelog', '/building-regs', '/design-risks'],
     subTabs: [
+      { label: 'Regulatory', href: '/regulatory' },
       { label: 'BRPD', href: '/brpd' },
       { label: 'Building Regs', href: '/building-regs' },
       { label: 'Design Risks', href: '/design-risks' },
