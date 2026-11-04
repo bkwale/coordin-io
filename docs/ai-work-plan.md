@@ -195,3 +195,7 @@ Tier 1 in-module AI, one per week, each a new `runAI` client: drawing title-bloc
 ## Smallest next step — today
 
 Sprint 0, task 0.1. Open a notebook. Run the practice-setup prompt against salto.ee and Laila's site. Save both JSON outputs. If the Salto output names Maarja, Ralf and Ragnar and lists 16 municipalities, the 40-second moment is real and sprint 1 starts Monday.
+
+## Working rule added 4 Nov — branches
+
+From Sprint 3: all work happens on a sprint branch (`sprint-3`, then `sprint-4`…). Every push to the branch gets a Vercel **preview URL**; Wale walks through it there. Merge to `main` only after that walkthrough — `main` is production and nothing else. One Vercel project (`coordin-io`); the two stray projects that were triple-building every push were deleted 4 Nov.
