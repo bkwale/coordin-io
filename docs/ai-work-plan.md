@@ -35,7 +35,7 @@ No product code. Everything here de-risks sprints 1–3. Karpathy's rule: data b
 |---|---|---|---|
 | 0.1 | Run the practice-setup prompt by hand against all 14 outreach firms + Laila's site + salto.ee + koko.ee | 17 `PracticeProfile` JSON outputs saved to `/private/ai-samples/practice/` | Half a day. This is the regression suite. |
 | 0.2 | Calibrate confidence threshold against those 17 | A number with a reason, not 0.8 because it sounds right | Look at where the model was wrong and what confidence it reported |
-| 0.3 | Probe Ehitisregister: is there a company-level query? Rate limits? Auth? | Yes/no + notes. If no, cut from sprint 3 | Half a day max. Newman: don't put it in a sprint until you've hit it |
+| 0.3 | ~~Probe Ehitisregister~~ **DONE 4 Nov** — public API: search by owner/buildingName, detail by EHR code; no designer search, no permits/docs without ID-card login | Partial go — see 3.3 | `private/ai-samples/ehr-probe-2026-11-04.md` |
 | 0.4 | Ask Laila (and Ülar when he replies) for 5–10 real *projekteerimistingimused* PDFs from different municipalities | PDFs in `/private/ai-samples/planning-conditions/` | Needed before sprint 3 estimate is real |
 | 0.5 | Write the 40+ rules-engine test cases: parameters in → expected checklist out, from the Ehitusseadustik dataset | `tests/rules/*.test.ts` fixtures, no engine yet | Crispin: tests before engine. Send to Laila for review in sprint 2 |
 | 0.6 | Decide model + fallback | Mistral primary (EU-hosted), Claude fallback, both keys in Vercel env | Already on the list. Just confirm and move on |
@@ -129,7 +129,7 @@ Estimates here depend on sprint-0 PDF sampling. Re-estimate Monday morning.
 |---|---|---|---|
 | 3.1 | Brief extraction — text/PDF → 18 parameters with confidence, via `runAI`. Pre-fills the questionnaire; architect confirms via `ConfirmationReview` | 1.5 days | — |
 | 3.2 | Planning-conditions extraction — *projekteerimistingimused* PDF → condition list with page/paragraph source → checklist items flagged `source: municipality` | 2 days **if** PDFs are consistent; 4 days if not; cut to sprint 4 if wildly inconsistent | Depends on 0.4 |
-| 3.3 | Ehitisregister import — registry code → project list → draft projects | 1 day | Only if 0.3 said yes |
+| 3.3 | **EHR enrichment** (replaces registry-code import — probe 4 Nov: public API has no designer search) — project name or EHR code → authoritative building record (address, cadastral unit, use class, area, storeys, energy class, geometry) attached to the project; owner-name import for construction companies / municipalities | 2 days | Public endpoints verified: `buildingSearchPageable` (owner, buildingName), `buildingData?ehr_code` |
 | 3.4 | Onboard Laila for real — her site through practice setup, one live project through project setup. Fix everything she hits | 1 day | Her time is a favour. Budget a thank-you |
 | 3.5 | Demo org: Salto-style profile seeded so the demo doesn't depend on live crawl of someone else's site | 0.5 day | — |
 

@@ -254,7 +254,8 @@ Estonia's public infrastructure is X-Road (registry data exchange) + national e-
 
 | Hook | Value | Timing |
 |---|---|---|
-| Ehitisregister via X-Road | Practice project history + permit status by registry code → practice setup and project import | Sprint 3 (if Sprint 0 probe passes) |
+| Ehitisregister — public API (verified 4 Nov) | Building record by EHR code or name: address, cadastral unit, use class, area, storeys, energy class, geometry. Owner-name search for developers/municipalities. **No designer search publicly.** | Sprint 3 — EHR enrichment |
+| Ehitisregister — authenticated (X-Road / ID-card) | Architect's own portfolio, permits, procedures, project documents | Sprint 5+ with Smart-ID |
 | Smart-ID / ID-card auth | Bank-grade login; digitally signed checklist sign-offs (legally binding in EE) | Post-demo, Sprint 5+ |
 | e-ehitus (state digital permit platform) | Checklist maps to what the architect submits; integration target and competitive reference | Research Sprint 2 |
 | e-arve (mandatory public-sector e-invoicing) | UBL generator already built; one config step | Flag in integrations UI |
