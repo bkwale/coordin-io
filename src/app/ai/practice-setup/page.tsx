@@ -110,14 +110,29 @@ export default function PracticeSetupDemo() {
   }, [])
 
   // ── Start a run ─────────────────────────────────────────────────────────────
+  /** "salto.ee" → website · "11038879" → Äriregister · "gb:12345678" / "SC123456" → Companies House · "salto.ee 11038879" → both */
+  function parseStart(raw: string): { url?: string; registryCode?: string; jurisdiction?: 'EE' | 'GB' } {
+    const parts = raw.trim().split(/\s+/)
+    const out: { url?: string; registryCode?: string; jurisdiction?: 'EE' | 'GB' } = {}
+    for (const p of parts) {
+      const gb = p.match(/^(?:gb:|uk:)?([A-Z]{2}\d{6}|\d{8})$/i)
+      if (/^\d{8}$/.test(p) && !out.registryCode) { out.registryCode = p; out.jurisdiction = 'EE'; continue }
+      if (gb && /^(gb:|uk:)/i.test(p) || (gb && /^[A-Z]{2}\d{6}$/i.test(p))) { out.registryCode = gb[1].toUpperCase(); out.jurisdiction = 'GB'; continue }
+      if (/[a-z]/i.test(p) && /\./.test(p)) out.url = p
+    }
+    return out
+  }
+
   async function start(raw: string) {
     const u = raw.trim()
     if (!u || busy) return
-    setBusy(true); setRun(null); setAnswers({}); setQIndex(-1); setUrl(u); finalisedRef.current = null
+    const input = parseStart(u)
+    if (!input.url && !input.registryCode) { push({ kind: 'ai', text: 'Give me a website (salto.ee), an Estonian registry code (8 digits), or a UK company number (gb:12345678).' }); return }
+    setBusy(true); setRun(null); setAnswers({}); setQIndex(-1); setUrl(input.url ?? `${input.jurisdiction}:${input.registryCode}`); finalisedRef.current = null
     push({ kind: 'user', text: u })
-    replaceBuild('BUILDING', [{ text: `Reading ${hostOf(u)}`, status: 'running' }])
+    replaceBuild('BUILDING', [{ text: input.url ? `Reading ${hostOf(input.url)}` : `Looking up ${input.jurisdiction === 'GB' ? 'Companies House' : 'Äriregister'} ${input.registryCode}`, status: 'running' }])
     try {
-      const res = await fetch('/api/ai/practice-setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: u }) })
+      const res = await fetch('/api/ai/practice-setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Could not start')
       const id = body.data.id as string
@@ -230,7 +245,7 @@ export default function PracticeSetupDemo() {
         <form onSubmit={submit} className="p-3 border-t border-surface-200">
           <div className="flex items-center gap-2 rounded-xl border border-surface-300 bg-white px-3 py-2 focus-within:border-accent-400">
             <Globe className="w-4 h-4 text-ink-300" />
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={run && qIndex >= 0 && qIndex < 99 ? 'Type your answer… or /reset' : 'practice-website.ee'} className="flex-1 bg-transparent outline-none text-[14px] placeholder:text-ink-300" disabled={busy} />
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={run && qIndex >= 0 && qIndex < 99 ? 'Type your answer… or /reset' : 'practice-website.ee  ·  or registry code 11038879  ·  or both'} className="flex-1 bg-transparent outline-none text-[14px] placeholder:text-ink-300" disabled={busy} />
             <button type="submit" disabled={busy || !input.trim()} className="w-8 h-8 rounded-full bg-accent-500 text-white flex items-center justify-center disabled:opacity-40">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}</button>
           </div>
           <div className="mt-2 flex items-center justify-between text-[11px] text-ink-300">

@@ -23,6 +23,8 @@ export interface RunAIOptions<S extends ZodTypeAny> {
   schema: S
   /** Optional light normalisation before Zod parse. */
   normalise?: (raw: unknown) => unknown
+  /** Optional deterministic enrichment after validation (e.g. registry facts overlay). May push a stage. */
+  enrich?: (output: z.infer<S>, push: (s: Omit<Stage, 'at'>) => Promise<void>) => Promise<z.infer<S>>
   /** Deterministic mapping from validated output → config. */
   map?: (output: z.infer<S>) => unknown
   /** Aggregate confidence for the run. */
@@ -77,11 +79,13 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
     await push({ name: 'extract', status: 'done', ms: Date.now() - te, detail: `${result.provider}/${result.model}` })
 
     await push({ name: 'map', status: 'running' })
+    let output = parsed.data
+    if (opts.enrich) output = await opts.enrich(output, push)
     const tm = Date.now()
-    const mapping = opts.map ? opts.map(parsed.data) : null
+    const mapping = opts.map ? opts.map(output) : null
     await push({ name: 'map', status: 'done', ms: Date.now() - tm })
 
-    const confidence = opts.confidenceOf ? opts.confidenceOf(parsed.data) : null
+    const confidence = opts.confidenceOf ? opts.confidenceOf(output) : null
 
     return prisma.aIRun.update({
       where: { id: runId },
@@ -89,7 +93,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
         status: 'AWAITING_CONFIRMATION',
         model: `${result.provider}/${result.model}`,
         inputHash,
-        output: parsed.data as any,
+        output: output as any,
         mapping: (mapping ?? undefined) as any,
         confidence,
         latencyMs: Date.now() - t0,
