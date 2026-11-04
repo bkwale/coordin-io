@@ -77,15 +77,25 @@ export function normalisePracticeProfile(raw: unknown): unknown {
   const r = raw as Record<string, any>
   const unwrap = (x: any) => (x && typeof x === 'object' && 'value' in x && 'confidence' in x ? x.value : x)
   if (Array.isArray(r.people)) {
-    r.people = r.people.map((p: any) => ({
-      ...p,
-      name: unwrap(p.name),
-      role: unwrap(p.role),
-      chartered: unwrap(p.chartered),
-      partner: Boolean(unwrap(p.partner)),
-      onLeave: Boolean(unwrap(p.onLeave)),
-    }))
+    r.people = r.people
+      .map((p: any) => ({
+        ...p,
+        name: typeof unwrap(p.name) === 'string' ? String(unwrap(p.name)).trim() : '',
+        role: unwrap(p.role) ?? null,
+        chartered: unwrap(p.chartered) ?? null,
+        partner: Boolean(unwrap(p.partner)),
+        onLeave: Boolean(unwrap(p.onLeave)),
+      }))
+      .filter((p: any) => p.name.length > 1)
+  } else {
+    r.people = []
   }
+  // Lists: coerce null → [] so a missing list never fails validation
+  for (const k of ['procurement', 'municipalities', 'activeProjects', 'languages', 'statedCapabilities']) {
+    if (r[k] && typeof r[k] === 'object' && 'value' in r[k] && !Array.isArray(r[k].value)) r[k].value = r[k].value == null ? [] : [r[k].value]
+    if (!r[k]) r[k] = { value: [], confidence: 0, source: null }
+  }
+  if (!r.signals || typeof r.signals !== 'object') r.signals = {}
   if (r.activeProjects?.value && Array.isArray(r.activeProjects.value)) {
     r.activeProjects.value = r.activeProjects.value.map((p: any) => ({
       name: unwrap(p.name),
