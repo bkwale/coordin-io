@@ -43,7 +43,7 @@ export interface Rule {
   /** Deterministic predicate. Pure. */
   applies: (p: ProjectParameters) => boolean
   /** Short rationale shown to the architect, e.g. 'Gross floor area > 60 m²'. */
-  because?: (p: ProjectParameters) => string
+  because?: (p: ProjectParameters) => string | undefined
   requirement?: string          // the obligation text (what to do / what value)
 }
 
