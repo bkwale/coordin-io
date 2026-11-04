@@ -140,7 +140,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const currentSubRoute = pathname.replace(basePath, '') || ''
 
   const activeTab = useMemo(() =>
-    visibleTabs.find(tab => tab.routes.some(r => currentSubRoute === r || currentSubRoute.startsWith(r + '/')))
+    visibleTabs.find(tab => tab.routes.some(r => currentSubRoute === r || (r !== '' && currentSubRoute.startsWith(r + '/'))))
       ?? visibleTabs[0],
     [visibleTabs, currentSubRoute]
   )
