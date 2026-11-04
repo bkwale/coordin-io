@@ -1240,3 +1240,15 @@ Vercel stays. Pro plan: 300s default / 800s max per function. `maxDuration = 300
 - **Laila** — one-person studio; rules-engine test-case reviewer (sprint 2); first live user (sprint 3); demo rehearsal audience (sprint 4)
 - **Ülar Mark** — Urban Mark OÜ, former EAL chairman; EAL AI working group route to the demo; source of planning-conditions PDFs
 - **Salto Architects** — worked example in the spec (11-person, 16 municipalities); demo org seeded from their public profile
+
+### AI Sprint 1 — Practice Setup from Website (COMPLETE, 4 Nov 2026)
+
+**Live:** `/ai/practice-setup` (platform-admin). Paste a URL → chat on the left streams the build (fetch → read → understand → map) → the right panel renders a mock `<practice>.coordin.io` workspace from the **real extracted data**: headline stats, Team with chartered levels, Projects under construction + portfolio mix, Compliance with municipality profiles, Modules on/off with reasons, Integrations. Then up to 5 follow-up questions with chips; answers adjust the workspace live. Graceful failure path (red card + "try another URL").
+
+**Verified on production:** salto.ee (10 people, 3 partners, 7 chartered, 20 municipalities, 3 under construction — 19s) and vndl.ee (5 people, 2 partners, 2 municipalities, 2 projects with stated dates — 19s). Crawl cached 24h; Mistral extraction 15–18s; ~8K tokens/run.
+
+**Built:** `AIRun` + `PracticeProfile` tables (migration applied); `src/lib/ai/` — `pipeline.ts` (runAI: ingest → extract → validate(Zod) → map → awaiting confirmation, stages persisted for polling), `providers/` (Mistral primary, Claude fallback), `crawl.ts` (robots-aware, 6 pages, Upstash cache), `prompts/practice-setup.ts` (v0.2), `schemas.ts` (Sourced<T> everywhere, tolerant normalisation), `map-practice.ts` (deterministic module decisions with reasons + follow-up questions); routes `POST /api/ai/practice-setup` (202 + background `after()`), `GET /api/ai/runs/[id]`; audit actions `ai.practice_setup_run`, `ai.practice_configured`, `ai.project_configured`.
+
+**Fixes during verification:** nameless people / null lists no longer fail the run; duplicate completion messages; stage lines merged by name; page rendered fullscreen outside the app shell.
+
+**Next (Sprint 2):** rules engine + questionnaire; `confirm` endpoint that applies `OrganisationFeature` flags for a real org; "Switch on Coordin" enabled.
