@@ -1,4 +1,5 @@
 import { VALID_STAGES, isValidStage } from '@/lib/onboarding/stages'
+import { isAppliesTo } from '@/lib/onboarding/seven-day'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -6,7 +7,7 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { requireString, optionalString, optionalNumber, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 
-const VALID_ROLES = ['HR', 'MANAGER', 'IT', 'EMPLOYEE']
+const VALID_ROLES = ['HR', 'MANAGER', 'IT', 'EMPLOYEE', 'ACCOUNTS']
 
 /**
  * Helper to extract templateId from the URL.
@@ -61,6 +62,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const acknowledgementRequired = body.acknowledgementRequired === true
   const dueDate = body.dueDate ? new Date(body.dueDate as string) : null
   const sortOrder = optionalNumber(body.sortOrder, 'sortOrder', { min: 0, max: 999 }) ?? 0
+  if (body.appliesTo !== undefined && !isAppliesTo(body.appliesTo)) throw new ValidationError('appliesTo must be ALL, NEW or EXISTING')
+  const appliesTo = isAppliesTo(body.appliesTo) ? body.appliesTo : 'ALL'
 
   const item = await modulesPrisma.onboardingTemplateItem.create({
     data: {
@@ -78,6 +81,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       acknowledgementRequired,
       dueDate,
       sortOrder,
+      appliesTo,
     },
   })
 
@@ -140,6 +144,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       throw new ValidationError(`responsibleRole must be one of: ${VALID_ROLES.join(', ')}`)
     }
     updateData.responsibleRole = role ?? null
+  }
+  if (body.appliesTo !== undefined) {
+    if (!isAppliesTo(body.appliesTo)) throw new ValidationError('appliesTo must be ALL, NEW or EXISTING')
+    updateData.appliesTo = body.appliesTo
   }
   if (body.daysFromStart !== undefined) {
     updateData.daysFromStart = optionalNumber(body.daysFromStart, 'daysFromStart', { min: 0, max: 365 }) ?? 0

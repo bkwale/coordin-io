@@ -10,19 +10,15 @@ import { sendSelfServiceOnboardingEmail } from '@/lib/email'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import crypto from 'crypto'
 
-const SELF_SERVICE_STEPS = ['PERSONAL_DETAILS', 'BANK_DETAILS', 'HMO_ENROLMENT', 'DOCUMENT_UPLOAD'] as const
+import { selfServiceSteps, SELF_SERVICE_TITLES, isEmployeeType, type EmployeeType } from '@/lib/onboarding/seven-day'
 
-const STEP_TITLES: Record<string, string> = {
-  PERSONAL_DETAILS: 'Confirm your personal details',
-  BANK_DETAILS: 'Submit your bank details for payroll',
-  HMO_ENROLMENT: 'Enrol in health insurance (HMO)',
-  DOCUMENT_UPLOAD: 'Upload and confirm required documents',
-}
+// Invitation link lifetime. The seven-day window itself starts when the employee activates the link.
+const INVITE_VALID_DAYS = 14
 
 /**
  * POST /api/onboarding/self-service/invite — Send a self-service onboarding invitation.
  *
- * Creates an OnboardingSelfServiceToken, generates 4 self-service OnboardingTasks,
+ * Creates an OnboardingSelfServiceToken, generates the self-service OnboardingTasks for the employee type,
  * and sends the branded email with a unique link.
  *
  * Body: { profileId, assignmentId? }
@@ -78,6 +74,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new ConflictError('An active onboarding invitation already exists for this employee. Revoke it first to send a new one.')
   }
 
+  let employeeType: EmployeeType = isEmployeeType(body.employeeType) ? body.employeeType : 'NEW'
   // Verify assignment if provided
   if (assignmentId) {
     const assignment = await modulesPrisma.onboardingAssignment.findFirst({
@@ -86,12 +83,15 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     if (!assignment) {
       throw new NotFoundError('Onboarding assignment not found')
     }
+    if (isEmployeeType(assignment.employeeType)) employeeType = assignment.employeeType
   }
+  // New starters get the full set; existing staff skip contracts/HMO and confirm payroll only when HR asks (Ayo 1.2)
+  const steps = selfServiceSteps(employeeType, { includePayroll: body.includePayroll === true })
 
   // Generate secure token (32 bytes = 64 hex chars)
   const token = crypto.randomBytes(32).toString('hex')
   const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + 7) // 7-day expiry
+  expiresAt.setDate(expiresAt.getDate() + INVITE_VALID_DAYS)
 
   // Create token + self-service tasks in a transaction
   const selfServiceToken = await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
@@ -107,19 +107,28 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       },
     })
 
-    // Create 4 self-service tasks (one per step)
-    // If there's an assignment, attach to it; otherwise create standalone tasks
-    for (let i = 0; i < SELF_SERVICE_STEPS.length; i++) {
-      const step = SELF_SERVICE_STEPS[i]
-      const dueDate = new Date(expiresAt) // Due when token expires
+    // One task per self-service step. Reuse the matching task from the assignment's checklist where
+    // there is one (so the employee does each thing once); otherwise create it.
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]
+      const dueDate = new Date(expiresAt) // Re-dated to the window deadline when the employee activates
+
+      if (assignmentId) {
+        const reused = await tx.onboardingTask.updateMany({
+          where: { assignmentId, assigneeId: targetProfileId, selfServiceStep: step, status: { notIn: ['COMPLETED', 'WAIVED'] } },
+          data: { isSelfService: true },
+        })
+        if (reused.count > 0) continue
+      }
 
       await tx.onboardingTask.create({
         data: {
           assignmentId: assignmentId || undefined,
           assigneeId: targetProfileId,
-          title: STEP_TITLES[step],
+          title: SELF_SERVICE_TITLES[employeeType][step] ?? step,
           stage: 'PRE_START',
           category: 'SELF_SERVICE',
+          responsibleRole: 'EMPLOYEE',
           dueDate,
           status: 'PENDING',
           sortOrder: i + 100, // High sort order to not conflict with template tasks

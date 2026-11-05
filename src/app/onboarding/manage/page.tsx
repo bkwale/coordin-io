@@ -32,6 +32,7 @@ interface TemplateSummary {
   officeName: string | null
   isDefault: boolean
   isActive: boolean
+  kind?: string
   totalItems: number
   stageCounts: Record<string, number>
   assignmentCount: number
@@ -48,6 +49,7 @@ interface TemplateItem {
   requiresEvidence: boolean
   requiresApproval: boolean
   sortOrder: number
+  appliesTo?: string
 }
 
 interface TemplateDetail {
@@ -80,6 +82,16 @@ interface AssignmentSummary {
   completedAt: string | null
   taskSummary: { total: number; completed: number; overdue: number }
   stageBreakdown: Record<string, { total: number; completed: number }>
+  employeeType?: 'NEW' | 'EXISTING'
+  window?: {
+    days: number
+    startAt: string | null
+    dueAt: string | null
+    submittedAt: string | null
+    verifiedAt: string | null
+    state: 'NOT_STARTED' | 'OPEN' | 'OVERDUE' | 'SUBMITTED' | 'VERIFIED'
+    daysRemaining: number | null
+  }
 }
 
 interface OnboardingTaskDetail {
@@ -123,7 +135,20 @@ const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
 const STAGES = CORE_STAGES.map((k) => stageMeta(k))
 const stagesFor = (present: Iterable<string>) => orderedStages(present).map((k) => stageMeta(k))
 
-const RESPONSIBLE_ROLES = ['HR', 'MANAGER', 'IT', 'EMPLOYEE'] as const
+const RESPONSIBLE_ROLES = ['HR', 'MANAGER', 'IT', 'ACCOUNTS', 'EMPLOYEE'] as const
+const APPLIES_TO_LABELS: Record<string, string> = { ALL: 'Everyone', NEW: 'New starters only', EXISTING: 'Existing staff only' }
+
+// Seven-day window chip (Ayo 1.3)
+function windowChip(w: AssignmentSummary['window']): { label: string; color: string } | null {
+  if (!w) return null
+  switch (w.state) {
+    case 'VERIFIED': return { label: 'Verified by HR', color: 'bg-green-100 text-green-800' }
+    case 'SUBMITTED': return { label: 'Submitted — verify', color: 'bg-blue-100 text-blue-800' }
+    case 'OVERDUE': return { label: `Overdue by ${Math.abs(w.daysRemaining ?? 0)}d`, color: 'bg-red-100 text-red-800' }
+    case 'OPEN': return { label: `${w.daysRemaining ?? 0} day${w.daysRemaining === 1 ? '' : 's'} left`, color: (w.daysRemaining ?? 0) <= 2 ? 'bg-amber-100 text-amber-800' : 'bg-ink-100 text-ink-700' }
+    default: return { label: 'Window starts on activation', color: 'bg-gray-100 text-gray-600' }
+  }
+}
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-700',
@@ -135,9 +160,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 const DOC_STATUS_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   NOT_SENT: { label: 'Not Sent', color: 'bg-gray-100 text-gray-600', icon: FileText },
-  SENT: { label: 'Sent', color: 'bg-blue-100 text-blue-700', icon: Send },
+  SENT: { label: 'Assigned', color: 'bg-blue-100 text-blue-700', icon: Send },
+  ASSIGNED: { label: 'Assigned', color: 'bg-blue-100 text-blue-700', icon: Send },
   VIEWED: { label: 'Viewed', color: 'bg-amber-100 text-amber-700', icon: Eye },
   ACKNOWLEDGED: { label: 'Acknowledged', color: 'bg-green-100 text-green-700', icon: FileCheck },
+  AWAITING_SIGNATURE: { label: 'Awaiting signature', color: 'bg-purple-100 text-purple-700', icon: FileText },
+  COMPLETED: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: FileCheck },
 }
 
 /* ================================================================
@@ -161,7 +189,7 @@ export default function OnboardingManagePage() {
   // Item add state
   const [addingItemStage, setAddingItemStage] = useState<string | null>(null)
   const [itemForm, setItemForm] = useState({
-    title: '', category: '', responsibleRole: 'HR',
+    title: '', category: '', responsibleRole: 'HR', appliesTo: 'ALL',
     daysFromStart: 0, requiresEvidence: false, requiresApproval: false,
   })
 
@@ -170,7 +198,11 @@ export default function OnboardingManagePage() {
   const [expandedAssignment, setExpandedAssignment] = useState<string | null>(null)
   const [assignmentTasks, setAssignmentTasks] = useState<Record<string, OnboardingTaskDetail[]> | null>(null)
   const [showAssignForm, setShowAssignForm] = useState(false)
-  const [assignForm, setAssignForm] = useState({ templateId: '', profileId: '', startDate: '' })
+  const [assignForm, setAssignForm] = useState<{ templateId: string; profileId: string; startDate: string; employeeType: 'NEW' | 'EXISTING'; addOnTemplateIds: string[]; startWindowNow: boolean; includePayroll: boolean }>({
+    templateId: '', profileId: '', startDate: '', employeeType: 'NEW', addOnTemplateIds: [], startWindowNow: false, includePayroll: false,
+  })
+  const [creatingDefaults, setCreatingDefaults] = useState(false)
+  const [windowBusy, setWindowBusy] = useState<string | null>(null)
   const [employees, setEmployees] = useState<{ id: string; fullName: string }[]>([])
 
   // Ad-hoc task state
@@ -376,6 +408,7 @@ export default function OnboardingManagePage() {
           title: itemForm.title,
           category: itemForm.category || null,
           responsibleRole: itemForm.responsibleRole,
+          appliesTo: itemForm.appliesTo,
           daysFromStart: itemForm.daysFromStart,
           requiresEvidence: itemForm.requiresEvidence,
           requiresApproval: itemForm.requiresApproval,
@@ -384,7 +417,7 @@ export default function OnboardingManagePage() {
       if (!res.ok) throw new Error('Failed to add item')
       toast('Item added', 'success')
       setAddingItemStage(null)
-      setItemForm({ title: '', category: '', responsibleRole: 'HR', daysFromStart: 0, requiresEvidence: false, requiresApproval: false })
+      setItemForm({ title: '', category: '', responsibleRole: 'HR', appliesTo: 'ALL', daysFromStart: 0, requiresEvidence: false, requiresApproval: false })
       await loadTemplateDetail(templateId)
       // Force re-expand to refresh
       setExpandedTemplate(null)
@@ -428,7 +461,14 @@ export default function OnboardingManagePage() {
       const res = await fetch('/api/onboarding/assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(assignForm),
+        body: JSON.stringify({
+          templateId: assignForm.templateId,
+          profileId: assignForm.profileId,
+          startDate: assignForm.startDate,
+          employeeType: assignForm.employeeType,
+          addOnTemplateIds: assignForm.addOnTemplateIds,
+          ...(assignForm.startWindowNow ? { windowStartDate: new Date().toISOString() } : {}),
+        }),
       })
       if (!res.ok) {
         const json = await res.json()
@@ -439,11 +479,12 @@ export default function OnboardingManagePage() {
       toast('Template assigned successfully', 'success')
       setShowAssignForm(false)
       const savedProfileId = assignForm.profileId
-      setAssignForm({ templateId: '', profileId: '', startDate: '' })
+      const savedPayroll = assignForm.includePayroll
+      setAssignForm({ templateId: '', profileId: '', startDate: '', employeeType: 'NEW', addOnTemplateIds: [], startWindowNow: false, includePayroll: false })
       await fetchAssignments()
       // Auto-send self-service invitation (Cagan: auto-trigger, no manual send)
       if (savedProfileId && newAssignmentId) {
-        handleSendSelfServiceInvite(savedProfileId, newAssignmentId)
+        handleSendSelfServiceInvite(savedProfileId, newAssignmentId, savedPayroll)
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to assign template', 'error')
@@ -542,13 +583,13 @@ export default function OnboardingManagePage() {
 
   // ── Send self-service invitation ───────────────────────
 
-  const handleSendSelfServiceInvite = async (profileId: string, assignmentId: string) => {
+  const handleSendSelfServiceInvite = async (profileId: string, assignmentId: string, includePayroll = false) => {
     setSendingInvite(profileId)
     try {
       const res = await fetch('/api/onboarding/self-service/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId, assignmentId }),
+        body: JSON.stringify({ profileId, assignmentId, includePayroll }),
       })
       if (!res.ok) {
         const json = await res.json()
@@ -557,7 +598,7 @@ export default function OnboardingManagePage() {
       toast('Self-service onboarding invitation sent', 'success')
       setSelfServiceStatus(prev => ({
         ...prev,
-        [profileId]: { sent: true, completedSteps: 0, totalSteps: 4 },
+        [profileId]: { sent: true, completedSteps: 0, totalSteps: 0 },
       }))
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to send invitation', 'error')
@@ -568,11 +609,57 @@ export default function OnboardingManagePage() {
 
   // ── Render: Templates Tab ────────────────────────────────
 
+  // ── Seven-day window actions (HR) ────────────────────────
+
+  const handleWindow = async (assignmentId: string, action: 'start' | 'extend' | 'submit' | 'verify', extra: Record<string, unknown> = {}) => {
+    setWindowBusy(assignmentId)
+    try {
+      const res = await fetch(`/api/onboarding/assignments/${assignmentId}/window`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...extra }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Could not update the onboarding window')
+      toast(action === 'verify' ? 'Onboarding verified' : action === 'extend' ? 'Deadline extended' : action === 'start' ? 'Seven-day window started' : 'Submitted for verification', 'success')
+      await fetchAssignments()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not update the onboarding window', 'error')
+    } finally {
+      setWindowBusy(null)
+    }
+  }
+
+  const handleCreateDefaults = async () => {
+    setCreatingDefaults(true)
+    try {
+      const res = await fetch('/api/onboarding/templates/defaults', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Could not create the standard templates')
+      const n = json.data?.created?.length ?? 0
+      toast(n ? `Created ${n} template${n === 1 ? '' : 's'} — review and edit before assigning` : 'The standard templates already exist', 'success')
+      await fetchTemplates()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not create the standard templates', 'error')
+    } finally {
+      setCreatingDefaults(false)
+    }
+  }
+
   function renderTemplatesTab() {
     return (
       <div className="space-y-4 mt-4">
-        {/* Create button */}
-        <div className="flex justify-end">
+        {/* Create buttons */}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={handleCreateDefaults}
+            disabled={creatingDefaults}
+            title="Creates the standard 7-day core template and five role add-ons for you to review and edit"
+            className="flex items-center gap-2 px-4 py-2 border border-ink-200 text-ink-700 rounded-lg text-[13px] font-medium hover:bg-ink-25 disabled:opacity-50"
+          >
+            {creatingDefaults ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />}
+            Create standard 7-day templates
+          </button>
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
             className="flex items-center gap-2 px-4 py-2 bg-ink-900 text-white rounded-lg text-[13px] font-medium hover:bg-ink-800 transition-colors"
@@ -699,6 +786,11 @@ export default function OnboardingManagePage() {
                           Default
                         </span>
                       )}
+                      {t.kind === 'ADDON' && (
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-semibold uppercase">
+                          Role add-on
+                        </span>
+                      )}
                     </div>
                     <div className="text-[12px] text-ink-400 mt-0.5">
                       {t.roleLevel !== 'Not provided' ? t.roleLevel : 'All roles'} &middot; {t.totalItems} item{t.totalItems !== 1 ? 's' : ''} &middot; {t.assignmentCount} assignment{t.assignmentCount !== 1 ? 's' : ''}
@@ -752,7 +844,7 @@ export default function OnboardingManagePage() {
                           <button
                             onClick={() => {
                               setAddingItemStage(addingItemStage === stage.key ? null : stage.key)
-                              setItemForm({ title: '', category: '', responsibleRole: 'HR', daysFromStart: 0, requiresEvidence: false, requiresApproval: false })
+                              setItemForm({ title: '', category: '', responsibleRole: 'HR', appliesTo: 'ALL', daysFromStart: 0, requiresEvidence: false, requiresApproval: false })
                             }}
                             className="flex items-center gap-1 text-[11px] text-ink-500 hover:text-ink-700"
                           >
@@ -784,6 +876,16 @@ export default function OnboardingManagePage() {
                               >
                                 {RESPONSIBLE_ROLES.map((r) => (
                                   <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                              <select
+                                value={itemForm.appliesTo}
+                                onChange={(e) => setItemForm({ ...itemForm, appliesTo: e.target.value })}
+                                className="px-2 py-1.5 border border-ink-200 rounded text-[12px]"
+                                title="Which employees get this task"
+                              >
+                                {Object.entries(APPLIES_TO_LABELS).map(([k, v]) => (
+                                  <option key={k} value={k}>{v}</option>
                                 ))}
                               </select>
                             </div>
@@ -848,6 +950,9 @@ export default function OnboardingManagePage() {
                                   <div className="flex items-center gap-3 mt-0.5 text-[11px] text-ink-400">
                                     {item.category && <span>{item.category}</span>}
                                     <span>{item.responsibleRole ?? 'Not provided'}</span>
+                                    {item.appliesTo && item.appliesTo !== 'ALL' && (
+                                      <span className="px-1.5 py-0.5 bg-ink-100 text-ink-600 rounded text-[10px]">{APPLIES_TO_LABELS[item.appliesTo]}</span>
+                                    )}
                                     <span>Day {item.daysFromStart}</span>
                                     {item.requiresEvidence && <span className="text-amber-600">Evidence</span>}
                                     {item.requiresApproval && <span className="text-blue-600">Approval</span>}
@@ -907,7 +1012,7 @@ export default function OnboardingManagePage() {
                   className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
                 >
                   <option value="">Select template...</option>
-                  {templates.map((t) => (
+                  {templates.filter((t) => t.kind !== 'ADDON').map((t) => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>
@@ -934,6 +1039,67 @@ export default function OnboardingManagePage() {
                   className="w-full px-3 py-2 border border-ink-200 rounded-lg text-[13px]"
                 />
               </div>
+            </div>
+            {/* Employee type (Ayo 1.2) */}
+            <div>
+              <label className="block text-[12px] font-medium text-ink-500 mb-1">Who is this for? *</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {([
+                  ['NEW', 'New employee', 'Joining CWA for the first time — contract, payroll, equipment, probation.'],
+                  ['EXISTING', 'Existing employee', 'Already employed, joining Coordin — keeps start date, leave and probation status. No re-signing contracts.'],
+                ] as const).map(([value, label, hint]) => (
+                  <label key={value} className={`flex items-start gap-2 p-3 border rounded-lg cursor-pointer ${assignForm.employeeType === value ? 'border-ink-900 bg-ink-25' : 'border-ink-200'}`}>
+                    <input
+                      type="radio"
+                      name="employeeType"
+                      checked={assignForm.employeeType === value}
+                      onChange={() => setAssignForm({ ...assignForm, employeeType: value })}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-[13px] font-medium text-ink-900">{label}</span>
+                      <span className="block text-[11px] text-ink-500 mt-0.5">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {/* Role add-ons (Ayo 1.6) */}
+            {templates.some((t) => t.kind === 'ADDON') && (
+              <div>
+                <label className="block text-[12px] font-medium text-ink-500 mb-1">Role add-ons (optional)</label>
+                <div className="flex flex-wrap gap-2">
+                  {templates.filter((t) => t.kind === 'ADDON').map((t) => {
+                    const on = assignForm.addOnTemplateIds.includes(t.id)
+                    return (
+                      <label key={t.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-[12px] cursor-pointer ${on ? 'border-ink-900 bg-ink-25 text-ink-900' : 'border-ink-200 text-ink-600'}`}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => setAssignForm({
+                            ...assignForm,
+                            addOnTemplateIds: on ? assignForm.addOnTemplateIds.filter((x) => x !== t.id) : [...assignForm.addOnTemplateIds, t.id],
+                          })}
+                        />
+                        {t.name.replace(/^Add-on:\s*/i, '')}
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-ink-400 mt-1">Tasks already in the core template aren&apos;t duplicated.</p>
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5 text-[12px] text-ink-600">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={assignForm.startWindowNow} onChange={(e) => setAssignForm({ ...assignForm, startWindowNow: e.target.checked })} />
+                Start the seven-day window now (otherwise it starts when the employee opens their invitation)
+              </label>
+              {assignForm.employeeType === 'EXISTING' && (
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={assignForm.includePayroll} onChange={(e) => setAssignForm({ ...assignForm, includePayroll: e.target.checked })} />
+                  Ask them to confirm payroll details
+                </label>
+              )}
             </div>
             <div className="flex gap-2 justify-end">
               <button
@@ -981,7 +1147,17 @@ export default function OnboardingManagePage() {
                     <span className="text-[14px] font-medium text-ink-900">{a.employee.fullName}</span>
                     <div className="text-[12px] text-ink-400 mt-0.5">
                       {a.template.name} &middot; Started {new Date(a.startDate).toLocaleDateString()}
+                      {a.employeeType === 'EXISTING' && <> &middot; Existing employee</>}
                     </div>
+                    {(() => {
+                      const chip = windowChip(a.window)
+                      return chip ? (
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${chip.color}`}>
+                          {chip.label}
+                          {a.window?.dueAt && a.window.state !== 'VERIFIED' && <> &middot; due {new Date(a.window.dueAt).toLocaleDateString()}</>}
+                        </span>
+                      ) : null
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -1012,6 +1188,32 @@ export default function OnboardingManagePage() {
               {/* Stage breakdown */}
               {expandedAssignment === a.id && (
                 <div className="border-t border-ink-100">
+                  {/* Seven-day window controls (Ayo 1.3) */}
+                  {a.window && (
+                    <div className="px-4 py-2.5 flex flex-wrap items-center gap-2 bg-ink-25 border-b border-ink-100 text-[12px]">
+                      <span className="text-ink-600 font-medium">Employee window:</span>
+                      <span className="text-ink-500">
+                        {a.window.startAt ? `started ${new Date(a.window.startAt).toLocaleDateString()}` : 'not started'}
+                        {a.window.submittedAt && <> &middot; submitted {new Date(a.window.submittedAt).toLocaleDateString()}</>}
+                        {a.window.verifiedAt && <> &middot; verified {new Date(a.window.verifiedAt).toLocaleDateString()}</>}
+                      </span>
+                      <span className="flex-1" />
+                      {a.window.state === 'NOT_STARTED' && (
+                        <button disabled={windowBusy === a.id} onClick={() => handleWindow(a.id, 'start')} className="px-2.5 py-1 border border-ink-200 rounded-lg hover:bg-white disabled:opacity-50">Start now</button>
+                      )}
+                      {(a.window.state === 'OPEN' || a.window.state === 'OVERDUE') && (
+                        <>
+                          <button disabled={windowBusy === a.id} onClick={() => handleWindow(a.id, 'extend', { days: 3 })} className="px-2.5 py-1 border border-ink-200 rounded-lg hover:bg-white disabled:opacity-50">Extend 3 days</button>
+                          <button disabled={windowBusy === a.id} onClick={() => handleWindow(a.id, 'extend', { days: 7 })} className="px-2.5 py-1 border border-ink-200 rounded-lg hover:bg-white disabled:opacity-50">Extend 7 days</button>
+                        </>
+                      )}
+                      {a.window.state === 'SUBMITTED' && (
+                        <button disabled={windowBusy === a.id} onClick={() => handleWindow(a.id, 'verify')} className="flex items-center gap-1 px-2.5 py-1 bg-ink-900 text-white rounded-lg disabled:opacity-50">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Verify onboarding
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {/* Stage progress bars */}
                   <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                     {stagesFor(Object.keys(a.stageBreakdown ?? {}).filter((k) => (a.stageBreakdown[k]?.total ?? 0) > 0)).map((stage) => {
@@ -1248,6 +1450,26 @@ export default function OnboardingManagePage() {
                                         >
                                           <Eye className="w-3.5 h-3.5" />
                                           Viewed
+                                        </button>
+                                      )}
+                                      {(task.documentStatus === 'VIEWED' || task.documentStatus === 'ACKNOWLEDGED') && (
+                                        <button
+                                          onClick={() => handleDocStatus(a.id, task.id, 'AWAITING_SIGNATURE')}
+                                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-purple-700 hover:bg-purple-50 rounded transition-colors"
+                                          title="Mark as awaiting signature"
+                                        >
+                                          <FileText className="w-3.5 h-3.5" />
+                                          Needs signature
+                                        </button>
+                                      )}
+                                      {task.documentStatus === 'AWAITING_SIGNATURE' && (
+                                        <button
+                                          onClick={() => handleDocStatus(a.id, task.id, 'COMPLETED')}
+                                          className="flex items-center gap-1 px-2 py-1 text-[11px] text-green-700 hover:bg-green-50 rounded transition-colors"
+                                          title="Signed — mark document completed"
+                                        >
+                                          <FileCheck className="w-3.5 h-3.5" />
+                                          Signed
                                         </button>
                                       )}
                                       {task.status !== 'COMPLETED' && task.status !== 'WAIVED' && (

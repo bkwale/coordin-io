@@ -68,6 +68,15 @@ type AssignmentData = {
   status: string
   progress: number
   template: { id: string; name: string }
+  window?: {
+    days: number
+    startAt: string | null
+    dueAt: string | null
+    submittedAt: string | null
+    verifiedAt: string | null
+    state: 'NOT_STARTED' | 'OPEN' | 'OVERDUE' | 'SUBMITTED' | 'VERIFIED'
+    daysRemaining: number | null
+  }
 }
 
 type OnboardingTask = {
@@ -416,6 +425,25 @@ export default function OnboardingPage() {
   }
 
   // ── Can proceed checks ────────────────────────────────
+  const handleSubmitOnboarding = async () => {
+    if (!assignment) return
+    setActionLoading('submit-onboarding')
+    try {
+      const res = await fetch(`/api/onboarding/assignments/${assignment.id}/window`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'submit' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Could not submit')
+      setAssignment((prev) => prev && prev.window ? { ...prev, window: { ...prev.window, state: 'SUBMITTED', submittedAt: new Date().toISOString() } } : prev)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not submit')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const canProceedFromPolicies = progress?.policies?.completed ?? false
   const canProceedFromTraining = progress?.training?.completed ?? false
   const canFinish = canProceedFromPolicies && canProceedFromTraining
@@ -496,6 +524,31 @@ export default function OnboardingPage() {
               </div>
               <span className="text-[13px] font-semibold text-ink-700 w-12 text-right">{progressPct}%</span>
             </div>
+            {/* Seven-day window (Ayo 1.3) */}
+            {assignment.window && assignment.window.state !== 'NOT_STARTED' && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-[13px]">
+                {assignment.window.state === 'OPEN' && (
+                  <span className={(assignment.window.daysRemaining ?? 0) <= 2 ? 'text-amber-700 font-medium' : 'text-ink-600'}>
+                    {assignment.window.daysRemaining} day{assignment.window.daysRemaining === 1 ? '' : 's'} left
+                    {assignment.window.dueAt && <> &middot; due {new Date(assignment.window.dueAt).toLocaleDateString()}</>}
+                  </span>
+                )}
+                {assignment.window.state === 'OVERDUE' && (
+                  <span className="text-red-700 font-medium">Your onboarding deadline has passed — please finish and submit, or speak to HR</span>
+                )}
+                {assignment.window.state === 'SUBMITTED' && <span className="text-blue-700">Submitted — HR is checking your onboarding</span>}
+                {assignment.window.state === 'VERIFIED' && <span className="text-emerald-700">Verified by HR. You&apos;re all set.</span>}
+                {(assignment.window.state === 'OPEN' || assignment.window.state === 'OVERDUE') && (
+                  <button
+                    onClick={handleSubmitOnboarding}
+                    disabled={actionLoading === 'submit-onboarding'}
+                    className="ml-auto px-3 py-1.5 bg-ink-900 text-white rounded-lg text-[12px] font-medium disabled:opacity-50"
+                  >
+                    {actionLoading === 'submit-onboarding' ? 'Submitting…' : 'Submit for HR verification'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </header>
 

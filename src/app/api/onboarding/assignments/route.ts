@@ -5,10 +5,11 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { requireString, requireDate, parseBody } from '@/lib/validation'
-import { NotFoundError, PermissionError, ConflictError } from '@/lib/errors'
+import { NotFoundError, PermissionError, ConflictError, ValidationError } from '@/lib/errors'
 import { recordAuditEvent } from '@/lib/audit'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { getEffectiveProbationMonths } from '@/lib/org-settings'
+import { isEmployeeType, planTasks, normaliseWindowDays, windowFor, windowState, daysRemaining, type EmployeeType } from '@/lib/onboarding/seven-day'
 
 /**
  * GET /api/onboarding/assignments — List onboarding assignments.
@@ -79,6 +80,13 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     createdAt: Date
     template: { id: string; name: string; roleLevel: string | null }
     tasks: { id: string; status: string; stage: string; dueDate: Date | null }[]
+    employeeType?: string
+    addOnTemplateIds?: string[]
+    windowDays?: number
+    windowStartAt?: Date | null
+    windowDueAt?: Date | null
+    submittedAt?: Date | null
+    verifiedAt?: Date | null
   }) => {
     const tasks = a.tasks
     const total = tasks.length
@@ -119,6 +127,17 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       createdAt: a.createdAt,
       taskSummary: { total, completed, overdue },
       stageBreakdown,
+      employeeType: a.employeeType ?? 'NEW',
+      addOnTemplateIds: a.addOnTemplateIds ?? [],
+      window: {
+        days: a.windowDays ?? 7,
+        startAt: a.windowStartAt ?? null,
+        dueAt: a.windowDueAt ?? null,
+        submittedAt: a.submittedAt ?? null,
+        verifiedAt: a.verifiedAt ?? null,
+        state: windowState({ windowStartAt: a.windowStartAt ?? null, windowDueAt: a.windowDueAt ?? null, submittedAt: a.submittedAt ?? null, verifiedAt: a.verifiedAt ?? null }),
+        daysRemaining: daysRemaining({ windowDueAt: a.windowDueAt ?? null }),
+      },
     }
   })
 
@@ -142,6 +161,14 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const templateId = requireString(body.templateId, 'templateId')
   const targetProfileId = requireString(body.profileId, 'profileId')
   const startDate = requireDate(body.startDate, 'startDate')
+  // Seven-day framework: NEW starters vs EXISTING staff joining Coordin; role add-ons; window length
+  const employeeType: EmployeeType = body.employeeType === undefined ? 'NEW' : isEmployeeType(body.employeeType) ? body.employeeType : (() => { throw new ValidationError('employeeType must be NEW or EXISTING') })()
+  const addOnTemplateIds: string[] = Array.isArray(body.addOnTemplateIds)
+    ? [...new Set((body.addOnTemplateIds as unknown[]).filter((x): x is string => typeof x === 'string' && x !== templateId))].slice(0, 10)
+    : []
+  const windowDays = normaliseWindowDays(body.windowDays)
+  // HR may start the window on a chosen date; otherwise it starts when the employee activates their invitation
+  const windowStart = body.windowStartDate ? requireDate(body.windowStartDate, 'windowStartDate') : null
 
   // Verify template belongs to org and is active
   const template = await modulesPrisma.onboardingTemplate.findFirst({
@@ -151,6 +178,13 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (!template) {
     throw new NotFoundError('Template not found or inactive')
   }
+  const addOns = addOnTemplateIds.length
+    ? await modulesPrisma.onboardingTemplate.findMany({
+        where: { id: { in: addOnTemplateIds }, organisationId: profile.organisationId, isActive: true },
+        include: { items: { orderBy: { sortOrder: 'asc' } } },
+      })
+    : []
+  if (addOns.length !== addOnTemplateIds.length) throw new NotFoundError('One or more add-on templates were not found or are inactive')
 
   // Verify target profile is in same org
   const targetProfile = await modulesPrisma.profile.findUnique({
@@ -185,38 +219,16 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         startDate,
         status: 'ACTIVE',
         progress: 0,
+        employeeType,
+        addOnTemplateIds: addOns.map((t: { id: string }) => t.id),
+        windowDays,
+        ...(windowStart ? windowFor(windowStart, windowDays) : {}),
       },
     })
 
-    // Create tasks from template items
-    const tasksData = template.items.map((item: {
-      id: string
-      stage: string
-      category: string | null
-      title: string
-      daysFromStart: number
-      responsibleRole: string | null
-      sortOrder: number
-    }) => {
-      // Calculate due date: startDate + daysFromStart
-      const dueDate = new Date(startDate)
-      dueDate.setDate(dueDate.getDate() + item.daysFromStart)
-
-      // Determine assignee: EMPLOYEE tasks go to the employee, others stay null for manager to assign
-      const assigneeId = item.responsibleRole === 'EMPLOYEE' ? targetProfileId : null
-
-      return {
-        assignmentId: newAssignment.id,
-        templateItemId: item.id,
-        assigneeId,
-        title: item.title,
-        stage: item.stage,
-        category: item.category,
-        dueDate,
-        status: 'PENDING',
-        sortOrder: item.sortOrder,
-      }
-    })
+    // Core + add-on items → tasks: filtered by employee type, no duplicates, employee tasks due inside the window
+    const planned = planTasks({ core: template, addOns, employeeType, employeeId: targetProfileId, startDate, windowDays })
+    const tasksData = planned.map((t) => ({ assignmentId: newAssignment.id, status: 'PENDING', ...t }))
 
     if (tasksData.length > 0) {
       await tx.onboardingTask.createMany({ data: tasksData })
@@ -227,6 +239,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   // Auto-generate probation reviews if none exist for this employee
   try {
+    // Existing staff keep their service history and settled probation (Ayo 1.2)
+    if (employeeType === 'EXISTING') throw new SkipProbation()
     const existingReviews = await modulesPrisma.probationReview.count({
       where: { profileId: targetProfileId },
     })
@@ -314,7 +328,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     action: 'onboarding_assignment.created',
     entityType: 'OnboardingAssignment',
     entityId: assignment.id,
-    metadata: { templateId, targetProfileId, templateName: template.name },
+    metadata: { templateId, targetProfileId, templateName: template.name, employeeType, addOnTemplateIds: addOns.map((t: { id: string }) => t.id), windowDays },
   })
 
   // Return full assignment with tasks

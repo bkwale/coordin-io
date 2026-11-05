@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isAppliesTo } from '@/lib/onboarding/seven-day'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -59,6 +60,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     region: string | null
     isDefault: boolean
     isActive: boolean
+    kind?: string
     createdAt: Date
     updatedAt: Date
     items: { id: string; stage: string }[]
@@ -79,6 +81,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       officeName: t.office?.name ?? null,
       isDefault: t.isDefault,
       isActive: t.isActive,
+      kind: t.kind ?? 'CORE',
       totalItems: t.items.length,
       stageCounts,
       assignmentCount: t._count.assignments,
@@ -109,6 +112,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const officeId = optionalString(body.officeId, 'officeId', 50)
   const region = optionalString(body.region, 'region', 10)
   const isDefault = body.isDefault === true
+  const kind = body.kind === 'ADDON' ? 'ADDON' : 'CORE'
 
   // If setting as default, unset any existing default
   if (isDefault) {
@@ -134,6 +138,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     acknowledgementRequired: item.acknowledgementRequired === true,
     dueDate: item.dueDate ? new Date(item.dueDate as string) : null,
     sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : index,
+    appliesTo: isAppliesTo(item.appliesTo) ? item.appliesTo : 'ALL',
   }))
 
   const template = await modulesPrisma.onboardingTemplate.create({
@@ -144,7 +149,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       description: description ?? null,
       officeId: officeId ?? null,
       region: region ?? null,
-      isDefault,
+      isDefault: kind === 'ADDON' ? false : isDefault,
+      kind,
       items: itemsData.length > 0 ? { create: itemsData } : undefined,
     },
     include: {

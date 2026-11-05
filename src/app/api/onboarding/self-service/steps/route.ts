@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { markSubmittedFromSelfService } from '@/lib/onboarding/window-service'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
@@ -141,6 +142,8 @@ export async function POST(request: NextRequest) {
       where: { id: selfServiceToken.id },
       data: { completedAt: new Date() },
     })
+    // Completing every step is the employee's submission for HR verification (Ayo 1.2 step 7)
+    try { await markSubmittedFromSelfService(selfServiceToken.assignmentId ?? null) } catch (e) { console.warn('[self-service] submission record failed', e) }
   }
 
   await recordAuditEvent({

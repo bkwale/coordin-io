@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { startWindowOnActivation } from '@/lib/onboarding/window-service'
 
 /**
  * GET /api/onboarding/self-service/verify?token=xxx
@@ -69,6 +70,8 @@ export async function GET(request: NextRequest) {
       data: { usedAt: new Date() },
     })
   }
+  // Seven-day window starts when the employee activates (unless HR already started it)
+  try { await startWindowOnActivation(selfServiceToken.assignmentId ?? null, selfServiceToken.id) } catch (e) { console.warn('[self-service] window start failed', e) }
 
   // Get self-service task progress
   const tasks = await modulesPrisma.onboardingTask.findMany({
