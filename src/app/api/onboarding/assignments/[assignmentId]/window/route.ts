@@ -6,8 +6,8 @@ import { parseBody, optionalDate } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError, ConflictError } from '@/lib/errors'
 import { recordAuditEvent } from '@/lib/audit'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
-import { windowFor, extendedDueDate, normaliseWindowDays, windowState, daysRemaining } from '@/lib/onboarding/seven-day'
-import { notifyHR, openEmployeeTasks } from '@/lib/onboarding/window-service'
+import { windowFor, extendedDueDate, normaliseWindowDays, windowState, daysRemaining, formatDueDate } from '@/lib/onboarding/seven-day'
+import { notifyHR, openEmployeeTasks, applyWindowDates, completeFinalVerificationTasks } from '@/lib/onboarding/window-service'
 
 const ACTIONS = ['start', 'extend', 'submit', 'verify'] as const
 type Action = typeof ACTIONS[number]
@@ -72,25 +72,21 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     Object.assign(data, { verifiedAt: now, verifiedById: profile.id })
   }
 
-  // Optimistic: only write if the record hasn't moved since we read it
-  const res = await modulesPrisma.onboardingAssignment.updateMany({
-    where: { id: assignment.id, updatedAt: assignment.updatedAt },
-    data,
+  // All-or-nothing: the assignment update (optimistic on updatedAt), task due dates, the invitation
+  // link and the final-verification tasks move together or not at all
+  await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
+    const res = await tx.onboardingAssignment.updateMany({
+      where: { id: assignment.id, updatedAt: assignment.updatedAt },
+      data,
+    })
+    if (res.count !== 1) throw new ConflictError('Someone else just changed this onboarding — reload and try again')
+    if (action === 'extend' || action === 'start') {
+      await applyWindowDates(tx, assignment.id, assignment.profileId, data.windowDueAt as Date)
+    }
+    if (action === 'submit' || action === 'verify') {
+      await completeFinalVerificationTasks(tx, assignment.id, assignment.profileId, action, profile.id)
+    }
   })
-  if (res.count !== 1) throw new ConflictError('Someone else just changed this onboarding — reload and try again')
-
-  if (action === 'extend' || action === 'start') {
-    // The employee's open tasks that were due by the old deadline now fall due at the new one
-    await modulesPrisma.onboardingTask.updateMany({
-      where: { assignmentId: assignment.id, assigneeId: assignment.profileId, status: { notIn: ['COMPLETED', 'WAIVED'] }, OR: [{ dueDate: null }, { dueDate: { lt: data.windowDueAt as Date } }, { isSelfService: true }] },
-      data: { dueDate: data.windowDueAt as Date },
-    })
-    // Keep the employee's invitation link alive until the new deadline
-    await modulesPrisma.onboardingSelfServiceToken.updateMany({
-      where: { assignmentId: assignment.id, revokedAt: null, completedAt: null, expiresAt: { lt: data.windowDueAt as Date } },
-      data: { expiresAt: data.windowDueAt as Date },
-    })
-  }
 
   await recordAuditEvent({
     organisationId: profile.organisationId,
@@ -110,7 +106,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       await createNotification({
         profileId: assignment.profileId,
         type: NOTIFICATION_EVENTS.ONBOARDING_TASK_DUE,
-        title: `Your onboarding is due by ${(data.windowDueAt as Date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`,
+        title: `Your onboarding is due by ${formatDueDate(data.windowDueAt as Date)}`,
         linkUrl: '/onboarding',
       })
     }

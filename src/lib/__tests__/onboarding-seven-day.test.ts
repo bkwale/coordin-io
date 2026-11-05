@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   itemApplies, windowState, daysRemaining, reminderDue, missedNotificationDue, extendedDueDate, windowFor,
-  selfServiceSteps, planTasks, selfServiceStepFor, normaliseWindowDays, ONBOARDING_CATEGORIES, documentStatusLabel, addDays,
+  selfServiceSteps, planTasks, selfServiceStepFor, normaliseWindowDays, ONBOARDING_CATEGORIES, documentStatusLabel, addDays, endOfDayIn, formatDueDate,
 } from '@/lib/onboarding/seven-day'
 import { CORE_TEMPLATE, ADDON_TEMPLATES } from '@/lib/onboarding/default-templates'
 
@@ -46,11 +46,28 @@ describe('seven-day window', () => {
     expect(missedNotificationDue({ ...open, missedNotifiedAt: D('2026-11-10T00:00:00Z') }, D('2026-11-11T00:00:00Z'))).toBe(false)
   })
 
-  it('extending adds days to the later of the current deadline and now', () => {
+  it('extending adds days to the later of the current deadline and now, ending at end of day', () => {
     const now = D('2026-11-05T00:00:00Z')
-    expect(extendedDueDate(open.windowDueAt, 3, now).toISOString()).toBe(addDays(open.windowDueAt, 3).toISOString())
+    expect(extendedDueDate(open.windowDueAt, 3, now).toISOString()).toBe(endOfDayIn(addDays(open.windowDueAt, 3)).toISOString())
     const late = D('2026-11-20T00:00:00Z')
-    expect(extendedDueDate(open.windowDueAt, 3, late).toISOString()).toBe(addDays(late, 3).toISOString())
+    expect(extendedDueDate(open.windowDueAt, 3, late).toISOString()).toBe('2026-11-23T22:59:59.000Z')
+  })
+
+  it('deadlines are end of day in the organisation time zone (Lagos, UTC+1)', () => {
+    // Activated 16:00 Lagos on 5 Nov → day 7 is 11 Nov → due 23:59:59 Lagos = 22:59:59Z
+    const w = windowFor(D('2026-11-05T15:00:00Z'), 7, 'Africa/Lagos')
+    expect(w.windowDueAt.toISOString()).toBe('2026-11-11T22:59:59.000Z')
+    // 23:30 Lagos is already the next calendar day in UTC terms? No: 22:30Z is still 5 Nov in Lagos
+    expect(endOfDayIn(D('2026-11-05T22:30:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-11-05T22:59:59.000Z')
+    expect(endOfDayIn(D('2026-11-05T23:30:00Z'), 'Africa/Lagos').toISOString()).toBe('2026-11-06T22:59:59.000Z')
+    expect(endOfDayIn(D('2026-07-01T10:00:00Z'), 'Europe/London').toISOString()).toBe('2026-07-01T22:59:59.000Z') // BST
+    expect(formatDueDate('2026-11-11T22:59:59.000Z', 'Africa/Lagos')).toBe('11 November')
+  })
+
+  it('after an extension, reminders follow the new length', () => {
+    const extended = { windowStartAt: start, windowDueAt: endOfDayIn(addDays(start, 13)), submittedAt: null, verifiedAt: null, remindersSent: [3, 5, 7] }
+    // Day 10 of a now-14-day window: scaled day-5 reminder (10) is due and wasn't sent
+    expect(reminderDue(extended, D('2026-11-11T10:00:00Z'))).toBe(10)
   })
 
   it('window length is clamped', () => {

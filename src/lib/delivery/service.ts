@@ -36,14 +36,19 @@ export async function applyFramework(opts: {
   try { built = buildStages(opts.framework, { accorOverlay: !!opts.accorOverlay, customStages: opts.customStages }) }
   catch (e) { throw new ValidationError(e instanceof Error ? e.message : 'Invalid stages') }
 
-  const existing = await prisma.deliveryStage.findMany({ where: { projectId: opts.projectId }, select: { id: true, decision: true, items: { where: { status: { not: 'OPEN' } }, select: { id: true }, take: 1 } } })
-  if (existing.some((s) => s.decision || s.items.length)) {
-    throw new ConflictError('This project already has gate decisions or completed items. Stages can no longer be replaced.')
-  }
-
   const templateVersion = TEMPLATE_VERSIONS[opts.framework]
+  let replaced = 0
   await prisma.$transaction(async (tx) => {
-    if (existing.length) await tx.deliveryStage.deleteMany({ where: { projectId: opts.projectId } })
+    // Check and replace in one transaction so a decision recorded in between can't be wiped
+    const existing = await tx.deliveryStage.findMany({ where: { projectId: opts.projectId }, select: { id: true, decision: true, items: { where: { status: { not: 'OPEN' } }, select: { id: true }, take: 1 } } })
+    if (existing.some((s) => s.decision || s.items.length)) {
+      throw new ConflictError('This project already has gate decisions or completed items. Stages can no longer be replaced.')
+    }
+    replaced = existing.length
+    if (existing.length) {
+      const del = await tx.deliveryStage.deleteMany({ where: { projectId: opts.projectId, decision: null } })
+      if (del.count !== existing.length) throw new ConflictError('A gate decision was just recorded — reload before changing the framework')
+    }
     await tx.project.update({ where: { id: opts.projectId }, data: { deliveryFramework: opts.framework, accorOverlay: opts.framework === 'CWA' && !!opts.accorOverlay } })
     for (const s of built) {
       const stage = await tx.deliveryStage.create({
@@ -59,10 +64,29 @@ export async function applyFramework(opts: {
 
   await recordAuditEvent({
     organisationId: opts.organisationId, actorId: opts.actorId, action: 'project.delivery_framework_applied', entityType: 'project', entityId: opts.projectId,
-    metadata: { framework: opts.framework, templateVersion, accorOverlay: !!opts.accorOverlay, stages: built.length, items: built.reduce((n, s) => n + s.items.length, 0), replaced: existing.length },
+    metadata: { framework: opts.framework, templateVersion, accorOverlay: !!opts.accorOverlay, stages: built.length, items: built.reduce((n, s) => n + s.items.length, 0), replaced },
   })
   return getDelivery(opts.projectId)
 }
+
+/** Parse an optional date field; bad input is a 400, not a 500. */
+function optDate(v: unknown, field: string): Date | null | undefined {
+  if (v === undefined) return undefined
+  if (v === null || v === '') return null
+  const d = new Date(String(v))
+  if (isNaN(+d)) throw new ValidationError(`${field} is not a valid date`)
+  return d
+}
+
+/** Assignees must be current members of this project. */
+async function assertProjectMember(projectId: string, profileId: string | null | undefined): Promise<void> {
+  if (!profileId) return
+  const m = await prisma.projectMembership.findUnique({ where: { projectId_profileId: { projectId, profileId } }, select: { removedAt: true } })
+  if (!m || m.removedAt) throw new ValidationError('The assignee must be a member of this project')
+}
+
+/** Once a gate is passed its checklist is the evidence for that decision; only open items can still move. */
+const isDecided = (decision: string | null) => decision === 'PASS' || decision === 'CONDITIONAL_PASS'
 
 async function stageInProject(projectId: string, stageId: string) {
   const stage = await prisma.deliveryStage.findUnique({ where: { id: stageId }, include: { items: true } })
@@ -104,6 +128,10 @@ export async function decideGate(projectId: string, stageId: string, body: Recor
   const openItems = Array.isArray(body.openItems) ? (body.openItems as { title?: string; assigneeId?: string; dueDate?: string }[]).slice(0, 50) : []
   const problems = gateDecisionProblems(stage.framework, stage.items, decision, { notes, openItems: openItems.map((o) => ({ title: String(o.title ?? ''), assigneeId: o.assigneeId ?? null, dueDate: o.dueDate ?? null })) })
   if (problems.length) throw new ValidationError(problems.join('; '))
+  for (const o of openItems) {
+    optDate(o.dueDate, 'Open item due date')
+    await assertProjectMember(projectId, o.assigneeId)
+  }
 
   const now = new Date()
   const freeze = stage.framework === 'CWA' && (stage.code === 'G2' || stage.code === 'G4') && decision !== 'HOLD'
@@ -126,13 +154,17 @@ export async function decideGate(projectId: string, stageId: string, body: Recor
 
 export async function addItem(projectId: string, body: Record<string, unknown>, actor: { organisationId: string; id: string }) {
   const stage = await stageInProject(projectId, String(body.stageId ?? ''))
+  if (isDecided(stage.decision)) throw new ConflictError(`${stage.code} has been passed — record new work as an open item or against the next gate`)
   const title = typeof body.title === 'string' ? body.title.trim() : ''
+  const assigneeId = body.assigneeId ? String(body.assigneeId) : null
+  await assertProjectMember(projectId, assigneeId)
+  const dueDate = optDate(body.dueDate, 'dueDate') ?? null
   if (!title) throw new ValidationError('title is required')
   const kind = (['DRAWING', 'REPORT', 'EXIT_CRITERION', 'DELIVERABLE', 'ACCOR'].includes(String(body.kind)) ? body.kind : 'DELIVERABLE') as ItemKind
   const item = await prisma.deliveryStageItem.create({
     data: {
       stageId: stage.id, kind, title: title.slice(0, 500), responsibleParty: typeof body.responsibleParty === 'string' ? body.responsibleParty.slice(0, 120) : null,
-      assigneeId: body.assigneeId ? String(body.assigneeId) : null, dueDate: body.dueDate ? new Date(String(body.dueDate)) : null, sortOrder: 500 + stage.items.length,
+      assigneeId, dueDate, sortOrder: 500 + stage.items.length,
     },
   })
   await recordAuditEvent({ organisationId: actor.organisationId, actorId: actor.id, action: 'project.delivery_item_added', entityType: 'delivery_stage_item', entityId: item.id, metadata: { projectId, stageId: stage.id, kind } })
@@ -140,8 +172,11 @@ export async function addItem(projectId: string, body: Record<string, unknown>, 
 }
 
 export async function updateItem(projectId: string, itemId: string, body: Record<string, unknown>, actor: { organisationId: string; id: string; canApprove: boolean }) {
-  const item = await prisma.deliveryStageItem.findUnique({ where: { id: itemId }, include: { stage: { select: { projectId: true, designFreeze: true, code: true } } } })
+  const item = await prisma.deliveryStageItem.findUnique({ where: { id: itemId }, include: { stage: { select: { projectId: true, designFreeze: true, code: true, decision: true } } } })
   if (!item || item.stage.projectId !== projectId) throw new NotFoundError('Item not found')
+  if (isDecided(item.stage.decision) && !item.isOpenItem) {
+    throw new ConflictError(`${item.stage.code} has been passed${item.stage.designFreeze ? ' and the design is frozen' : ''} — its checklist can no longer change. Raise an open item or a change instead.`)
+  }
   if (item.kind === 'APPROVAL' && !actor.canApprove) throw new ValidationError('Only the project lead or design lead can record approvals')
   const data: Record<string, unknown> = {}
   if (body.status !== undefined) {
@@ -150,8 +185,11 @@ export async function updateItem(projectId: string, itemId: string, body: Record
     if (body.status === 'OPEN') { data.completedAt = null; data.completedById = null }
     else { data.completedAt = new Date(); data.completedById = actor.id }
   }
-  if (body.assigneeId !== undefined) data.assigneeId = body.assigneeId ? String(body.assigneeId) : null
-  if (body.dueDate !== undefined) data.dueDate = body.dueDate ? new Date(String(body.dueDate)) : null
+  if (body.assigneeId !== undefined) {
+    data.assigneeId = body.assigneeId ? String(body.assigneeId) : null
+    await assertProjectMember(projectId, data.assigneeId as string | null)
+  }
+  if (body.dueDate !== undefined) data.dueDate = optDate(body.dueDate, 'dueDate') ?? null
   if (body.documentUrl !== undefined) {
     const u = body.documentUrl ? String(body.documentUrl) : null
     if (u && !/^https?:\/\//.test(u)) throw new ValidationError('documentUrl must be an http(s) link')

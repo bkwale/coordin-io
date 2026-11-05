@@ -65,7 +65,7 @@ describe('delivery frameworks — gate rules (guide p.9)', () => {
 // ── Service (persistence rules) ─────────────────────────────
 const db = vi.hoisted(() => {
   const m = () => ({ findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), createMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn() })
-  const prisma: any = { project: m(), deliveryStage: m(), deliveryStageItem: m() }
+  const prisma: any = { project: m(), deliveryStage: m(), deliveryStageItem: m(), projectMembership: { findUnique: vi.fn().mockResolvedValue({ removedAt: null }) } }
   prisma.$transaction = vi.fn(async (fn: any) => fn(prisma))
   return prisma
 })

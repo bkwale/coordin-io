@@ -41,6 +41,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     data.assessment = assessment
     data.managerRecommendation = rec ?? null
     for (const f of ['feedback', 'objectives', 'employeeFeedback', 'improvementObjectives'] as const) {
+      if (body[f] === '') { data[f] = null; continue } // an emptied box clears the saved text
       const v = optionalString(body[f] as unknown, f, 5000)
       if (v !== null) data[f] = v
     }
@@ -68,6 +69,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   let newEmployeeStatus: string | null = null
   if (action === 'finalise') {
+    // Separation of duties: whoever submitted the assessment doesn't also make the HR decision
+    if (review.submittedById && review.submittedById === profile.id) {
+      throw new PermissionError('Another HR colleague needs to finalise a review you submitted')
+    }
     const decision = validDecision(body.decision)
     if (!decision) throw new ValidationError('Choose a decision: Pass, Extend or Fail')
     Object.assign(data, { hrDecision: decision, outcome: decision, completedDate: now, finalisedAt: now, finalisedById: profile.id })
@@ -81,7 +86,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   // Optimistic concurrency: only move from the status we read
   const updated = await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
-    const res = await tx.probationReview.updateMany({ where: { id, workflowStatus: review.workflowStatus }, data })
+    // Lock on the exact version we read, so two people saving drafts can't silently overwrite each other
+    const res = await tx.probationReview.updateMany({ where: { id, workflowStatus: review.workflowStatus, ...(review.updatedAt ? { updatedAt: review.updatedAt } : {}) }, data })
     if (res.count !== 1) throw new ConflictError('Someone else just changed this review — reload and try again')
     if (newEmployeeStatus) {
       await tx.employeeProfile.upsert({

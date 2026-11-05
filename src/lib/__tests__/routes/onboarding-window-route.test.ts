@@ -57,7 +57,7 @@ describe('onboarding window route', () => {
     expect(res.status).toBe(200)
     const data = P.onboardingAssignment.updateMany.mock.calls[0][0].data
     expect(data.windowStartAt.toISOString()).toBe('2026-11-06T09:00:00.000Z')
-    expect(data.windowDueAt.toISOString()).toBe('2026-11-13T09:00:00.000Z')
+    expect(data.windowDueAt.toISOString()).toBe('2026-11-12T22:59:59.000Z') // end of day 7, Lagos
     expect(P.onboardingAssignment.updateMany.mock.calls[0][0].where).toEqual({ id: 'as-1', updatedAt })
     expect(ctx.notify.mock.calls[0][0].profileId).toBe('emp-1')
   })
@@ -104,6 +104,28 @@ describe('onboarding window route', () => {
     expect((await win({ action: 'verify' })).status).toBe(403)
   })
 
+  it('submitting closes the employee "submit" task; verifying closes HR\'s final check — in the same transaction', async () => {
+    as('emp-1')
+    await win({ action: 'submit' })
+    expect(P.$transaction).toHaveBeenCalled()
+    expect(P.onboardingTask.updateMany.mock.calls[0][0].where).toMatchObject({ assignmentId: 'as-1', category: 'Final Verification', assigneeId: 'emp-1' })
+    vi.clearAllMocks()
+    as('hr-1', 'HR')
+    P.onboardingAssignment.findFirst.mockResolvedValue(assignment({ submittedAt: new Date() }))
+    P.onboardingAssignment.updateMany.mockResolvedValue({ count: 1 })
+    P.$transaction.mockImplementation(async (fn: any) => fn(P))
+    await win({ action: 'verify' })
+    expect(P.onboardingTask.updateMany.mock.calls[0][0].where).toMatchObject({ category: 'Final Verification', NOT: { assigneeId: 'emp-1' } })
+  })
+
+  it('HR cannot restart a window that was already submitted, or touch their own', async () => {
+    as('hr-1', 'HR')
+    P.onboardingAssignment.findFirst.mockResolvedValue(assignment({ submittedAt: new Date() }))
+    expect((await win({ action: 'start' })).status).toBe(409)
+    P.onboardingAssignment.findFirst.mockResolvedValue(assignment({ profileId: 'hr-1', windowDueAt: new Date(), windowStartAt: new Date() }))
+    expect((await win({ action: 'extend', days: 3 })).status).toBe(403)
+  })
+
   it('a concurrent change is refused rather than overwritten', async () => {
     as('hr-1', 'HR')
     P.onboardingAssignment.updateMany.mockResolvedValue({ count: 0 })
@@ -132,6 +154,12 @@ describe('reminder run', () => {
     const r = await runOnboardingReminders(new Date('2026-11-04T10:00:00Z'))
     expect(r.reminded).toBe(0)
     expect(ctx.notify).not.toHaveBeenCalled()
+  })
+
+  it('only scans windows with work left, paged by id', async () => {
+    P.onboardingAssignment.findMany.mockResolvedValue([])
+    await runOnboardingReminders(new Date('2026-11-04T10:00:00Z'))
+    expect(P.onboardingAssignment.findMany.mock.calls[0][0]).toMatchObject({ where: { missedNotifiedAt: null, submittedAt: null }, orderBy: { id: 'asc' } })
   })
 
   it('tells HR once when the window is missed', async () => {
@@ -181,6 +209,19 @@ describe('assignment creation', () => {
     expect(tasks.map((t: { title: string }) => t.title)).toEqual(['Review and sign employment contract', '90-day check-in'])
     expect(tasks[0]).toMatchObject({ assigneeId: 'emp-1', responsibleRole: 'EMPLOYEE', selfServiceStep: 'DOCUMENT_UPLOAD', sourceTemplateId: 'core' })
     expect(P.probationReview.create).toHaveBeenCalled()
+  })
+
+  it('re-assigning a template the employee already finished gives a clear 409, not a database error', async () => {
+    P.onboardingAssignment.findFirst.mockResolvedValue({ status: 'COMPLETED' })
+    const res = await assign({ templateId: 'core', profileId: 'emp-1', startDate: '2026-11-09' })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/completed assignment/)
+  })
+
+  it('starting the window at creation puts employee tasks on the window deadline', async () => {
+    await assign({ templateId: 'core', profileId: 'emp-1', startDate: '2026-12-01', windowStartDate: '2026-11-06T09:00:00.000Z' })
+    const redate = P.onboardingTask.updateMany.mock.calls.find((c: any[]) => c[0].where?.assigneeId === 'emp-1')
+    expect(redate[0].data.dueDate.toISOString()).toBe('2026-11-12T22:59:59.000Z')
   })
 
   it('rejects an unknown employee type and missing add-ons', async () => {

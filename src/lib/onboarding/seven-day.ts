@@ -55,6 +55,30 @@ export function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * DAY_MS)
 }
 
+/** Organisation time zone for deadlines. No per-org setting yet; CWA is in Lagos. */
+export const ORG_TIMEZONE = process.env.ORG_TIMEZONE || 'Africa/Lagos'
+
+/** Offset (ms) of `tz` from UTC at instant `d`. */
+function tzOffsetMs(d: Date, tz: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    .formatToParts(d).reduce<Record<string, number>>((acc, p) => { if (p.type !== 'literal') acc[p.type] = Number(p.value); return acc }, {})
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  return asUtc - Math.floor(d.getTime() / 1000) * 1000
+}
+
+/** 23:59:59 on the calendar day of `d` in `tz`, as a UTC instant. */
+export function endOfDayIn(d: Date, tz: string = ORG_TIMEZONE): Date {
+  const off = tzOffsetMs(d, tz)
+  const local = new Date(d.getTime() + off) // wall-clock time expressed as if UTC
+  const endLocal = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 23, 59, 59)
+  return new Date(endLocal - off)
+}
+
+/** "12 November" in the organisation's time zone. */
+export function formatDueDate(d: Date | string, tz: string = ORG_TIMEZONE): string {
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: tz })
+}
+
 /** Clamp a requested window length to something sensible. */
 export function normaliseWindowDays(v: unknown): number {
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
@@ -107,7 +131,9 @@ export function reminderDue(
   if (windowState(a, now) !== 'OPEN') return null
   const day = windowDay(a, now)
   if (day === null) return null
-  const length = a.windowDays ?? DEFAULT_WINDOW_DAYS
+  // Window length from the actual dates, so an extended window keeps reminding on its new schedule
+  const start = toDate(a.windowStartAt), due = toDate(a.windowDueAt)
+  const length = start && due ? Math.max(1, Math.round((due.getTime() - start.getTime()) / DAY_MS)) : (a.windowDays ?? DEFAULT_WINDOW_DAYS)
   // Scale 3/5/7 to the window length so an extended or custom window still reminds sensibly
   const scaled = REMINDER_DAYS.map((d) => Math.max(1, Math.round((d / DEFAULT_WINDOW_DAYS) * length)))
   const sent = new Set(a.remindersSent ?? [])
@@ -120,16 +146,19 @@ export function missedNotificationDue(a: WindowFields & { missedNotifiedAt?: Dat
   return windowState(a, now) === 'OVERDUE' && !a.missedNotifiedAt
 }
 
-/** Window start/due for a given start date and length. */
-export function windowFor(start: Date, days: number): { windowStartAt: Date; windowDueAt: Date } {
-  return { windowStartAt: start, windowDueAt: addDays(start, normaliseWindowDays(days)) }
+/**
+ * Window start/due for a given start date and length. Day 1 is the start day; the deadline is the
+ * end of day N in the organisation's time zone (a 16:00 activation doesn't expire at 16:00 on day 7).
+ */
+export function windowFor(start: Date, days: number, tz: string = ORG_TIMEZONE): { windowStartAt: Date; windowDueAt: Date } {
+  return { windowStartAt: start, windowDueAt: endOfDayIn(addDays(start, normaliseWindowDays(days) - 1), tz) }
 }
 
-/** Extending a window: new due date = later of (current due, now) + extra days. */
-export function extendedDueDate(currentDue: Date | string | null, extraDays: number, now: Date = new Date()): Date {
+/** Extending a window: end of day on (later of current due, now) + extra days. */
+export function extendedDueDate(currentDue: Date | string | null, extraDays: number, now: Date = new Date(), tz: string = ORG_TIMEZONE): Date {
   const base = toDate(currentDue)
   const from = base && base.getTime() > now.getTime() ? base : now
-  return addDays(from, normaliseWindowDays(extraDays))
+  return endOfDayIn(addDays(from, normaliseWindowDays(extraDays)), tz)
 }
 
 // ── Self-service steps per employee type (Ayo 1.2) ─────────────────────────

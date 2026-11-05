@@ -105,6 +105,23 @@ describe('probation workflow route', () => {
     expect((await call({ action: 'save' })).status).toBe(404)
   })
 
+  it('HR who submitted the assessment cannot also finalise it', async () => {
+    as('hr-1', 'HR')
+    P.probationReview.findUnique.mockResolvedValue(review({ workflowStatus: 'SUBMITTED', submittedById: 'hr-1' }))
+    const res = await call({ action: 'finalise', decision: 'Pass' })
+    expect(res.status).toBe(403)
+    expect(P.probationReview.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('locks on the version read and lets a manager clear a text box', async () => {
+    as('mgr-1')
+    const v = new Date('2026-11-05T10:00:00Z')
+    P.probationReview.findUnique.mockResolvedValue(review({ workflowStatus: 'DRAFT', updatedAt: v, feedback: 'old' }))
+    await call({ action: 'save', feedback: '' })
+    expect(P.probationReview.updateMany.mock.calls[0][0].where).toEqual({ id: 'rev-1', workflowStatus: 'DRAFT', updatedAt: v })
+    expect(P.probationReview.updateMany.mock.calls[0][0].data.feedback).toBeNull()
+  })
+
   it('concurrent change is detected (optimistic lock)', async () => {
     as('mgr-1')
     P.probationReview.updateMany.mockResolvedValue({ count: 0 })

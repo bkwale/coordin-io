@@ -10,6 +10,7 @@ import { recordAuditEvent } from '@/lib/audit'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { getEffectiveProbationMonths } from '@/lib/org-settings'
 import { isEmployeeType, planTasks, normaliseWindowDays, windowFor, windowState, daysRemaining, type EmployeeType } from '@/lib/onboarding/seven-day'
+import { applyWindowDates } from '@/lib/onboarding/window-service'
 
 /**
  * GET /api/onboarding/assignments — List onboarding assignments.
@@ -195,16 +196,15 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Employee not found in your organisation')
   }
 
-  // Check for existing active assignment with same template
+  // One assignment per template per employee (database rule). Say which one exists rather than failing later.
   const existingAssignment = await modulesPrisma.onboardingAssignment.findFirst({
-    where: {
-      templateId,
-      profileId: targetProfileId,
-      status: 'ACTIVE',
-    },
+    where: { templateId, profileId: targetProfileId },
+    select: { status: true },
   })
   if (existingAssignment) {
-    throw new ConflictError('This employee already has an active assignment for this template')
+    throw new ConflictError(existingAssignment.status === 'ACTIVE'
+      ? 'This employee already has an active assignment for this template'
+      : `This employee already has a ${String(existingAssignment.status).toLowerCase()} assignment for this template — reopen it, or use a different template`)
   }
 
   // Create assignment and tasks in a transaction
@@ -232,6 +232,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
     if (tasksData.length > 0) {
       await tx.onboardingTask.createMany({ data: tasksData })
+    }
+    // Window started now: employee tasks fall due at the window deadline, not the employment start + 7
+    if (windowStart) {
+      await applyWindowDates(tx, newAssignment.id, targetProfileId, windowFor(windowStart, windowDays).windowDueAt)
     }
 
     return newAssignment
