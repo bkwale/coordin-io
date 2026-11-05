@@ -235,6 +235,14 @@ export default function EmployeeProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<SectionKey>('overview')
+  // Deep link from the HR Probation tab (…#probation) opens the Employment tab at the probation section
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#probation') {
+      setActiveTab('employment')
+      const t = setTimeout(() => document.getElementById('probation')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 600)
+      return () => clearTimeout(t)
+    }
+  }, [])
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, string | number | null>>({})

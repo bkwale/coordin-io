@@ -135,7 +135,7 @@ describe('probation routes (BUG-016)', () => {
   })
 
   const existing = (over: Record<string, unknown> = {}) => ({
-    id: 'rev-1', profileId: 'emp-1', reviewType: 'final', completedDate: null, outcome: null,
+    id: 'rev-1', profileId: 'emp-1', reviewType: 'final', scheduledDate: new Date('2026-10-16'), completedDate: null, outcome: null,
     profile: { id: 'emp-1', fullName: 'Ada', organisationId: ctx.profileRef.current.organisationId }, ...over,
   })
 
@@ -156,9 +156,18 @@ describe('probation routes (BUG-016)', () => {
 
   it('a 30-day review Pass does not change the probation status', async () => {
     P.probationReview.findUnique.mockResolvedValue(existing({ reviewType: '30-day' }))
+    P.probationReview.count.mockResolvedValue(2) // later reviews exist
     const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { completedDate: '2026-11-05', outcome: 'Pass' } }))
     expect(res.status).toBe(200)
     expect(P.employeeProfile.upsert).not.toHaveBeenCalled()
+  })
+
+  it('older records: the last scheduled review (a 90-day on a 3-month probation) is the final decision', async () => {
+    P.probationReview.findUnique.mockResolvedValue(existing({ reviewType: '90-day' }))
+    P.probationReview.count.mockResolvedValue(0) // nothing scheduled after it
+    const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { completedDate: '2026-11-05', outcome: 'Pass' } }))
+    expect(res.status).toBe(200)
+    expect(P.employeeProfile.upsert.mock.calls[0][0].update).toEqual({ probationStatus: 'CONFIRMED' })
   })
 
   it('final review Fail leaves the status for HR to action', async () => {

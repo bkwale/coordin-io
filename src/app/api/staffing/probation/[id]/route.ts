@@ -113,7 +113,16 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // A final review outcome moves the employee's probation status: Pass → Confirmed, Extend → Extended.
   // Fail is left for HR to action.
-  const newStatus = completing && isFinalReview(existing.reviewType) ? statusAfterFinalReview(outcome ?? existing.outcome) : null
+  // The final decision is a review typed final/end-of-probation, or — for older records without one —
+  // the last scheduled review for this employee (e.g. a 90-day review on a 3-month probation).
+  let isFinal = isFinalReview(existing.reviewType)
+  if (completing && !isFinal) {
+    const later = await modulesPrisma.probationReview.count({
+      where: { profileId: existing.profileId, id: { not: id }, scheduledDate: { gt: existing.scheduledDate } },
+    })
+    isFinal = later === 0
+  }
+  const newStatus = completing && isFinal ? statusAfterFinalReview(outcome ?? existing.outcome) : null
 
   const review = await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
     const r = await tx.probationReview.update({
