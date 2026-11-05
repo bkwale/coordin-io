@@ -9,6 +9,8 @@ import { normaliseOutcome, isFinalReview, statusAfterFinalReview } from '@/lib/s
 import { canManageHR } from '@/lib/staffing-utils'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
+import { loadReviewForActor } from '@/lib/staffing/probation-access'
+import { allowedActions } from '@/lib/staffing/probation-workflow'
 
 /**
  * GET /api/staffing/probation/[id] — Single probation review with profile info.
@@ -16,38 +18,10 @@ import type { OrgPermission } from '@/generated/prisma/client'
  * Permission: HR+ sees any review; others see only their own.
  */
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
-  const url = new URL(request.url)
-  const id = url.pathname.split('/').pop()!
-
-  const review = await modulesPrisma.probationReview.findUnique({
-    where: { id },
-    include: {
-      profile: { select: { id: true, fullName: true, jobTitle: true, startDate: true } },
-      goals: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
-    },
-  })
-
-  if (!review) {
-    throw new NotFoundError('Probation review not found')
-  }
-
-  // Verify same org
-  const targetProfile = await modulesPrisma.profile.findUnique({
-    where: { id: review.profileId },
-    select: { organisationId: true },
-  })
-  if (!targetProfile || targetProfile.organisationId !== profile.organisationId) {
-    throw new NotFoundError('Probation review not found')
-  }
-
-  const hasHRAccess = canManageHR(profile.orgPermission as OrgPermission)
-
-  // Non-HR can only view their own reviews
-  if (!hasHRAccess && review.profileId !== profile.id) {
-    throw new PermissionError('You do not have access to this probation review')
-  }
-
-  return success({ review })
+  const id = new URL(request.url).pathname.split('/').pop()!
+  // Line manager, HR/Admin, or the employee once finalised (PT 2026-11-05)
+  const { review, actor } = await loadReviewForActor(id, profile)
+  return success({ review, actor, allowedActions: allowedActions(review.workflowStatus, actor) })
 })
 
 /**
@@ -86,7 +60,21 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new NotFoundError('Probation review not found')
   }
 
+  // Nobody edits their own probation review (the HR user being reviewed included)
+  if (existing.profileId === profile.id) {
+    throw new PermissionError('You cannot edit your own probation review')
+  }
+
   const body = await parseBody(request)
+
+  // Outcomes are decided through the review workflow (manager submits, HR finalises) so the
+  // recommendation, decision, audit trail and employee visibility stay consistent.
+  if (body.outcome !== undefined || body.completedDate !== undefined) {
+    throw new ValidationError('Complete reviews from the review page (Open review → Finalise), not here')
+  }
+  if (existing.workflowStatus === 'FINALISED') {
+    throw new ValidationError('This review has been finalised and can no longer be edited')
+  }
 
   const feedback = optionalString(body.feedback, 'feedback', 5000)
   const objectives = optionalString(body.objectives, 'objectives', 5000)

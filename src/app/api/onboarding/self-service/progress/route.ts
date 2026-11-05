@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
+import { windowForLink } from '@/lib/onboarding/window-service'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 
 /**
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
       revokedAt: true,
       completedAt: true,
       createdAt: true,
+      assignmentId: true,
     },
   })
 
@@ -47,6 +49,8 @@ export async function GET(request: NextRequest) {
       assigneeId: selfServiceToken.profileId,
       isSelfService: true,
       selfServiceStep: { not: null },
+      status: { not: 'WAIVED' },
+      ...(selfServiceToken.assignmentId ? { assignmentId: selfServiceToken.assignmentId } : {}),
     },
     select: {
       id: true,
@@ -66,10 +70,19 @@ export async function GET(request: NextRequest) {
   const completedCount = steps.filter((s: { status: string }) => s.status === 'COMPLETED').length
   const totalCount = steps.length
 
-  // Calculate 7-day deadline from token creation
-  const deadline = new Date(selfServiceToken.createdAt)
-  deadline.setDate(deadline.getDate() + 7)
-  const daysRemaining = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+  // The real seven-day window (starts when the employee presses Begin). Invitations without an
+  // assignment keep the old rule: seven days from when the link was sent.
+  const window = await windowForLink(selfServiceToken.assignmentId ?? null)
+  let deadline: Date | null
+  let daysRemaining: number | null
+  if (window) {
+    deadline = window.dueAt ? new Date(window.dueAt) : null
+    daysRemaining = window.daysRemaining === null ? null : Math.max(0, window.daysRemaining)
+  } else {
+    deadline = new Date(selfServiceToken.createdAt)
+    deadline.setDate(deadline.getDate() + 7)
+    daysRemaining = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+  }
 
   return success({
     steps,
@@ -77,7 +90,8 @@ export async function GET(request: NextRequest) {
     totalCount,
     allCompleted: totalCount > 0 && completedCount === totalCount,
     overallCompleted: selfServiceToken.completedAt !== null,
-    deadline: deadline.toISOString(),
+    deadline: deadline ? deadline.toISOString() : null,
     daysRemaining,
+    windowStarted: window ? window.started : true,
   })
 }

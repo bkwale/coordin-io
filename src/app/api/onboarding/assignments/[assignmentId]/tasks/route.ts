@@ -9,7 +9,8 @@ import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { recordAuditEvent } from '@/lib/audit'
 
 const VALID_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'WAIVED']
-const VALID_DOC_STATUSES = ['NOT_SENT', 'SENT', 'VIEWED', 'ACKNOWLEDGED']
+// Five-status document model (Ayo 1.5) plus the older NOT_SENT/SENT values still on existing tasks
+const VALID_DOC_STATUSES = ['ASSIGNED', 'VIEWED', 'ACKNOWLEDGED', 'AWAITING_SIGNATURE', 'COMPLETED', 'NOT_SENT', 'SENT']
 
 /**
  * Helper to extract assignmentId from the URL.
@@ -70,8 +71,10 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('You can only view your own onboarding tasks')
   }
 
+  // Employees see only the tasks they own (Ayo 1.4); HR/admins and managers see the whole checklist
+  const ownTasksOnly = assignment.profileId === profile.id && !isHROrAbove
   const tasks = await modulesPrisma.onboardingTask.findMany({
-    where: { assignmentId },
+    where: { assignmentId, ...(ownTasksOnly ? { assigneeId: profile.id } : {}) },
     include: {
       templateItem: {
         select: {
@@ -129,6 +132,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     comment: string | null
     sortOrder: number
     isAdHoc: boolean
+    responsibleRole?: string | null
     documentStatus: string | null
     documentSentAt: Date | null
     documentViewedAt: Date | null
@@ -162,7 +166,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       documentSentAt: task.documentSentAt,
       documentViewedAt: task.documentViewedAt,
       documentAcknowledgedAt: task.documentAcknowledgedAt,
-      responsibleRole: task.templateItem?.responsibleRole ?? 'Not provided',
+      responsibleRole: task.responsibleRole ?? task.templateItem?.responsibleRole ?? 'Not provided',
       requiresEvidence: task.templateItem?.requiresEvidence ?? false,
       requiresApproval: task.templateItem?.requiresApproval ?? false,
       description: task.templateItem?.description ?? 'Not provided',
@@ -191,8 +195,16 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new NotFoundError('Assignment not found')
   }
 
-  const isManager = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'MANAGER'
   const isOwnAssignment = assignment.profileId === profile.id
+  const isPrivileged = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR'
+  let isLineManager = false
+  if (!isPrivileged && profile.orgPermission === 'MANAGER' && !isOwnAssignment) {
+    const emp = await modulesPrisma.profile.findUnique({ where: { id: assignment.profileId }, select: { managerId: true } })
+    isLineManager = emp?.managerId === profile.id
+  }
+  // On your own onboarding you only have employee rights, whatever your role (no self-approval).
+  // Managers act only on their direct reports' onboarding.
+  const isManager = !isOwnAssignment && (isPrivileged || isLineManager)
 
   if (!isManager && !isOwnAssignment) {
     throw new PermissionError('You can only update your own onboarding tasks')
@@ -211,6 +223,18 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   })
   if (!task) {
     throw new NotFoundError('Task not found')
+  }
+  // On their own onboarding, an employee can only act on tasks they own (not HR/IT/manager tasks)
+  if (!isManager && task.assigneeId !== profile.id) {
+    throw new PermissionError('This task belongs to someone else on your onboarding team')
+  }
+  // Steps backed by the self-service form (bank details, contract, etc.) complete when the form is submitted
+  if (!isManager && task.selfServiceStep && body.status === 'COMPLETED') {
+    throw new PermissionError('Complete this step through your onboarding form so the details are recorded')
+  }
+  // Employees can record that they viewed or acknowledged a document; HR records signatures and completion
+  if (!isManager && body.documentStatus !== undefined && !['VIEWED', 'ACKNOWLEDGED'].includes(String(body.documentStatus))) {
+    throw new PermissionError('Only HR can mark a document as awaiting signature or completed')
   }
 
   const updateData: Record<string, unknown> = {}
@@ -267,7 +291,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     }
     updateData.documentStatus = docStatus
     const now = new Date()
-    if (docStatus === 'SENT') updateData.documentSentAt = now
+    if (docStatus === 'SENT' || docStatus === 'ASSIGNED') updateData.documentSentAt = now
     if (docStatus === 'VIEWED') updateData.documentViewedAt = now
     if (docStatus === 'ACKNOWLEDGED') updateData.documentAcknowledgedAt = now
   }

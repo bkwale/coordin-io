@@ -44,3 +44,21 @@ export function orderedStages(present: Iterable<string>): string[] {
 /** Stages accepted when creating or editing items/tasks. Legacy stages stay valid so existing items can be edited. */
 export const VALID_STAGES: readonly string[] = STAGE_ORDER
 export function isValidStage(s: unknown): s is string { return typeof s === 'string' && VALID_STAGES.includes(s) }
+
+/**
+ * One badge per task (Wale, 5 Nov). The stored status and a computed "overdue" flag used to show
+ * as two badges ("PENDING" + "OVERDUE"). Overdue now replaces Pending / In progress.
+ */
+const TASK_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pending', IN_PROGRESS: 'In progress', OVERDUE: 'Overdue', COMPLETED: 'Completed', WAIVED: 'Waived',
+}
+export function taskDisplayStatus(status: string, dueDate: string | Date | null | undefined, now: Date = new Date()): { key: string; label: string } {
+  const done = status === 'COMPLETED' || status === 'WAIVED'
+  const late = !done && !!dueDate && (() => {
+    const d = new Date(dueDate); d.setHours(0, 0, 0, 0)
+    const n = new Date(now); n.setHours(0, 0, 0, 0)
+    return d < n
+  })()
+  const key = late ? 'OVERDUE' : status
+  return { key, label: TASK_STATUS_LABELS[key] ?? status }
+}

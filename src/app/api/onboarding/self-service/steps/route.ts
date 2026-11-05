@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { markSubmittedFromSelfService, startWindowOnActivation } from '@/lib/onboarding/window-service'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
       expiresAt: true,
       revokedAt: true,
       completedAt: true,
+      assignmentId: true,
     },
   })
 
@@ -69,21 +71,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'This onboarding has already been completed' }, { status: 410 })
   }
 
-  // Find the matching self-service task
+  // Doing a step is a deliberate action, so it also starts the window if Begin was never pressed
+  try { await startWindowOnActivation(selfServiceToken.assignmentId ?? null, selfServiceToken.id) } catch (e) { console.warn('[self-service] window start failed', e) }
+
+  // Self-service tasks belong to this invitation's assignment (not any older one)
+  const scope = {
+    assigneeId: selfServiceToken.profileId,
+    isSelfService: true,
+    ...(selfServiceToken.assignmentId ? { assignmentId: selfServiceToken.assignmentId } : {}),
+  }
+
+  // Find the matching open self-service task; an already-completed copy must not block the step
   const task = await modulesPrisma.onboardingTask.findFirst({
-    where: {
-      assigneeId: selfServiceToken.profileId,
-      isSelfService: true,
-      selfServiceStep: step,
-    },
+    where: { ...scope, selfServiceStep: step, status: { notIn: ['COMPLETED', 'WAIVED'] } },
   })
 
   if (!task) {
+    const done = await modulesPrisma.onboardingTask.count({ where: { ...scope, selfServiceStep: step, status: 'COMPLETED' } })
+    if (done > 0) return NextResponse.json({ error: 'This step has already been completed' }, { status: 409 })
     return NextResponse.json({ error: 'Self-service task not found for this step' }, { status: 404 })
-  }
-
-  if (task.status === 'COMPLETED') {
-    return NextResponse.json({ error: 'This step has already been completed' }, { status: 409 })
   }
 
   // Process the step data
@@ -116,22 +122,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 
-  // Mark task as completed
-  await modulesPrisma.onboardingTask.update({
-    where: { id: task.id },
+  // Mark every open task for this step as completed (covers a linked checklist task and its step)
+  await modulesPrisma.onboardingTask.updateMany({
+    where: { ...scope, selfServiceStep: step, status: { notIn: ['COMPLETED', 'WAIVED'] } },
     data: {
       status: 'COMPLETED',
       completedAt: new Date(),
     },
   })
 
-  // Check if all steps are now complete
+  // Check if all steps on this invitation's assignment are now complete
   const remainingTasks = await modulesPrisma.onboardingTask.count({
     where: {
-      assigneeId: selfServiceToken.profileId,
-      isSelfService: true,
+      ...scope,
       selfServiceStep: { not: null },
-      status: { not: 'COMPLETED' },
+      status: { notIn: ['COMPLETED', 'WAIVED'] },
     },
   })
 
@@ -141,6 +146,8 @@ export async function POST(request: NextRequest) {
       where: { id: selfServiceToken.id },
       data: { completedAt: new Date() },
     })
+    // Completing every step is the employee's submission for HR verification (Ayo 1.2 step 7)
+    try { await markSubmittedFromSelfService(selfServiceToken.assignmentId ?? null) } catch (e) { console.warn('[self-service] submission record failed', e) }
   }
 
   await recordAuditEvent({

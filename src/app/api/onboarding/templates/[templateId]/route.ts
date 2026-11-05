@@ -49,6 +49,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       description: template.description ?? 'Not provided',
       isDefault: template.isDefault,
       isActive: template.isActive,
+      kind: template.kind ?? 'CORE',
       totalItems: template.items.length,
       assignmentCount: template._count.assignments,
       items: template.items,
@@ -105,6 +106,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (roleLevel !== null) updateData.roleLevel = roleLevel
   if (isDefault !== undefined) updateData.isDefault = isDefault
   if (isActive !== undefined) updateData.isActive = isActive
+  if (body.kind === 'CORE' || body.kind === 'ADDON') {
+    updateData.kind = body.kind
+    if (body.kind === 'ADDON') updateData.isDefault = false
+  }
 
   const template = await modulesPrisma.onboardingTemplate.update({
     where: { id: templateId },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
+import { windowForLink } from '@/lib/onboarding/window-service'
 
 /**
  * GET /api/onboarding/self-service/verify?token=xxx
@@ -62,13 +63,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'This onboarding has already been completed. If you need to make changes, contact your HR team.' }, { status: 410 })
   }
 
-  // Mark token as used (first access)
-  if (!selfServiceToken.usedAt) {
-    await modulesPrisma.onboardingSelfServiceToken.update({
-      where: { id: selfServiceToken.id },
-      data: { usedAt: new Date() },
-    })
-  }
+  // Opening the link changes nothing: email security scanners open links automatically, so the
+  // seven-day clock only starts when the employee presses Begin (POST /self-service/begin).
 
   // Get self-service task progress
   const tasks = await modulesPrisma.onboardingTask.findMany({
@@ -76,6 +72,8 @@ export async function GET(request: NextRequest) {
       assigneeId: selfServiceToken.profileId,
       isSelfService: true,
       selfServiceStep: { not: null },
+      status: { not: 'WAIVED' },
+      ...(selfServiceToken.assignmentId ? { assignmentId: selfServiceToken.assignmentId } : {}),
     },
     select: {
       id: true,
@@ -124,6 +122,7 @@ export async function GET(request: NextRequest) {
     },
     managerName,
     expiresAt: selfServiceToken.expiresAt,
+    window: await windowForLink(selfServiceToken.assignmentId ?? null),
     steps,
     allCompleted: steps.length > 0 && steps.every((s: { status: string }) => s.status === 'COMPLETED'),
   })

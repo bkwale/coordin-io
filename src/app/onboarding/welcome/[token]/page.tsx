@@ -50,6 +50,8 @@ interface VerifyResponse {
     organisation: { id: string; name: string }
     managerName: string | null
     expiresAt: string
+    // Seven-day window; null for older invitations without an onboarding assignment
+    window: { started: boolean; days: number; dueAt: string | null; dueLabel: string | null; daysRemaining: number | null } | null
     steps: StepInfo[]
     allCompleted: boolean
   }
@@ -108,6 +110,26 @@ export default function SelfServiceWelcomePage() {
   const [data, setData] = useState<VerifyResponse['data'] | null>(null)
   const [activeStep, setActiveStep] = useState<StepName | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [beginning, setBeginning] = useState(false)
+
+  // Begin: starts the seven-day window (opening the link alone never does)
+  const begin = useCallback(async () => {
+    setBeginning(true)
+    try {
+      const res = await fetch('/api/onboarding/self-service/begin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'Could not start your onboarding')
+      setData((prev) => (prev ? { ...prev, window: json.data?.window ?? prev.window } : prev))
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not start your onboarding', 'error')
+    } finally {
+      setBeginning(false)
+    }
+  }, [token, toast])
 
   // Verify token on mount
   useEffect(() => {
@@ -231,6 +253,28 @@ export default function SelfServiceWelcomePage() {
           Bank details are encrypted and stored securely.
         </div>
 
+        {data.window && !data.window.started ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
+            <Clock className="h-8 w-8 text-blue-600 mx-auto mb-3" />
+            <h2 className="text-base font-semibold text-gray-900 mb-1">Ready when you are</h2>
+            <p className="text-sm text-gray-600 mb-1">
+              There {totalCount === 1 ? 'is 1 step' : `are ${totalCount} steps`} to complete. Most people finish in under 20 minutes.
+            </p>
+            <p className="text-sm text-gray-600 mb-5">
+              You&apos;ll have <strong>{data.window.days} days</strong> from when you press Begin. You can stop and come back to this link at any time.
+            </p>
+            <button
+              onClick={begin}
+              disabled={beginning}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {beginning ? 'Starting…' : 'Begin'}
+            </button>
+            <p className="text-xs text-gray-400 mt-4">
+              This link stays valid until {new Date(data.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.
+            </p>
+          </div>
+        ) : (<>
         {/* Progress bar */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
@@ -252,7 +296,20 @@ export default function SelfServiceWelcomePage() {
         </div>
 
         {/* 7-day deadline countdown */}
-        <DeadlineCountdown token={token} />
+        {data.window?.dueLabel ? (
+          <div className={`flex items-center gap-2 text-xs mb-6 p-3 rounded-lg border ${
+            (data.window.daysRemaining ?? 0) <= 2 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-100 text-blue-700'
+          }`}>
+            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+            <span>
+              Please complete by <strong>{data.window.dueLabel}</strong>
+              {data.window.daysRemaining !== null && data.window.daysRemaining >= 0 && <> · {data.window.daysRemaining} day{data.window.daysRemaining === 1 ? '' : 's'} left</>}
+              {data.window.daysRemaining !== null && data.window.daysRemaining < 0 && <> · the deadline has passed, please finish as soon as you can</>}
+            </span>
+          </div>
+        ) : !data.window ? (
+          <DeadlineCountdown token={token} />
+        ) : null}
 
         {/* Step cards */}
         <div className="space-y-3">
@@ -322,6 +379,7 @@ export default function SelfServiceWelcomePage() {
             )
           })}
         </div>
+        </>)}
 
         {/* Help text */}
         <p className="text-xs text-gray-400 text-center mt-8">

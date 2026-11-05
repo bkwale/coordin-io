@@ -31,12 +31,17 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     profile: { organisationId: profile.organisationId },
   }
 
-  if (profileIdFilter) {
-    where.profileId = profileIdFilter
-  } else if (!hasHRAccess) {
-    // Non-HR see only their own
-    where.profileId = profile.id
+  // Non-HR: own reviews (finalised only — PT 2026-11-05) + reviews of direct reports (line manager)
+  let visibleTo: Record<string, unknown> | null = null
+  if (!hasHRAccess) {
+    const reports = await modulesPrisma.profile.findMany({ where: { managerId: profile.id, organisationId: profile.organisationId }, select: { id: true } })
+    const reportIds = reports.map((r: { id: string }) => r.id)
+    visibleTo = { OR: [{ profileId: { in: reportIds } }, { profileId: profile.id, workflowStatus: 'FINALISED' }] }
   }
+  if (profileIdFilter) where.profileId = profileIdFilter
+  if (visibleTo) where.AND = [visibleTo]
+  const workflowFilter = url.searchParams.get('workflow')
+  if (workflowFilter) where.workflowStatus = { in: workflowFilter.split(',').slice(0, 5) }
 
   if (pendingOnly) {
     where.completedDate = null
@@ -47,7 +52,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const reviews = await modulesPrisma.probationReview.findMany({
     where,
     include: {
-      profile: { select: { id: true, fullName: true, jobTitle: true, startDate: true } },
+      profile: { select: { id: true, fullName: true, jobTitle: true, startDate: true, managerId: true } },
       _count: { select: { goals: true } },
     },
     orderBy: { scheduledDate: 'asc' },
