@@ -38,12 +38,13 @@ const PROJECT_TABS: TabDef[] = [
     label: 'Overview',
     href: '',
     icon: LayoutDashboard,
-    routes: ['', '/health', '/brief', '/resources'],
+    routes: ['', '/health', '/brief', '/resources', '/delivery'],
     subTabs: [
       { label: 'Dashboard', href: '' },
       { label: 'Health', href: '/health' },
       { label: 'Brief', href: '/brief' },
       { label: 'Resources', href: '/resources' },
+      { label: 'Delivery', href: '/delivery' },
     ],
   },
   {

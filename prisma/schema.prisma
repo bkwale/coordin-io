@@ -649,6 +649,9 @@ model Project {
 
   // Sprint 2 — BUG-05: project-level SharePoint link
   sharepointUrl String? @map("sharepoint_url")
+  // Delivery framework (FEAT-017): RIBA, CWA (G0–G10) or CUSTOM; stages snapshotted into delivery_stages
+  deliveryFramework String?  @map("delivery_framework")
+  accorOverlay      Boolean  @default(false) @map("accor_overlay")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -683,6 +686,7 @@ model Project {
   outboundInvoices     OutboundInvoice[]     @relation("OutboundInvoiceProject")
   categorisationRules  CategorisationRule[]  @relation("CategorisationRuleProject")
   stageGates           StageGate[]
+  deliveryStages       DeliveryStage[]
   briefSections        ProjectBriefSection[]
 
   @@map("projects")
@@ -3466,4 +3470,62 @@ model PracticeProfile {
   @@unique([organisationId, version])
   @@index([organisationId])
   @@map("practice_profiles")
+}
+
+/// Project delivery stage / gate (FEAT-017). Snapshot of a framework template at apply time.
+model DeliveryStage {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  framework       String // RIBA, CWA, CUSTOM
+  templateVersion String    @map("template_version")
+  code            String
+  name            String
+  outcome         String?
+  purpose         String?
+  sortOrder       Int       @map("sort_order")
+  status          String    @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, PASSED, CONDITIONAL, HOLD
+  designFreeze    Boolean   @default(false) @map("design_freeze")
+  frozenAt        DateTime? @map("frozen_at")
+  leadId          String?   @map("lead_id")
+  plannedStart    DateTime? @map("planned_start")
+  plannedEnd      DateTime? @map("planned_end")
+  actualStart     DateTime? @map("actual_start")
+  actualEnd       DateTime? @map("actual_end")
+  decision        String? // PASS, CONDITIONAL_PASS, HOLD
+  decisionNotes   String?   @map("decision_notes")
+  decidedById     String?   @map("decided_by_id")
+  decidedAt       DateTime? @map("decided_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   DeliveryStageItem[]
+
+  @@index([projectId, sortOrder])
+  @@map("delivery_stages")
+}
+
+/// Checklist line in a delivery stage: drawing, report, exit criterion, approval step, Accor milestone, deliverable.
+model DeliveryStageItem {
+  id               String    @id @default(cuid())
+  stageId          String    @map("stage_id")
+  kind             String // DRAWING, REPORT, EXIT_CRITERION, APPROVAL, ACCOR, DELIVERABLE
+  title            String
+  responsibleParty String?   @map("responsible_party")
+  assigneeId       String?   @map("assignee_id")
+  dueDate          DateTime? @map("due_date")
+  status           String    @default("OPEN") // OPEN, DONE, NOT_APPLICABLE
+  isOpenItem       Boolean   @default(false) @map("is_open_item")
+  documentUrl      String?   @map("document_url")
+  notes            String?
+  completedAt      DateTime? @map("completed_at")
+  completedById    String?   @map("completed_by_id")
+  sortOrder        Int       @default(0) @map("sort_order")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  stage DeliveryStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([stageId, kind])
+  @@map("delivery_stage_items")
 }
