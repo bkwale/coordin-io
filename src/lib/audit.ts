@@ -428,6 +428,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'ai.practice_setup_run': 'Ran AI practice setup',
   'ai.practice_configured': 'Applied AI practice configuration',
   'ai.project_configured': 'Applied AI project configuration',
+  'project.ehr_linked': 'Linked Ehitisregister building',
+  'project.ehr_unlinked': 'Unlinked Ehitisregister building',
 
   // Audit
   'audit.exported': 'Exported audit trail',
