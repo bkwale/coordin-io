@@ -39,7 +39,7 @@ type Mapping = {
   followUpQuestions: { id: string; question: string; options: string[] }[]
   warnings: string[]
 }
-type Run = { id: string; status: string; stages: Stage[]; output?: Profile | null; mapping?: Mapping | null; error?: string | null; latencyMs?: number | null; model?: string | null; tokensUsed?: number | null; inputSummary: string }
+type Run = { id: string; status: string; stages: Stage[]; output?: Profile | null; mapping?: Mapping | null; error?: string | null; errorKind?: string | null; latencyMs?: number | null; model?: string | null; tokensUsed?: number | null; inputSummary: string }
 
 type Msg =
   | { kind: 'ai'; text: string }
@@ -95,6 +95,8 @@ export default function PracticeSetupDemo() {
   const [busy, setBusy] = useState(false)
   const chatEnd = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollStartRef = useRef(0)
+  const pollFailsRef = useRef(0)
   const finalisedRef = useRef<string | null>(null)
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
@@ -137,6 +139,7 @@ export default function PracticeSetupDemo() {
       if (!res.ok) throw new Error(body.error || 'Could not start')
       const id = body.data.id as string
       if (pollRef.current) clearInterval(pollRef.current)
+      pollStartRef.current = Date.now(); pollFailsRef.current = 0
       pollRef.current = setInterval(() => poll(id), 1500)
     } catch (e) {
       setBusy(false)
@@ -145,10 +148,18 @@ export default function PracticeSetupDemo() {
     }
   }
 
+  function giveUp(text: string) {
+    if (pollRef.current) clearInterval(pollRef.current)
+    setBusy(false)
+    push({ kind: 'error', text })
+  }
+
   async function poll(id: string) {
+    if (Date.now() - pollStartRef.current > 8 * 60_000) return giveUp('This is taking much longer than it should. Nothing was changed — try again later, or we can set up manually.')
     try {
       const res = await fetch(`/api/ai/runs/${id}`, { cache: 'no-store' })
-      if (!res.ok) return
+      if (!res.ok) { if (++pollFailsRef.current >= 5) giveUp('Lost contact with Coordin. Check your connection and try again.'); return }
+      pollFailsRef.current = 0
       const { data } = (await res.json()) as { data: Run }
       setRun(data)
       const byName = new Map<string, Stage>()
@@ -165,14 +176,15 @@ export default function PracticeSetupDemo() {
         setBusy(false)
         if (data.status === 'FAILED') {
           push({ kind: 'error', text: data.error || 'Could not read that site.' })
-          push({ kind: 'ai', text: 'I couldn’t read that one. Try another URL, or we can set up manually.' })
+          const outage = ['unavailable', 'timeout', 'rate_limited', 'stale'].includes(data.errorKind ?? '')
+          push({ kind: 'ai', text: outage ? 'The AI isn’t available right now. Try again in a few minutes, use the registry number on its own, or we can set up manually.' : 'I couldn’t read that one. Try another URL, or we can set up manually.' })
         } else if (data.mapping) {
           const h = data.mapping.headline
           push({ kind: 'ai', text: `${h.name}${h.city ? `, ${h.city}` : ''}${h.founded ? `, since ${h.founded}` : ''}. ${h.teamSize ? `${h.teamSize} people` : 'Team not listed'}${h.partners.length ? ` — ${h.partners.slice(0, 3).join(', ')} as partners` : ''}. ${data.mapping.municipalityProfiles.length ? `Working across ${data.mapping.municipalityProfiles.length} ${data.mapping.authorityTerm || 'municipalities'}.` : ''} Everything on the right is yours to change.` })
           setTimeout(() => askNext(data.mapping!, 0), 900)
         }
       }
-    } catch { /* keep polling */ }
+    } catch { if (++pollFailsRef.current >= 5) giveUp('Lost contact with Coordin. Check your connection and try again.') }
   }
 
   function askNext(m: Mapping, i: number) {

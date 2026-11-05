@@ -648,14 +648,14 @@ model Project {
   complianceFrameworks     String?   @map("compliance_frameworks") // Comma-separated: BUILDING_REGS, PLANNING, FIRE_SAFETY, EDGE, BREEAM, LEED, OPERATOR_REQS
 
   // Sprint 2 — BUG-05: project-level SharePoint link
-  sharepointUrl String? @map("sharepoint_url")
+  sharepointUrl     String?   @map("sharepoint_url")
   // Ehitisregister (public API) — authoritative building record linked by the architect (S3.C)
-  ehrCode      String?   @map("ehr_code")
-  ehrSnapshot  Json?     @map("ehr_snapshot")
-  ehrFetchedAt DateTime? @map("ehr_fetched_at")
+  ehrCode           String?   @map("ehr_code")
+  ehrSnapshot       Json?     @map("ehr_snapshot")
+  ehrFetchedAt      DateTime? @map("ehr_fetched_at")
   // Delivery framework (FEAT-017): RIBA, CWA (G0–G10) or CUSTOM; stages snapshotted into delivery_stages
-  deliveryFramework String?  @map("delivery_framework")
-  accorOverlay      Boolean  @default(false) @map("accor_overlay")
+  deliveryFramework String?   @map("delivery_framework")
+  accorOverlay      Boolean   @default(false) @map("accor_overlay")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -2296,16 +2296,16 @@ enum HRDocumentType {
 }
 
 model ProbationReview {
-  id             String    @id @default(cuid())
-  profileId      String    @map("profile_id")
-  reviewType     String    @map("review_type") // 30-day, 60-day, 90-day, final
-  scheduledDate  DateTime  @map("scheduled_date")
-  completedDate  DateTime? @map("completed_date")
-  reviewerId     String?   @map("reviewer_id")
-  objectives     String?
-  feedback       String?
-  outcome        String? // Pass, Extend, Fail
-  nextReviewDate DateTime? @map("next_review_date")
+  id                    String    @id @default(cuid())
+  profileId             String    @map("profile_id")
+  reviewType            String    @map("review_type") // 30-day, 60-day, 90-day, final
+  scheduledDate         DateTime  @map("scheduled_date")
+  completedDate         DateTime? @map("completed_date")
+  reviewerId            String?   @map("reviewer_id")
+  objectives            String?
+  feedback              String?
+  outcome               String? // Pass, Extend, Fail
+  nextReviewDate        DateTime? @map("next_review_date")
   // Review workflow (2026-11-05): manager drafts → submits to HR → HR returns or finalises
   workflowStatus        String    @default("SCHEDULED") @map("workflow_status") // SCHEDULED, DRAFT, SUBMITTED, RETURNED, FINALISED
   assessment            Json? // criteria list: key, label, score 1-5, comment
@@ -2321,8 +2321,8 @@ model ProbationReview {
   returnReason          String?   @map("return_reason")
   finalisedAt           DateTime? @map("finalised_at")
   finalisedById         String?   @map("finalised_by_id")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   profile Profile         @relation(fields: [profileId], references: [id])
   goals   ProbationGoal[]
@@ -2462,28 +2462,28 @@ model OnboardingTemplateItem {
 }
 
 model OnboardingAssignment {
-  id             String    @id @default(cuid())
-  templateId     String    @map("template_id")
-  profileId      String    @map("profile_id")
-  organisationId String    @map("organisation_id")
-  assignedById   String    @map("assigned_by_id")
-  startDate      DateTime  @map("start_date")
-  status         String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
-  completedAt    DateTime? @map("completed_at")
-  progress       Float     @default(0) // 0-100 percentage
+  id               String    @id @default(cuid())
+  templateId       String    @map("template_id")
+  profileId        String    @map("profile_id")
+  organisationId   String    @map("organisation_id")
+  assignedById     String    @map("assigned_by_id")
+  startDate        DateTime  @map("start_date")
+  status           String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  completedAt      DateTime? @map("completed_at")
+  progress         Float     @default(0) // 0-100 percentage
   // Seven-day self-service window (Ayo 1.2-1.3)
-  employeeType      String    @default("NEW") @map("employee_type") // NEW or EXISTING
-  addOnTemplateIds  String[]  @default([]) @map("add_on_template_ids")
-  windowDays        Int       @default(7) @map("window_days")
-  windowStartAt     DateTime? @map("window_start_at") // set on activation, or by HR
-  windowDueAt       DateTime? @map("window_due_at")
-  remindersSent     Int[]     @default([]) @map("reminders_sent") // window days already reminded (3, 5, 7)
-  missedNotifiedAt  DateTime? @map("missed_notified_at")
-  submittedAt       DateTime? @map("submitted_at")
-  verifiedAt        DateTime? @map("verified_at")
-  verifiedById      String?   @map("verified_by_id")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  employeeType     String    @default("NEW") @map("employee_type") // NEW or EXISTING
+  addOnTemplateIds String[]  @default([]) @map("add_on_template_ids")
+  windowDays       Int       @default(7) @map("window_days")
+  windowStartAt    DateTime? @map("window_start_at") // set on activation, or by HR
+  windowDueAt      DateTime? @map("window_due_at")
+  remindersSent    Int[]     @default([]) @map("reminders_sent") // window days already reminded (3, 5, 7)
+  missedNotifiedAt DateTime? @map("missed_notified_at")
+  submittedAt      DateTime? @map("submitted_at")
+  verifiedAt       DateTime? @map("verified_at")
+  verifiedById     String?   @map("verified_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   template OnboardingTemplate @relation(fields: [templateId], references: [id])
 
@@ -3447,7 +3447,9 @@ model AIRun {
   mapping        Json? // deterministic config derived from output
   confidence     Float?
   citations      Json?
-  error          String?
+  error          String? // user-facing message
+  errorKind      String?      @map("error_kind") // unavailable | timeout | rate_limited | config | bad_output | input | stale | unknown
+  errorDetail    String?      @map("error_detail") // technical detail — platform admins only
   latencyMs      Int?         @map("latency_ms")
   tokensUsed     Int?         @map("tokens_used")
   createdBy      String       @map("created_by") // auth user id or profile id
@@ -3547,4 +3549,30 @@ model DeliveryStageItem {
 
   @@index([stageId, kind])
   @@map("delivery_stage_items")
+}
+
+/// Server and client errors, one row per occurrence. Written by src/lib/error-reporting.ts; never throws.
+model ErrorEvent {
+  id             String   @id @default(cuid())
+  ref            String   @unique // shown to users as "Error reference"
+  fingerprint    String
+  level          String   @default("error") // error | warning
+  source         String // api | ai | cron | client | background
+  route          String?
+  method         String?
+  statusCode     Int?     @map("status_code")
+  code           String?
+  message        String
+  stack          String?
+  organisationId String?  @map("organisation_id")
+  profileId      String?  @map("profile_id")
+  runId          String?  @map("run_id")
+  context        Json?
+  release        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([fingerprint, createdAt])
+  @@index([createdAt])
+  @@index([organisationId, createdAt])
+  @@map("error_events")
 }

@@ -8,6 +8,8 @@ import { createHash } from 'node:crypto'
 import type { ZodTypeAny, z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { chat, parseJsonWithMeta } from './providers'
+import { classifyAIError, AI_FAILURE_LABEL } from './failures'
+import { captureError } from '@/lib/error-reporting'
 
 export type Stage = { name: string; status: 'running' | 'done' | 'failed'; ms?: number; detail?: string; at: string }
 
@@ -108,13 +110,29 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
       },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    // Never silent: the run says what happened in plain words, admins get the detail, reporting gets the rest.
+    const f = classifyAIError(err)
     const last = stages.find((s) => s.status === 'running')
-    if (last) { last.status = 'failed'; last.detail = message.slice(0, 200) }
-    await prisma.aIRun.update({
-      where: { id: runId },
-      data: { status: 'FAILED', error: message.slice(0, 1000), latencyMs: Date.now() - t0, stages: stages as any },
-    })
+    if (last) { last.status = 'failed'; last.detail = AI_FAILURE_LABEL[f.kind] }
+    const run = await prisma.aIRun.findUnique({ where: { id: runId }, select: { organisationId: true, projectId: true, surface: true } }).catch(() => null)
+    const ref = f.report
+      ? captureError(err, {
+          source: 'ai', runId, organisationId: run?.organisationId ?? null, route: `ai:${run?.surface ?? opts.surface}`,
+          code: `AI_${f.kind.toUpperCase()}`, extra: { kind: f.kind, stage: last?.name ?? null, promptVersion: opts.promptVersion, projectId: run?.projectId ?? null },
+        }, f.report)
+      : null
+    try {
+      await prisma.aIRun.update({
+        where: { id: runId },
+        data: {
+          status: 'FAILED', error: (ref ? `${f.message} (Reference: ${ref})` : f.message).slice(0, 1000), errorKind: f.kind,
+          errorDetail: `${ref ? `[${ref}] ` : ''}${f.detail}`.slice(0, 1000), latencyMs: Date.now() - t0, stages: stages as any,
+        },
+      })
+    } catch (writeErr) {
+      // Could not even record the failure (DB down) — the stale-run check will close it; make sure someone hears about it
+      captureError(writeErr, { source: 'ai', runId, extra: { while: 'recording AI failure', kind: f.kind } })
+    }
     throw err
   }
 }

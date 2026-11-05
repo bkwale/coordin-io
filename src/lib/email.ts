@@ -477,3 +477,33 @@ Your bank details are encrypted and only accessible to authorised HR and Payroll
 
 — Coordin.io`
 }
+
+// ── Error alert (platform operator only) ─────────────────
+
+export interface ErrorAlertEmailParams {
+  to: string
+  ref: string
+  source: string
+  route: string | null
+  message: string
+  level: string
+}
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+
+/** Sent the first time a new kind of error appears in 24 h. Message is already scrubbed of emails/numbers. */
+export async function sendErrorAlertEmail(p: ErrorAlertEmailParams): Promise<{ success: boolean; error?: string }> {
+  const link = `${APP_URL}/admin/errors?ref=${encodeURIComponent(p.ref)}`
+  try {
+    const { error } = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to: p.to,
+      subject: `[Coordin] New ${p.level}: ${p.message.slice(0, 80)}`,
+      text: `New ${p.level} (${p.source}${p.route ? ` · ${p.route}` : ''})\n\n${p.message}\n\nReference: ${p.ref}\n${link}\n`,
+      html: `<p><strong>New ${esc(p.level)}</strong> (${esc(p.source)}${p.route ? ` · ${esc(p.route)}` : ''})</p><pre style="white-space:pre-wrap">${esc(p.message)}</pre><p>Reference: <code>${esc(p.ref)}</code></p><p><a href="${link}">Open in admin</a></p>`,
+    })
+    return error ? { success: false, error: error.message } : { success: true }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}

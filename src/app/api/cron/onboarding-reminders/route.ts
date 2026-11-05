@@ -1,3 +1,4 @@
+import { captureErrorAndWait } from '@/lib/error-reporting'
 import { NextRequest, NextResponse } from 'next/server'
 import { runOnboardingReminders } from '@/lib/onboarding/window-service'
 
@@ -20,7 +21,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ...result, timestamp: new Date().toISOString() })
   } catch (err) {
     console.error('[cron/onboarding-reminders] Failed:', err)
-    return NextResponse.json({ ok: false, error: 'Reminder run failed' }, { status: 500 })
+    const ref = await captureErrorAndWait(err, { source: 'cron', route: '/api/cron/onboarding-reminders' })
+    return NextResponse.json({ ok: false, error: 'Reminder run failed', ref }, { status: 500 })
   }
 }
 

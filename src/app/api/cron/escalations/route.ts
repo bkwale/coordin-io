@@ -1,3 +1,4 @@
+import { captureErrorAndWait } from '@/lib/error-reporting'
 import { NextRequest, NextResponse } from 'next/server'
 import { processEscalations } from '@/lib/approval-escalation'
 
@@ -34,8 +35,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     console.error('[cron/escalations] Failed:', err)
+    const ref = await captureErrorAndWait(err, { source: 'cron', route: '/api/cron/escalations' })
     return NextResponse.json(
-      { ok: false, error: 'Escalation processing failed' },
+      { ok: false, error: 'Escalation processing failed', ref },
       { status: 500 },
     )
   }

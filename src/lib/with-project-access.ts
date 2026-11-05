@@ -60,6 +60,7 @@ type ProjectAccessHandler = (
  */
 export function withProjectAccess(handler: ProjectAccessHandler, options: WithProjectAccessOptions = {}) {
   return async (request: NextRequest): Promise<NextResponse> => {
+    let who: { profileId?: string; organisationId?: string } = {}
     try {
       // 0. Demo mode — cookie-based 10-minute pass (no Supabase session needed)
       const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
@@ -131,6 +132,7 @@ export function withProjectAccess(handler: ProjectAccessHandler, options: WithPr
       // 2. Look up profile
       const profile = await getProfileByAuthId(user.id)
 
+      who = { profileId: profile?.id, organisationId: profile?.organisationId }
       if (!profile) {
         throw new AuthError(
           'No profile found for this account. Please contact your administrator.',
@@ -198,7 +200,7 @@ export function withProjectAccess(handler: ProjectAccessHandler, options: WithPr
         projectId,
       })
     } catch (err) {
-      const formatted = formatAPIError(err)
+      const formatted = formatAPIError(err, { route: new URL(request.url).pathname, method: request.method, ...who })
       return NextResponse.json(formatted.body, { status: formatted.statusCode })
     }
   }

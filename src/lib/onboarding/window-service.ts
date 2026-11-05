@@ -5,6 +5,7 @@
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { recordAuditEvent } from '@/lib/audit'
+import { captureError } from '@/lib/error-reporting'
 import { windowFor, reminderDue, missedNotificationDue, formatDueDate, daysRemaining as daysLeft, normaliseWindowDays } from './seven-day'
 
 const DONE = ['COMPLETED', 'WAIVED']
@@ -208,6 +209,7 @@ async function processReminderPage(open: ReminderRow[], now: Date, result: Remin
     } catch (e) {
       result.errors++
       console.warn('[onboarding-reminders] failed for assignment', a.id, e)
+      captureError(e, { source: 'cron', route: '/api/cron/onboarding-reminders', organisationId: a.organisationId, extra: { assignmentId: a.id } })
     }
   }
 }

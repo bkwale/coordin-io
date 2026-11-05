@@ -23,7 +23,7 @@ export interface CrawlResult {
 }
 
 export class CrawlError extends Error {
-  constructor(public failure: CrawlFailure, message: string) { super(message) }
+  constructor(public failure: CrawlFailure, message: string) { super(message); this.name = 'CrawlError' }
 }
 
 export const FAILURE_MESSAGE: Record<CrawlFailure, string> = {

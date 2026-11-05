@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { reportClientError } from '@/lib/client/report-client-error'
 
 interface ErrorPageProps {
   error: Error & { digest?: string }
@@ -15,7 +16,10 @@ interface ErrorPageProps {
  * to the browser console.
  */
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
+  const [ref, setRef] = useState<string | null>(null)
   useEffect(() => {
+    // Every crash is reported; the user gets a reference they can quote to support
+    reportClientError(error).then(setRef)
     if (process.env.NODE_ENV === 'development') {
       console.error('[ErrorPage]', {
         timestamp: new Date().toISOString(),
@@ -70,10 +74,11 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
           </a>
         </div>
 
-        {/* Digest for support reference */}
-        {error.digest && (
+        {/* Reference the user can quote — we already have the details */}
+        {(ref || error.digest) && (
           <p className="mt-6 text-xs text-ink-400">
-            Error reference: {error.digest}
+            Error reference: <span className="font-mono">{ref ?? error.digest}</span>
+            {ref && <span className="block mt-1">We’ve been notified. If you contact support, quote this reference.</span>}
           </p>
         )}
       </div>

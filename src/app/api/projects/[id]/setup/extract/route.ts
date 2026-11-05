@@ -1,4 +1,4 @@
-import { NextRequest, after } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { assertProjectWrite } from '@/lib/project-write-access'
 import { success, error } from '@/lib/api-response'
@@ -6,6 +6,8 @@ import { ValidationError } from '@/lib/errors'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { startProjectSetup, executeProjectSetup, type SetupDocumentKind } from '@/lib/ai/project-setup'
 import { IngestError, INGEST_LIMITS } from '@/lib/ai/document-ingest'
+import { aiAvailability } from '@/lib/ai/availability'
+import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -21,6 +23,10 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const limited = await checkRateLimit(`ai-setup:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
 
+  // Model down: say so now, before anything is uploaded or stored — the architect fills it in by hand
+  const ai = await aiAvailability()
+  if (!ai.available) return NextResponse.json({ error: ai.message, code: 'AI_UNAVAILABLE', manual: true }, { status: 503 })
+
   let form: FormData
   try { form = await request.formData() } catch { return error(new ValidationError('Could not read the upload')) }
   const kindRaw = String(form.get('kind') ?? 'planning_conditions')
@@ -28,6 +34,13 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const kind = kindRaw as SetupDocumentKind
   const file = form.get('file')
   const text = form.get('text')
+  // "Try again" after a failure re-uses the document already stored for that run (no duplicate in Documents)
+  let reuseDocumentId: string | null = null
+  const retryOf = form.get('retryOf')
+  if (typeof retryOf === 'string' && retryOf) {
+    const prev = await prisma.aIRun.findFirst({ where: { id: retryOf, projectId, surface: 'PROJECT_SETUP', status: 'FAILED' }, select: { inputSummary: true } })
+    try { reuseDocumentId = prev ? (JSON.parse(prev.inputSummary).documentId ?? null) : null } catch { reuseDocumentId = null }
+  }
 
   try {
     let fileInput: { name: string; bytes: Uint8Array; contentType: string } | null = null
@@ -37,7 +50,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
     }
     const { run, document, pages } = await startProjectSetup({
       projectId, organisationId: project.organisationId, authorProfileId: profile.id, authUserId, kind,
-      file: fileInput, text: typeof text === 'string' ? text : null,
+      file: fileInput, text: typeof text === 'string' ? text : null, reuseDocumentId,
     })
     after(async () => { try { await executeProjectSetup(run.id, kind, pages) } catch { /* recorded on the run */ } })
     return success({ runId: run.id, documentId: document?.id ?? null, pages: pages.length }, 202)

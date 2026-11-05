@@ -52,8 +52,7 @@ export function useApiFetch<T>(
       const res = await fetch(url, { signal })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        const apiErr = body.error as ApiError | undefined
-        throw new Error(apiErr?.message || `Request failed (${res.status})`)
+        throw new Error(apiErrorMessage(body, res.status))
       }
       const json = await res.json()
       if (!signal?.aborted) {
@@ -122,8 +121,7 @@ export function useApiMutation<T = unknown>(
 
         if (!res.ok) {
           const json = await res.json().catch(() => ({}))
-          const apiErr = json.error as ApiError | undefined
-          throw new Error(apiErr?.message || `Request failed (${res.status})`)
+          throw new Error(apiErrorMessage(json, res.status))
         }
 
         // DELETE may return 204 (no content)
@@ -145,4 +143,15 @@ export function useApiMutation<T = unknown>(
   const clearError = useCallback(() => setError(null), [])
 
   return { mutate, loading, error, clearError }
+}
+
+/**
+ * The API sends `{ error: string, code, ref? }` (older routes: `{ error: { message } }`).
+ * Server errors carry a reference the user can quote to support.
+ */
+export function apiErrorMessage(body: unknown, status: number): string {
+  const b = (body ?? {}) as { error?: string | ApiError; ref?: string }
+  const msg = typeof b.error === 'string' ? b.error : b.error?.message
+  const base = msg || (status >= 500 ? 'Something went wrong on our side' : `Request failed (${status})`)
+  return b.ref ? `${base} (Reference: ${b.ref})` : base
 }

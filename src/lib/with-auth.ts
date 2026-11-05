@@ -60,6 +60,7 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
   return async (request: NextRequest, routeContext?: unknown): Promise<NextResponse> => {
     const startMs = Date.now()
 
+    let who: { profileId?: string; organisationId?: string } = {}
     try {
       // 0. Demo mode — cookie-based 10-minute pass (read-only, no Supabase session needed)
       const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
@@ -113,6 +114,7 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
       // 3. Look up profile
       const profile = await getProfileByAuthId(user.id)
 
+      who = { profileId: profile?.id, organisationId: profile?.organisationId }
       if (!profile) {
         throw new AuthError(
           'No profile found for this account. Please contact your administrator.',
@@ -164,7 +166,7 @@ export function withAuth(handler: AuthHandler, options: WithAuthOptions = {}) {
         )
       }
 
-      const formatted = formatAPIError(err)
+      const formatted = formatAPIError(err, { route: new URL(request.url).pathname, method: request.method, ...who })
       return NextResponse.json(formatted.body, { status: formatted.statusCode })
     }
   }

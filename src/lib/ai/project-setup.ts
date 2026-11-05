@@ -29,6 +29,8 @@ export interface StartProjectSetupInput {
   kind: SetupDocumentKind
   file?: { name: string; bytes: Uint8Array; contentType: string } | null
   text?: string | null
+  /** Retry of a failed run: the document is already stored — link the new run to it instead of uploading a copy. */
+  reuseDocumentId?: string | null
 }
 
 /** Stores the document and creates the run atomically. Returns what the background step needs. */
@@ -42,7 +44,7 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
 
   if (input.file) {
     pages = await pdfToPages(input.file.bytes) // throws IngestError
-    storage = await uploadToStorage(organisationId, projectId, input.file)
+    if (!input.reuseDocumentId) storage = await uploadToStorage(organisationId, projectId, input.file)
   } else if (input.text && input.text.trim()) {
     pages = capPages(paginateText(input.text))
     if (pages.join('').length < 300) throw new IngestError('empty', 'Paste at least a few paragraphs of the document')
@@ -59,7 +61,9 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
             revisions: { create: { revision: 'A', authorId: authorProfileId, fileUrl: storage!.url, fileSize: storage!.size, status: 'ISSUED', issuePurpose: kind } },
           },
         })
-      : null
+      : input.reuseDocumentId
+        ? await tx.document.findFirst({ where: { id: input.reuseDocumentId, projectId } })
+        : null
     const run = await tx.aIRun.create({
       data: {
         surface: 'PROJECT_SETUP', organisationId, projectId, status: 'QUEUED', promptVersion: kind === 'brief' ? BRIEF_PROMPT_VERSION : PLANNING_CONDITIONS_PROMPT_VERSION,

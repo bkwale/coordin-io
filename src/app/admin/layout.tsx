@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   Shield,
   Sparkles,
+  Bug,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/audit', label: 'Audit Log', icon: ScrollText },
   { href: '/admin/health', label: 'System Health', icon: Activity },
+  { href: '/admin/errors', label: 'Errors', icon: Bug },
   { href: '/ai/practice-setup', label: 'AI Practice Setup', icon: Sparkles },
 ]
 

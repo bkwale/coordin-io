@@ -1,3 +1,4 @@
+import { captureError, type ErrorContext } from '@/lib/error-reporting'
 // ── Centralised Error Types & Handling ──────────────────────
 //
 // All application errors extend AppError. API routes use
@@ -224,15 +225,30 @@ function logError(error: AppError, originalError?: unknown): void {
 // ── API Error Formatting ────────────────────────────────────
 
 export interface FormattedAPIError {
-  body: { error: string; code: string; details?: Record<string, unknown> }
+  body: { error: string; code: string; details?: Record<string, unknown>; ref?: string }
   statusCode: number
+}
+
+/** Where the error happened — passed by the route wrappers so reports say which route and who. */
+export type APIErrorContext = Omit<ErrorContext, 'source' | 'statusCode' | 'code'> & { source?: ErrorContext['source'] }
+
+function withRef(f: FormattedAPIError, err: unknown, ctx?: APIErrorContext): FormattedAPIError {
+  // 4xx are the user's to fix — logged, not reported. 5xx are ours: report and give the user a reference.
+  if (f.statusCode < 500) return f
+  const ref = captureError(err, { ...ctx, source: ctx?.source ?? 'api', statusCode: f.statusCode, code: f.body.code })
+  return { ...f, body: { ...f.body, ref } }
 }
 
 /**
  * Catches any thrown value and returns a safe, consistent
  * JSON body + status code ready for NextResponse.
+ * Server errors (5xx) are captured by error-reporting and carry a `ref` the user can quote.
  */
-export function formatAPIError(error: unknown): FormattedAPIError {
+export function formatAPIError(error: unknown, ctx?: APIErrorContext): FormattedAPIError {
+  return withRef(formatAPIErrorInner(error), error, ctx)
+}
+
+function formatAPIErrorInner(error: unknown): FormattedAPIError {
   // Already an AppError — use directly
   if (error instanceof AppError) {
     logError(error)

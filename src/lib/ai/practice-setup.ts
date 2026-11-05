@@ -1,3 +1,5 @@
+import { classifyAIError } from './failures'
+import { captureError } from '@/lib/error-reporting'
 /**
  * Surface A — Practice Setup. First client of runAI.
  */
@@ -43,9 +45,12 @@ export async function executeRegistryOnlySetup(runId: string, jurisdiction: Regi
       data: { status: 'AWAITING_CONFIRMATION', model: 'none/registry', inputHash: `${jurisdiction}:${registryCode}`, output: output as any, mapping: mapping as any, confidence: practiceConfidence(output), latencyMs: Date.now() - t0, tokensUsed: 0, stages: [...stages, { name: 'map', status: 'done', ms: 0, at: new Date().toISOString() }] as any },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    stages[0] = { ...stages[0], status: 'failed', detail: message.slice(0, 200) }
-    await prisma.aIRun.update({ where: { id: runId }, data: { status: 'FAILED', error: message.slice(0, 1000), latencyMs: Date.now() - t0, stages: stages as any } })
+    const f = classifyAIError(err)
+    const message = f.kind === 'input' ? f.message : 'The company registry didn’t answer. Try again in a few minutes, or set the practice up by hand.'
+    stages[0] = { ...stages[0], status: 'failed', detail: f.kind === 'input' ? 'not found' : 'registry unavailable' }
+    await prisma.aIRun.update({ where: { id: runId }, data: { status: 'FAILED', error: message, errorKind: f.kind === 'input' ? 'input' : 'unavailable', errorDetail: f.detail, latencyMs: Date.now() - t0, stages: stages as any } })
+      .catch((e) => captureError(e, { source: 'ai', runId, extra: { while: 'recording registry failure' } }))
+    if (f.kind !== 'input') captureError(err, { source: 'ai', runId, route: 'ai:PRACTICE_SETUP', code: 'REGISTRY_UNAVAILABLE', extra: { jurisdiction } }, 'warning')
     throw err
   }
 }

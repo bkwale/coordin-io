@@ -4,6 +4,7 @@ import { withSuperAdmin } from '@/lib/with-super-admin'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { startPracticeSetup, executePracticeSetup, executeRegistryOnlySetup } from '@/lib/ai/practice-setup'
 import { normaliseUrl } from '@/lib/ai/crawl'
+import { aiAvailability } from '@/lib/ai/availability'
 import { isRegistryConfigured, type RegistryJurisdiction } from '@/lib/registry'
 
 export const maxDuration = 300
@@ -30,6 +31,12 @@ export const POST = withSuperAdmin(async (request: NextRequest, { authUserId }) 
 
   let url: string | null = null
   if (raw) { try { url = normaliseUrl(raw).toString() } catch { return NextResponse.json({ error: 'Not a valid URL', code: 'VALIDATION' }, { status: 400 }) } }
+
+  // Reading a website needs the model; a registry-only lookup does not
+  if (url) {
+    const ai = await aiAvailability()
+    if (!ai.available) return NextResponse.json({ error: registryCode ? `${ai.message} You can still set up from the registry number alone.` : ai.message, code: 'AI_UNAVAILABLE', manual: true }, { status: 503 })
+  }
 
   let run: Awaited<ReturnType<typeof startPracticeSetup>>
   try { run = await startPracticeSetup({ url, registryCode: registryCode || null, jurisdiction, createdBy: authUserId }) }

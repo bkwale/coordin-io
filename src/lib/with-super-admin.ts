@@ -31,6 +31,7 @@ type SuperAdminHandler = (
  */
 export function withSuperAdmin(handler: SuperAdminHandler) {
   return async (request: NextRequest): Promise<NextResponse> => {
+    let who: { profileId?: string; organisationId?: string } = {}
     try {
       // 1. Verify Supabase session
       const supabase = await createServerSupabaseClient()
@@ -63,7 +64,7 @@ export function withSuperAdmin(handler: SuperAdminHandler) {
         name: admin[0].name,
       })
     } catch (err) {
-      const formatted = formatAPIError(err)
+      const formatted = formatAPIError(err, { route: new URL(request.url).pathname, method: request.method, ...who })
       return NextResponse.json(formatted.body, { status: formatted.statusCode })
     }
   }
