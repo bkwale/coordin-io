@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { markSubmittedFromSelfService } from '@/lib/onboarding/window-service'
+import { markSubmittedFromSelfService, startWindowOnActivation } from '@/lib/onboarding/window-service'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
@@ -70,6 +70,9 @@ export async function POST(request: NextRequest) {
   if (selfServiceToken.completedAt) {
     return NextResponse.json({ error: 'This onboarding has already been completed' }, { status: 410 })
   }
+
+  // Doing a step is a deliberate action, so it also starts the window if Begin was never pressed
+  try { await startWindowOnActivation(selfServiceToken.assignmentId ?? null, selfServiceToken.id) } catch (e) { console.warn('[self-service] window start failed', e) }
 
   // Self-service tasks belong to this invitation's assignment (not any older one)
   const scope = {

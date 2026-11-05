@@ -5,7 +5,7 @@
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { recordAuditEvent } from '@/lib/audit'
-import { windowFor, reminderDue, missedNotificationDue, formatDueDate } from './seven-day'
+import { windowFor, reminderDue, missedNotificationDue, formatDueDate, daysRemaining as daysLeft, normaliseWindowDays } from './seven-day'
 
 const DONE = ['COMPLETED', 'WAIVED']
 
@@ -62,6 +62,23 @@ export async function completeFinalVerificationTasks(tx: Tx, assignmentId: strin
     data: { status: 'COMPLETED', completedAt: now, completedById: actorId },
   })
   await recalcAssignmentProgress(tx, assignmentId)
+}
+
+export interface LinkWindow { started: boolean; days: number; startAt: string | null; dueAt: string | null; dueLabel: string | null; daysRemaining: number | null }
+
+/** The seven-day window as the employee sees it on their invitation link (one source of truth). */
+export async function windowForLink(assignmentId: string | null): Promise<LinkWindow | null> {
+  if (!assignmentId) return null
+  const a = await modulesPrisma.onboardingAssignment.findUnique({ where: { id: assignmentId }, select: { windowDays: true, windowStartAt: true, windowDueAt: true } })
+  if (!a) return null
+  return {
+    started: !!a.windowStartAt,
+    days: normaliseWindowDays(a.windowDays ?? 7),
+    startAt: a.windowStartAt ? new Date(a.windowStartAt).toISOString() : null,
+    dueAt: a.windowDueAt ? new Date(a.windowDueAt).toISOString() : null,
+    dueLabel: a.windowDueAt ? formatDueDate(a.windowDueAt) : null,
+    daysRemaining: daysLeft({ windowDueAt: a.windowDueAt }),
+  }
 }
 
 /** Titles of the employee's own tasks still open (the final "submit" step itself doesn't count). */

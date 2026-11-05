@@ -445,7 +445,7 @@ function buildSelfServiceHtml(params: {
 <tr><td style="padding: 8px 12px;">4. Confirm your documents</td></tr>
 </table>
 <a href="${welcomeUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; margin: 8px 0;">Start onboarding</a>
-<p style="font-size: 13px; color: #666; margin-top: 16px;">This link expires on ${expiryDate}. If it expires, ask your HR team to send a new one.</p>
+<p style="font-size: 13px; color: #666; margin-top: 16px;">You'll have 7 days to finish once you press <strong>Begin</strong>, and you can come back to the link as often as you like. The link itself is valid until ${expiryDate}; if it expires, ask your HR team to send a new one.</p>
 <p style="font-size: 13px; color: #666;">Your bank details are encrypted and only accessible to authorised HR and Payroll staff.</p>
 <p style="font-size: 12px; color: #999; margin-top: 24px;">— Coordin.io</p>
 </body></html>`
@@ -471,7 +471,7 @@ You'll need to:
 
 Start here: ${welcomeUrl}
 
-This link expires on ${expiryDate}. If it expires, ask your HR team to send a new one.
+You'll have 7 days to finish once you press Begin, and you can come back to the link as often as you like. The link itself is valid until ${expiryDate}; if it expires, ask your HR team to send a new one.
 
 Your bank details are encrypted and only accessible to authorised HR and Payroll staff.
 
