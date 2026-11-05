@@ -141,6 +141,19 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
   const accepted = Array.from(new Set(input.acceptedConditions.filter((i) => Number.isInteger(i) && i >= 0 && i < mapping.conditions.length)))
   const docInfo = (() => { try { return JSON.parse(run.inputSummary) as { documentId?: string | null } } catch { return {} } })()
 
+  // An older planning-conditions document must not supersede a newer one that is already applied
+  if (mapping.kind === 'planning_conditions') {
+    const newer = await prisma.aIRun.findFirst({
+      where: { projectId: input.projectId, surface: 'PROJECT_SETUP', status: 'APPLIED', id: { not: run.id }, createdAt: { gt: run.createdAt } },
+      select: { id: true, mapping: true },
+    })
+    const newerMap = newer?.mapping as unknown as ProjectSetupMapping | null
+    if (newerMap?.kind === 'planning_conditions') {
+      const a = mapping.document.issuedAt, b = newerMap.document.issuedAt
+      if (!a || !b || a <= b) throw new ValidationError(`A newer planning-conditions document (PT nr ${newerMap.document.number ?? '?'}) is already applied — upload this one again if it really replaces it`)
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     // Claim the run atomically — two concurrent confirms must not both apply
     const claimed = await tx.aIRun.updateMany({ where: { id: run.id, status: 'AWAITING_CONFIRMATION' }, data: { status: 'APPLIED' } })
@@ -164,7 +177,7 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
           const c = mapping.conditions[i]
           return {
             registerId: applied.registerId, origin: 'MUNICIPALITY' as const, section: 'municipal', requirement: c.topic ? `${c.topic}: ${c.text}`.slice(0, 500) : c.text.slice(0, 500),
-            citation: c.citation, source: c.source, because: c.page ? `Page ${c.page} of the planning conditions` : null, confidence: c.mandatory ? 'high' : 'medium',
+            citation: c.citation, source: c.source, because: c.page ? `AI-extracted from page ${c.page} of the planning conditions — check against the document` : 'AI-extracted from the planning conditions — check against the document', confidence: 'ai',
             ruleSetVersion: null, ruleId: null, aiRunId: run.id, sortOrder: base + n * 10, comments: c.mandatory ? null : 'Recommended, not mandatory',
           }
         }),

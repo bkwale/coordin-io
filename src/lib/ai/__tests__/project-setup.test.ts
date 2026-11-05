@@ -140,7 +140,8 @@ const tx = {
   },
   aIRun: { updateMany: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id && (!where.status || x.status === where.status)); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 } }), update: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id)!; Object.assign(r, data); return r }) },
 }
-vi.mock('@/lib/prisma', () => ({ prisma: { aIRun: { findUnique: vi.fn(async ({ where }: Row) => db.runs.find((r) => r.id === where.id) ?? null) }, $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) } }))
+let newerRun: Row | null = null
+vi.mock('@/lib/prisma', () => ({ prisma: { aIRun: { findUnique: vi.fn(async ({ where }: Row) => db.runs.find((r) => r.id === where.id) ?? null), findFirst: vi.fn(async () => newerRun) }, $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) } }))
 vi.mock('@/lib/audit', () => ({ recordAuditEvent: (...a: unknown[]) => audit(...a), AuditActions: { AI_PROJECT_CONFIGURED: 'ai.project_configured' } }))
 
 const { confirmProjectSetup } = await import('@/lib/ai/project-setup')
@@ -148,7 +149,7 @@ const PARAMS = { jurisdiction: 'EE', buildingType: 'detached_house', workType: '
 const seed = (over: Row = {}) => { db.runs.push({ id: 'run-1', surface: 'PROJECT_SETUP', projectId: 'proj-1', status: 'AWAITING_CONFIRMATION', promptVersion: 'pt-0.2', model: 'mistral/x', inputSummary: JSON.stringify({ documentId: 'doc-1' }), mapping: mapPlanningConditions(pt()), ...over }) }
 const base = { projectId: 'proj-1', organisationId: 'org-1', runId: 'run-1', actorProfileId: 'prof-1', actorAuthUserId: 'auth-1' }
 
-beforeEach(() => { db.runs = []; db.items = []; db.registers = []; db.profiles = []; applied.calls = []; audit.mockClear() })
+beforeEach(() => { newerRun = null; db.runs = []; db.items = []; db.registers = []; db.profiles = []; applied.calls = []; audit.mockClear() })
 
 describe('confirmProjectSetup', () => {
   it('writes profile with sourceRunId, accepted conditions as MUNICIPALITY items citing the PT, marks run APPLIED, audits', async () => {
@@ -188,6 +189,19 @@ describe('confirmProjectSetup', () => {
     expect(worked.requirement).toMatch(/^\[Superseded by PT nr 2699999\/00001\] Old facade condition/)
     expect(worked.confidence).toBe('stale')
     expect(db.items.find((i) => i.id === 'rule-1')).toBeTruthy()
+  })
+  it('refuses an older planning-conditions run once a newer document is applied', async () => {
+    seed()
+    const mine = db.runs[0].mapping as any
+    newerRun = { id: 'run-new', mapping: { ...mine, document: { ...mine.document, issuedAt: '2027-01-01', number: '2699999/00099' } } }
+    await expect(confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [] } as any)).rejects.toThrow(/newer planning-conditions document/)
+    expect(db.runs[0].status).toBe('AWAITING_CONFIRMATION')
+  })
+  it('allows it when this document is issued later than the applied one', async () => {
+    seed()
+    const mine = db.runs[0].mapping as any
+    newerRun = { id: 'run-old', mapping: { ...mine, document: { ...mine.document, issuedAt: '2020-01-01' } } }
+    await expect(confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [] } as any)).resolves.toBeTruthy()
   })
   it('refuses to confirm the same run twice (atomic claim)', async () => {
     seed({ status: 'APPLIED' })

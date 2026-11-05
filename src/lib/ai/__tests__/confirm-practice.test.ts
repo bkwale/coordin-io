@@ -30,6 +30,7 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     aIRun: { findUnique: vi.fn(async ({ where }: Row) => db.runs.find((r) => r.id === where.id) ?? null) },
     organisation: { findUnique: vi.fn(async ({ where }: Row) => db.orgs.find((o) => o.id === where.id) ?? null) },
+    organisationFeature: { findMany: vi.fn(async ({ where }: Row) => db.features.filter((f) => f.organisationId === where.organisationId && f.enabled === where.enabled)) },
     profile: { findFirst: vi.fn(async ({ where }: Row) => db.profiles.find((p) => p.authUserId === where.authUserId) ?? null) },
     $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
   },
@@ -119,7 +120,18 @@ describe('confirmPracticeSetup', () => {
     const r = await confirmPracticeSetup({ runId: 'run-2', organisationId: 'org-1', overrides: { projects: false }, actorAuthUserId: 'auth-1' })
     expect(r.profileVersion).toBe(2)
     expect(db.features.filter((f) => f.featureKey === 'projects')).toHaveLength(1)
+    // A live module is never switched off by a confirm unless explicitly allowed
+    expect(db.features.find((f) => f.featureKey === 'projects')!.enabled).toBe(true)
+    expect(r.keptOn).toEqual(['projects'])
+  })
+
+  it('switches a live module off only with allowDisable', async () => {
+    seedRun()
+    await confirmPracticeSetup({ runId: 'run-1', organisationId: 'org-1', actorAuthUserId: 'auth-1' })
+    db.runs.push({ ...db.runs[0], id: 'run-2', status: 'AWAITING_CONFIRMATION', organisationId: null })
+    const r = await confirmPracticeSetup({ runId: 'run-2', organisationId: 'org-1', overrides: { projects: false }, actorAuthUserId: 'auth-1', allowDisable: true })
     expect(db.features.find((f) => f.featureKey === 'projects')!.enabled).toBe(false)
+    expect(r.keptOn).toEqual([])
   })
 
   it('refuses a run that is not awaiting confirmation', async () => {

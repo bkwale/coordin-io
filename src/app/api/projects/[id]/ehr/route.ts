@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { withProjectAccess } from '@/lib/with-project-access'
+import { assertProjectWrite } from '@/lib/project-write-access'
 import { success, error } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -20,7 +21,8 @@ export const GET = withProjectAccess(async (_req: NextRequest, { projectId }) =>
 })
 
 /** POST { ehrCode } — fetch from Ehitisregister and store as the project's snapshot. Lead only. */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project, membership }) => {
+  await assertProjectWrite({ profile, projectId, membership }, 'PROJECT_LEAD')
   const limited = await checkRateLimit(`ehr:${profile.id}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
   const body = await request.json().catch(() => ({}))
@@ -37,7 +39,8 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
 }, { minProjectRole: 'PROJECT_LEAD' })
 
 /** DELETE — unlink. Lead only. */
-export const DELETE = withProjectAccess(async (_req: NextRequest, { projectId, profile, project }) => {
+export const DELETE = withProjectAccess(async (_req: NextRequest, { projectId, profile, project, membership }) => {
+  await assertProjectWrite({ profile, projectId, membership }, 'PROJECT_LEAD')
   const p = await prisma.project.findUnique({ where: { id: projectId }, select: { ehrCode: true } })
   if (!p?.ehrCode) return error(new ValidationError('No building is linked'))
   await prisma.project.update({ where: { id: projectId }, data: { ehrCode: null, ehrSnapshot: Prisma.DbNull, ehrFetchedAt: null } })

@@ -13,7 +13,7 @@ import { ConfirmationReview, type ReviewRow, type ConditionRow } from './Confirm
 type Stage = { name: string; status: 'running' | 'done' | 'failed'; ms?: number; detail?: string }
 type Prefill = { key: string; value: unknown; kind: 'value' | 'bound'; label: string; because: string; confidence: number; page: number | null; quote: string | null; preAccept: boolean }
 type Kind = 'planning_conditions' | 'brief'
-type Mapping = { kind?: Kind; document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; projectName?: string | null; client?: string | null; ehrCode?: string | null }; prefills: Prefill[]; conditions: Array<{ topic: string; text: string; page: number | null; mandatory: boolean; citation: string }>; bounds: { maxHeightM: number | null; maxStoreys: number | null }; warnings: string[]; suspicious?: { pages: number[]; excerpts: string[] } }
+type Mapping = { kind?: Kind; document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; projectName?: string | null; client?: string | null; ehrCode?: string | null }; prefills: Prefill[]; conditions: Array<{ topic: string; text: string; page: number | null; mandatory: boolean; citation: string; verified?: boolean }>; bounds: { maxHeightM: number | null; maxStoreys: number | null }; warnings: string[]; suspicious?: { pages: number[]; excerpts: string[] } }
 type Run = { id: string; status: string; stages: Stage[]; mapping: Mapping | null; error: string | null; documentUrl: string | null }
 
 const LABELS: Record<string, string> = { jurisdiction: 'Jurisdiction', buildingType: 'Building type', workType: 'Work', detailedPlanExists: 'Detailed plan', county: 'County', heritage: 'Heritage', urbanArea: 'Urban area', height: 'Height', storeys: 'Storeys', grossFloorArea: 'Gross floor area', apartments: 'Apartments', parkingSpaces: 'Parking', timberStructure: 'Structure', districtHeatingAvailable: 'District heating' }
@@ -62,7 +62,9 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending, onEhrCode
           if (data.status === 'AWAITING_CONFIRMATION' && data.mapping) {
             const pre = new Set(data.mapping.prefills.filter((p) => p.preAccept).map((p) => p.key))
             setAccepted(pre)
-            setAcceptedConds(new Set(data.mapping.conditions.map((_, i) => String(i))))
+            // Only conditions whose wording was found in the document are pre-ticked — and none if the
+            // document contained text addressed to an AI (the architect ticks each one deliberately)
+            setAcceptedConds(new Set(data.mapping.suspicious || (data.mapping.document.validUntil && data.mapping.document.validUntil.slice(0, 10) < new Date().toISOString().slice(0, 10)) ? [] : data.mapping.conditions.flatMap((c, i) => (c.verified ? [String(i)] : []))))
           }
         }
       }, 1500)

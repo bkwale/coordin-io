@@ -30,7 +30,7 @@ export const POST = withSuperAdmin(async (request: NextRequest, { authUserId }) 
   }
 
   try {
-    const result = await confirmPracticeSetup({ runId, organisationId, overrides, actorAuthUserId: authUserId })
+    const result = await confirmPracticeSetup({ runId, organisationId, overrides, actorAuthUserId: authUserId, allowDisable: body.allowDisable === true })
     return success(result)
   } catch (e) {
     return error(e)

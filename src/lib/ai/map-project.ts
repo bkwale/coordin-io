@@ -28,6 +28,8 @@ export interface MunicipalCondition {
   mandatory: boolean
   citation: string   // "PT nr 2611802/03126 p.4"
   source: string     // "Viljandi Vallavalitsus"
+  /** Set by verifyQuotes: the condition's wording was found in the document. Only verified conditions are pre-ticked. */
+  verified?: boolean
 }
 
 export interface ProjectSetupMapping {
@@ -116,6 +118,9 @@ export function mapPlanningConditions(pc: PlanningConditions): ProjectSetupMappi
   if (validUntil) conditions.push({ topic: 'Kehtivus', text: `Planning conditions valid until ${validUntil}`, page: pc.document.validUntil.page ?? null, mandatory: true, citation: cite(pc.document.validUntil.page ?? null), source: issuer ?? 'Municipality' })
 
   if (!docNo) warnings.push('Document number not found — citations will read "PT nr ?"')
+  if (validUntil && /^\d{4}-\d{2}-\d{2}/.test(validUntil) && validUntil.slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+    warnings.push(`These planning conditions expired on ${validUntil.slice(0, 10)} — check whether new conditions have been issued before relying on them`)
+  }
   if (pc.document.kind !== 'planning_conditions') warnings.push('This may not be a planning-conditions document')
 
   return {
@@ -231,6 +236,19 @@ export function verifyQuotes(mapping: ProjectSetupMapping, pages: string[]): Pro
     unverified++
     return { ...p, preAccept: false, confidence: Math.min(p.confidence, 0.5), because: `${p.because} — quote not found in the document, check it` }
   })
-  if (!unverified) return mapping
-  return { ...mapping, prefills, warnings: [...mapping.warnings, `${unverified} value${unverified > 1 ? 's' : ''} cite text that isn't in the document — left unticked`] }
+  // Conditions: page citations must exist, and only wording found in the document counts as verified
+  let badPages = 0, unverifiedConds = 0
+  const conditions = mapping.conditions.map((c) => {
+    let { page, citation } = c
+    if (page != null && (page < 1 || page > pages.length)) { page = null; citation = citation.replace(/ p\.\d+$/, ''); badPages++ }
+    const t = squash(c.text)
+    const verified = t.length >= 3 && (doc.includes(t) || wordCoverage(t, doc) >= 0.6)
+    if (!verified) unverifiedConds++
+    return { ...c, page, citation, verified }
+  })
+  const warnings = [...mapping.warnings]
+  if (unverified) warnings.push(`${unverified} value${unverified > 1 ? 's' : ''} cite text that isn't in the document — left unticked`)
+  if (unverifiedConds) warnings.push(`${unverifiedConds} condition${unverifiedConds > 1 ? 's' : ''} couldn't be matched to the document wording — left unticked, check against the PDF`)
+  if (badPages) warnings.push(`${badPages} citation${badPages > 1 ? 's' : ''} pointed to a page that isn't in the document — page removed`)
+  return { ...mapping, prefills, conditions, warnings }
 }

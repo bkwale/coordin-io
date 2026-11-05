@@ -76,7 +76,7 @@ export default function RegulatoryPage() {
     try {
       if (pendingRun) {
         // Confirm the document run: profile + engine + accepted municipal conditions, all server-side and audited
-        const res = await fetch(`/api/projects/${projectId}/setup/confirm`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: pendingRun.runId, parameters: form, acceptedConditions: pendingRun.acceptedConditions }) })
+        const res = await fetch(`/api/projects/${projectId}/setup/confirm`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runId: pendingRun.runId, parameters: form, acceptedConditions: pendingRun.acceptedConditions, acceptedBounds: [...(bounds.maxHeightM != null ? ['height'] : []), ...(bounds.maxStoreys != null ? ['storeys'] : [])] }) })
         const body = await res.json()
         if (!res.ok) throw new Error(body.error || 'Could not confirm')
         setDiff(body.data.profileVersion > 1 ? body.data.diff : null)
@@ -263,7 +263,12 @@ function Row({ item, lang, isNew }: { item: Item; lang: 'en' | 'et'; isNew?: boo
         <div className="text-[11px] text-ink-400 mt-0.5 font-mono">{item.citation}{item.source ? ` — ${item.source}` : ''}</div>
       </div>
       {stale && <span className="text-[10px] px-1.5 py-0.5 rounded border shrink-0 bg-surface-100 text-ink-500 border-surface-300">no longer applies</span>}
-      {conf && conf !== 'architect' && !stale && (
+      {conf === 'ai' && (
+        <span title="Extracted by AI from the planning conditions — check it against the cited page" className="text-[10px] px-1.5 py-0.5 rounded border shrink-0 bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-1">
+          <AlertTriangle className="w-3 h-3" />AI-extracted · check
+        </span>
+      )}
+      {conf && conf !== 'architect' && conf !== 'ai' && !stale && (
         <span title={`Dataset confidence: ${conf}`} className={cn('text-[10px] px-1.5 py-0.5 rounded border shrink-0', conf === 'high' ? 'bg-green-50 text-green-700 border-green-200' : conf === 'medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200')}>
           {conf === 'low' ? <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" />verify</span> : conf}
         </span>

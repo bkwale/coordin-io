@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { withProjectAccess } from '@/lib/with-project-access'
+import { assertProjectWrite } from '@/lib/project-write-access'
 import { success, error } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import { confirmProjectSetup } from '@/lib/ai/project-setup'
@@ -11,7 +12,8 @@ export const dynamic = 'force-dynamic'
  * The architect has reviewed every pre-filled value and typed the design numbers. Writes a new
  * ProjectProfile (sourceRunId), runs the engine, adds accepted municipal conditions as MUNICIPALITY items.
  */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project, authUserId }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project, authUserId, membership }) => {
+  await assertProjectWrite({ profile, projectId, membership }, 'PROJECT_LEAD')
   const body = await request.json().catch(() => ({}))
   const runId = typeof body.runId === 'string' ? body.runId : ''
   if (!runId) return error(new ValidationError('runId is required'))

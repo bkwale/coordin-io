@@ -1,5 +1,6 @@
 import { NextRequest, after } from 'next/server'
 import { withProjectAccess } from '@/lib/with-project-access'
+import { assertProjectWrite } from '@/lib/project-write-access'
 import { success, error } from '@/lib/api-response'
 import { ValidationError } from '@/lib/errors'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -15,7 +16,8 @@ export const dynamic = 'force-dynamic'
  * PROJECT_LEAD only (Schneier). The file is stored as a project Document and the run is created in the
  * same transaction; extraction runs in the background — poll /api/ai/runs/[id].
  */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project, authUserId }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project, authUserId, membership }) => {
+  await assertProjectWrite({ profile, projectId, membership }, 'PROJECT_LEAD')
   const limited = await checkRateLimit(`ai-setup:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
 

@@ -24,6 +24,11 @@ export type ConfirmPracticeInput = {
   /** Architect overrides, by mapper key: true = switch on, false = keep off. */
   overrides?: Record<string, boolean>
   actorAuthUserId: string
+  /**
+   * An organisation that already uses Coordin keeps every module it has switched on unless this is
+   * set: a confirm (or a mistyped organisation id) must never quietly switch off live modules.
+   */
+  allowDisable?: boolean
 }
 
 export type AppliedDecision = { key: string; featureKey: FeatureKey | null; on: boolean; source: 'ai' | 'architect'; reason: string; applied: boolean }
@@ -35,6 +40,8 @@ export type ConfirmPracticeResult = {
   decisions: AppliedDecision[]
   appliedCount: number
   skippedKeys: string[]
+  /** Modules the run would have switched off but were kept on because the organisation uses them. */
+  keptOn: string[]
 }
 
 /** Pure: merge mapper decisions with overrides and resolve registry keys. Exported for tests. */
@@ -66,7 +73,7 @@ export function resolveDecisions(modules: ModuleDecision[], overrides: Record<st
 }
 
 export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise<ConfirmPracticeResult> {
-  const { runId, organisationId, overrides = {}, actorAuthUserId } = input
+  const { runId, organisationId, overrides = {}, actorAuthUserId, allowDisable = false } = input
 
   const run = await prisma.aIRun.findUnique({ where: { id: runId } })
   if (!run || run.surface !== 'PRACTICE_SETUP') throw new NotFoundError('Practice-setup run not found')
@@ -80,6 +87,19 @@ export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise
   if (!mapping?.modules?.length) throw new ValidationError('Run has no module decisions to apply')
 
   const decisions = resolveDecisions(mapping.modules, overrides)
+  // Live organisation: never switch off a module that is on today unless explicitly allowed
+  const live = await prisma.organisationFeature.findMany({ where: { organisationId, enabled: true }, select: { featureKey: true } })
+  const liveKeys = new Set(live.map((f) => f.featureKey))
+  const keptOn: string[] = []
+  if (!allowDisable) {
+    for (const d of decisions) {
+      if (d.featureKey && !d.on && liveKeys.has(d.featureKey)) {
+        d.applied = false
+        d.reason = `${d.reason} — kept on: already in use (confirm with allowDisable to switch off)`
+        keptOn.push(d.key)
+      }
+    }
+  }
   const actor = await prisma.profile.findFirst({ where: { authUserId: actorAuthUserId }, select: { id: true } })
   const now = new Date()
 
@@ -88,7 +108,7 @@ export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise
     const claimed = await tx.aIRun.updateMany({ where: { id: run.id, status: 'AWAITING_CONFIRMATION' }, data: { status: 'APPLIED' } })
     if (claimed.count === 0) throw new ValidationError('This run was already applied')
     for (const d of decisions) {
-      if (!d.featureKey) continue
+      if (!d.featureKey || !d.applied) continue
       await tx.organisationFeature.upsert({
         where: { organisationId_featureKey: { organisationId, featureKey: d.featureKey } },
         update: { enabled: d.on, enabledAt: d.on ? now : null, enabledBy: d.on ? actor?.id ?? null : null },
@@ -122,6 +142,8 @@ export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise
       profileVersion,
       decisions: decisions.map((d) => ({ key: d.key, featureKey: d.featureKey, on: d.on, source: d.source, reason: d.reason })),
       overriddenKeys: Object.keys(overrides),
+      keptOn,
+      allowDisable,
     },
   })
 
@@ -132,5 +154,6 @@ export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise
     decisions,
     appliedCount: decisions.filter((d) => d.applied).length,
     skippedKeys: decisions.filter((d) => !d.applied).map((d) => d.key),
+    keptOn,
   }
 }
