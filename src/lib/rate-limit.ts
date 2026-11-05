@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
+import { getRedis } from '@/lib/cache'
 
 /**
- * In-memory per-user rate limiter using sliding window counters.
+ * Rate limiter — GLOBAL across all serverless instances via Upstash Redis (fixed window, INCR + PEXPIRE).
  *
- * Designed for single-instance deployment (Vercel serverless).
- * For multi-instance, swap with Redis-backed limiter.
+ * Vercel runs many instances; an in-memory counter only counted per instance and reset on every cold
+ * start, so "10/min" was really "10/min per instance". Redis gives one shared count.
  *
- * Default: 100 requests per 60-second window per user.
+ * If Redis is not configured, errors, or takes longer than REDIS_TIMEOUT_MS, we fall back to the
+ * in-memory counter (the site stays up) and log a warning so the gap is visible (Hightower/Majors).
+ *
+ * Default: 100 requests per 60-second window per key.
  */
+const REDIS_TIMEOUT_MS = 400
 
 interface RateLimitEntry {
   count: number
@@ -43,7 +48,42 @@ interface RateLimitOptions {
  * Check rate limit for a user. Returns null if allowed,
  * or a NextResponse with 429 status if rate limited.
  */
-export function checkRateLimit(
+export async function checkRateLimit(
+  userId: string,
+  opts: RateLimitOptions = {},
+): Promise<NextResponse | null> {
+  const maxRequests = opts.maxRequests ?? 100
+  const windowMs = opts.windowMs ?? 60_000
+  const redis = getRedis()
+  if (redis) {
+    try {
+      const now = Date.now()
+      const windowStart = Math.floor(now / windowMs) * windowMs
+      const key = `rl:${userId}:${windowStart}`
+      // The window start is part of the key, so even if PEXPIRE never lands nobody is locked out beyond this window.
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const count = await Promise.race([
+        (async () => {
+          const n = await redis.incr(key)
+          if (n === 1) await redis.pexpire(key, windowMs + 1_000)
+          return n
+        })(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('redis timeout')), REDIS_TIMEOUT_MS) }),
+      ]).finally(() => clearTimeout(timer))
+      if (count > maxRequests) {
+        console.warn('[RateLimit] limited', { key: userId, count, maxRequests })
+        return limitedResponse(maxRequests, windowStart + windowMs, now)
+      }
+      return null
+    } catch (e) {
+      console.warn('[RateLimit] Redis unavailable — falling back to per-instance counter', { error: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return checkRateLimitLocal(userId, opts)
+}
+
+/** Per-instance fallback (and the only limiter when Redis isn't configured, e.g. tests/local). */
+export function checkRateLimitLocal(
   userId: string,
   opts: RateLimitOptions = {},
 ): NextResponse | null {
@@ -68,7 +108,15 @@ export function checkRateLimit(
   entry.count++
 
   if (entry.count > maxRequests) {
-    const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000)
+    return limitedResponse(maxRequests, entry.resetAt, now)
+  }
+
+  return null // allowed
+}
+
+function limitedResponse(maxRequests: number, resetAt: number, now: number): NextResponse {
+  {
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000))
     return NextResponse.json(
       {
         ok: false,
@@ -83,13 +131,11 @@ export function checkRateLimit(
           'Retry-After': String(retryAfterSeconds),
           'X-RateLimit-Limit': String(maxRequests),
           'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(Math.ceil(entry.resetAt / 1000)),
+          'X-RateLimit-Reset': String(Math.ceil(resetAt / 1000)),
         },
       },
     )
   }
-
-  return null // allowed
 }
 
 /**

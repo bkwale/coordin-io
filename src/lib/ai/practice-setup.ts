@@ -6,9 +6,11 @@ import { crawlPractice, normaliseUrl, CrawlError } from './crawl'
 import { PRACTICE_SETUP_SYSTEM, PRACTICE_SETUP_PROMPT_VERSION, practiceSetupUser } from './prompts/practice-setup'
 import { PracticeProfileSchema, normalisePracticeProfile } from './schemas'
 import { mapPracticeProfile, practiceConfidence } from './map-practice'
+import { assertAiBudget } from './budget'
 
 export async function startPracticeSetup(opts: { url: string; createdBy: string; organisationId?: string | null }) {
   const base = normaliseUrl(opts.url)
+  await assertAiBudget(opts.organisationId ?? null)
   const run = await createRun({
     surface: 'PRACTICE_SETUP',
     organisationId: opts.organisationId ?? null,

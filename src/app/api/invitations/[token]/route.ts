@@ -16,7 +16,7 @@ export async function GET(
   try {
     // IP-based rate limit: 10 lookups per minute per IP
     const ip = _request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    const rateLimited = checkRateLimit(`invite-lookup:${ip}`, { maxRequests: 10, windowMs: 60_000 })
+    const rateLimited = await checkRateLimit(`invite-lookup:${ip}`, { maxRequests: 10, windowMs: 60_000 })
     if (rateLimited) return rateLimited
 
     const { token } = await params
