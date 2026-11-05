@@ -8,9 +8,10 @@ import { createClient } from '@supabase/supabase-js'
 import { prisma } from '@/lib/prisma'
 import { createRun, runAI } from './pipeline'
 import { pdfToPages, paginateText, capPages, IngestError } from './document-ingest'
-import { PlanningConditionsSchema, normalisePlanningConditions } from './schemas-documents'
+import { PlanningConditionsSchema, normalisePlanningConditions, BriefSchema, normaliseBrief } from './schemas-documents'
 import { PLANNING_CONDITIONS_SYSTEM, PLANNING_CONDITIONS_PROMPT_VERSION, planningConditionsUser } from './prompts/planning-conditions'
-import { mapPlanningConditions, pinDocumentNumber, type ProjectSetupMapping } from './map-project'
+import { mapPlanningConditions, mapBrief, pinDocumentNumber, verifyQuotes, type ProjectSetupMapping } from './map-project'
+import { BRIEF_PROMPT_VERSION, BRIEF_SYSTEM, briefUser } from './prompts/brief'
 import { applyInjectionGuard } from './injection-guard'
 import { applyProjectParameters, APPLY_TX_OPTIONS } from '@/lib/rules/apply'
 import { ProjectParametersSchema } from '@/lib/rules/schema'
@@ -69,18 +70,35 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
 }
 
 export async function executeProjectSetup(runId: string, kind: SetupDocumentKind, pages: string[]) {
-  if (kind !== 'planning_conditions') throw new Error('Brief extraction arrives in 3.B3')
+  const readStage = async (push: (s: { name: string; status: 'done'; detail: string }) => Promise<void>) =>
+    push({ name: 'read', status: 'done', detail: `${pages.length} page${pages.length > 1 ? 's' : ''}, ${pages.reduce((a, p) => a + p.split(/\s+/).length, 0).toLocaleString()} words${pages.join('').length > 12_000 ? ' · long document' : ''}` })
+
+  if (kind === 'brief') {
+    return runAI(runId, {
+      surface: 'PROJECT_SETUP', createdBy: '', inputSummary: '', promptVersion: BRIEF_PROMPT_VERSION,
+      maxTokens: 8_000,
+      ingest: async (push) => { await readStage(push); return { system: BRIEF_SYSTEM, user: briefUser(pages), inputForHash: pages.join('\n') } },
+      schema: BriefSchema,
+      normalise: normaliseBrief,
+      map: (b) => applyInjectionGuard(verifyQuotes(mapBrief(b), pages), pages),
+      confidenceOf: (b) => {
+        const f = [b.parameters.buildingType, b.parameters.workType, b.parameters.grossFloorArea, b.parameters.storeys]
+        return f.reduce((a, x) => a + (x?.confidence ?? 0), 0) / f.length
+      },
+    })
+  }
+
   return runAI(runId, {
     surface: 'PROJECT_SETUP', createdBy: '', inputSummary: '', promptVersion: PLANNING_CONDITIONS_PROMPT_VERSION,
     maxTokens: 16_000,
     ingest: async (push) => {
-      await push({ name: 'read', status: 'done', detail: `${pages.length} page${pages.length > 1 ? 's' : ''}, ${pages.reduce((a, p) => a + p.split(/\s+/).length, 0).toLocaleString()} words${pages.join('').length > 12_000 ? ' · long document' : ''}` })
+      await readStage(push)
       return { system: PLANNING_CONDITIONS_SYSTEM, user: planningConditionsUser(pages), inputForHash: pages.join('\n') }
     },
     schema: PlanningConditionsSchema,
     normalise: normalisePlanningConditions,
     // deterministic injection guard runs after the model, on the source pages — never trusts model warnings
-    map: (pc) => applyInjectionGuard(mapPlanningConditions(pinDocumentNumber(pc, pages)), pages),
+    map: (pc) => applyInjectionGuard(verifyQuotes(mapPlanningConditions(pinDocumentNumber(pc, pages)), pages), pages),
     confidenceOf: (pc) => {
       const fields = [pc.document.number, pc.document.issuedAt, pc.document.legalBasis, pc.site.ehrCode, pc.limits.maxHeight, pc.limits.maxStoreys]
       return fields.reduce((a, f) => a + (f?.confidence ?? 0), 0) / fields.length

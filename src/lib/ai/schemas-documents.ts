@@ -161,3 +161,67 @@ export function normalisePlanningConditions(raw: unknown): unknown {
   }).filter(Boolean).slice(0, 20)
   return r
 }
+
+/** Same coercions for briefs: decimal commas, numbers-as-strings, "jah"/"ei" booleans, wrapped enums. */
+export function normaliseBrief(raw: unknown): unknown {
+  const r = (typeof raw === 'object' && raw) ? JSON.parse(JSON.stringify(raw)) : {}
+  const num = (v: unknown): number | null => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null
+    if (typeof v === 'string') { const m = v.replace(/\s/g, '').replace(',', '.').match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null }
+    return null
+  }
+  const bool = (v: unknown): boolean | null => {
+    if (typeof v === 'boolean') return v
+    if (typeof v === 'string') { const s = v.trim().toLowerCase(); if (['true', 'jah', 'yes', 'on'].includes(s)) return true; if (['false', 'ei', 'no', 'puudub'].includes(s)) return false }
+    return null
+  }
+  const leaf = (o: any) => (o && typeof o === 'object' && !Array.isArray(o) ? o : { value: o ?? null })
+  const fixLeaf = (o: any) => {
+    if (o.value === undefined) o.value = null
+    if (typeof o.confidence !== 'number') o.confidence = o.value === null ? 0 : 0.5
+    o.confidence = Math.max(0, Math.min(1, o.confidence))
+    if (typeof o.quote === 'string' && o.quote.length > 300) o.quote = o.quote.slice(0, 297) + '…'
+    if (o.quote !== undefined && o.quote !== null && typeof o.quote !== 'string') o.quote = String(o.quote)
+    if (o.page !== undefined && o.page !== null && (typeof o.page !== 'number' || !Number.isInteger(o.page) || o.page < 1)) o.page = null
+    return o
+  }
+  r.project = r.project && typeof r.project === 'object' ? r.project : {}
+  for (const k of ['name', 'client', 'address', 'county']) {
+    const f = fixLeaf(leaf(r.project[k]))
+    if (f.value !== null && typeof f.value !== 'string') f.value = String(f.value)
+    r.project[k] = f
+  }
+  r.parameters = r.parameters && typeof r.parameters === 'object' ? r.parameters : {}
+  const p = r.parameters
+  const enums: Record<string, string[]> = {
+    buildingType: ['detached_house', 'apartment_block', 'semi_detached', 'terraced', 'non_residential', 'other'],
+    workType: ['new_build', 'extension', 'reconstruction', 'change_of_use', 'demolition'],
+  }
+  for (const [k, allowed] of Object.entries(enums)) {
+    const f = fixLeaf(leaf(p[k]))
+    if (f.value && typeof f.value === 'object' && 'value' in f.value) f.value = f.value.value
+    if (f.value !== null && !allowed.includes(String(f.value))) { f.value = null; f.confidence = 0 }
+    p[k] = f
+  }
+  for (const k of ['grossFloorArea', 'height']) {
+    const f = fixLeaf(leaf(p[k]))
+    if (f.value !== null && typeof f.value === 'object') f.value = { value: num(f.value.value), unit: f.value.unit == null ? null : String(f.value.unit).slice(0, 12) }
+    else if (f.value !== null) f.value = { value: num(f.value), unit: null }
+    p[k] = f
+  }
+  for (const k of ['storeys', 'apartments', 'parkingSpaces']) {
+    const f = fixLeaf(leaf(p[k]))
+    if (f.value !== null) { const n = num(typeof f.value === 'object' ? f.value?.value : f.value); f.value = n === null ? null : Math.round(n) }
+    p[k] = f
+  }
+  for (const k of ['timberStructure', 'heritage', 'detailedPlanExists', 'districtHeatingAvailable', 'urbanArea']) {
+    const f = fixLeaf(leaf(p[k]))
+    if (f.value !== null) f.value = bool(f.value)
+    p[k] = f
+  }
+  if (r.language && typeof r.language === 'object') r.language = r.language.value
+  if (!['et', 'en', 'pl', 'other'].includes(r.language)) r.language = 'other'
+  if (!Array.isArray(r.warnings)) r.warnings = []
+  r.warnings = r.warnings.filter((w: unknown) => typeof w === 'string').map((w: string) => w.slice(0, 200)).slice(0, 10)
+  return r
+}

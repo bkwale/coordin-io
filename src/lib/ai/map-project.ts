@@ -3,7 +3,7 @@
  * Limits are BOUNDS, not design values (Suleyman): the architect types the design number; we show "≤ 6.5 m per PT".
  * Every pre-filled field carries its page and quote so the ConfirmationReview can open the PDF there.
  */
-import type { PlanningConditions, PagedField } from './schemas-documents'
+import type { PlanningConditions, PagedField, Brief } from './schemas-documents'
 import type { ProjectParameters } from '@/lib/rules'
 
 export type PrefillKind = 'value' | 'bound'
@@ -31,8 +31,8 @@ export interface MunicipalCondition {
 }
 
 export interface ProjectSetupMapping {
-  kind: 'planning_conditions'
-  document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; legalBasis: string | null; ehrCode: string | null; address: string | null }
+  kind: 'planning_conditions' | 'brief'
+  document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; legalBasis: string | null; ehrCode: string | null; address: string | null; projectName?: string | null; client?: string | null }
   prefills: Prefill[]
   conditions: MunicipalCondition[]
   bounds: { maxHeightM: number | null; maxStoreys: number | null; maxFootprint: { value: number; unit: string } | null; minSetbackM: number | null }
@@ -149,4 +149,88 @@ export function pinDocumentNumber(pc: PlanningConditions, pages: string[]): Plan
   const [[number, src]] = [...found]
   if (pc.document.number?.value === number) return pc
   return { ...pc, document: { ...pc.document, number: { value: number, confidence: 0.95, page: src.page, quote: src.quote } } }
+}
+
+const AREA_UNIT = /^(m2|m²|m\^2|ruutmeetrit?|sq\.? ?m|sqm)$/i
+const LABEL_BT: Record<string, string> = { detached_house: 'Detached house', semi_detached: 'Semi-detached', terraced: 'Terraced', apartment_block: 'Apartment block', non_residential: 'Non-residential', other: 'Other' }
+const LABEL_WT: Record<string, string> = { new_build: 'New build', extension: 'Extension', reconstruction: 'Reconstruction', change_of_use: 'Change of use', demolition: 'Demolition' }
+
+/**
+ * Client brief → questionnaire pre-fill. A brief is design INTENT, not law: values are proposals,
+ * pre-accepted only when the model quoted the brief with confidence >= 0.8. No bounds, no municipal conditions.
+ */
+export function mapBrief(b: Brief): ProjectSetupMapping {
+  const prefills: Prefill[] = []
+  const warnings: string[] = [...(b.warnings ?? [])]
+  const p = b.parameters
+  const ok = (f: PagedField<unknown> | undefined) => (f?.confidence ?? 0) >= 0.8 && !!f?.quote
+  const add = (key: keyof ProjectParameters, value: unknown, label: string, because: string, f: PagedField<unknown>) =>
+    prefills.push({ key, value, kind: 'value', label, because, ...meta(f), preAccept: ok(f) })
+
+  const bt = v(p.buildingType); if (bt) add('buildingType', bt, LABEL_BT[bt] ?? bt, 'Client brief', p.buildingType)
+  const wt = v(p.workType); if (wt) add('workType', wt, LABEL_WT[wt] ?? wt, 'Client brief', p.workType)
+
+  const gfa = v(p.grossFloorArea)
+  if (gfa?.value != null) {
+    if (gfa.unit == null || AREA_UNIT.test(gfa.unit.trim())) add('grossFloorArea', gfa.value, `${gfa.value} m²`, 'Requested floor area', p.grossFloorArea)
+    else warnings.push(`Floor area given in "${gfa.unit}" — not applied`)
+  }
+  const h = v(p.height)
+  if (h?.value != null) {
+    if (h.unit == null || /^m$/i.test(h.unit.trim())) add('height', h.value, `${h.value} m`, 'Requested height', p.height)
+    else warnings.push(`Height given in "${h.unit}" — not applied`)
+  }
+  const st = v(p.storeys); if (st != null) add('storeys', st, `${st} storeys`, 'Requested storeys', p.storeys)
+  const ap = v(p.apartments); if (ap != null) add('apartments', ap, `${ap} apartments`, 'Requested apartments', p.apartments)
+  const pk = v(p.parkingSpaces); if (pk != null) add('parkingSpaces', pk, `${pk} spaces`, 'Requested parking', p.parkingSpaces)
+
+  const flags: Array<[keyof ProjectParameters, string, string]> = [
+    ['timberStructure', 'Timber structure', 'Not timber'], ['heritage', 'Heritage applies', 'No heritage'],
+    ['detailedPlanExists', 'Detailed plan in force', 'No detailed plan'], ['districtHeatingAvailable', 'District heating', 'No district heating'],
+    ['urbanArea', 'Urban area', 'Not urban'],
+  ]
+  for (const [key, yes, no] of flags) {
+    const f = (p as Record<string, PagedField<boolean>>)[key as string]
+    const val = v(f); if (val != null) add(key, val, val ? yes : no, 'Client brief', f)
+  }
+  const county = v(b.project.county)
+  if (county) add('county', county.replace(/ maakond$/i, ''), county, 'Site address in brief', b.project.county)
+
+  if (prefills.length === 0) warnings.push('Nothing in this document maps to the questionnaire — is it a client brief?')
+  return {
+    kind: 'brief',
+    document: { number: null, issuer: v(b.project.client), issuedAt: null, validUntil: null, legalBasis: null, ehrCode: null, address: v(b.project.address), projectName: v(b.project.name), client: v(b.project.client) },
+    prefills,
+    conditions: [],
+    bounds: { maxHeightM: null, maxStoreys: null, maxFootprint: null, minSetbackM: null },
+    warnings,
+  }
+}
+
+/** Share of the quote's words (4+ letters) that occur in the document. Models stitch adjacent phrases into one quote. */
+function wordCoverage(q: string, doc: string): number {
+  const words = q.split(/[^\p{L}\p{N}§]+/u).filter((w) => w.length >= 4)
+  if (words.length === 0) return 0
+  return words.filter((w) => doc.includes(w)).length / words.length
+}
+
+const squash = (s: string) => s.toLowerCase().normalize('NFKC').replace(/[\s ]+/g, ' ').replace(/[“”„"«»]/g, '"').trim()
+
+/**
+ * Models report ~100% confidence on almost everything, so confidence alone can't decide pre-acceptance.
+ * Deterministic check: a pre-filled value is only pre-ticked if its quote actually occurs in the document text.
+ * Unverifiable quotes keep the row (the architect may still accept it) but untick it and cap confidence.
+ */
+export function verifyQuotes(mapping: ProjectSetupMapping, pages: string[]): ProjectSetupMapping {
+  const doc = squash(pages.join('\n'))
+  let unverified = 0
+  const prefills = mapping.prefills.map((p) => {
+    if (!p.quote) return p
+    const q = squash(p.quote).replace(/…$/, '')
+    if (q.length < 3 || doc.includes(q) || wordCoverage(q, doc) >= 0.85) return p
+    unverified++
+    return { ...p, preAccept: false, confidence: Math.min(p.confidence, 0.5), because: `${p.because} — quote not found in the document, check it` }
+  })
+  if (!unverified) return mapping
+  return { ...mapping, prefills, warnings: [...mapping.warnings, `${unverified} value${unverified > 1 ? 's' : ''} cite text that isn't in the document — left unticked`] }
 }

@@ -31,7 +31,7 @@ export interface ConditionRow {
   citation: string
 }
 
-export function ConfirmationReview({ rows, conditions, documentUrl, accepted, onToggle, acceptedConditions, onToggleCondition }: {
+export function ConfirmationReview({ rows, conditions, documentUrl, accepted, onToggle, acceptedConditions, onToggleCondition, showConditions = true }: {
   rows: ReviewRow[]
   conditions: ConditionRow[]
   documentUrl: string | null
@@ -39,6 +39,8 @@ export function ConfirmationReview({ rows, conditions, documentUrl, accepted, on
   onToggle: (id: string, on: boolean) => void
   acceptedConditions: Set<string>
   onToggleCondition: (id: string, on: boolean) => void
+  /** Briefs carry no municipal conditions. */
+  showConditions?: boolean
 }) {
   const [showQuote, setShowQuote] = useState<string | null>(null)
   const pageLink = (page: number | null) => {
@@ -58,7 +60,7 @@ export function ConfirmationReview({ rows, conditions, documentUrl, accepted, on
       <section className="rounded-xl border border-surface-200 bg-white">
         <div className="px-4 py-3 border-b border-surface-100">
           <div className="text-[13px] font-semibold text-ink-900">Pre-filled from the document</div>
-          <div className="text-[11px] text-ink-400">Accept each value or leave it off. Limits marked ≤ are municipal bounds — type your design value in the questionnaire; it must stay within them.</div>
+          <div className="text-[11px] text-ink-400">Accept each value or leave it off.{showConditions && ' Limits marked ≤ are municipal bounds — type your design value in the questionnaire; it must stay within them.'}</div>
         </div>
         <ul>
           {rows.map((r) => {
@@ -86,7 +88,7 @@ export function ConfirmationReview({ rows, conditions, documentUrl, accepted, on
         </ul>
       </section>
 
-      <section className="rounded-xl border border-surface-200 bg-white">
+      {showConditions && <section className="rounded-xl border border-surface-200 bg-white">
         <div className="px-4 py-3 border-b border-surface-100 flex items-center justify-between">
           <div>
             <div className="text-[13px] font-semibold text-ink-900">Municipal conditions <span className="text-[11px] text-ink-400 font-normal">{acceptedConditions.size} of {conditions.length} selected</span></div>
@@ -114,7 +116,7 @@ export function ConfirmationReview({ rows, conditions, documentUrl, accepted, on
           })}
           {conditions.length === 0 && <li className="px-4 py-3 text-[12px] text-ink-400">No conditions found.</li>}
         </ul>
-      </section>
+      </section>}
     </div>
   )
 }

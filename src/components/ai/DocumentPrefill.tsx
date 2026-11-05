@@ -12,19 +12,21 @@ import { ConfirmationReview, type ReviewRow, type ConditionRow } from './Confirm
 
 type Stage = { name: string; status: 'running' | 'done' | 'failed'; ms?: number; detail?: string }
 type Prefill = { key: string; value: unknown; kind: 'value' | 'bound'; label: string; because: string; confidence: number; page: number | null; quote: string | null; preAccept: boolean }
-type Mapping = { document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null }; prefills: Prefill[]; conditions: Array<{ topic: string; text: string; page: number | null; mandatory: boolean; citation: string }>; bounds: { maxHeightM: number | null; maxStoreys: number | null }; warnings: string[]; suspicious?: { pages: number[]; excerpts: string[] } }
+type Kind = 'planning_conditions' | 'brief'
+type Mapping = { kind?: Kind; document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; projectName?: string | null; client?: string | null }; prefills: Prefill[]; conditions: Array<{ topic: string; text: string; page: number | null; mandatory: boolean; citation: string }>; bounds: { maxHeightM: number | null; maxStoreys: number | null }; warnings: string[]; suspicious?: { pages: number[]; excerpts: string[] } }
 type Run = { id: string; status: string; stages: Stage[]; mapping: Mapping | null; error: string | null; documentUrl: string | null }
 
-const LABELS: Record<string, string> = { jurisdiction: 'Jurisdiction', buildingType: 'Building type', workType: 'Work', detailedPlanExists: 'Detailed plan', county: 'County', heritage: 'Heritage', urbanArea: 'Urban area', height: 'Max height', storeys: 'Max storeys' }
+const LABELS: Record<string, string> = { jurisdiction: 'Jurisdiction', buildingType: 'Building type', workType: 'Work', detailedPlanExists: 'Detailed plan', county: 'County', heritage: 'Heritage', urbanArea: 'Urban area', height: 'Height', storeys: 'Storeys', grossFloorArea: 'Gross floor area', apartments: 'Apartments', parkingSpaces: 'Parking', timberStructure: 'Structure', districtHeatingAvailable: 'District heating' }
 
 export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
   projectId: string
-  /** Called with accepted VALUE prefills (never bounds) so the questionnaire fills in before the architect confirms. */
-  onApplyValues: (values: Record<string, unknown>, bounds: { maxHeightM: number | null; maxStoreys: number | null }) => void
+  /** Called with accepted VALUE prefills (never bounds) so the questionnaire fills in before the architect confirms. bounds = null means "leave existing bounds alone" (briefs carry none). */
+  onApplyValues: (values: Record<string, unknown>, bounds: { maxHeightM: number | null; maxStoreys: number | null } | null) => void
   /** The run awaiting confirmation + selected condition indexes; null when nothing is pending. The page's Generate button confirms it. */
   onPending: (p: { runId: string; acceptedConditions: number[] } | null) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [kind, setKind] = useState<Kind>('planning_conditions')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [run, setRun] = useState<Run | null>(null)
@@ -39,7 +41,7 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
   async function submit(file: File | null) {
     setErr(null); setRun(null); setBusy(true)
     const fd = new FormData()
-    fd.set('kind', 'planning_conditions')
+    fd.set('kind', kind)
     if (file) fd.set('file', file); else fd.set('text', text)
     try {
       const res = await fetch(`/api/projects/${projectId}/setup/extract`, { method: 'POST', body: fd })
@@ -73,7 +75,7 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
     if (!m) return
     const values: Record<string, unknown> = {}
     for (const p of m.prefills) if (p.kind === 'value' && accepted.has(p.key)) values[p.key] = p.value
-    onApplyValues(values, { maxHeightM: accepted.has('height') ? m.bounds.maxHeightM : null, maxStoreys: accepted.has('storeys') ? m.bounds.maxStoreys : null })
+    onApplyValues(values, m.kind === 'brief' ? null : { maxHeightM: accepted.has('height') ? m.bounds.maxHeightM : null, maxStoreys: accepted.has('storeys') ? m.bounds.maxStoreys : null })
   }
 
   // expose confirm to the parent via a window-free pattern: parent calls confirm through onConfirmed after generate
@@ -88,7 +90,7 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="w-full mb-3 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-accent-300 bg-accent-50/40 text-[12px] text-accent-700 hover:border-accent-500">
-        <FileUp className="w-4 h-4" /> Pre-fill from the municipality&rsquo;s planning conditions (PDF)
+        <FileUp className="w-4 h-4" /> Pre-fill from a document — planning conditions or client brief (PDF)
       </button>
     )
   }
@@ -101,9 +103,15 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
       </div>
       {!run && (
         <>
+          <div className="flex gap-1 p-0.5 rounded-md bg-surface-100 text-[11px]">
+            {([['planning_conditions', 'Planning conditions (PT)'], ['brief', 'Client brief']] as const).map(([k, label]) => (
+              <button key={k} type="button" disabled={busy} onClick={() => setKind(k)} className={cn('flex-1 px-2 py-1 rounded', kind === k ? 'bg-white shadow-sm text-ink-900 font-medium' : 'text-ink-500 hover:text-ink-700')}>{label}</button>
+            ))}
+          </div>
+          <div className="text-[10px] text-ink-400">{kind === 'brief' ? 'What the client wants — values become proposals you confirm. No limits or municipal conditions come from a brief.' : 'The municipality’s projekteerimistingimused — limits become bounds, obligations become checklist items.'}</div>
           <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) submit(f) }} />
           <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-3 py-4 rounded-lg border-2 border-dashed border-surface-300 text-[12px] text-ink-500 hover:border-accent-400">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />} Drop the projekteerimistingimused PDF here or click
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />} {kind === 'brief' ? 'Drop the client brief PDF here or click' : 'Drop the projekteerimistingimused PDF here or click'}
           </button>
           <div className="text-[10px] text-ink-300 text-center">or paste the text</div>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Paste the document text…" className="w-full text-[12px] px-2.5 py-1.5 rounded-md border border-surface-300" />
@@ -124,7 +132,8 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
           {run.status === 'FAILED' && <div className="text-[11px] text-red-700 mt-1">{run.error}</div>}
           {run.status === 'AWAITING_CONFIRMATION' && m && (
             <div className="mt-2">
-              {m.document.number && <div className="text-[11px] text-ink-500 mb-2">PT nr <b>{m.document.number}</b>{m.document.issuer ? ` · ${m.document.issuer}` : ''}{m.document.validUntil ? ` · valid until ${m.document.validUntil}` : ''}</div>}
+              {m.kind !== 'brief' && m.document.number && <div className="text-[11px] text-ink-500 mb-2">PT nr <b>{m.document.number}</b>{m.document.issuer ? ` · ${m.document.issuer}` : ''}{m.document.validUntil ? ` · valid until ${m.document.validUntil}` : ''}</div>}
+              {m.kind === 'brief' && (m.document.projectName || m.document.client) && <div className="text-[11px] text-ink-500 mb-2">Brief{m.document.projectName ? <> · <b>{m.document.projectName}</b></> : null}{m.document.client ? ` · ${m.document.client}` : ''}</div>}
               {m.suspicious && (
                 <div className="text-[11px] text-red-800 bg-red-50 border border-red-300 rounded px-2 py-1.5 mb-2 flex gap-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -132,8 +141,8 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
                 </div>
               )}
               {m.warnings.length > 0 && <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">{m.warnings.join(' · ')}</div>}
-              <ConfirmationReview rows={rows} conditions={conds} documentUrl={run.documentUrl} accepted={accepted} onToggle={(id, on) => setAccepted((s) => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n })} acceptedConditions={acceptedConds} onToggleCondition={(id, on) => setAcceptedConds((s) => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n })} />
-              <div className="text-[11px] text-ink-400 mt-2">Accepted values are now in the questionnaire. Type your design height and storeys within the bounds, then press <b>Generate checklist</b> — the {acceptedConds.size} selected conditions will be added as municipal items.</div>
+              <ConfirmationReview showConditions={m.kind !== 'brief'} rows={rows} conditions={conds} documentUrl={run.documentUrl} accepted={accepted} onToggle={(id, on) => setAccepted((s) => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n })} acceptedConditions={acceptedConds} onToggleCondition={(id, on) => setAcceptedConds((s) => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n })} />
+              <div className="text-[11px] text-ink-400 mt-2">{m.kind === 'brief' ? <>Accepted values are now in the questionnaire. Check them, fill anything missing, then press <b>Generate checklist</b>.</> : <>Accepted values are now in the questionnaire. Type your design height and storeys within the bounds, then press <b>Generate checklist</b> — the {acceptedConds.size} selected conditions will be added as municipal items.</>}</div>
             </div>
           )}
         </div>

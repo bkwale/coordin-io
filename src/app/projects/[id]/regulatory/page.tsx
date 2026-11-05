@@ -105,7 +105,7 @@ export default function RegulatoryPage() {
       <aside className="w-[340px] shrink-0 rounded-xl border border-surface-200 bg-white p-5 sticky top-4">
         <DocumentPrefill
           projectId={projectId}
-          onApplyValues={(values, b) => { setForm((f) => ({ ...f, ...(values as Partial<Params>) })); setBounds(b) }}
+          onApplyValues={(values, b) => { setForm((f) => ({ ...f, ...(values as Partial<Params>) })); if (b) setBounds(b) }}
           onPending={setPendingRun}
         />
         <div className="flex items-center gap-2 mb-1"><Scale className="w-4 h-4 text-accent-600" /><h2 className="text-[14px] font-semibold text-ink-900">Project parameters</h2></div>
