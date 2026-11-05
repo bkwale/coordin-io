@@ -10,13 +10,16 @@ export const DEMO_DURATION_MS = 10 * 60 * 1000 // 10 minutes
 const STORAGE_KEY = 'coordin_demo_start'
 export const DEMO_COOKIE = 'coordin_demo_start'
 
-/** Start the demo timer (set current timestamp + cookie for middleware). */
-export function startDemoTimer(): void {
-  if (typeof window === 'undefined') return
-  const now = Date.now().toString()
-  localStorage.setItem(STORAGE_KEY, now)
-  // Set cookie readable by middleware — 11 min max-age (slight buffer over 10 min)
-  document.cookie = `${DEMO_COOKIE}=${now}; path=/; max-age=660; SameSite=Lax`
+/** Start the demo: the server issues a signed HttpOnly cookie; we keep the start time locally for the countdown. */
+export async function startDemoTimer(): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  try {
+    const res = await fetch('/api/demo/start', { method: 'POST' })
+    if (!res.ok) return false
+    const { data } = (await res.json()) as { data: { start: number } }
+    localStorage.setItem(STORAGE_KEY, String(data.start))
+    return true
+  } catch { return false }
 }
 
 /** Get the timestamp when the demo started. Returns null if not started. */
@@ -44,7 +47,8 @@ export function isDemoExpired(): boolean {
 export function clearDemoTimer(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(STORAGE_KEY)
-  document.cookie = `${DEMO_COOKIE}=; path=/; max-age=0`
+  // HttpOnly cookie — only the server can clear it
+  void fetch('/api/demo/start', { method: 'DELETE' }).catch(() => {})
 }
 
 /** Format milliseconds as "M:SS" */

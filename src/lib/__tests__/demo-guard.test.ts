@@ -60,7 +60,7 @@ describe('the demo identity can only be granted by the guarded gates', () => {
   const ALLOWED = new Set([
     'src/lib/demo-timer.ts', 'src/lib/demo-guard.ts', 'src/lib/supabase/middleware.ts',
     'src/lib/with-auth.ts', 'src/lib/with-project-access.ts', 'src/lib/with-task-access.ts', 'src/lib/with-document-access.ts',
-    'src/components/DemoTimerProvider.tsx', 'src/components/DemoExpiredOverlay.tsx', 'src/app/demo-access/page.tsx',
+    'src/lib/demo-cookie.ts', 'src/app/api/demo/start/route.ts', 'src/components/DemoTimerProvider.tsx', 'src/components/DemoExpiredOverlay.tsx', 'src/app/demo-access/page.tsx',
   ])
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((f) => {
     const p = join(dir, f)

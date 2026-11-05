@@ -1,3 +1,4 @@
+import { readDemoStart } from '@/lib/demo-cookie'
 import { isDemoWrite, demoWriteRefused } from '@/lib/demo-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
@@ -41,7 +42,7 @@ export function withTaskAccess(handler: TaskAccessHandler) {
       // 0. Demo mode — cookie-based 10-minute pass
       const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
       if (demoCookie) {
-        const demoStart = parseInt(demoCookie, 10)
+        const demoStart = await readDemoStart(demoCookie) // NaN if forged/malformed
         if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
           // Anonymous demo is read-only — refuse every write before touching the database
           if (isDemoWrite(request)) return demoWriteRefused(request)
