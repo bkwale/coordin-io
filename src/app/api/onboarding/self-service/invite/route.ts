@@ -10,7 +10,7 @@ import { sendSelfServiceOnboardingEmail } from '@/lib/email'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 import crypto from 'crypto'
 
-import { selfServiceSteps, SELF_SERVICE_TITLES, isEmployeeType, type EmployeeType } from '@/lib/onboarding/seven-day'
+import { selfServiceSteps, selfServiceStepFor, SELF_SERVICE_TITLES, isEmployeeType, type EmployeeType } from '@/lib/onboarding/seven-day'
 
 // Invitation link lifetime. The seven-day window itself starts when the employee activates the link.
 const INVITE_VALID_DAYS = 14
@@ -109,16 +109,31 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
     // One task per self-service step. Reuse the matching task from the assignment's checklist where
     // there is one (so the employee does each thing once); otherwise create it.
+    const legacyTasks: { id: string; title: string; claimed?: boolean }[] = assignmentId
+      ? await tx.onboardingTask.findMany({
+          where: { assignmentId, assigneeId: targetProfileId, selfServiceStep: null, status: { not: 'WAIVED' } },
+          select: { id: true, title: true },
+          orderBy: { sortOrder: 'asc' },
+        })
+      : []
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i]
       const dueDate = new Date(expiresAt) // Re-dated to the window deadline when the employee activates
 
       if (assignmentId) {
+        // Already linked (new assignments set the step when tasks are created)
         const reused = await tx.onboardingTask.updateMany({
-          where: { assignmentId, assigneeId: targetProfileId, selfServiceStep: step, status: { notIn: ['COMPLETED', 'WAIVED'] } },
+          where: { assignmentId, assigneeId: targetProfileId, selfServiceStep: step, status: { not: 'WAIVED' } },
           data: { isSelfService: true },
         })
         if (reused.count > 0) continue
+        // Older assignments: link the matching checklist task by its wording, even if already completed
+        const legacy = legacyTasks.find((t) => !t.claimed && selfServiceStepFor({ title: t.title, responsibleRole: 'EMPLOYEE' }) === step)
+        if (legacy) {
+          legacy.claimed = true
+          await tx.onboardingTask.update({ where: { id: legacy.id }, data: { isSelfService: true, selfServiceStep: step } })
+          continue
+        }
       }
 
       await tx.onboardingTask.create({

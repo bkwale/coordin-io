@@ -1,4 +1,5 @@
 'use client'
+import { taskDisplayStatus } from '@/lib/onboarding/stages'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -594,9 +595,14 @@ export default function OnboardingPage() {
                                 <p className="text-[13px] text-ink-500 mt-1">{task.description}</p>
                               )}
                               <div className="flex items-center gap-3 mt-1.5 text-[12px] text-ink-400 flex-wrap">
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TASK_STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-700'}`}>
-                                  {task.status}
-                                </span>
+                                {(() => {
+                                  const ds = taskDisplayStatus(task.status, task.dueDate)
+                                  return (
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TASK_STATUS_COLORS[ds.key] ?? 'bg-gray-100 text-gray-700'}`}>
+                                      {ds.label}
+                                    </span>
+                                  )
+                                })()}
                                 {task.isAdHoc && (
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
                                     AD-HOC

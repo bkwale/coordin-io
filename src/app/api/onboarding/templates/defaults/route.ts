@@ -21,7 +21,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const templates = DEFAULT_TEMPLATES.filter((t) => !wanted || wanted.has(t.key))
 
   const existing = await modulesPrisma.onboardingTemplate.findMany({
-    where: { organisationId: profile.organisationId, name: { in: templates.map((t) => t.name) } },
+    where: { organisationId: profile.organisationId, isActive: true, name: { in: templates.map((t) => t.name) } },
     select: { name: true },
   })
   const have = new Set(existing.map((t: { name: string }) => t.name))

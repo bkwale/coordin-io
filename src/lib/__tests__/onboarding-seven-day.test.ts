@@ -160,3 +160,17 @@ describe('standard templates (draft for CWA)', () => {
     expect(documentStatusLabel(null)).toBe('—')
   })
 })
+
+import { taskDisplayStatus } from '@/lib/onboarding/stages'
+describe('one status badge per task', () => {
+  const now = new Date('2026-11-05T12:00:00Z')
+  it('overdue replaces pending / in progress; done never shows overdue', () => {
+    expect(taskDisplayStatus('PENDING', '2026-10-23', now)).toEqual({ key: 'OVERDUE', label: 'Overdue' })
+    expect(taskDisplayStatus('IN_PROGRESS', '2026-10-27', now).key).toBe('OVERDUE')
+    expect(taskDisplayStatus('PENDING', '2026-11-06', now)).toEqual({ key: 'PENDING', label: 'Pending' })
+    expect(taskDisplayStatus('PENDING', '2026-11-05', now).key).toBe('PENDING') // due today is not late
+    expect(taskDisplayStatus('COMPLETED', '2026-10-01', now).label).toBe('Completed')
+    expect(taskDisplayStatus('WAIVED', '2026-10-01', now).label).toBe('Waived')
+    expect(taskDisplayStatus('IN_PROGRESS', null, now).label).toBe('In progress')
+  })
+})

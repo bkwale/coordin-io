@@ -1,4 +1,5 @@
 'use client'
+import { taskDisplayStatus } from '@/lib/onboarding/stages'
 
 import { useEffect, useState, useCallback } from 'react'
 import {
@@ -1394,17 +1395,17 @@ export default function OnboardingManagePage() {
                                     <div className="flex-1">
                                       <div className="flex items-center gap-2">
                                         <span className="text-[13px] text-ink-800">{task.title}</span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[task.status] ?? 'bg-gray-100 text-gray-700'}`}>
-                                          {task.status}
-                                        </span>
+                                        {(() => {
+                                          const ds = taskDisplayStatus(task.status, task.dueDate)
+                                          return (
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[ds.key] ?? 'bg-gray-100 text-gray-700'}`}>
+                                              {ds.label}
+                                            </span>
+                                          )
+                                        })()}
                                         {task.isAdHoc && (
                                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
                                             AD-HOC
-                                          </span>
-                                        )}
-                                        {isOverdue && (
-                                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
-                                            OVERDUE
                                           </span>
                                         )}
                                         {task.documentStatus && (() => {
