@@ -2,22 +2,19 @@
 
 import { useEffect } from 'react'
 import { Clock, Play } from 'lucide-react'
-import { startDemoTimer, getDemoStart } from '@/lib/demo-timer'
+import { startDemoTimer } from '@/lib/demo-timer'
 
 export default function DemoAccessPage() {
   useEffect(() => {
-    // Start the 10-minute demo timer (only if not already running)
-    if (getDemoStart() === null) {
-      startDemoTimer()
-    }
-
-    // Full page navigation to dashboard after welcome screen.
-    // Must use window.location.href (not router.push) so the browser sends
-    // the freshly-set demo cookie to middleware on the very first request.
-    const timer = setTimeout(() => {
-      window.location.href = '/dashboard'
+    // Ask the server for a signed demo pass (always — the cookie is HttpOnly, so we can't tell if it's still valid).
+    // Full page navigation afterwards so the browser sends the fresh cookie to middleware on the first request.
+    let cancelled = false
+    const started = startDemoTimer()
+    const timer = setTimeout(async () => {
+      await started
+      if (!cancelled) window.location.href = '/dashboard'
     }, 3000)
-    return () => clearTimeout(timer)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [])
 
   return (

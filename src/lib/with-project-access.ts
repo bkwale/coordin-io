@@ -1,4 +1,5 @@
-import { isDemoWrite, demoWriteRefused } from '@/lib/demo-guard'
+import { readDemoStart } from '@/lib/demo-cookie'
+import { isDemoWrite, demoWriteRefused, demoReadLimit } from '@/lib/demo-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getProfileByAuthId, getProjectMembership } from '@/lib/permissions'
@@ -63,10 +64,12 @@ export function withProjectAccess(handler: ProjectAccessHandler, options: WithPr
       // 0. Demo mode — cookie-based 10-minute pass (no Supabase session needed)
       const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
       if (demoCookie) {
-        const demoStart = parseInt(demoCookie, 10)
+        const demoStart = await readDemoStart(demoCookie) // NaN if forged/malformed
         if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
           // Anonymous demo is read-only — refuse every write before touching the database
           if (isDemoWrite(request)) return demoWriteRefused(request)
+          const demoLimited = await demoReadLimit(request)
+          if (demoLimited) return demoLimited
           const demoProfile = await prisma.profile.findFirst({
             where: {
               organisationId: 'demo_org_sterling_2026',

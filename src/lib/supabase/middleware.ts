@@ -1,3 +1,4 @@
+import { readDemoStart } from '@/lib/demo-cookie'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -35,7 +36,7 @@ export async function updateSession(request: NextRequest) {
   // 2. Active demo — cookie-based 10-minute pass (no auth required)
   const demoCookie = request.cookies.get(DEMO_COOKIE)?.value
   if (demoCookie) {
-    const demoStart = parseInt(demoCookie, 10)
+    const demoStart = await readDemoStart(demoCookie) // NaN if forged/malformed
     if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
       // Demo still active — allow through without auth
       return NextResponse.next()

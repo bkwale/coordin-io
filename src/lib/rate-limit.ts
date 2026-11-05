@@ -42,6 +42,12 @@ interface RateLimitOptions {
   maxRequests?: number
   /** Window duration in milliseconds. Default: 60_000 (1 minute) */
   windowMs?: number
+  /**
+   * Brute-force-sensitive routes (invitation token lookup, onboarding verification): if Redis is
+   * configured but unreachable, refuse with 503 instead of falling back to the per-instance counter.
+   * Better a few minutes' outage than an unlimited guessing window (Schneier, PT 5 Nov).
+   */
+  failClosed?: boolean
 }
 
 /**
@@ -76,6 +82,10 @@ export async function checkRateLimit(
       }
       return null
     } catch (e) {
+      if (opts.failClosed) {
+        console.error('[RateLimit] Redis unavailable — failing CLOSED', { key: userId, error: e instanceof Error ? e.message : String(e) })
+        return NextResponse.json({ ok: false, error: { code: 'TEMPORARILY_UNAVAILABLE', message: 'This is temporarily unavailable. Please try again in a few minutes.' } }, { status: 503, headers: { 'Retry-After': '60' } })
+      }
       console.warn('[RateLimit] Redis unavailable — falling back to per-instance counter', { error: e instanceof Error ? e.message : String(e) })
     }
   }
