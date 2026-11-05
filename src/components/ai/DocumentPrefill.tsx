@@ -13,17 +13,19 @@ import { ConfirmationReview, type ReviewRow, type ConditionRow } from './Confirm
 type Stage = { name: string; status: 'running' | 'done' | 'failed'; ms?: number; detail?: string }
 type Prefill = { key: string; value: unknown; kind: 'value' | 'bound'; label: string; because: string; confidence: number; page: number | null; quote: string | null; preAccept: boolean }
 type Kind = 'planning_conditions' | 'brief'
-type Mapping = { kind?: Kind; document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; projectName?: string | null; client?: string | null }; prefills: Prefill[]; conditions: Array<{ topic: string; text: string; page: number | null; mandatory: boolean; citation: string }>; bounds: { maxHeightM: number | null; maxStoreys: number | null }; warnings: string[]; suspicious?: { pages: number[]; excerpts: string[] } }
+type Mapping = { kind?: Kind; document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; projectName?: string | null; client?: string | null; ehrCode?: string | null }; prefills: Prefill[]; conditions: Array<{ topic: string; text: string; page: number | null; mandatory: boolean; citation: string }>; bounds: { maxHeightM: number | null; maxStoreys: number | null }; warnings: string[]; suspicious?: { pages: number[]; excerpts: string[] } }
 type Run = { id: string; status: string; stages: Stage[]; mapping: Mapping | null; error: string | null; documentUrl: string | null }
 
 const LABELS: Record<string, string> = { jurisdiction: 'Jurisdiction', buildingType: 'Building type', workType: 'Work', detailedPlanExists: 'Detailed plan', county: 'County', heritage: 'Heritage', urbanArea: 'Urban area', height: 'Height', storeys: 'Storeys', grossFloorArea: 'Gross floor area', apartments: 'Apartments', parkingSpaces: 'Parking', timberStructure: 'Structure', districtHeatingAvailable: 'District heating' }
 
-export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
+export function DocumentPrefill({ projectId, onApplyValues, onPending, onEhrCode }: {
   projectId: string
   /** Called with accepted VALUE prefills (never bounds) so the questionnaire fills in before the architect confirms. bounds = null means "leave existing bounds alone" (briefs carry none). */
   onApplyValues: (values: Record<string, unknown>, bounds: { maxHeightM: number | null; maxStoreys: number | null } | null) => void
   /** The run awaiting confirmation + selected condition indexes; null when nothing is pending. The page's Generate button confirms it. */
   onPending: (p: { runId: string; acceptedConditions: number[] } | null) => void
+  /** EHR code found in the document, so the Ehitisregister panel can offer to link it. */
+  onEhrCode?: (code: string | null) => void
 }) {
   const [open, setOpen] = useState(false)
   const [kind, setKind] = useState<Kind>('planning_conditions')
@@ -80,6 +82,11 @@ export function DocumentPrefill({ projectId, onApplyValues, onPending }: {
 
   // expose confirm to the parent via a window-free pattern: parent calls confirm through onConfirmed after generate
   useEffect(() => { if (run?.status === 'AWAITING_CONFIRMATION' && m) applyToForm() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [accepted, run?.status])
+  useEffect(() => {
+    const code = run?.mapping?.document.ehrCode
+    if (run?.status === 'AWAITING_CONFIRMATION' && code && /^\d{9}$/.test(code)) onEhrCode?.(code)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.id, run?.status])
   useEffect(() => {
     if (run?.status === 'AWAITING_CONFIRMATION') onPending({ runId: run.id, acceptedConditions: Array.from(acceptedConds).map(Number) })
     else onPending(null)

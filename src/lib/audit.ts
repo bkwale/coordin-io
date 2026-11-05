@@ -192,6 +192,8 @@ export const AuditActions = {
   AI_PRACTICE_SETUP_RUN: 'ai.practice_setup_run',
   AI_PRACTICE_CONFIGURED: 'ai.practice_configured',
   AI_PROJECT_CONFIGURED: 'ai.project_configured',
+  PROJECT_EHR_LINKED: 'project.ehr_linked',
+  PROJECT_EHR_UNLINKED: 'project.ehr_unlinked',
 
   // Audit trail
   AUDIT_EXPORTED: 'audit.exported',

@@ -1335,4 +1335,12 @@ Workflow change: all Sprint 3 work on the `sprint-3` branch → Vercel preview U
 - Live: synthetic ET apartment-block brief 12/12 fields correct, EN school-conversion brief 9/9; plot area never mistaken for floor area.
 - **Data gap:** no real client briefs yet (vs 10 real PTs). Ask Laila for 5–10 anonymised briefs before calling brief accuracy known.
 
-**Next:** walk 3.B2/3.B3 on the preview; 3.C EHR enrichment; 3.D demo org + Laila.
+**3.C — Ehitisregister (EHR) link**
+- Migration `ai_sprint3_project_ehr_link`: `projects.ehr_code / ehr_snapshot / ehr_fetched_at` (additive, nullable).
+- `src/lib/ehr/client.ts`: public keyless endpoints only (`buildingData`, `buildingSearchPageable`); 9-digit validation (rejects cadastral numbers before calling); 10 s timeout; global cache by code (record 24 h, search 1 h); keeps building facts only — no owners, no geometry. Heritage comes from search (best effort; "not shown" when unknown).
+- Routes: `GET /api/ehr/search?q=` (code or building name; 10/min/user), `GET|POST|DELETE /api/projects/[id]/ehr` (link/unlink lead-only, audited `project.ehr_linked/unlinked`).
+- UI: Ehitisregister panel on the Regulatory page — search, link, record card with "Ehitisregister, fetched DD.MM.YYYY", "Use these values" (building type, storeys, height, heated/enclosed area, county, heritage). Never invents a gross area. A planning-conditions upload that contains an EHR code offers "Link it".
+- Live: Tallinna Linnateater 101029474 → all values + heritage in 0.4 s; unknown codes → clean "No building with EHR code …".
+- **Bug fixed (from 3.B3):** applying gross area from a document didn't update heated/enclosed area (only typing did), so energy rules could run on 150 m² for a 2,400 m² block. One shared `mergeValues` now handles documents and EHR; tested.
+
+**Next:** walk 3.B2/3.B3/3.C on the preview; 3.D demo org + Laila; then merge `sprint-3` → `main`.

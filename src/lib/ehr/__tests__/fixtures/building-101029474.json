@@ -1,0 +1,233 @@
+{
+ "ehitis": {
+  "ehitiseAndmed": {
+   "url": "URL pole kasutusel",
+   "oper": "A",
+   "adsOid": "ME00647375",
+   "ehitId": "31347424",
+   "ehrKood": "101029474",
+   "nimetus": "Tallinna Linnateater",
+   "seisund": "EHITIS_SEISUND_OLEMA",
+   "kaosKood": "12611",
+   "markused": null,
+   "kaosIdTxt": "Teater, kino, kontserdi- ja universaalsaalide hoone",
+   "seisundTxt": "Olemas",
+   "verTekkAeg": "2025-11-24T19:57:50.923",
+   "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Laboratooriumi tn 12// Lai tn 19// 21// 23// 25",
+   "rajatisHoone": "H",
+   "esmaneKasutus": null,
+   "kaosIdPeamine": "30046",
+   "katastriyksused": "katastriuksused on eraldi plokis",
+   "rajatishoonetxt": "hoone"
+  },
+  "ehitiseKehand": {
+   "kehand": []
+  },
+  "ehitiseAadressid": {
+   "aadress": [
+    {
+     "oper": "A",
+     "adrId": "2264344",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "377840298000005ZC00001FK600000000",
+     "lahiaadress": "Lai tn 23",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 23",
+     "aadressTekstina": null
+    },
+    {
+     "oper": "A",
+     "adrId": "2223472",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "377840298000005ZC000097B500000000",
+     "lahiaadress": "Lai tn 21",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 21",
+     "aadressTekstina": null
+    },
+    {
+     "oper": "A",
+     "adrId": "2225650",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "377840298000005ZC000097HP00000000",
+     "lahiaadress": "Lai tn 19",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 19",
+     "aadressTekstina": null
+    },
+    {
+     "oper": "A",
+     "adrId": "2225650",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "377840298000005ZC000097HP00000000",
+     "lahiaadress": "Lai tn 19",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 19",
+     "aadressTekstina": null
+    },
+    {
+     "oper": "A",
+     "adrId": "2223472",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "377840298000005ZC000097B500000000",
+     "lahiaadress": "Lai tn 21",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 21",
+     "aadressTekstina": null
+    },
+    {
+     "oper": "A",
+     "adrId": "2116620",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "3778402980000046W00000PXX00000000",
+     "lahiaadress": "Laboratooriumi tn 12",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Laboratooriumi tn 12",
+     "aadressTekstina": null
+    },
+    {
+     "oper": "A",
+     "adrId": "2267830",
+     "olekviit": {
+      "olek": "K",
+      "olekTxt": "kehtiv"
+     },
+     "koodaadress": "377840298000005ZC00000PXW00000000",
+     "lahiaadress": "Lai tn 25",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 25",
+     "aadressTekstina": null
+    }
+   ]
+  },
+  "ehitisePohiandmed": {
+   "lift": "1",
+   "maht": "35081.0",
+   "laius": "52.7",
+   "korgus": "23.4",
+   "pikkus": "86.0",
+   "maakond": "37",
+   "sygavus": "8.0",
+   "kinavald": null,
+   "ehAlustKp": "2010-03-15T00:00:00.000",
+   "mahtBruto": "56595.0",
+   "oletuslik": "0",
+   "tubadeArv": "0",
+   "abs0Korgus": "39.6",
+   "koetavPind": "9819.2",
+   "omandiLiik": "EHITIS_OMANDI_LIIK_KINNIS",
+   "omavalitsus": "784",
+   "kavKasutusKp": "2022-12-01T00:00:00.000",
+   "toatemp_pind": "9819.2",
+   "omandiLiikTxt": "kinnisasi",
+   "vetteEhitatud": null,
+   "yldkasut_pind": "0",
+   "abiruumidePind": "0",
+   "ajehKasutalgKp": null,
+   "maxKorrusteArv": "6",
+   "ajehKasutloppKp": null,
+   "ehitisalunePind": "4159.3",
+   "suletud_netopind": "9819.2",
+   "mitteeluruumideArv": "0",
+   "soltumatuVallasAsi": null,
+   "maaalusteKorrusteArv": "2",
+   "ehitisaluneMaapealnePind": "3148.5"
+  },
+  "ehitiseEnergiamargised": {
+   "energiamargis": []
+  },
+  "ehitiseKatastriyksused": {
+   "ehitiseKatastriyksus": [
+    {
+     "id": "43229473",
+     "olek": "K",
+     "oper": "A",
+     "adob_id": 9800973,
+     "ads_oid": "CU00444232",
+     "kayk_id": "269229",
+     "kontrKp": null,
+     "lahiaadress": "Lai tn 19 // 21 // 23",
+     "taisaadress": "Harju maakond, Tallinn, Kesklinna linnaosa, Lai tn 19 // 21 // 23",
+     "katastritunnus": "78401:101:2050",
+     "seostamiseViis": null
+    }
+   ]
+  },
+  "ehitiseKasutusotstarbed": {
+   "kasutusotstarve": [
+    {
+     "oper": "A",
+     "kaosId": "30046",
+     "ehos_id": null,
+     "kaosKood": "12611",
+     "kaosIdTxt": "Teater, kino, kontserdi- ja universaalsaalide hoone",
+     "eluruumidePind": null,
+     "mitteeluruumidePind": "8623.9"
+    },
+    {
+     "oper": "A",
+     "kaosId": "12132",
+     "ehos_id": null,
+     "kaosKood": "12132",
+     "kaosIdTxt": "Kohvik, baar või söökla",
+     "eluruumidePind": null,
+     "mitteeluruumidePind": "587.9"
+    },
+    {
+     "oper": "A",
+     "kaosId": "30046",
+     "ehos_id": "28442834",
+     "kaosKood": "12611",
+     "kaosIdTxt": "Teater, kino, kontserdi- ja universaalsaalide hoone",
+     "eluruumidePind": null,
+     "mitteeluruumidePind": null
+    }
+   ]
+  },
+  "ehitiseTehnilisedNaitajad": {
+   "tehnilineNaitaja": [
+    {
+     "oper": "A",
+     "jrkNr": "4",
+     "klKood": "KONS_VSEIN",
+     "tenaId": "512",
+     "nimetus": "betoon",
+     "klNimetus": "Välisseina liik",
+     "eh_tehna_id": null,
+     "lisavaartus": null
+    },
+    {
+     "oper": "A",
+     "jrkNr": "6",
+     "klKood": "KONS_VLAED",
+     "tenaId": "405",
+     "nimetus": "monoliitne raudbetoon",
+     "klNimetus": "Vahelagede kandva osa materjal",
+     "eh_tehna_id": "42260916",
+     "lisavaartus": null
+    },
+    {
+     "oper": "A",
+     "jrkNr": "3",
+     "klKood": "KONS_VALISV",
+     "tenaId": "703",
+     "nimetus": "krohv",
+     "klNimetus": "Välisseina välisviimistluse materjal",
+     "eh_tehna_id": "42260926",
+     "lisavaartus": null
+    }
+   ]
+  }
+ }
+}

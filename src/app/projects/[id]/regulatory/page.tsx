@@ -6,6 +6,8 @@ import { ShieldCheck, Loader2, Plus, Check, AlertTriangle, Info, RefreshCw, Chev
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { DocumentPrefill } from '@/components/ai/DocumentPrefill'
+import { EhrLink } from '@/components/ai/EhrLink'
+import { mergeValues } from '@/lib/ai/merge-values'
 
 /* ── Types ──────────────────────────────────────────────── */
 type Params = {
@@ -52,7 +54,12 @@ export default function RegulatoryPage() {
 
   const [areaEdited, setAreaEdited] = useState({ heated: false, enclosed: false })
   const [pendingRun, setPendingRun] = useState<{ runId: string; acceptedConditions: number[] } | null>(null)
+  const [suggestedEhr, setSuggestedEhr] = useState<string | null>(null)
   const [bounds, setBounds] = useState<{ maxHeightM: number | null; maxStoreys: number | null }>({ maxHeightM: null, maxStoreys: null })
+  const applyValues = (values: Record<string, unknown>) => {
+    const r = mergeValues(form, values, areaEdited)
+    setForm(r.form); setAreaEdited(r.edited)
+  }
   const set = <K extends keyof Params>(k: K, v: Params[K]) => setForm((f) => {
     const next = { ...f, [k]: v }
     // Heated / enclosed net area follow gross area until the architect edits them — prevents energy rules running on a stale 150 m² default.
@@ -105,9 +112,11 @@ export default function RegulatoryPage() {
       <aside className="w-[340px] shrink-0 rounded-xl border border-surface-200 bg-white p-5 sticky top-4">
         <DocumentPrefill
           projectId={projectId}
-          onApplyValues={(values, b) => { setForm((f) => ({ ...f, ...(values as Partial<Params>) })); if (b) setBounds(b) }}
+          onApplyValues={(values, b) => { applyValues(values); if (b) setBounds(b) }}
           onPending={setPendingRun}
+          onEhrCode={setSuggestedEhr}
         />
+        <EhrLink projectId={projectId} suggestedCode={suggestedEhr} onApply={applyValues} />
         <div className="flex items-center gap-2 mb-1"><Scale className="w-4 h-4 text-accent-600" /><h2 className="text-[14px] font-semibold text-ink-900">Project parameters</h2></div>
         <p className="text-[11px] text-ink-400 mb-4">Answer what you know. The engine only uses deterministic rules — no AI judgement.</p>
 

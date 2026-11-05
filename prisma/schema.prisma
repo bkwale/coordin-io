@@ -649,6 +649,10 @@ model Project {
 
   // Sprint 2 — BUG-05: project-level SharePoint link
   sharepointUrl String? @map("sharepoint_url")
+  // Ehitisregister (public API) — authoritative building record linked by the architect (S3.C)
+  ehrCode      String?   @map("ehr_code")
+  ehrSnapshot  Json?     @map("ehr_snapshot")
+  ehrFetchedAt DateTime? @map("ehr_fetched_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
