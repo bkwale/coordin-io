@@ -1,3 +1,4 @@
+import { CORE_STAGES, VALID_STAGES, isValidStage } from '@/lib/onboarding/stages'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -7,7 +8,6 @@ import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { recordAuditEvent } from '@/lib/audit'
 
-const STAGES = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION'] as const
 const VALID_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'OVERDUE', 'WAIVED']
 const VALID_DOC_STATUSES = ['NOT_SENT', 'SENT', 'VIEWED', 'ACKNOWLEDGED']
 
@@ -108,7 +108,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   // Group by stage
   const groupedTasks: Record<string, unknown[]> = {}
-  for (const stage of STAGES) {
+  for (const stage of CORE_STAGES) {
     groupedTasks[stage] = []
   }
 
@@ -338,8 +338,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const title = requireString(body.title, 'title', 500)
   const stage = requireString(body.stage, 'stage', 50)
-  if (!STAGES.includes(stage as typeof STAGES[number])) {
-    throw new ValidationError(`stage must be one of: ${STAGES.join(', ')}`)
+  if (!isValidStage(stage)) {
+    throw new ValidationError(`stage must be one of: ${VALID_STAGES.join(', ')}`)
   }
 
   const category = optionalString(body.category, 'category', 200)

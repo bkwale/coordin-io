@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
+import { stageMeta } from '@/lib/onboarding/stages'
 
 /* ================================================================
    TYPES
@@ -2852,7 +2853,7 @@ function OnboardingContent({
                       return (
                         <div key={stage}>
                           <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-2">
-                            {STAGE_LABELS[stage] ?? stage}
+                            {STAGE_LABELS[stage] ?? stageMeta(stage).label}
                           </h4>
                           <div className="space-y-1.5">
                             {stageTasks.map((task) => {

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
+import { CORE_STAGES, orderedStages, stageMeta } from '@/lib/onboarding/stages'
 
 /* ================================================================
    TYPES
@@ -118,12 +119,9 @@ const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: 'probation', label: 'Probation', icon: Clock },
 ]
 
-const STAGES = [
-  { key: 'BEFORE_START', label: 'Before Start', color: 'bg-blue-100 text-blue-800' },
-  { key: 'DAY_ONE', label: 'Day One', color: 'bg-green-100 text-green-800' },
-  { key: 'ROLE_SPECIFIC', label: 'Role Specific', color: 'bg-purple-100 text-purple-800' },
-  { key: 'PROBATION', label: 'Probation', color: 'bg-amber-100 text-amber-800' },
-]
+// Core stages for creating new items/tasks; existing data renders every stage it has (BUG-015)
+const STAGES = CORE_STAGES.map((k) => stageMeta(k))
+const stagesFor = (present: Iterable<string>) => orderedStages(present).map((k) => stageMeta(k))
 
 const RESPONSIBLE_ROLES = ['HR', 'MANAGER', 'IT', 'EMPLOYEE'] as const
 
@@ -705,7 +703,7 @@ export default function OnboardingManagePage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {STAGES.map((s) => (
+                  {stagesFor(Object.keys(t.stageCounts ?? {}).filter((k) => (t.stageCounts[k] ?? 0) > 0)).map((s) => (
                     <span key={s.key} className={`px-2 py-0.5 rounded text-[10px] font-medium ${s.color}`}>
                       {s.label}: {t.stageCounts[s.key] ?? 0}
                     </span>
@@ -737,7 +735,7 @@ export default function OnboardingManagePage() {
                   </div>
 
                   {/* Items by stage */}
-                  {STAGES.map((stage) => {
+                  {stagesFor(Object.keys(templateDetail.groupedItems ?? {}).filter((k) => (templateDetail.groupedItems[k]?.length ?? 0) > 0)).map((stage) => {
                     const items = templateDetail.groupedItems[stage.key] ?? []
                     return (
                       <div key={stage.key} className="mb-4">
@@ -1009,8 +1007,8 @@ export default function OnboardingManagePage() {
               {expandedAssignment === a.id && (
                 <div className="border-t border-ink-100">
                   {/* Stage progress bars */}
-                  <div className="px-4 py-3 grid grid-cols-4 gap-2">
-                    {STAGES.map((stage) => {
+                  <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                    {stagesFor(Object.keys(a.stageBreakdown ?? {}).filter((k) => (a.stageBreakdown[k]?.total ?? 0) > 0)).map((stage) => {
                       const sb = a.stageBreakdown[stage.key]
                       const pct = sb ? (sb.total > 0 ? Math.round((sb.completed / sb.total) * 100) : 0) : 0
                       return (
@@ -1172,7 +1170,7 @@ export default function OnboardingManagePage() {
                   {/* Tasks by stage */}
                   {assignmentTasks && (
                     <div className="px-4 pb-4 space-y-3">
-                      {STAGES.map((stage) => {
+                      {stagesFor(Object.keys(assignmentTasks)).map((stage) => {
                         const tasks = (assignmentTasks[stage.key] ?? []) as OnboardingTaskDetail[]
                         if (tasks.length === 0) return null
                         return (
