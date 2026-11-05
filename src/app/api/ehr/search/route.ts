@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  * 10/min per user; results cached globally (search 1 h, records 24 h).
  */
 export const GET = withAuth(async (request, { profile }) => {
-  const limited = checkRateLimit(`ehr:${profile.id}`, { maxRequests: 10, windowMs: 60_000 })
+  const limited = await checkRateLimit(`ehr:${profile.id}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
   const q = (new URL(request.url).searchParams.get('q') ?? '').trim()
   if (q.length < 3) return error(new ValidationError('Type at least 3 characters, or a 9-digit EHR code'))

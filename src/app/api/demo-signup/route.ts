@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
   try {
     // IP-based rate limit: 5 signups per minute per IP
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    const rateLimited = checkRateLimit(`demo-signup:${ip}`, { maxRequests: 5, windowMs: 60_000 })
+    const rateLimited = await checkRateLimit(`demo-signup:${ip}`, { maxRequests: 5, windowMs: 60_000 })
     if (rateLimited) return rateLimited
 
     const body = await request.json()

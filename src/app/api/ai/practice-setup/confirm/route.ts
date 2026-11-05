@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
  * Platform-admin for the demo surface; org-owner self-serve comes with the onboarding flow.
  */
 export const POST = withSuperAdmin(async (request: NextRequest, { authUserId }) => {
-  const limited = checkRateLimit(`ai-confirm:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
+  const limited = await checkRateLimit(`ai-confirm:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
 
   const body = await request.json().catch(() => ({}))

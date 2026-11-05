@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
  * same transaction; extraction runs in the background — poll /api/ai/runs/[id].
  */
 export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project, authUserId }) => {
-  const limited = checkRateLimit(`ai-setup:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
+  const limited = await checkRateLimit(`ai-setup:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
 
   let form: FormData

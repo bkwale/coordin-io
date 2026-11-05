@@ -41,7 +41,7 @@ export function withSuperAdmin(handler: SuperAdminHandler) {
       }
 
       // 2. Rate limit
-      const rateLimitResponse = checkRateLimit(user.id, RateLimitPresets.standard)
+      const rateLimitResponse = await checkRateLimit(user.id, RateLimitPresets.standard)
       if (rateLimitResponse) return rateLimitResponse
 
       // 3. Check platform_admins table

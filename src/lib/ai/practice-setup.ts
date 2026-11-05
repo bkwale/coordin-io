@@ -9,12 +9,14 @@ import { mapPracticeProfile, practiceConfidence } from './map-practice'
 import { lookupCompany, type RegistryJurisdiction, type CompanyFacts } from '@/lib/registry'
 import { overlayRegistryFacts, profileFromRegistry } from './registry-overlay'
 import { prisma } from '@/lib/prisma'
+import { assertAiBudget } from './budget'
 
 export type PracticeSetupInput = { url?: string | null; registryCode?: string | null; jurisdiction?: RegistryJurisdiction | null }
 
 export async function startPracticeSetup(opts: PracticeSetupInput & { createdBy: string; organisationId?: string | null }) {
   const base = opts.url ? normaliseUrl(opts.url).toString() : null
   if (!base && !opts.registryCode) throw new Error('A website or a registry number is required')
+  await assertAiBudget(opts.organisationId ?? null)
   const run = await createRun({
     surface: 'PRACTICE_SETUP',
     organisationId: opts.organisationId ?? null,

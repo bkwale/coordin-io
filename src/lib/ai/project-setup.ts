@@ -13,6 +13,7 @@ import { PLANNING_CONDITIONS_SYSTEM, PLANNING_CONDITIONS_PROMPT_VERSION, plannin
 import { mapPlanningConditions, mapBrief, pinDocumentNumber, verifyQuotes, type ProjectSetupMapping } from './map-project'
 import { BRIEF_PROMPT_VERSION, BRIEF_SYSTEM, briefUser } from './prompts/brief'
 import { applyInjectionGuard } from './injection-guard'
+import { assertAiBudget } from './budget'
 import { applyProjectParameters, APPLY_TX_OPTIONS } from '@/lib/rules/apply'
 import { ProjectParametersSchema } from '@/lib/rules/schema'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
@@ -36,6 +37,9 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
   let pages: string[]
   let storage: { path: string; url: string; size: number } | null = null
 
+  // Spend cap first — before we parse, upload, or call any model
+  await assertAiBudget(organisationId)
+
   if (input.file) {
     pages = await pdfToPages(input.file.bytes) // throws IngestError
     storage = await uploadToStorage(organisationId, projectId, input.file)
@@ -58,7 +62,7 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
       : null
     const run = await tx.aIRun.create({
       data: {
-        surface: 'PROJECT_SETUP', organisationId, projectId, status: 'QUEUED', promptVersion: PLANNING_CONDITIONS_PROMPT_VERSION,
+        surface: 'PROJECT_SETUP', organisationId, projectId, status: 'QUEUED', promptVersion: kind === 'brief' ? BRIEF_PROMPT_VERSION : PLANNING_CONDITIONS_PROMPT_VERSION,
         inputHash: '', inputSummary: JSON.stringify({ kind, documentId: document?.id ?? null, fileName: input.file?.name ?? null, pages: pages.length, chars: pages.reduce((a, p) => a + p.length, 0) }),
         createdBy: authUserId, stages: [],
       },

@@ -1,3 +1,4 @@
+import { isDemoWrite, demoWriteRefused } from '@/lib/demo-guard'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getProfileByAuthId, canViewProject } from '@/lib/permissions'
@@ -37,6 +38,8 @@ export function withDocumentAccess(handler: DocumentAccessHandler) {
       if (demoCookie) {
         const demoStart = parseInt(demoCookie, 10)
         if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+          // Anonymous demo is read-only — refuse every write before touching the database
+          if (isDemoWrite(request)) return demoWriteRefused(request)
           const demoProfile = await prisma.profile.findFirst({
             where: {
               organisationId: 'demo_org_sterling_2026',
@@ -173,6 +176,8 @@ export function withRevisionAccess(handler: RevisionAccessHandler) {
       if (demoCookie) {
         const demoStart = parseInt(demoCookie, 10)
         if (!isNaN(demoStart) && Date.now() - demoStart < DEMO_DURATION_MS) {
+          // Anonymous demo is read-only — refuse every write before touching the database
+          if (isDemoWrite(request)) return demoWriteRefused(request)
           const demoProfile = await prisma.profile.findFirst({
             where: {
               organisationId: 'demo_org_sterling_2026',

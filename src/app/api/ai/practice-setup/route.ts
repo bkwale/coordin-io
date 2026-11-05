@@ -1,3 +1,4 @@
+import { error } from '@/lib/api-response'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { withSuperAdmin } from '@/lib/with-super-admin'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic'
  * crawl → extract → map in the background (after()), returns the run id to poll.
  */
 export const POST = withSuperAdmin(async (request: NextRequest, { authUserId }) => {
-  const limited = checkRateLimit(`ai:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
+  const limited = await checkRateLimit(`ai:${authUserId}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
 
   const body = await request.json().catch(() => ({}))
@@ -30,7 +31,9 @@ export const POST = withSuperAdmin(async (request: NextRequest, { authUserId }) 
   let url: string | null = null
   if (raw) { try { url = normaliseUrl(raw).toString() } catch { return NextResponse.json({ error: 'Not a valid URL', code: 'VALIDATION' }, { status: 400 }) } }
 
-  const run = await startPracticeSetup({ url, registryCode: registryCode || null, jurisdiction, createdBy: authUserId })
+  let run: Awaited<ReturnType<typeof startPracticeSetup>>
+  try { run = await startPracticeSetup({ url, registryCode: registryCode || null, jurisdiction, createdBy: authUserId }) }
+  catch (e) { return error(e) }
   const registry = registryCode ? { jurisdiction, registryCode } : null
 
   after(async () => {

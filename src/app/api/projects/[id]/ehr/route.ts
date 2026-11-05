@@ -21,7 +21,7 @@ export const GET = withProjectAccess(async (_req: NextRequest, { projectId }) =>
 
 /** POST { ehrCode } — fetch from Ehitisregister and store as the project's snapshot. Lead only. */
 export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, project }) => {
-  const limited = checkRateLimit(`ehr:${profile.id}`, { maxRequests: 10, windowMs: 60_000 })
+  const limited = await checkRateLimit(`ehr:${profile.id}`, { maxRequests: 10, windowMs: 60_000 })
   if (limited) return limited
   const body = await request.json().catch(() => ({}))
   const code = typeof body.ehrCode === 'string' ? body.ehrCode.trim() : ''
