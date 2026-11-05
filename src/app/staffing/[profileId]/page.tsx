@@ -1070,6 +1070,7 @@ function ProbationReviewsSection({
                 {r.objectives && <p className="mt-1 text-ink-600">{r.objectives}</p>}
                 {r.feedback && <p className="mt-1 italic text-ink-500">{r.feedback}</p>}
               </div>
+              <a href={`/probation-reviews/${r.id}`} className="mt-2 mr-4 inline-block text-[12px] font-medium text-ink-700 hover:underline">Open review →</a>
               {canCreate && !r.completedDate && completingId !== r.id && (
                 <button
                   onClick={() => startComplete(r.id)}

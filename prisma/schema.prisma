@@ -2298,6 +2298,21 @@ model ProbationReview {
   feedback       String?
   outcome        String? // Pass, Extend, Fail
   nextReviewDate DateTime? @map("next_review_date")
+  // Review workflow (2026-11-05): manager drafts → submits to HR → HR returns or finalises
+  workflowStatus        String    @default("SCHEDULED") @map("workflow_status") // SCHEDULED, DRAFT, SUBMITTED, RETURNED, FINALISED
+  assessment            Json? // criteria list: key, label, score 1-5, comment
+  employeeFeedback      String?   @map("employee_feedback")
+  improvementObjectives String?   @map("improvement_objectives")
+  managerRecommendation String?   @map("manager_recommendation") // Pass, Extend, Fail
+  hrDecision            String?   @map("hr_decision") // Pass, Extend, Fail
+  evidence              Json? // list of name + url links
+  submittedAt           DateTime? @map("submitted_at")
+  submittedById         String?   @map("submitted_by_id")
+  returnedAt            DateTime? @map("returned_at")
+  returnedById          String?   @map("returned_by_id")
+  returnReason          String?   @map("return_reason")
+  finalisedAt           DateTime? @map("finalised_at")
+  finalisedById         String?   @map("finalised_by_id")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 

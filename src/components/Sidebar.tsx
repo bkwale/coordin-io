@@ -8,6 +8,7 @@ import { useUser } from '@/lib/hooks/useUser'
 import { useProfile } from '@/lib/hooks/useProfile'
 import { createClient } from '@/lib/supabase/client'
 import {
+  ClipboardCheck,
   LayoutDashboard, FolderOpen, Sparkles, BookOpen,
   GraduationCap, Users, ExternalLink, BarChart3, PoundSterling,
   TrendingUp, Receipt, Target, Shield, Clock, ClipboardList,
@@ -32,6 +33,7 @@ const MAIN_ITEMS = [
   { href: '/fee-quotes', label: 'Quotes & Invoices', icon: Receipt, featureKey: 'commercial' },
   { href: '/staffing', label: 'Staffing', icon: Users, featureKey: 'staffing' },
   { href: '/onboarding/manage', label: 'Onboarding', icon: ClipboardList, featureKey: 'staffing' },
+  { href: '/probation-reviews', label: 'Probation Reviews', icon: ClipboardCheck, featureKey: 'staffing' },
   { href: '/timesheets', label: 'Timesheets', icon: Clock, featureKey: 'timesheets' },
   { href: '/support-tickets', label: 'Support', icon: Ticket, featureKey: 'helpdesk' },
 ]

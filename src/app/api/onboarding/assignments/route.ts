@@ -245,6 +245,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       const probMonths = await getEffectiveProbationMonths(empProfile?.probationLength, profile.organisationId)
 
       const milestones: { type: string; daysOffset: number }[] = []
+      // Day 7: agree responsibilities, expectations and goals (Ayo §2.3)
+      milestones.push({ type: 'Initial objectives', daysOffset: 7 })
       if (probMonths >= 1) milestones.push({ type: '30-day', daysOffset: 30 })
       if (probMonths >= 2) milestones.push({ type: '60-day', daysOffset: 60 })
       if (probMonths >= 3) milestones.push({ type: '90-day', daysOffset: 90 })

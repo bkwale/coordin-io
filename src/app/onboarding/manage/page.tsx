@@ -187,7 +187,7 @@ export default function OnboardingManagePage() {
   // Probation state
   const [probationReviews, setProbationReviews] = useState<{
     id: string; reviewType: string; scheduledDate: string; completedDate: string | null
-    outcome: string | null; profile: { id: string; fullName: string; jobTitle: string | null; startDate: string | null }
+    outcome: string | null; workflowStatus?: string; profile: { id: string; fullName: string; jobTitle: string | null; startDate: string | null }
   }[]>([])
   // BUG-016: employees in probation by their probation status (single definition), plus records HR must correct
   const [probationEmployees, setProbationEmployees] = useState<{
@@ -1312,6 +1312,9 @@ export default function OnboardingManagePage() {
               <span className="text-[12px] font-medium text-ink-500">Pending Reviews</span>
             </div>
             <span className="text-2xl font-semibold text-ink-900">{probationReviews.length}</span>
+            {probationReviews.some((r) => r.workflowStatus === 'SUBMITTED') && (
+              <div className="text-[11px] text-amber-700 mt-1">{probationReviews.filter((r) => r.workflowStatus === 'SUBMITTED').length} awaiting HR decision</div>
+            )}
           </div>
           <div className="bg-white border border-ink-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -1413,7 +1416,7 @@ export default function OnboardingManagePage() {
                         <FileText className={`w-4 h-4 ${isOverdue ? 'text-red-600' : 'text-blue-600'}`} />
                       </div>
                       <div>
-                        <a href={`/staffing/${r.profile.id}#probation`} className="text-[13px] font-medium text-ink-900 hover:underline">
+                        <a href={`/probation-reviews/${r.id}`} className="text-[13px] font-medium text-ink-900 hover:underline">
                           {r.profile.fullName} &mdash; {r.reviewType}
                         </a>
                         <div className="text-[12px] text-ink-400">
@@ -1422,11 +1425,17 @@ export default function OnboardingManagePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isOverdue && (
+                      {r.workflowStatus && r.workflowStatus !== 'SCHEDULED' && (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${r.workflowStatus === 'SUBMITTED' ? 'bg-amber-100 text-amber-800' : r.workflowStatus === 'RETURNED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-800'}`}>
+                          {r.workflowStatus === 'SUBMITTED' ? 'AWAITING HR' : r.workflowStatus === 'RETURNED' ? 'RETURNED' : 'DRAFT'}
+                        </span>
+                      )}
+                      {isOverdue && r.workflowStatus !== 'SUBMITTED' && (
                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-semibold">
                           OVERDUE
                         </span>
                       )}
+                      <a href={`/probation-reviews/${r.id}`} className="text-[12px] text-blue-600 hover:underline">Open</a>
                       {r.outcome && (
                         <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
                           r.outcome?.toLowerCase() === 'pass' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
