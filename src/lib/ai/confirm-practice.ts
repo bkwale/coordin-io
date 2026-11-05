@@ -84,6 +84,9 @@ export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise
   const now = new Date()
 
   const profileVersion = await prisma.$transaction(async (tx) => {
+    // Claim the run atomically — two concurrent confirms must not both apply
+    const claimed = await tx.aIRun.updateMany({ where: { id: run.id, status: 'AWAITING_CONFIRMATION' }, data: { status: 'APPLIED' } })
+    if (claimed.count === 0) throw new ValidationError('This run was already applied')
     for (const d of decisions) {
       if (!d.featureKey) continue
       await tx.organisationFeature.upsert({

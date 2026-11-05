@@ -116,6 +116,8 @@ export interface ConfirmProjectSetupInput {
   runId: string
   parameters: unknown                 // full questionnaire as the architect confirmed it
   acceptedConditions: number[]        // indexes into mapping.conditions
+  /** Limits the architect ticked in the review ('height' | 'storeys'). Undefined = enforce all (API callers). */
+  acceptedBounds?: string[]
   actorProfileId: string
   actorAuthUserId: string
 }
@@ -131,17 +133,30 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
   if (!parsed.success) { const f = parsed.error.issues[0]; throw new ValidationError(`${f.path.join('.')}: ${f.message}`) }
   const params = parsed.data
 
-  // Bounds are advisory; refuse a confirmed design value that breaches a municipal bound outright
-  if (mapping.bounds.maxHeightM != null && params.height > mapping.bounds.maxHeightM) throw new ValidationError(`Height ${params.height} m exceeds the municipal maximum of ${mapping.bounds.maxHeightM} m`)
-  if (mapping.bounds.maxStoreys != null && params.storeys > mapping.bounds.maxStoreys) throw new ValidationError(`${params.storeys} storeys exceeds the municipal maximum of ${mapping.bounds.maxStoreys}`)
+  // Enforce only the limits the architect accepted — a misread or tampered limit they rejected must not block them
+  const enforce = (k: string) => input.acceptedBounds === undefined || input.acceptedBounds.includes(k)
+  if (enforce('height') && mapping.bounds.maxHeightM != null && params.height > mapping.bounds.maxHeightM) throw new ValidationError(`Height ${params.height} m exceeds the municipal maximum of ${mapping.bounds.maxHeightM} m`)
+  if (enforce('storeys') && mapping.bounds.maxStoreys != null && params.storeys > mapping.bounds.maxStoreys) throw new ValidationError(`${params.storeys} storeys exceeds the municipal maximum of ${mapping.bounds.maxStoreys}`)
 
   const accepted = Array.from(new Set(input.acceptedConditions.filter((i) => Number.isInteger(i) && i >= 0 && i < mapping.conditions.length)))
   const docInfo = (() => { try { return JSON.parse(run.inputSummary) as { documentId?: string | null } } catch { return {} } })()
 
   const result = await prisma.$transaction(async (tx) => {
+    // Claim the run atomically — two concurrent confirms must not both apply
+    const claimed = await tx.aIRun.updateMany({ where: { id: run.id, status: 'AWAITING_CONFIRMATION' }, data: { status: 'APPLIED' } })
+    if (claimed.count === 0) throw new ValidationError('This run was already applied')
     const applied = await applyProjectParameters(tx, { projectId: input.projectId, parameters: params, createdBy: input.actorProfileId, sourceRunId: run.id })
     // Replace this run's municipality items (idempotent on re-confirm), never touch RULE/ARCHITECT
     await tx.complianceItem.deleteMany({ where: { registerId: applied.registerId, origin: 'MUNICIPALITY', aiRunId: run.id } })
+    // A newer planning-conditions document supersedes the previous one's conditions.
+    // Untouched items go; items someone has worked on stay, flagged, so no work is lost. Briefs carry no conditions — leave PT items alone.
+    if (mapping.kind === 'planning_conditions') {
+      const older = { registerId: applied.registerId, origin: 'MUNICIPALITY' as const, aiRunId: { not: run.id } }
+      await tx.complianceItem.deleteMany({ where: { ...older, status: 'NOT_STARTED' } })
+      const kept = await tx.complianceItem.findMany({ where: older, select: { id: true, requirement: true } })
+      const tag = `[Superseded by PT nr ${mapping.document.number ?? '?'}] `
+      await Promise.all(kept.filter((k) => !k.requirement.startsWith('[Superseded')).map((k) => tx.complianceItem.update({ where: { id: k.id }, data: { requirement: (tag + k.requirement).slice(0, 500), confidence: 'stale' } })))
+    }
     const base = 100_000
     if (accepted.length) {
       await tx.complianceItem.createMany({

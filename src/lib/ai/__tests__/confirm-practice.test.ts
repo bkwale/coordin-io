@@ -21,6 +21,7 @@ const tx = {
     create: vi.fn(async ({ data }: Row) => { const r = { id: `pp${db.practiceProfiles.length + 1}`, ...data }; db.practiceProfiles.push(r); return r }),
   },
   aIRun: {
+    updateMany: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id && (!where.status || x.status === where.status)); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 } }),
     update: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id)!; Object.assign(r, data); return r }),
   },
 }

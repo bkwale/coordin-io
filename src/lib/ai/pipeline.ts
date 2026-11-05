@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto'
 import type { ZodTypeAny, z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { chat, parseJson } from './providers'
+import { chat, parseJsonWithMeta } from './providers'
 
 export type Stage = { name: string; status: 'running' | 'done' | 'failed'; ms?: number; detail?: string; at: string }
 
@@ -71,20 +71,24 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
     await push({ name: 'extract', status: 'running', detail: 'reading with AI' })
     const te = Date.now()
     const result = await chat({ system, user, json: true, maxTokens: opts.maxTokens })
-    const raw = parseJson(result.text)
+    const { value: raw, repaired } = parseJsonWithMeta(result.text)
     const normalised = opts.normalise ? opts.normalise(raw) : raw
     const parsed = opts.schema.safeParse(normalised)
     if (!parsed.success) {
       const issues = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
       throw new Error(`Model output failed validation: ${issues}`)
     }
-    await push({ name: 'extract', status: 'done', ms: Date.now() - te, detail: `${result.provider}/${result.model}` })
+    await push({ name: 'extract', status: 'done', ms: Date.now() - te, detail: `${result.provider}/${result.model}${repaired ? ' · output cut short' : ''}` })
 
     await push({ name: 'map', status: 'running' })
     let output = parsed.data
     if (opts.enrich) output = await opts.enrich(output, push)
     const tm = Date.now()
-    const mapping = opts.map ? opts.map(output) : null
+    let mapping = opts.map ? opts.map(output) : null
+    // Output cut short at max_tokens and repaired: the tail (usually the last conditions) is missing. Never silent.
+    if (repaired && mapping && typeof mapping === 'object' && Array.isArray((mapping as { warnings?: unknown }).warnings)) {
+      mapping = { ...(mapping as object), warnings: ['The AI response was cut short — later items in the document may be missing. Check the document for anything not listed.', ...(mapping as { warnings: string[] }).warnings] } as typeof mapping
+    }
     await push({ name: 'map', status: 'done', ms: Date.now() - tm })
 
     const confidence = opts.confidenceOf ? opts.confidenceOf(output) : null

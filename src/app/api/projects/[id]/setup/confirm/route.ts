@@ -15,9 +15,10 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const body = await request.json().catch(() => ({}))
   const runId = typeof body.runId === 'string' ? body.runId : ''
   if (!runId) return error(new ValidationError('runId is required'))
+  const acceptedBounds = Array.isArray(body.acceptedBounds) ? (body.acceptedBounds as unknown[]).filter((k): k is string => k === 'height' || k === 'storeys') : undefined
   const accepted = Array.isArray(body.acceptedConditions) ? (body.acceptedConditions as unknown[]).filter((n): n is number => typeof n === 'number') : []
   try {
-    const result = await confirmProjectSetup({ projectId, organisationId: project.organisationId, runId, parameters: body.parameters, acceptedConditions: accepted, actorProfileId: profile.id, actorAuthUserId: authUserId })
+    const result = await confirmProjectSetup({ projectId, organisationId: project.organisationId, runId, parameters: body.parameters, acceptedConditions: accepted, acceptedBounds, actorProfileId: profile.id, actorAuthUserId: authUserId })
     return success(result)
   } catch (e) { return error(e) }
 }, { minProjectRole: 'PROJECT_LEAD' })

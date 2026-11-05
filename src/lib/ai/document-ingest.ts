@@ -8,7 +8,8 @@ export class IngestError extends Error {
 }
 
 export const INGEST_LIMITS = {
-  maxBytes: 20 * 1024 * 1024,
+  // Vercel rejects request bodies over 4.5 MB before our code runs. Larger PDFs need direct-to-storage upload (backlog).
+  maxBytes: 4 * 1024 * 1024,
   maxChars: 60_000,
   minChars: 300,
   maxPages: 60,
@@ -16,7 +17,7 @@ export const INGEST_LIMITS = {
 
 export const INGEST_MESSAGE: Record<IngestFailure, string> = {
   no_text_layer: 'This PDF has no text layer (it is a scan). Ask the municipality for the digital original, or paste the text.',
-  too_large: 'File is over 20 MB.',
+  too_large: 'File is over 4 MB. Paste the text instead, or compress the PDF.',
   not_pdf: 'Only PDF files or pasted text are supported here.',
   empty: 'The document is empty.',
   unreadable: 'The PDF could not be read. It may be damaged or password-protected.',

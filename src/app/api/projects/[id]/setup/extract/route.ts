@@ -30,7 +30,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   try {
     let fileInput: { name: string; bytes: Uint8Array; contentType: string } | null = null
     if (file instanceof File) {
-      if (file.size > INGEST_LIMITS.maxBytes) return error(new ValidationError('File is over 20 MB'))
+      if (file.size > INGEST_LIMITS.maxBytes) return error(new ValidationError(`File is over ${INGEST_LIMITS.maxBytes / 1024 / 1024} MB. Paste the text instead, or compress the PDF.`))
       fileInput = { name: file.name.slice(0, 120) || 'document.pdf', bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type }
     }
     const { run, document, pages } = await startProjectSetup({

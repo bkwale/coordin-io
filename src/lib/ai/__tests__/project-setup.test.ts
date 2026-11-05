@@ -128,12 +128,17 @@ vi.mock('@/lib/rules/apply', () => ({
     return { profile: { id: 'p', version: db.profiles.length }, registerId: reg.id, checklist: [{ ruleId: 'EE.X', citation: '§ 1' }], ruleSetVersion: 'EE-1.0', diff: { added: [], removed: [], unchanged: [] } }
   }),
 }))
+// Minimal Prisma where-matcher: equality, { not: x }, and undefined = no filter
+const matches = (i: Row, where: Row) => Object.entries(where).every(([k, v]) =>
+  v !== null && typeof v === 'object' && 'not' in (v as Row) ? i[k] !== (v as Row).not : i[k] === v)
 const tx = {
   complianceItem: {
-    deleteMany: vi.fn(async ({ where }: Row) => { const b = db.items.length; db.items = db.items.filter((i) => !(i.registerId === where.registerId && i.origin === where.origin && i.aiRunId === where.aiRunId)); return { count: b - db.items.length } }),
+    deleteMany: vi.fn(async ({ where }: Row) => { const b = db.items.length; db.items = db.items.filter((i) => !matches(i, where)); return { count: b - db.items.length } }),
+    findMany: vi.fn(async ({ where }: Row) => db.items.filter((i) => matches(i, where))),
+    update: vi.fn(async ({ where, data }: Row) => { const i = db.items.find((x) => x.id === where.id)!; Object.assign(i, data); return i }),
     createMany: vi.fn(async ({ data }: Row) => { for (const d of data) db.items.push({ id: `i${db.items.length + 1}`, ...d }); return { count: data.length } }),
   },
-  aIRun: { update: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id)!; Object.assign(r, data); return r }) },
+  aIRun: { updateMany: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id && (!where.status || x.status === where.status)); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 } }), update: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id)!; Object.assign(r, data); return r }) },
 }
 vi.mock('@/lib/prisma', () => ({ prisma: { aIRun: { findUnique: vi.fn(async ({ where }: Row) => db.runs.find((r) => r.id === where.id) ?? null) }, $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) } }))
 vi.mock('@/lib/audit', () => ({ recordAuditEvent: (...a: unknown[]) => audit(...a), AuditActions: { AI_PROJECT_CONFIGURED: 'ai.project_configured' } }))
@@ -168,6 +173,25 @@ describe('confirmProjectSetup', () => {
     expect(db.items.filter((i) => i.origin === 'MUNICIPALITY')).toHaveLength(1)
     expect(db.items.find((i) => i.id === 'rule-1')).toBeTruthy()
     expect(db.items.find((i) => i.id === 'arch-1')).toBeTruthy()
+  })
+  it('a newer planning-conditions document supersedes older ones: untouched items go, worked-on items stay flagged', async () => {
+    seed()
+    db.registers.push({ id: 'reg-1', projectId: 'proj-1' })
+    db.items.push(
+      { id: 'old-untouched', registerId: 'reg-1', origin: 'MUNICIPALITY', aiRunId: 'run-0', status: 'NOT_STARTED', requirement: 'Old height limit' },
+      { id: 'old-worked', registerId: 'reg-1', origin: 'MUNICIPALITY', aiRunId: 'run-0', status: 'IN_PROGRESS', requirement: 'Old facade condition' },
+      { id: 'rule-1', registerId: 'reg-1', origin: 'RULE', aiRunId: null, status: 'NOT_STARTED', requirement: 'Rule item' },
+    )
+    await confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [0] })
+    expect(db.items.find((i) => i.id === 'old-untouched')).toBeUndefined()
+    const worked = db.items.find((i) => i.id === 'old-worked')!
+    expect(worked.requirement).toMatch(/^\[Superseded by PT nr 2699999\/00001\] Old facade condition/)
+    expect(worked.confidence).toBe('stale')
+    expect(db.items.find((i) => i.id === 'rule-1')).toBeTruthy()
+  })
+  it('refuses to confirm the same run twice (atomic claim)', async () => {
+    seed({ status: 'APPLIED' })
+    await expect(confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [] })).rejects.toThrow()
   })
   it('refuses a design value that breaches a municipal bound', async () => {
     seed()

@@ -18,11 +18,18 @@ export interface ChatResult {
   provider: 'mistral' | 'claude'
 }
 
-async function mistral(req: ChatRequest, model: string): Promise<ChatResult> {
+/** Per-provider budget. Primary + fallback must finish inside the 300 s function limit so the run is always marked FAILED, never left RUNNING. */
+export const PRIMARY_TIMEOUT_MS = 150_000
+export const FALLBACK_TIMEOUT_MS = 80_000
+
+function timeoutError(provider: string, ms: number) { return new Error(`${provider} did not answer within ${Math.round(ms / 1000)} s`) }
+
+async function mistral(req: ChatRequest, model: string, timeoutMs = PRIMARY_TIMEOUT_MS): Promise<ChatResult> {
   const key = process.env.MISTRAL_API_KEY
   if (!key) throw new Error('MISTRAL_API_KEY not set')
   const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
+    signal: AbortSignal.timeout(timeoutMs),
     headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       model,
@@ -40,11 +47,12 @@ async function mistral(req: ChatRequest, model: string): Promise<ChatResult> {
   return { text: data.choices?.[0]?.message?.content ?? '', model, tokens: data.usage?.total_tokens ?? 0, provider: 'mistral' }
 }
 
-async function claude(req: ChatRequest, model: string): Promise<ChatResult> {
+async function claude(req: ChatRequest, model: string, timeoutMs = FALLBACK_TIMEOUT_MS): Promise<ChatResult> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) throw new Error('ANTHROPIC_API_KEY not set')
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
+    signal: AbortSignal.timeout(timeoutMs),
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model,
@@ -66,24 +74,30 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
   try {
     return await mistral(req, primary)
   } catch (e) {
-    if (!process.env.ANTHROPIC_API_KEY) throw e
-    return await claude(req, fallback)
+    const primaryErr = isTimeout(e) ? timeoutError('Mistral', PRIMARY_TIMEOUT_MS) : e
+    if (!process.env.ANTHROPIC_API_KEY) throw primaryErr
+    try { return await claude(req, fallback) } catch (e2) { throw isTimeout(e2) ? timeoutError('Claude (fallback)', FALLBACK_TIMEOUT_MS) : e2 }
   }
 }
 
+const isTimeout = (e: unknown) => e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')
+
 /** Extract the first JSON object from model text (handles ```json fences). */
-export function parseJson(text: string): unknown {
+export function parseJson(text: string): unknown { return parseJsonWithMeta(text).value }
+
+/** Same, but says whether the output had to be repaired (cut short at max_tokens) — callers must warn the user. */
+export function parseJsonWithMeta(text: string): { value: unknown; repaired: boolean } {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   const body = fenced ? fenced[1] : text
   const start = body.indexOf('{')
   if (start === -1) throw new Error('No JSON object in model output')
   const end = body.lastIndexOf('}')
   if (end > start) {
-    try { return JSON.parse(body.slice(start, end + 1)) } catch { /* fall through to repair */ }
+    try { return { value: JSON.parse(body.slice(start, end + 1)), repaired: false } } catch { /* fall through to repair */ }
   }
   // Truncated (max_tokens) or malformed: cut back to the last complete value and close open brackets.
   const repaired = repairTruncatedJson(body.slice(start))
-  if (repaired !== null) return repaired
+  if (repaired !== null) return { value: repaired, repaired: true }
   throw new Error('Model output was not valid JSON and could not be repaired')
 }
 
