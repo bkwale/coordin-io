@@ -186,3 +186,21 @@ describe('confirmProjectSetup', () => {
     await expect(confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [] })).rejects.toThrow(/applied/)
   })
 })
+
+// ── Document number pin (S3.B2 test PDF finding) ─────────────
+import { pinDocumentNumber } from '@/lib/ai/map-project'
+describe('pinDocumentNumber', () => {
+  const pc = (number: string | null) => ({ document: { number: { value: number, confidence: 0.9, page: 1, quote: null } } }) as any
+  it('replaces a decision number with the stated PT number, citing its page', () => {
+    const out = pinDocumentNumber(pc('2-3/999'), ['KORRALDUS nr 2-3/999', 'Projekteerimistingimused nr 2699999/00042.'])
+    expect(out.document.number).toMatchObject({ value: '2699999/00042', page: 2, confidence: 0.95 })
+  })
+  it('leaves the model value when the phrase is absent', () => {
+    const p = pc('TE-1538-1')
+    expect(pinDocumentNumber(p, ['Projekteerimistingimuste andmine, otsus TE-1538-1'])).toBe(p)
+  })
+  it('does not guess when the document states two different numbers', () => {
+    const p = pc('2-3/999')
+    expect(pinDocumentNumber(p, ['Projekteerimistingimused nr 111/1', 'projekteerimistingimuste nr 222/2'])).toBe(p)
+  })
+})

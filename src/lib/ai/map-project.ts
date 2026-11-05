@@ -132,3 +132,21 @@ function dedupe(items: MunicipalCondition[]): MunicipalCondition[] {
   const seen = new Set<string>()
   return items.filter((c) => { const k = c.text.toLowerCase().replace(/\s+/g, ' ').slice(0, 80); if (seen.has(k)) return false; seen.add(k); return true }).slice(0, 80)
 }
+
+const PT_NUMBER = /projekteerimistingimus\w*\s+nr\.?\s*([0-9][0-9/.\-]*[0-9])/gi
+
+/**
+ * Pin document.number to the "Projekteerimistingimused nr X" phrase when the document states it
+ * exactly one way. Models confuse it with the decision number ("korraldus nr 2-3/999"), which
+ * real documents also carry. 9/10 real PDFs state it; when absent or ambiguous the model's value stands.
+ */
+export function pinDocumentNumber(pc: PlanningConditions, pages: string[]): PlanningConditions {
+  const found = new Map<string, { page: number; quote: string }>()
+  pages.forEach((text, i) => {
+    for (const m of text.matchAll(PT_NUMBER)) if (!found.has(m[1])) found.set(m[1], { page: i + 1, quote: m[0].replace(/\s+/g, ' ') })
+  })
+  if (found.size !== 1) return pc
+  const [[number, src]] = [...found]
+  if (pc.document.number?.value === number) return pc
+  return { ...pc, document: { ...pc.document, number: { value: number, confidence: 0.95, page: src.page, quote: src.quote } } }
+}

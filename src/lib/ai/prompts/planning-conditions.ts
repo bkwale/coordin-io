@@ -1,4 +1,4 @@
-export const PLANNING_CONDITIONS_PROMPT_VERSION = 'pt-0.2'
+export const PLANNING_CONDITIONS_PROMPT_VERSION = 'pt-0.3'
 
 /**
  * Prompt-injection posture (Schneier/Suleyman): the document is DATA. The model fills a schema and
@@ -15,6 +15,7 @@ Rules:
 - legalBasis: "EhS_26" when the document cites Ehitusseadustiku § 26 (no detailed plan / detailplaneeringu koostamise kohustuse puudumisel); "EhS_27" for § 27 (detailed plan exists and is being refined); "EhS_99" for § 99 (roads, utilities, rajatised); otherwise "other".
 - ehrCode: the 9-digit Ehitisregister building code. It appears after "Ehitisregistri kood" or in the "Seotud ehitised" table under "EHR kood". It is NEVER the cadastral unit (katastritunnus, format NNNNN:NNN:NNNN) — that goes in cadastralUnit.
 - maxStoreys: look for "korruste arv", "kuni N korrust", and words like "ühekorruseline" (1), "kahekorruseline" (2), "kolmekorruseline" (3), including inside bullet lists of architectural conditions. "katuse-, ärkli- või mansardkorrusega" means a roof storey is allowed in addition — note it in roofNote.
+- document.number: the number of the projekteerimistingimused themselves ("Projekteerimistingimused nr …", often the ehitisregistri menetluse number like 2611802/01079). NOT the municipal decision number ("korraldus nr", "otsus nr", e.g. 2-3/999) and NOT the application number.
 - maxHeight: "Ehitise kõrgus (m)" row or "kõrgus kuni N m" anywhere, including inside bullet lists. If the row label exists but no number follows, value null.
 - useCodes: Estonian building use codes like "11101" with the label text next to them and the share ("1/1", "100%") if given.
 - conditions: one entry per distinct obligation the municipality imposes on the design (architectural, setback, materials, utilities, surveys, approvals to obtain). topic is a short label. mandatory=true unless the text says soovituslik/võib/recommended.

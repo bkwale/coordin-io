@@ -10,7 +10,7 @@ import { createRun, runAI } from './pipeline'
 import { pdfToPages, paginateText, capPages, IngestError } from './document-ingest'
 import { PlanningConditionsSchema, normalisePlanningConditions } from './schemas-documents'
 import { PLANNING_CONDITIONS_SYSTEM, PLANNING_CONDITIONS_PROMPT_VERSION, planningConditionsUser } from './prompts/planning-conditions'
-import { mapPlanningConditions, type ProjectSetupMapping } from './map-project'
+import { mapPlanningConditions, pinDocumentNumber, type ProjectSetupMapping } from './map-project'
 import { applyInjectionGuard } from './injection-guard'
 import { applyProjectParameters, APPLY_TX_OPTIONS } from '@/lib/rules/apply'
 import { ProjectParametersSchema } from '@/lib/rules/schema'
@@ -80,7 +80,7 @@ export async function executeProjectSetup(runId: string, kind: SetupDocumentKind
     schema: PlanningConditionsSchema,
     normalise: normalisePlanningConditions,
     // deterministic injection guard runs after the model, on the source pages — never trusts model warnings
-    map: (pc) => applyInjectionGuard(mapPlanningConditions(pc), pages),
+    map: (pc) => applyInjectionGuard(mapPlanningConditions(pinDocumentNumber(pc, pages)), pages),
     confidenceOf: (pc) => {
       const fields = [pc.document.number, pc.document.issuedAt, pc.document.legalBasis, pc.site.ehrCode, pc.limits.maxHeight, pc.limits.maxStoreys]
       return fields.reduce((a, f) => a + (f?.confidence ?? 0), 0) / fields.length
