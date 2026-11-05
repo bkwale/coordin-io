@@ -26,11 +26,32 @@ export interface InjectionHit { page: number; excerpt: string; paragraph: string
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
 
-/** Paragraphs (blank-line or line separated) that contain text addressed to an AI system. */
+const CLAUSE_START = /^\s*(\d+(\.\d+)*\.?\s|[-•–]\s)/
+const HEADING = /^[\p{Lu}\d\s.,:;()–-]{4,}$/u
+
+/**
+ * Split a page into blocks: a new block starts at a blank line, a numbered clause ("1.4.", "2.")
+ * or an ALL-CAPS heading. PDF text rarely has blank lines between paragraphs, so splitting on blank
+ * lines alone made a whole page "hostile" and discarded the genuine limits next to the injection.
+ */
+export function segmentBlocks(text: string): string[] {
+  const blocks: string[] = []
+  let cur: string[] = []
+  const flush = () => { if (cur.length) blocks.push(cur.join('\n')); cur = [] }
+  for (const line of text.split('\n')) {
+    if (!line.trim()) { flush(); continue }
+    if (CLAUSE_START.test(line) || HEADING.test(line.trim()) || PATTERNS.some((re) => re.test(line))) flush()
+    cur.push(line)
+  }
+  flush()
+  return blocks
+}
+
+/** Blocks that contain text addressed to an AI system. */
 export function findInjection(pages: string[]): InjectionHit[] {
   const hits: InjectionHit[] = []
   pages.forEach((text, i) => {
-    for (const para of text.split(/\n\s*\n/)) {
+    for (const para of segmentBlocks(text)) {
       const m = PATTERNS.map((re) => para.match(re)).find(Boolean)
       if (m) hits.push({ page: i + 1, excerpt: ((m.index ?? 0) < 120 ? para.slice(0, 160) : '…' + para.slice((m.index ?? 0) - 20, (m.index ?? 0) + 140)).replace(/\s+/g, ' ').trim(), paragraph: norm(para) })
     }
