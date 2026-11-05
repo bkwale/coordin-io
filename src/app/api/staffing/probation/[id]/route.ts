@@ -60,7 +60,21 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new NotFoundError('Probation review not found')
   }
 
+  // Nobody edits their own probation review (the HR user being reviewed included)
+  if (existing.profileId === profile.id) {
+    throw new PermissionError('You cannot edit your own probation review')
+  }
+
   const body = await parseBody(request)
+
+  // Outcomes are decided through the review workflow (manager submits, HR finalises) so the
+  // recommendation, decision, audit trail and employee visibility stay consistent.
+  if (body.outcome !== undefined || body.completedDate !== undefined) {
+    throw new ValidationError('Complete reviews from the review page (Open review → Finalise), not here')
+  }
+  if (existing.workflowStatus === 'FINALISED') {
+    throw new ValidationError('This review has been finalised and can no longer be edited')
+  }
 
   const feedback = optionalString(body.feedback, 'feedback', 5000)
   const objectives = optionalString(body.objectives, 'objectives', 5000)

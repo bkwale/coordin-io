@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { loadReviewForActor } from '@/lib/staffing/probation-access'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -17,26 +18,8 @@ function extractReviewId(url: string): string {
 export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const reviewId = extractReviewId(request.url)
 
-  const review = await modulesPrisma.probationReview.findUnique({
-    where: { id: reviewId },
-    select: { profileId: true },
-  })
-
-  if (!review) throw new NotFoundError('Probation review not found')
-
-  // Owner, their manager, or HR+ can view
-  const isOwner = review.profileId === profile.id
-  const isHRPlus = ['ADMIN', 'OWNER', 'HR'].includes(profile.orgPermission)
-  if (!isOwner && !isHRPlus) {
-    // Check if manager
-    const employee = await modulesPrisma.profile.findUnique({
-      where: { id: review.profileId },
-      select: { managerId: true },
-    })
-    if (employee?.managerId !== profile.id) {
-      throw new PermissionError('You do not have access to this review')
-    }
-  }
+  // Same visibility rules as the review itself: org-scoped; the employee only once finalised
+  await loadReviewForActor(reviewId, profile)
 
   const goals = await modulesPrisma.probationGoal.findMany({
     where: { reviewId },
@@ -57,10 +40,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const review = await modulesPrisma.probationReview.findUnique({
     where: { id: reviewId },
-    select: { profileId: true },
+    select: { profileId: true, profile: { select: { organisationId: true } } },
   })
 
-  if (!review) throw new NotFoundError('Probation review not found')
+  if (!review || review.profile?.organisationId !== profile.organisationId) throw new NotFoundError('Probation review not found')
 
   if (!isHRPlus) {
     const employee = await modulesPrisma.profile.findUnique({
@@ -118,9 +101,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   // Permission check: HR+, manager, or employee (can update status/evidence)
   const review = await modulesPrisma.probationReview.findUnique({
     where: { id: reviewId },
-    select: { profileId: true },
+    select: { profileId: true, profile: { select: { organisationId: true } } },
   })
-  if (!review) throw new NotFoundError('Review not found')
+  if (!review || review.profile?.organisationId !== profile.organisationId) throw new NotFoundError('Review not found')
 
   const isOwner = review.profileId === profile.id
   const isHRPlus = ['ADMIN', 'OWNER', 'HR'].includes(profile.orgPermission)
@@ -200,9 +183,9 @@ export const DELETE = withAuth(async (request: NextRequest, { profile }) => {
 
   const review = await modulesPrisma.probationReview.findUnique({
     where: { id: reviewId },
-    select: { profileId: true },
+    select: { profileId: true, profile: { select: { organisationId: true } } },
   })
-  if (!review) throw new NotFoundError('Review not found')
+  if (!review || review.profile?.organisationId !== profile.organisationId) throw new NotFoundError('Review not found')
 
   if (!isHRPlus) {
     const employee = await modulesPrisma.profile.findUnique({

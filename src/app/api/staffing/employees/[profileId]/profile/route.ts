@@ -523,37 +523,36 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     const startDate = empData.probationStartDate as Date
     const lengthMonths = (empData.probationLength as number) ?? 3 // default 3 months
 
-    // Define review milestones based on probation length
-    const milestones: { type: string; daysOffset: number }[] = []
+    // Define review milestones based on probation length (same schedule as onboarding assignment)
+    const milestones: { type: string; daysOffset: number }[] = [{ type: 'Initial objectives', daysOffset: 7 }]
     if (lengthMonths >= 1) milestones.push({ type: '30-day', daysOffset: 30 })
     if (lengthMonths >= 2) milestones.push({ type: '60-day', daysOffset: 60 })
     if (lengthMonths >= 3) milestones.push({ type: '90-day', daysOffset: 90 })
-    // Final review at probation end
-    milestones.push({ type: 'final', daysOffset: lengthMonths * 30 })
+    // Final review at probation end — replaces a milestone on the same day rather than duplicating it
+    const finalOffset = lengthMonths * 30
+    const same = milestones.findIndex((m) => m.daysOffset === finalOffset)
+    if (same >= 0) milestones[same] = { type: 'final', daysOffset: finalOffset }
+    else milestones.push({ type: 'final', daysOffset: finalOffset })
 
-    // Remove existing auto-generated reviews that haven't been completed
-    // (so re-saving probation dates regenerates them cleanly)
+    // Re-saving probation dates only regenerates reviews nobody has started. Drafts, submitted,
+    // returned and finalised reviews (and anything completed) are kept untouched.
     try {
-      await modulesPrisma.probationReview.deleteMany({
-        where: {
-          profileId,
-          completedDate: null,
-        },
-      })
-
-      // Create new review milestones
-      for (const milestone of milestones) {
-        const scheduledDate = new Date(startDate)
-        scheduledDate.setDate(scheduledDate.getDate() + milestone.daysOffset)
-
-        await modulesPrisma.probationReview.create({
-          data: {
-            profileId,
-            reviewType: milestone.type,
-            scheduledDate,
-          },
+      await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
+        await tx.probationReview.deleteMany({
+          where: { profileId, completedDate: null, workflowStatus: 'SCHEDULED' },
         })
-      }
+        const kept = await tx.probationReview.findMany({ where: { profileId }, select: { reviewType: true } })
+        const keptTypes = new Set(kept.map((k: { reviewType: string }) => k.reviewType))
+
+        for (const milestone of milestones) {
+          if (keptTypes.has(milestone.type)) continue // an in-progress or completed review already covers it
+          const scheduledDate = new Date(startDate)
+          scheduledDate.setDate(scheduledDate.getDate() + milestone.daysOffset)
+          await tx.probationReview.create({
+            data: { profileId, reviewType: milestone.type, scheduledDate },
+          })
+        }
+      })
     } catch (err: unknown) {
       // Swallow only "table does not exist" errors
       const msg = err instanceof Error ? err.message : ''

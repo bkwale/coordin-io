@@ -195,8 +195,16 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new NotFoundError('Assignment not found')
   }
 
-  const isManager = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR' || profile.orgPermission === 'MANAGER'
   const isOwnAssignment = assignment.profileId === profile.id
+  const isPrivileged = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER' || profile.orgPermission === 'HR'
+  let isLineManager = false
+  if (!isPrivileged && profile.orgPermission === 'MANAGER' && !isOwnAssignment) {
+    const emp = await modulesPrisma.profile.findUnique({ where: { id: assignment.profileId }, select: { managerId: true } })
+    isLineManager = emp?.managerId === profile.id
+  }
+  // On your own onboarding you only have employee rights, whatever your role (no self-approval).
+  // Managers act only on their direct reports' onboarding.
+  const isManager = !isOwnAssignment && (isPrivileged || isLineManager)
 
   if (!isManager && !isOwnAssignment) {
     throw new PermissionError('You can only update your own onboarding tasks')
@@ -216,9 +224,17 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (!task) {
     throw new NotFoundError('Task not found')
   }
-  // On their own onboarding, a non-manager can only act on tasks they own (not HR/IT/manager tasks)
+  // On their own onboarding, an employee can only act on tasks they own (not HR/IT/manager tasks)
   if (!isManager && task.assigneeId !== profile.id) {
     throw new PermissionError('This task belongs to someone else on your onboarding team')
+  }
+  // Steps backed by the self-service form (bank details, contract, etc.) complete when the form is submitted
+  if (!isManager && task.selfServiceStep && body.status === 'COMPLETED') {
+    throw new PermissionError('Complete this step through your onboarding form so the details are recorded')
+  }
+  // Employees can record that they viewed or acknowledged a document; HR records signatures and completion
+  if (!isManager && body.documentStatus !== undefined && !['VIEWED', 'ACKNOWLEDGED'].includes(String(body.documentStatus))) {
+    throw new PermissionError('Only HR can mark a document as awaiting signature or completed')
   }
 
   const updateData: Record<string, unknown> = {}

@@ -146,34 +146,30 @@ describe('probation routes (BUG-016)', () => {
     expect(P.probationReview.update).not.toHaveBeenCalled()
   })
 
-  it('final review Pass completes the review and confirms the employee', async () => {
+  // Outcomes are now decided only through the review workflow (manager submits → HR finalises);
+  // the final-review → probation-status rules are covered in probation-workflow-route.test.ts.
+  it('the direct edit route refuses to set an outcome or complete a review', async () => {
     P.probationReview.findUnique.mockResolvedValue(existing())
-    const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { completedDate: '2026-11-05', outcome: 'Pass', feedback: 'Strong start' } }))
-    expect(res.status).toBe(200)
-    expect(P.probationReview.update.mock.calls[0][0].data).toMatchObject({ outcome: 'Pass', feedback: 'Strong start' })
-    expect(P.employeeProfile.upsert.mock.calls[0][0].update).toEqual({ probationStatus: 'CONFIRMED' })
-  })
-
-  it('a 30-day review Pass does not change the probation status', async () => {
-    P.probationReview.findUnique.mockResolvedValue(existing({ reviewType: '30-day' }))
-    P.probationReview.count.mockResolvedValue(2) // later reviews exist
     const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { completedDate: '2026-11-05', outcome: 'Pass' } }))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/review page/)
+    expect(P.probationReview.update).not.toHaveBeenCalled()
     expect(P.employeeProfile.upsert).not.toHaveBeenCalled()
   })
 
-  it('older records: the last scheduled review (a 90-day on a 3-month probation) is the final decision', async () => {
-    P.probationReview.findUnique.mockResolvedValue(existing({ reviewType: '90-day' }))
-    P.probationReview.count.mockResolvedValue(0) // nothing scheduled after it
-    const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { completedDate: '2026-11-05', outcome: 'Pass' } }))
-    expect(res.status).toBe(200)
-    expect(P.employeeProfile.upsert.mock.calls[0][0].update).toEqual({ probationStatus: 'CONFIRMED' })
+  it('HR cannot edit their own probation review', async () => {
+    P.probationReview.findUnique.mockResolvedValue(existing({ profileId: ctx.profileRef.current.id }))
+    const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { feedback: 'Great me' } }))
+    expect(res.status).toBe(403)
+    expect(P.probationReview.update).not.toHaveBeenCalled()
   })
 
-  it('final review Fail leaves the status for HR to action', async () => {
-    P.probationReview.findUnique.mockResolvedValue(existing())
-    const res = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { completedDate: '2026-11-05', outcome: 'Fail' } }))
-    expect(res.status).toBe(200)
-    expect(P.employeeProfile.upsert).not.toHaveBeenCalled()
+  it('a finalised review can no longer be edited; an open one can take notes', async () => {
+    P.probationReview.findUnique.mockResolvedValue(existing({ workflowStatus: 'FINALISED' }))
+    expect((await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { feedback: 'x' } }))).status).toBe(400)
+    P.probationReview.findUnique.mockResolvedValue(existing({ workflowStatus: 'SCHEDULED' }))
+    const ok = await patchReview(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/staffing/probation/rev-1', body: { feedback: 'Settling in well' } }))
+    expect(ok.status).toBe(200)
+    expect(P.probationReview.update.mock.calls[0][0].data).toEqual({ feedback: 'Settling in well' })
   })
 })

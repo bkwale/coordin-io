@@ -143,8 +143,10 @@ async function fetchEmployeeDetail(
   // ── Probation reviews ──────────────────────────────────────
   let probationReviews: unknown[] = []
   try {
+    // HR sees every review; anyone else (incl. the employee) only finalised ones — drafts and
+    // submitted assessments stay private until HR finalises them
     probationReviews = await modulesPrisma.probationReview.findMany({
-      where: { profileId },
+      where: { profileId, ...(hasHRAccess ? {} : { workflowStatus: 'FINALISED' }) },
       orderBy: { scheduledDate: 'asc' },
     })
   } catch {

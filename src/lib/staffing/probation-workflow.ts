@@ -50,8 +50,9 @@ export function allowedActions(status: string, actor: Actor): WorkflowAction[] {
 
 /** Who can open the review at all. The subject sees it only once finalised. */
 export function canView(status: string, actor: Actor): boolean {
-  if (actor.isHR || actor.isLineManager) return true
-  return actor.isSubject && status === 'FINALISED'
+  // The subject only ever sees their own review once finalised — even if they are HR or a manager
+  if (actor.isSubject) return status === 'FINALISED'
+  return actor.isHR || actor.isLineManager
 }
 
 export function nextStatus(action: WorkflowAction): WorkflowStatus {

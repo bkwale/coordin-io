@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
       revokedAt: true,
       completedAt: true,
       createdAt: true,
+      assignmentId: true,
     },
   })
 
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest) {
       assigneeId: selfServiceToken.profileId,
       isSelfService: true,
       selfServiceStep: { not: null },
+      status: { not: 'WAIVED' },
+      ...(selfServiceToken.assignmentId ? { assignmentId: selfServiceToken.assignmentId } : {}),
     },
     select: {
       id: true,

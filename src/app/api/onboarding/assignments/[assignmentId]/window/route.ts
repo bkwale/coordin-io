@@ -35,13 +35,14 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (action === 'submit' ? !(isSubject || isHR) : !isHR) {
     throw new PermissionError(action === 'submit' ? 'Only the employee or HR can submit this onboarding' : 'Only HR can do this')
   }
-  if (isSubject && action === 'verify') throw new PermissionError('You cannot verify your own onboarding')
+  if (isSubject && action !== 'submit') throw new PermissionError('You cannot change or verify your own onboarding window')
 
   const now = new Date()
   const data: Record<string, unknown> = {}
   const meta: Record<string, unknown> = {}
 
   if (action === 'start') {
+    if (assignment.submittedAt || assignment.verifiedAt) throw new ConflictError('This onboarding has already been submitted')
     const start = optionalDate(body.startDate, 'startDate') ?? now
     Object.assign(data, windowFor(start, assignment.windowDays ?? 7), { remindersSent: [], missedNotifiedAt: null })
     meta.startAt = start.toISOString()

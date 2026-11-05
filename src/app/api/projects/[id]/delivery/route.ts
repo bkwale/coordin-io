@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
+import { assertDeliveryWrite } from '@/lib/delivery/access'
 import { parseBody } from '@/lib/validation'
 import { applyFramework, getDelivery } from '@/lib/delivery/service'
 import type { Framework } from '@/lib/delivery/types'
@@ -9,7 +10,8 @@ import type { Framework } from '@/lib/delivery/types'
 export const GET = withProjectAccess(async (_req: NextRequest, { projectId }) => success(await getDelivery(projectId)))
 
 /** POST — apply a framework { framework: RIBA|CWA|CUSTOM, accorOverlay?, customStages? } (project lead). */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, project, profile }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, project, profile, membership }) => {
+  await assertDeliveryWrite({ profile, projectId, membership }, 'PROJECT_LEAD')
   const body = await parseBody(request)
   const data = await applyFramework({
     projectId, organisationId: project.organisationId, actorId: profile.id,
