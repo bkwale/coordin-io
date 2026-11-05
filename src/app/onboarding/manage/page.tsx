@@ -189,6 +189,11 @@ export default function OnboardingManagePage() {
     id: string; reviewType: string; scheduledDate: string; completedDate: string | null
     outcome: string | null; profile: { id: string; fullName: string; jobTitle: string | null; startDate: string | null }
   }[]>([])
+  // BUG-016: employees in probation by their probation status (single definition), plus records HR must correct
+  const [probationEmployees, setProbationEmployees] = useState<{
+    profileId: string; fullName: string; jobTitle: string | null; status: string | null; statusLabel: string
+    inProbation: boolean; startDate: string | null; endDate: string | null; issues: { code: string; label: string }[]
+  }[]>([])
 
   // ── Data fetching ────────────────────────────────────────
 
@@ -220,6 +225,7 @@ export default function OnboardingManagePage() {
       if (!res.ok) throw new Error('Failed to load probation reviews')
       const json = await res.json()
       setProbationReviews(json.data?.reviews ?? [])
+      setProbationEmployees(json.data?.employees ?? [])
     } catch {
       toast('Failed to load probation reviews', 'error')
     }
@@ -1286,22 +1292,19 @@ export default function OnboardingManagePage() {
   // ── Render: Probation Tab ────────────────────────────────
 
   function renderProbationTab() {
-    // Filter assignments in probation stage
-    const probationAssignments = assignments.filter((a) => {
-      const probationStage = a.stageBreakdown['PROBATION']
-      return a.status === 'ACTIVE' && probationStage && probationStage.total > 0
-    })
+    const inProbation = probationEmployees.filter((e) => e.inProbation)
+    const needsFixing = probationEmployees.filter((e) => e.issues.length > 0)
 
     return (
       <div className="space-y-4 mt-4">
-        {/* Probation overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Probation overview — one definition: the employee's probation status */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white border border-ink-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <Calendar className="w-4 h-4 text-amber-500" />
               <span className="text-[12px] font-medium text-ink-500">In Probation</span>
             </div>
-            <span className="text-2xl font-semibold text-ink-900">{probationAssignments.length}</span>
+            <span className="text-2xl font-semibold text-ink-900">{inProbation.length}</span>
           </div>
           <div className="bg-white border border-ink-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -1319,53 +1322,71 @@ export default function OnboardingManagePage() {
               {probationReviews.filter((r) => new Date(r.scheduledDate) < new Date() && !r.completedDate).length}
             </span>
           </div>
+          <div className="bg-white border border-ink-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span className="text-[12px] font-medium text-ink-500">Records to Check</span>
+            </div>
+            <span className="text-2xl font-semibold text-ink-900">{needsFixing.length}</span>
+          </div>
         </div>
+
+        {/* Records HR needs to correct — flagged, never auto-changed */}
+        {needsFixing.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="px-4 py-3 border-b border-amber-200">
+              <h3 className="text-[14px] font-semibold text-ink-900">Probation records to check</h3>
+              <p className="text-[12px] text-ink-500 mt-0.5">Open the profile to confirm, extend, correct the dates, or mark as Completed (historic) / Not applicable.</p>
+            </div>
+            <div className="divide-y divide-amber-200">
+              {needsFixing.map((e) => (
+                <div key={e.profileId} className="flex items-start justify-between px-4 py-3 gap-3">
+                  <div>
+                    <span className="text-[13px] font-medium text-ink-900">{e.fullName}</span>
+                    <span className="ml-2 text-[11px] text-ink-500">{e.statusLabel}</span>
+                    <ul className="mt-1 text-[12px] text-amber-800 list-disc list-inside">
+                      {e.issues.map((i) => <li key={i.code}>{i.label}</li>)}
+                    </ul>
+                  </div>
+                  <a href={`/staffing/${e.profileId}#probation`} className="text-[12px] text-blue-600 hover:underline whitespace-nowrap">Fix record</a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Probation employees */}
         <div className="bg-white border border-ink-200 rounded-xl">
           <div className="px-4 py-3 border-b border-ink-100">
             <h3 className="text-[14px] font-semibold text-ink-900">Employees in Probation</h3>
           </div>
-          {probationAssignments.length === 0 ? (
+          {inProbation.length === 0 ? (
             <div className="text-center py-8 text-ink-400 text-[13px]">
               <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p>No employees currently in probation stage</p>
+              <p>No employees currently in probation</p>
             </div>
           ) : (
             <div className="divide-y divide-ink-100">
-              {probationAssignments.map((a) => {
-                const probation = a.stageBreakdown['PROBATION']
-                const pct = probation ? (probation.total > 0 ? Math.round((probation.completed / probation.total) * 100) : 0) : 0
-                return (
-                  <div key={a.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                        <Users className="w-4 h-4 text-amber-600" />
-                      </div>
-                      <div>
-                        <span className="text-[13px] font-medium text-ink-900">{a.employee.fullName}</span>
-                        <div className="text-[12px] text-ink-400">
-                          Started {new Date(a.startDate).toLocaleDateString()} &middot; {a.template.name}
-                        </div>
-                      </div>
+              {inProbation.map((e) => (
+                <div key={e.profileId} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                      <Users className="w-4 h-4 text-amber-600" />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <div className="text-[12px] font-medium text-ink-600">Probation: {pct}%</div>
-                        <div className="w-20 h-1.5 bg-ink-100 rounded-full overflow-hidden mt-1">
-                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
+                    <div>
+                      <span className="text-[13px] font-medium text-ink-900">{e.fullName}</span>
+                      <div className="text-[12px] text-ink-400">
+                        {e.statusLabel}
+                        {e.startDate && <> &middot; {new Date(e.startDate).toLocaleDateString()}</>}
+                        {e.endDate && <> → {new Date(e.endDate).toLocaleDateString()}</>}
                       </div>
-                      <a
-                        href="/staffing"
-                        className="text-[12px] text-blue-600 hover:underline"
-                      >
-                        View Reviews
-                      </a>
                     </div>
                   </div>
-                )
-              })}
+                  <a href={`/staffing/${e.profileId}#probation`} className="text-[12px] text-blue-600 hover:underline">
+                    View Reviews
+                  </a>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1392,9 +1413,9 @@ export default function OnboardingManagePage() {
                         <FileText className={`w-4 h-4 ${isOverdue ? 'text-red-600' : 'text-blue-600'}`} />
                       </div>
                       <div>
-                        <span className="text-[13px] font-medium text-ink-900">
+                        <a href={`/staffing/${r.profile.id}#probation`} className="text-[13px] font-medium text-ink-900 hover:underline">
                           {r.profile.fullName} &mdash; {r.reviewType}
-                        </span>
+                        </a>
                         <div className="text-[12px] text-ink-400">
                           {r.profile.jobTitle ?? 'Not provided'} &middot; Scheduled: {new Date(r.scheduledDate).toLocaleDateString()}
                         </div>
@@ -1408,7 +1429,7 @@ export default function OnboardingManagePage() {
                       )}
                       {r.outcome && (
                         <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                          r.outcome === 'PASS' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                          r.outcome?.toLowerCase() === 'pass' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                         }`}>
                           {r.outcome}
                         </span>

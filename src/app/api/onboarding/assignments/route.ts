@@ -1,3 +1,5 @@
+import { isProbationClosed } from '@/lib/staffing/probation'
+class SkipProbation extends Error {}
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -232,8 +234,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       // Check if employee has probation dates set; if not, default from startDate
       const empProfile = await modulesPrisma.employeeProfile.findUnique({
         where: { profileId: targetProfileId },
-        select: { probationStartDate: true, probationLength: true },
+        select: { probationStartDate: true, probationLength: true, probationStatus: true },
       })
+      // BUG-016: an employee whose probation is already closed (confirmed, historic, N/A) is not put back on probation
+      if (isProbationClosed(empProfile?.probationStatus)) throw new SkipProbation()
 
       // Always use the assignment's startDate for new probation reviews —
       // empProfile.probationStartDate may be stale from prior data
@@ -288,8 +292,9 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         })
       }
     }
-  } catch {
-    // Swallow errors — probation auto-gen is best-effort
+  } catch (e) {
+    // Best-effort; SkipProbation is the deliberate early exit for closed probations
+    if (!(e instanceof SkipProbation)) console.warn('[onboarding] probation auto-generation failed', e)
   }
 
   // Send notification to the employee
