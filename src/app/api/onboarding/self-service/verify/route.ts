@@ -13,7 +13,7 @@ import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
 export async function GET(request: NextRequest) {
   // Rate limit by IP
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  const rateLimitResponse = await checkRateLimit(`self-service-verify:${ip}`, RateLimitPresets.auth)
+  const rateLimitResponse = await checkRateLimit(`self-service-verify:${ip}`, { ...RateLimitPresets.auth, failClosed: true })
   if (rateLimitResponse) return rateLimitResponse
 
   const url = new URL(request.url)

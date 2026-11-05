@@ -1,3 +1,4 @@
+import { notClosedProfileFilter } from '@/lib/staffing/probation'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -275,7 +276,7 @@ async function fetchStaffingDashboard(
     try {
       probationsDue = await modulesPrisma.probationReview.count({
         where: {
-          profile: { organisationId: orgId },
+          profile: notClosedProfileFilter(orgId),
           completedDate: null,
           scheduledDate: { lte: in30Days },
         },

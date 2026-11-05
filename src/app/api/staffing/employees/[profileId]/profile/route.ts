@@ -1,10 +1,11 @@
+import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, optionalNumber, optionalDate, parseBody } from '@/lib/validation'
-import { NotFoundError, PermissionError } from '@/lib/errors'
+import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { canPerform } from '@/lib/role-permissions'
 import { hasFullStaffingAccess } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -426,13 +427,21 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (probationLength !== null) empData.probationLength = probationLength
 
     const probationStatus = optionalString(body.probationStatus as unknown, 'probationStatus', 50)
-    if (probationStatus !== null) empData.probationStatus = probationStatus
+    if (probationStatus !== null) {
+      if (!isValidProbationStatus(probationStatus)) throw new ValidationError(`probationStatus must be one of: ${PROBATION_STATUS_OPTIONS.map((o) => o.value).join(', ')}`)
+      empData.probationStatus = probationStatus
+    }
 
     const probationStartDate = optionalDate(body.probationStartDate as unknown, 'probationStartDate')
     if (probationStartDate !== null) empData.probationStartDate = probationStartDate
 
     const probationEndDate = optionalDate(body.probationEndDate as unknown, 'probationEndDate')
     if (probationEndDate !== null) empData.probationEndDate = probationEndDate
+    {
+      const ps = (empData.probationStartDate as Date | undefined) ?? null
+      const pe = (empData.probationEndDate as Date | undefined) ?? null
+      if (ps && pe && pe < ps) throw new ValidationError('Probation end date cannot be before the start date')
+    }
 
     const annualLeaveAllocation = optionalNumber(body.annualLeaveAllocation as unknown, 'annualLeaveAllocation', { min: 0, max: 365 })
     if (annualLeaveAllocation !== null) empData.annualLeaveAllocation = annualLeaveAllocation

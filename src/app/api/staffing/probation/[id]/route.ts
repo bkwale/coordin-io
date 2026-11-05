@@ -4,7 +4,8 @@ import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { optionalString, optionalDate, parseBody } from '@/lib/validation'
-import { PermissionError, NotFoundError } from '@/lib/errors'
+import { PermissionError, NotFoundError, ValidationError } from '@/lib/errors'
+import { normaliseOutcome, isFinalReview, statusAfterFinalReview } from '@/lib/staffing/probation'
 import { canManageHR } from '@/lib/staffing-utils'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -89,7 +90,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   const feedback = optionalString(body.feedback, 'feedback', 5000)
   const objectives = optionalString(body.objectives, 'objectives', 5000)
-  const outcome = optionalString(body.outcome, 'outcome', 50)
+  const rawOutcome = optionalString(body.outcome, 'outcome', 50)
+  const outcome = rawOutcome === null ? null : normaliseOutcome(rawOutcome)
+  if (rawOutcome !== null && outcome === null) throw new ValidationError('outcome must be Pass, Extend or Fail')
   const completedDate = optionalDate(body.completedDate, 'completedDate')
   const nextReviewDate = optionalDate(body.nextReviewDate, 'nextReviewDate')
   const reviewerId = optionalString(body.reviewerId, 'reviewerId', 100)
@@ -102,12 +105,41 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (nextReviewDate !== null) updateData.nextReviewDate = nextReviewDate
   if (reviewerId !== null) updateData.reviewerId = reviewerId
 
-  const review = await modulesPrisma.probationReview.update({
-    where: { id },
-    data: updateData,
-    include: {
-      profile: { select: { id: true, fullName: true } },
-    },
+  // Completing a review needs an outcome (BUG-016c)
+  const completing = completedDate !== null && !existing.completedDate
+  if (completing && !(outcome ?? existing.outcome)) {
+    throw new ValidationError('Choose an outcome (Pass, Extend or Fail) to complete the review')
+  }
+
+  // A final review outcome moves the employee's probation status: Pass → Confirmed, Extend → Extended.
+  // Fail is left for HR to action.
+  // The final decision is a review typed final/end-of-probation, or — for older records without one —
+  // the last scheduled review for this employee (e.g. a 90-day review on a 3-month probation).
+  let isFinal = isFinalReview(existing.reviewType)
+  if (completing && !isFinal) {
+    const later = await modulesPrisma.probationReview.count({
+      where: { profileId: existing.profileId, id: { not: id }, scheduledDate: { gt: existing.scheduledDate } },
+    })
+    isFinal = later === 0
+  }
+  const newStatus = completing && isFinal ? statusAfterFinalReview(outcome ?? existing.outcome) : null
+
+  const review = await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
+    const r = await tx.probationReview.update({
+      where: { id },
+      data: updateData,
+      include: {
+        profile: { select: { id: true, fullName: true } },
+      },
+    })
+    if (newStatus) {
+      await tx.employeeProfile.upsert({
+        where: { profileId: existing.profileId },
+        create: { profileId: existing.profileId, probationStatus: newStatus },
+        update: { probationStatus: newStatus },
+      })
+    }
+    return r
   })
 
   await recordAuditEvent({
@@ -116,7 +148,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     action: 'staffing.probation_review_updated',
     entityType: 'probation_review',
     entityId: id,
-    metadata: { outcome: outcome ?? undefined },
+    metadata: { outcome: outcome ?? undefined, completed: completing || undefined, probationStatus: newStatus ?? undefined },
   })
 
   // If review is being completed, notify the employee

@@ -1,3 +1,4 @@
+import { VALID_STAGES, isValidStage } from '@/lib/onboarding/stages'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -5,7 +6,6 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { requireString, optionalString, optionalNumber, parseBody } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 
-const VALID_STAGES = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION']
 const VALID_ROLES = ['HR', 'MANAGER', 'IT', 'EMPLOYEE']
 
 /**
@@ -40,7 +40,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const body = await parseBody(request)
 
   const stage = requireString(body.stage, 'stage', 50)
-  if (!VALID_STAGES.includes(stage)) {
+  if (!isValidStage(stage)) {
     throw new ValidationError(`stage must be one of: ${VALID_STAGES.join(', ')}`)
   }
 
@@ -120,7 +120,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   if (body.stage !== undefined) {
     const stage = requireString(body.stage, 'stage', 50)
-    if (!VALID_STAGES.includes(stage)) {
+    if (!isValidStage(stage)) {
       throw new ValidationError(`stage must be one of: ${VALID_STAGES.join(', ')}`)
     }
     updateData.stage = stage

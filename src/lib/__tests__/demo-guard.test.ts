@@ -46,6 +46,13 @@ describe('anonymous demo is read-only at every auth gate', () => {
     }
   }
 
+  it('caps demo reads per IP (demo visitors skip the per-user limit)', async () => {
+    const { DEMO_READS_PER_MINUTE } = await import('@/lib/demo-guard')
+    const handler = vi.fn(async () => new Response('{}', { status: 200 }))
+    const req = () => new NextRequest('http://localhost/api/x', { headers: { cookie: `coordin_demo_start=${Date.now()}`, 'x-real-ip': '203.0.113.9' } })
+    for (let i = 0; i < DEMO_READS_PER_MINUTE; i++) expect((await withAuth(handler as any)(req(), ctx)).status).toBe(200)
+    expect((await withAuth(handler as any)(req(), ctx)).status).toBe(429)
+  })
   it('still lets a demo visitor read (GET passes through as the demo identity)', async () => {
     const handler = vi.fn(async (_r: unknown, c: { authUserId: string }) => new Response(JSON.stringify({ who: c.authUserId }), { status: 200 }))
     const res = await withAuth(handler as any)(demoReq('GET'), ctx)
@@ -80,7 +87,8 @@ describe('the demo identity can only be granted by the guarded gates', () => {
       const src = readFileSync(join(process.cwd(), 'src/lib', `${f}.ts`), 'utf8')
       const grants = (src.match(/demoStart < DEMO_DURATION_MS/g) ?? []).length
       const guards = (src.match(/if \(isDemoWrite\(request\)\) return demoWriteRefused\(request\)/g) ?? []).length
-      expect({ file: f, guards }).toEqual({ file: f, guards: grants })
+      const limits = (src.match(/const demoLimited = await demoReadLimit\(request\)/g) ?? []).length
+      expect({ file: f, guards, limits }).toEqual({ file: f, guards: grants, limits: grants })
     }
   })
 })

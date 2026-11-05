@@ -21,6 +21,7 @@ import {
   User,
 } from 'lucide-react'
 import { useToast } from '@/components/Toast'
+import { STAGE_ORDER, stageMeta } from '@/lib/onboarding/stages'
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -457,7 +458,7 @@ export default function OnboardingPage() {
   // ── Template-based onboarding view ────────────────────
   if (hasAssignment && assignment) {
     // Preferred order for known stages, then any additional stages from the data
-    const KNOWN_STAGES = ['BEFORE_START', 'DAY_ONE', 'ROLE_SPECIFIC', 'PROBATION']
+    const KNOWN_STAGES: string[] = [...STAGE_ORDER]
     const dataStages = Object.keys(groupedTasks)
     const stageOrder = [
       ...KNOWN_STAGES.filter((s) => dataStages.includes(s)),
@@ -502,7 +503,7 @@ export default function OnboardingPage() {
           {stageOrder.map((stageKey) => {
             const tasks = groupedTasks[stageKey] ?? []
             if (tasks.length === 0) return null
-            const meta = STAGE_META[stageKey] ?? { label: stageKey, color: 'bg-gray-100 text-gray-700' }
+            const meta = STAGE_META[stageKey] ?? stageMeta(stageKey)
             const stageCompleted = tasks.filter((t) => t.status === 'COMPLETED' || t.status === 'WAIVED').length
             return (
               <div key={stageKey}>

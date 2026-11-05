@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
 import { useToast } from '@/components/Toast'
+import { stageMeta } from '@/lib/onboarding/stages'
+import { PROBATION_STATUS_OPTIONS, probationStatusLabel, REVIEW_OUTCOMES } from '@/lib/staffing/probation'
 
 /* ================================================================
    TYPES
@@ -233,6 +235,14 @@ export default function EmployeeProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<SectionKey>('overview')
+  // Deep link from the HR Probation tab (…#probation) opens the Employment tab at the probation section
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#probation') {
+      setActiveTab('employment')
+      const t = setTimeout(() => document.getElementById('probation')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 600)
+      return () => clearTimeout(t)
+    }
+  }, [])
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, string | number | null>>({})
@@ -926,8 +936,44 @@ function ProbationReviewsSection({
 
   const canCreate = isAdmin || hasHRAccess
 
+  // BUG-016c: complete a review (outcome, feedback, date). A final review with Pass/Extend updates probation status.
+  const [completingId, setCompletingId] = useState<string | null>(null)
+  const [completeForm, setCompleteForm] = useState({ outcome: '', feedback: '', completedDate: '' })
+  const [completeError, setCompleteError] = useState<string | null>(null)
+  const startComplete = (id: string) => {
+    setCompletingId(id)
+    setCompleteError(null)
+    setCompleteForm({ outcome: '', feedback: '', completedDate: new Date().toISOString().slice(0, 10) })
+  }
+  const handleComplete = async (id: string) => {
+    if (!completeForm.outcome) { setCompleteError('Choose an outcome'); return }
+    setSubmitting(true)
+    setCompleteError(null)
+    try {
+      const res = await fetch(`/api/staffing/probation/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outcome: completeForm.outcome,
+          feedback: completeForm.feedback || undefined,
+          completedDate: completeForm.completedDate,
+        }),
+      })
+      if (res.ok) {
+        setCompletingId(null)
+        fetchReviews()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setCompleteError(err.error?.message || err.error || 'Could not complete the review')
+      }
+    } catch {
+      setCompleteError('Network error — the review was not saved')
+    }
+    setSubmitting(false)
+  }
+
   return (
-    <div>
+    <div id="probation">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide">Probation Reviews</h4>
         {canCreate && (
@@ -1024,6 +1070,63 @@ function ProbationReviewsSection({
                 {r.objectives && <p className="mt-1 text-ink-600">{r.objectives}</p>}
                 {r.feedback && <p className="mt-1 italic text-ink-500">{r.feedback}</p>}
               </div>
+              {canCreate && !r.completedDate && completingId !== r.id && (
+                <button
+                  onClick={() => startComplete(r.id)}
+                  className="mt-2 text-[12px] font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Complete review
+                </button>
+              )}
+              {completingId === r.id && (
+                <div className="mt-3 p-3 bg-ink-50 border border-ink-200 rounded-lg space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[12px] font-medium text-ink-600 mb-1">Outcome *</label>
+                      <select
+                        value={completeForm.outcome}
+                        onChange={(e) => setCompleteForm((p) => ({ ...p, outcome: e.target.value }))}
+                        className="w-full px-2 py-1.5 text-[13px] border border-ink-200 rounded bg-white"
+                      >
+                        <option value="">Select…</option>
+                        {REVIEW_OUTCOMES.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-ink-600 mb-1">Completed on</label>
+                      <input
+                        type="date"
+                        value={completeForm.completedDate}
+                        onChange={(e) => setCompleteForm((p) => ({ ...p, completedDate: e.target.value }))}
+                        className="w-full px-2 py-1.5 text-[13px] border border-ink-200 rounded"
+                      />
+                    </div>
+                  </div>
+                  <textarea
+                    value={completeForm.feedback}
+                    onChange={(e) => setCompleteForm((p) => ({ ...p, feedback: e.target.value }))}
+                    rows={2}
+                    placeholder="Feedback and notes…"
+                    className="w-full px-2 py-1.5 text-[13px] border border-ink-200 rounded"
+                  />
+                  {completeError && <p className="text-[12px] text-red-600">{completeError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleComplete(r.id)}
+                      disabled={submitting}
+                      className="px-3 py-1.5 text-[12px] font-medium bg-brand-600 text-white rounded hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      {submitting ? 'Saving…' : 'Save and complete'}
+                    </button>
+                    <button
+                      onClick={() => setCompletingId(null)}
+                      className="px-3 py-1.5 text-[12px] font-medium text-ink-600 bg-white border border-ink-200 rounded hover:bg-ink-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1098,14 +1201,11 @@ function EmploymentContent({
       <div>
         <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Probation</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {renderField('Status', 'probationStatus', displayValue(employment.probationStatus), {
+          {renderField('Status', 'probationStatus', employment.probationStatus ? probationStatusLabel(employment.probationStatus) : displayValue(employment.probationStatus), {
             type: 'select',
             options: [
               { value: '', label: 'Select...' },
-              { value: 'PROBATION', label: 'Probation' },
-              { value: 'CONFIRMED', label: 'Confirmed' },
-              { value: 'EXTENDED', label: 'Extended' },
-              { value: 'COMPLETED', label: 'Completed' },
+              ...PROBATION_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
             ],
           })}
           {renderField('Length (months)', 'probationLength', employment.probationLength !== null && employment.probationLength !== undefined ? `${employment.probationLength} months` : 'Not provided', { type: 'number' })}
@@ -2852,7 +2952,7 @@ function OnboardingContent({
                       return (
                         <div key={stage}>
                           <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider mb-2">
-                            {STAGE_LABELS[stage] ?? stage}
+                            {STAGE_LABELS[stage] ?? stageMeta(stage).label}
                           </h4>
                           <div className="space-y-1.5">
                             {stageTasks.map((task) => {

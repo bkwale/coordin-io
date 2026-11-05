@@ -4,7 +4,8 @@ import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import { requireString, optionalString, requireDate, optionalDate, parseBody } from '@/lib/validation'
-import { PermissionError } from '@/lib/errors'
+import { PermissionError, ConflictError, ValidationError } from '@/lib/errors'
+import { notClosedProfileFilter, normaliseOutcome, probationIssues, isInProbation, probationStatusLabel, ISSUE_LABELS } from '@/lib/staffing/probation'
 import { canManageHR } from '@/lib/staffing-utils'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -39,6 +40,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   if (pendingOnly) {
     where.completedDate = null
+    // BUG-016: reviews for employees whose probation is closed (confirmed, historic, N/A…) are not pending
+    where.profile = notClosedProfileFilter(profile.organisationId)
   }
 
   const reviews = await modulesPrisma.probationReview.findMany({
@@ -51,7 +54,37 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     take: 100,
   })
 
-  return success({ reviews })
+  // BUG-016: one definition of "in probation" — the employee's probationStatus — plus records HR must correct
+  let employees: unknown[] | undefined
+  if (hasHRAccess && !profileIdFilter) {
+    const eps = await modulesPrisma.employeeProfile.findMany({
+      where: { profile: { organisationId: profile.organisationId } },
+      select: {
+        profileId: true, probationStatus: true, probationStartDate: true, probationEndDate: true, probationLength: true,
+        profile: { select: { fullName: true, jobTitle: true, startDate: true } },
+      },
+    })
+    type EpRow = { profileId: string; probationStatus: string | null; probationStartDate: Date | null; probationEndDate: Date | null; probationLength: number | null; profile: { fullName: string; jobTitle: string | null; startDate: Date | null } | null }
+    employees = (eps as EpRow[])
+      .map((e) => {
+        const issues = probationIssues({ ...e, employmentStartDate: e.profile?.startDate ?? null })
+        return {
+          profileId: e.profileId,
+          fullName: e.profile?.fullName ?? 'Unknown',
+          jobTitle: e.profile?.jobTitle ?? null,
+          status: e.probationStatus,
+          statusLabel: probationStatusLabel(e.probationStatus),
+          inProbation: isInProbation(e.probationStatus),
+          startDate: e.probationStartDate,
+          endDate: e.probationEndDate,
+          issues: issues.map((code) => ({ code, label: ISSUE_LABELS[code] })),
+        }
+      })
+      .filter((e) => e.inProbation || e.issues.length > 0)
+      .sort((a: { fullName: string }, b: { fullName: string }) => a.fullName.localeCompare(b.fullName))
+  }
+
+  return success({ reviews, employees })
 })
 
 /**
@@ -73,7 +106,9 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const objectives = optionalString(body.objectives, 'objectives', 5000)
   const feedback = optionalString(body.feedback, 'feedback', 5000)
-  const outcome = optionalString(body.outcome, 'outcome', 50)
+  const rawOutcome = optionalString(body.outcome, 'outcome', 50)
+  const outcome = rawOutcome === null ? null : normaliseOutcome(rawOutcome)
+  if (rawOutcome !== null && outcome === null) throw new ValidationError('outcome must be Pass, Extend or Fail')
 
   // Verify profile in same org
   const targetProfile = await modulesPrisma.profile.findUnique({
@@ -86,6 +121,15 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const completedDate = optionalDate(body.completedDate, 'completedDate')
   const nextReviewDate = optionalDate(body.nextReviewDate, 'nextReviewDate')
+
+  // BUG-016: never two open reviews of the same type for the same person
+  const duplicate = await modulesPrisma.probationReview.findFirst({
+    where: { profileId: targetProfileId, reviewType: { equals: reviewType, mode: 'insensitive' }, completedDate: null },
+    select: { id: true, scheduledDate: true },
+  })
+  if (duplicate) {
+    throw new ConflictError(`An open ${reviewType} review already exists for this employee (scheduled ${duplicate.scheduledDate.toISOString().slice(0, 10)}). Complete or reschedule it instead.`)
+  }
 
   const review = await modulesPrisma.probationReview.create({
     data: {

@@ -49,6 +49,14 @@ describe('rate limiter (Redis-backed)', () => {
     expect(await checkRateLimit('fb2', { maxRequests: 5 })).toBeNull()
     expect(Date.now() - t0).toBeLessThan(2_000)
   })
+  it('fail-closed routes refuse with 503 when Redis errors (no guessing window)', async () => {
+    mode = 'error'
+    const res = await checkRateLimit('invite-lookup:1.2.3.4', { maxRequests: 10, failClosed: true })
+    expect(res?.status).toBe(503)
+  })
+  it('fail-closed routes still work normally when Redis is healthy', async () => {
+    expect(await checkRateLimit('invite-lookup:5.6.7.8', { maxRequests: 10, failClosed: true })).toBeNull()
+  })
   it('works with no Redis configured (local/tests)', async () => {
     mode = 'off'
     expect(await checkRateLimit('fb3', { maxRequests: 1 })).toBeNull()
