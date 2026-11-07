@@ -50,15 +50,30 @@ export interface ProjectSetupMapping {
 const v = <T,>(f: PagedField<T> | undefined | null): T | null => (f && f.value !== undefined ? f.value : null)
 const meta = (f: PagedField<unknown> | undefined | null) => ({ confidence: f?.confidence ?? 0, page: f?.page ?? null, quote: f?.quote ?? null })
 
-/** Estonian building use codes (EHR) → questionnaire building type. */
-export function buildingTypeFromUseCode(code: string | null | undefined): ProjectParameters['buildingType'] | null {
+/**
+ * Estonian building use codes → questionnaire building type.
+ * Source: "Ehitise kasutamise otstarvete loetelu" (MKM määrus nr 51, 02.06.2015, Lisa 1; amended 2025):
+ *   11101 Üksikelamu · 11102 Ridaelamu või kaksikelamu sektsioon (own roof + ground-level entrance) · 11103 Suvila, aiamaja
+ *   11212 Kahe korteriga elamu · 11221 Ridaelamu · 11222 Muu kolme või enama korteriga elamu
+ *   113xx Hoolekandeasutused / ühiselamud · 12xxx Mitteelamud · 2xxxx Rajatised
+ * The label (when given) decides 11102: "kaksik…" = semi-detached, otherwise terraced.
+ */
+export function buildingTypeFromUseCode(code: string | null | undefined, label?: string | null): ProjectParameters['buildingType'] | null {
   if (!code) return null
-  if (/^1110[1-3]/.test(code) || code === '11101') return 'detached_house'      // üksikelamu
-  if (code.startsWith('1110')) return 'detached_house'
-  if (code.startsWith('1112')) return 'semi_detached'                           // kahe korteriga / ridaelamu 11211? keep simple
-  if (code.startsWith('1121')) return 'terraced'
-  if (code.startsWith('112')) return 'apartment_block'
-  if (code.startsWith('12')) return 'non_residential'
+  const c = String(code).trim()
+  if (!/^\d{5}$/.test(c)) return null
+  switch (c) {
+    case '11101': return 'detached_house'
+    case '11103': return 'detached_house'
+    case '11102': return label && /kaksik/i.test(label) ? 'semi_detached' : 'terraced'
+    case '11212': return 'semi_detached'        // two dwellings in one building
+    case '11221': return 'terraced'             // row house as a whole building
+    case '11222': return 'apartment_block'
+  }
+  if (c.startsWith('1121')) return 'semi_detached'
+  if (c.startsWith('1122')) return 'apartment_block'
+  if (c.startsWith('113')) return 'non_residential' // care homes, dormitories
+  if (c.startsWith('12')) return 'non_residential'
   return 'other'
 }
 
@@ -74,7 +89,7 @@ export function mapPlanningConditions(pc: PlanningConditions): ProjectSetupMappi
 
   // building type from use code
   const use = pc.building.useCodes?.[0]
-  const bt = buildingTypeFromUseCode(use?.code)
+  const bt = buildingTypeFromUseCode(use?.code, use?.label)
   if (bt) prefills.push({ key: 'buildingType', value: bt, kind: 'value', label: bt.replace('_', ' '), because: `Use code ${use!.code}${use!.label ? ` (${use!.label})` : ''}`, confidence: 0.9, page: null, quote: use!.label ?? use!.code, preAccept: true })
 
   // work type
