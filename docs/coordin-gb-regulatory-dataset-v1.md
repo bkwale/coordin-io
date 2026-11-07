@@ -70,6 +70,23 @@ These existing fields are reused:
 - `protectedArea` = National Park, National Landscape (AONB) or World Heritage Site
 - `temporary`, `parkingSpaces`, `apartments`, `height`, `storeys`
 
+## Document reader: English planning decision notices
+
+Upload a decision notice on the Regulatory page (England selected). The reader (prompt `dn-0.1`) extracts:
+- reference, planning authority, decision date, outcome, application type, parent permission
+- approved plans
+- every numbered condition with its timing: time limit, approved plans, pre-commencement, pre-superstructure, pre-occupation, ongoing
+- reasons for refusal
+
+Deterministic checks run after the model:
+- reference pinned to the "Application No" phrase
+- timing read from the wording ("prior to commencement") when the model leaves it unclassified
+- commencement deadline = decision date + years − 1 day; flagged if already passed
+- M4(2)/M4(3), water targets (105/110 l), BNG and removed permitted-development rights raised as warnings
+- every condition's wording checked against the document; unmatched ones left unticked
+
+Tested on four public notices (Brent full, North Yorkshire householder, Copeland reserved matters, Camden refusal). Refusals produce reasons, not conditions. Reserved matters and discharge decisions warn that the parent permission's conditions still apply.
+
 ## Known limits (v1)
 
 - Permitted development is checked for **rear extensions only**. Side extensions, roof extensions (Class B), outbuildings (Class E) and upward extensions (Class AA) fall back to "householder application" and should be confirmed by the architect.

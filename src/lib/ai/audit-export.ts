@@ -101,7 +101,7 @@ export async function buildAiRunRows(organisationId: string, from: Date, to: Dat
       'Time': dt.toISOString().slice(11, 19),
       'Run ID': r.id,
       'Surface': r.surface === 'PROJECT_SETUP' ? 'Project setup from document' : r.surface === 'PRACTICE_SETUP' ? 'Practice setup' : r.surface,
-      'Document kind': summary?.kind === 'brief' ? 'Client brief' : summary?.kind === 'planning_conditions' ? 'Planning conditions' : '',
+      'Document kind': summary?.kind === 'brief' ? 'Client brief' : summary?.kind === 'planning_conditions' ? 'Planning conditions' : summary?.kind === 'decision_notice' ? 'Decision notice' : '',
       'Project': r.projectId ? projectName.get(r.projectId) ?? r.projectId : '',
       'Source document': summary?.documentId ? docTitle.get(summary.documentId) ?? summary.fileName ?? '' : summary?.fileName ?? (isProject ? 'Pasted text' : r.inputSummary),
       'Source document ID': summary?.documentId ?? '',

@@ -128,6 +128,7 @@ export default function RegulatoryPage() {
       {/* ── Questionnaire ─────────────────────────────────── */}
       <aside className="w-[340px] shrink-0 rounded-xl border border-surface-200 bg-white p-5 sticky top-4">
         <DocumentPrefill
+          jurisdiction={form.jurisdiction}
           projectId={projectId}
           onApplyValues={(values, b) => { applyValues(values); if (b) setBounds(b) }}
           onPending={setPendingRun}

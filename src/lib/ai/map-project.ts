@@ -3,7 +3,7 @@
  * Limits are BOUNDS, not design values (Suleyman): the architect types the design number; we show "≤ 6.5 m per PT".
  * Every pre-filled field carries its page and quote so the ConfirmationReview can open the PDF there.
  */
-import type { PlanningConditions, PagedField, Brief } from './schemas-documents'
+import type { PlanningConditions, PagedField, Brief, DecisionNotice } from './schemas-documents'
 import type { ProjectParameters } from '@/lib/rules'
 
 export type PrefillKind = 'value' | 'bound'
@@ -28,12 +28,14 @@ export interface MunicipalCondition {
   mandatory: boolean
   citation: string   // "PT nr 2611802/03126 p.4"
   source: string     // "Viljandi Vallavalitsus"
+  /** England decision notices: when the condition bites (pre-commencement, pre-occupation …). */
+  timing?: string
   /** Set by verifyQuotes: the condition's wording was found in the document. Only verified conditions are pre-ticked. */
   verified?: boolean
 }
 
 export interface ProjectSetupMapping {
-  kind: 'planning_conditions' | 'brief'
+  kind: 'planning_conditions' | 'brief' | 'decision_notice'
   document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; legalBasis: string | null; ehrCode: string | null; address: string | null; projectName?: string | null; client?: string | null }
   prefills: Prefill[]
   conditions: MunicipalCondition[]
@@ -251,4 +253,144 @@ export function verifyQuotes(mapping: ProjectSetupMapping, pages: string[]): Pro
   if (unverifiedConds) warnings.push(`${unverifiedConds} condition${unverifiedConds > 1 ? 's' : ''} couldn't be matched to the document wording — left unticked, check against the PDF`)
   if (badPages) warnings.push(`${badPages} citation${badPages > 1 ? 's' : ''} pointed to a page that isn't in the document — page removed`)
   return { ...mapping, prefills, conditions, warnings }
+}
+
+/* ─────────────────────────── England: planning decision notices ─────────────────────────── */
+
+const TIMING_LABEL: Record<string, string> = {
+  time_limit: 'Time limit', approved_plans: 'Approved plans', pre_commencement: 'Before commencement', pre_superstructure: 'Before above-ground works',
+  pre_occupation: 'Before occupation', compliance: 'Ongoing', other: 'Condition',
+}
+const TIME_LIMIT = /\b(begun|commenced|begin|start(ed)?)\b.{0,40}\b(not later than|before|within)\b.{0,40}\b(expiration of )?(three|five|\d) years\b/i
+const APPROVED_PLANS = /\b(in accordance with the following (approved )?(plans|drawings?|documents)|relates to the following (approved )?plans|carried out in accordance with the (approved|submitted) plans)/i
+const PRE_COMMENCEMENT = /\b(prior to (the )?commencement|prior to (the )?development commencing|before (the )?(development|works?) (commences?|begins?|starts?)|no development (shall|must|will) (take place|commence|begin|start)|prior to any (works|development) (commencing|starting))/i
+const PRE_OCCUPATION = /\b(prior to (the )?(first )?(occupation|use)\b|before (the )?(first )?occupation|shall not be occupied (unless|until))/i
+const PRE_SUPER = /\b(above[- ]ground works|superstructure|damp[- ]proof course|external walling)/i
+
+/** Decision date + N years, minus a day — "begun not later than the expiration of three years beginning with the date of this permission". */
+export function commencementDeadline(decisionDate: string | null, years: number | null): string | null {
+  if (!decisionDate || !/^\d{4}-\d{2}-\d{2}/.test(decisionDate) || !years || years < 1 || years > 10) return null
+  const d = new Date(decisionDate.slice(0, 10) + 'T00:00:00Z')
+  if (Number.isNaN(d.getTime())) return null
+  d.setUTCFullYear(d.getUTCFullYear() + Math.round(years))
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+/** The model's timing label is a hint; the wording decides when it clearly says "prior to commencement" etc. */
+export function conditionTiming(text: string, modelTiming: string): string {
+  if (modelTiming === 'time_limit' || modelTiming === 'approved_plans') return modelTiming
+  // A trigger in the wording beats any label
+  if (PRE_COMMENCEMENT.test(text)) return 'pre_commencement'
+  if (PRE_SUPER.test(text) && /\b(prior to|before|until)\b/i.test(text)) return 'pre_superstructure'
+  if (PRE_OCCUPATION.test(text)) return 'pre_occupation'
+  // Only relabel what the model left unclassified — never override a trigger it found
+  if (modelTiming === 'other' || modelTiming === 'compliance') {
+    if (TIME_LIMIT.test(text)) return 'time_limit'
+    if (APPROVED_PLANS.test(text)) return 'approved_plans'
+  }
+  return modelTiming
+}
+
+/** Things in conditions that change the Building Regulations checklist — found deterministically, never trusted from the model. */
+export function conditionSignals(texts: string[]): { m42: boolean; m43: boolean; waterLitres: number | null; bng: boolean; pdRemoved: boolean } {
+  const all = texts.join('\n')
+  const water = all.match(/(\d{2,3})\s*litres?\s*(?:or less\s*)?(?:per|\/)\s*(?:person|head)/i)
+  return {
+    m42: /M4\s*\(\s*2\s*\)/i.test(all),
+    m43: /M4\s*\(\s*3\s*\)/i.test(all),
+    waterLitres: water ? parseInt(water[1], 10) : null,
+    bng: /biodiversity gain plan|biodiversity net gain|\bBNG\b/i.test(all),
+    pdRemoved: /permitted development|Schedule 2.{0,40}(General )?Permitted Development/i.test(all) && /\b(no|shall not|notwithstanding)\b/i.test(all),
+  }
+}
+
+export function mapDecisionNotice(dn: DecisionNotice): ProjectSetupMapping {
+  const prefills: Prefill[] = []
+  const warnings: string[] = [...(dn.warnings ?? [])]
+  const ref = v(dn.document.reference)
+  const lpa = v(dn.document.authority)
+  const decision = v(dn.document.decision)
+  const appType = v(dn.document.applicationType)
+  const decided = v(dn.document.decisionDate)
+  const cite = (n: number | null, page: number | null) => `${ref ?? 'Decision ?'}${n != null ? ` condition ${n}` : ''}${page ? ` p.${page}` : ''}`
+  const source = lpa ?? 'Local planning authority'
+  const ok = (f: PagedField<unknown> | undefined) => (f?.confidence ?? 0) >= 0.8 && !!f?.quote
+
+  prefills.push({ key: 'jurisdiction', value: 'GB', kind: 'value', label: 'England', because: 'Decision issued under the Town and Country Planning Act 1990', confidence: 1, page: null, quote: null, preAccept: true })
+  const wt = v(dn.proposal.workType)
+  if (wt) prefills.push({ key: 'workType', value: wt, kind: 'value', label: LABEL_WT[wt] ?? wt, because: 'Proposal description', ...meta(dn.proposal.workType), preAccept: ok(dn.proposal.workType) })
+  const bt = v(dn.proposal.buildingType)
+  if (bt && bt !== 'other') prefills.push({ key: 'buildingType', value: bt, kind: 'value', label: LABEL_BT[bt] ?? bt, because: 'Proposal description', ...meta(dn.proposal.buildingType), preAccept: ok(dn.proposal.buildingType) })
+  const dw = v(dn.proposal.dwellings)
+  if (dw != null && dw > 1) prefills.push({ key: 'apartments', value: dw, kind: 'value', label: `${dw} dwellings`, because: 'Proposal description', ...meta(dn.proposal.dwellings), preAccept: ok(dn.proposal.dwellings) })
+  const st = v(dn.proposal.storeys)
+  if (st != null && st > 0) prefills.push({ key: 'storeys', value: st, kind: 'value', label: `${st} storeys`, because: 'Proposal description', ...meta(dn.proposal.storeys), preAccept: ok(dn.proposal.storeys) })
+
+  const conditions: MunicipalCondition[] = []
+  const refused = decision === 'refused' || decision === 'prior_approval_refused' || decision === 'certificate_refused'
+  if (refused) {
+    warnings.push('This application was REFUSED — there is no permission to build. Reasons for refusal are listed so a resubmission can address them.')
+    for (const r of dn.refusalReasons ?? []) conditions.push({ topic: `Reason for refusal${r.number != null ? ` ${r.number}` : ''}`, text: r.text, page: r.page, mandatory: false, citation: `${ref ?? 'Decision ?'} reason ${r.number ?? '?'}`, source, timing: 'refusal' })
+  } else {
+    for (const c of dn.conditions ?? []) {
+      let timing = conditionTiming(c.text, c.timing)
+      if (timing === 'other' && !/\buntil\b/i.test(c.text)) timing = 'compliance'
+      conditions.push({ topic: c.heading?.trim() || TIMING_LABEL[timing] || 'Condition', text: c.text, page: c.page, mandatory: true, citation: cite(c.number, c.page), source, timing })
+    }
+  }
+
+  // Derived: commencement deadline. Default 3 years (s.91) when a time-limit condition exists but the number was missed.
+  const hasTimeLimit = (dn.conditions ?? []).some((c) => conditionTiming(c.text, c.timing) === 'time_limit')
+  const years = v(dn.timeLimitYears) ?? (hasTimeLimit ? 3 : null)
+  const deadline = !refused && appType !== 'approval_of_details' ? commencementDeadline(decided, years) : null
+  if (deadline) {
+    conditions.unshift({ topic: 'Commencement deadline', text: `Begin development no later than ${deadline} (${years} years from the decision on ${decided!.slice(0, 10)}), or the permission lapses. Discharge all pre-commencement conditions first.`, page: dn.timeLimitYears.page ?? null, mandatory: true, citation: cite(null, dn.timeLimitYears.page ?? null), source, timing: 'time_limit' })
+    if (deadline < new Date().toISOString().slice(0, 10)) warnings.push(`The time limit expired on ${deadline} — unless development lawfully began before then, this permission has lapsed`)
+  }
+
+  // Derived: approved plans, as one item the architect can tick against the drawing register
+  const plans = dn.approvedPlans ?? []
+  if (plans.length && !refused) conditions.push({ topic: 'Approved plans', text: `Build in accordance with the ${plans.length} approved drawing${plans.length > 1 ? 's' : ''}/documents: ${plans.map((p) => p.ref).join('; ')}`.slice(0, 1200), page: null, mandatory: true, citation: cite(null, null), source, timing: 'approved_plans' })
+
+  const sig = conditionSignals((dn.conditions ?? []).map((c) => c.text))
+  if (!refused) {
+    if (sig.m43) warnings.push('A condition requires M4(3) wheelchair user dwellings — check AD M Vol 1 Category 3 applies to the units named')
+    else if (sig.m42) warnings.push('A condition requires M4(2) accessible and adaptable dwellings — this replaces the M4(1) default')
+    if (sig.waterLitres) warnings.push(`A condition sets a water use target of ${sig.waterLitres} litres/person/day — design to the optional requirement G2 (Building Regulations reg 36(2)(b))`)
+    if (sig.bng) warnings.push('A condition refers to biodiversity net gain — a Biodiversity Gain Plan must be approved before development begins')
+    if (sig.pdRemoved) warnings.push('A condition removes permitted development rights — later extensions will need a planning application')
+    const pre = conditions.filter((c) => c.timing === 'pre_commencement').length
+    if (pre) warnings.push(`${pre} pre-commencement condition${pre > 1 ? 's' : ''} must be discharged before any work starts`)
+  }
+  if (appType === 'reserved_matters' || appType === 'approval_of_details' || appType === 'variation_of_condition') {
+    const parent = v(dn.document.parentPermission)
+    warnings.push(`This decision depends on an earlier permission${parent ? ` (${parent})` : ''} — its conditions still apply. Upload that decision notice too.`)
+  }
+  if (!ref) warnings.push('Application reference not found — citations will read "Decision ?"')
+  if (dn.document.kind !== 'decision_notice') warnings.push('This may not be a planning decision notice')
+  if (!refused && (dn.conditions ?? []).length === 0 && appType !== 'approval_of_details' && appType !== 'lawful_development_certificate') warnings.push('No conditions were found — check the notice; most permissions carry at least a time limit')
+
+  return {
+    kind: 'decision_notice',
+    document: { number: ref, issuer: lpa, issuedAt: decided, validUntil: deadline, legalBasis: appType, ehrCode: null, address: v(dn.site.address) },
+    prefills,
+    conditions: dedupe(conditions),
+    bounds: { maxHeightM: null, maxStoreys: null, maxFootprint: null, minSetbackM: null },
+    warnings,
+  }
+}
+
+const APP_REF = /\b(?:application\s*(?:no\.?|number|ref(?:erence)?\.?)|our\s*ref\.?|ref\.?)\s*:?\s*([A-Z]{0,4}\d{1,4}[A-Z0-9]*(?:\/[A-Z0-9.\-]+)+)/gi
+
+/** Pin document.reference to the "Application No:" phrase when the notice states one reference only. */
+export function pinApplicationReference(dn: DecisionNotice, pages: string[]): DecisionNotice {
+  const found = new Map<string, { page: number; quote: string }>()
+  pages.forEach((text, i) => { for (const m of text.matchAll(APP_REF)) if (!found.has(m[1])) found.set(m[1], { page: i + 1, quote: m[0].replace(/\s+/g, ' ') }) })
+  const parent = dn.document.parentPermission?.value
+  if (parent) found.delete(parent)
+  if (found.size !== 1) return dn
+  const [[reference, src]] = [...found]
+  if (dn.document.reference?.value === reference) return dn
+  return { ...dn, document: { ...dn.document, reference: { value: reference, confidence: 0.95, page: src.page, quote: src.quote } } }
 }

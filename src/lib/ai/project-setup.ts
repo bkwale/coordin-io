@@ -8,9 +8,10 @@ import { createClient } from '@supabase/supabase-js'
 import { prisma } from '@/lib/prisma'
 import { createRun, runAI } from './pipeline'
 import { pdfToPages, paginateText, capPages, IngestError } from './document-ingest'
-import { PlanningConditionsSchema, normalisePlanningConditions, BriefSchema, normaliseBrief } from './schemas-documents'
+import { PlanningConditionsSchema, normalisePlanningConditions, BriefSchema, normaliseBrief, DecisionNoticeSchema, normaliseDecisionNotice } from './schemas-documents'
+import { DECISION_NOTICE_PROMPT_VERSION, DECISION_NOTICE_SYSTEM, decisionNoticeUser } from './prompts/decision-notice'
 import { PLANNING_CONDITIONS_SYSTEM, PLANNING_CONDITIONS_PROMPT_VERSION, planningConditionsUser } from './prompts/planning-conditions'
-import { mapPlanningConditions, mapBrief, pinDocumentNumber, verifyQuotes, type ProjectSetupMapping } from './map-project'
+import { mapPlanningConditions, mapBrief, mapDecisionNotice, pinDocumentNumber, pinApplicationReference, verifyQuotes, type ProjectSetupMapping } from './map-project'
 import { BRIEF_PROMPT_VERSION, BRIEF_SYSTEM, briefUser } from './prompts/brief'
 import { applyInjectionGuard } from './injection-guard'
 import { assertAiBudget } from './budget'
@@ -19,7 +20,12 @@ import { ProjectParametersSchema } from '@/lib/rules/schema'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { ValidationError, NotFoundError } from '@/lib/errors'
 
-export type SetupDocumentKind = 'planning_conditions' | 'brief'
+export type SetupDocumentKind = 'planning_conditions' | 'brief' | 'decision_notice'
+export const SETUP_DOCUMENT_KINDS: SetupDocumentKind[] = ['planning_conditions', 'brief', 'decision_notice']
+const PROMPT_VERSION: Record<SetupDocumentKind, string> = { planning_conditions: PLANNING_CONDITIONS_PROMPT_VERSION, brief: BRIEF_PROMPT_VERSION, decision_notice: DECISION_NOTICE_PROMPT_VERSION }
+const TITLE: Record<SetupDocumentKind, string> = { planning_conditions: 'Projekteerimistingimused', brief: 'Brief', decision_notice: 'Planning decision notice' }
+/** How a document is cited in item text: "PT nr 2611802/03126" or "Decision 22/4128". */
+export function docLabel(m: ProjectSetupMapping): string { return m.kind === 'decision_notice' ? `Decision ${m.document.number ?? '?'}` : `PT nr ${m.document.number ?? '?'}` }
 
 export interface StartProjectSetupInput {
   projectId: string
@@ -52,7 +58,7 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
     throw new ValidationError('A PDF file or pasted text is required')
   }
 
-  const title = kind === 'planning_conditions' ? `Projekteerimistingimused${input.file ? ' — ' + input.file.name : ''}` : `Brief${input.file ? ' — ' + input.file.name : ''}`
+  const title = `${TITLE[kind]}${input.file ? ' — ' + input.file.name : ''}`
   const { document, run } = await prisma.$transaction(async (tx) => {
     const document = storage
       ? await tx.document.create({
@@ -66,7 +72,7 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
         : null
     const run = await tx.aIRun.create({
       data: {
-        surface: 'PROJECT_SETUP', organisationId, projectId, status: 'QUEUED', promptVersion: kind === 'brief' ? BRIEF_PROMPT_VERSION : PLANNING_CONDITIONS_PROMPT_VERSION,
+        surface: 'PROJECT_SETUP', organisationId, projectId, status: 'QUEUED', promptVersion: PROMPT_VERSION[kind],
         inputHash: '', inputSummary: JSON.stringify({ kind, documentId: document?.id ?? null, fileName: input.file?.name ?? null, pages: pages.length, chars: pages.reduce((a, p) => a + p.length, 0) }),
         createdBy: authUserId, stages: [],
       },
@@ -91,6 +97,21 @@ export async function executeProjectSetup(runId: string, kind: SetupDocumentKind
       map: (b) => applyInjectionGuard(verifyQuotes(mapBrief(b), pages), pages),
       confidenceOf: (b) => {
         const f = [b.parameters.buildingType, b.parameters.workType, b.parameters.grossFloorArea, b.parameters.storeys]
+        return f.reduce((a, x) => a + (x?.confidence ?? 0), 0) / f.length
+      },
+    })
+  }
+
+  if (kind === 'decision_notice') {
+    return runAI(runId, {
+      surface: 'PROJECT_SETUP', createdBy: '', inputSummary: '', promptVersion: DECISION_NOTICE_PROMPT_VERSION,
+      maxTokens: 16_000,
+      ingest: async (push) => { await readStage(push); return { system: DECISION_NOTICE_SYSTEM, user: decisionNoticeUser(pages), inputForHash: pages.join('\n') } },
+      schema: DecisionNoticeSchema,
+      normalise: normaliseDecisionNotice,
+      map: (dn) => applyInjectionGuard(verifyQuotes(mapDecisionNotice(pinApplicationReference(dn, pages)), pages), pages),
+      confidenceOf: (dn) => {
+        const f = [dn.document.reference, dn.document.decisionDate, dn.document.decision, dn.document.authority]
         return f.reduce((a, x) => a + (x?.confidence ?? 0), 0) / f.length
       },
     })
@@ -146,15 +167,16 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
   const docInfo = (() => { try { return JSON.parse(run.inputSummary) as { documentId?: string | null } } catch { return {} } })()
 
   // An older planning-conditions document must not supersede a newer one that is already applied
-  if (mapping.kind === 'planning_conditions') {
+  const carriesConditions = mapping.kind === 'planning_conditions' || mapping.kind === 'decision_notice'
+  if (carriesConditions) {
     const newer = await prisma.aIRun.findFirst({
       where: { projectId: input.projectId, surface: 'PROJECT_SETUP', status: 'APPLIED', id: { not: run.id }, createdAt: { gt: run.createdAt } },
       select: { id: true, mapping: true },
     })
     const newerMap = newer?.mapping as unknown as ProjectSetupMapping | null
-    if (newerMap?.kind === 'planning_conditions') {
+    if (newerMap && newerMap.kind === mapping.kind) {
       const a = mapping.document.issuedAt, b = newerMap.document.issuedAt
-      if (!a || !b || a <= b) throw new ValidationError(`A newer planning-conditions document (PT nr ${newerMap.document.number ?? '?'}) is already applied — upload this one again if it really replaces it`)
+      if (!a || !b || a <= b) throw new ValidationError(`A newer ${mapping.kind === 'decision_notice' ? 'decision notice' : 'planning-conditions document'} (${docLabel(newerMap)}) is already applied — upload this one again if it really replaces it`)
     }
   }
 
@@ -167,11 +189,11 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
     await tx.complianceItem.deleteMany({ where: { registerId: applied.registerId, origin: 'MUNICIPALITY', aiRunId: run.id } })
     // A newer planning-conditions document supersedes the previous one's conditions.
     // Untouched items go; items someone has worked on stay, flagged, so no work is lost. Briefs carry no conditions — leave PT items alone.
-    if (mapping.kind === 'planning_conditions') {
+    if (carriesConditions) {
       const older = { registerId: applied.registerId, origin: 'MUNICIPALITY' as const, aiRunId: { not: run.id } }
       await tx.complianceItem.deleteMany({ where: { ...older, status: 'NOT_STARTED' } })
       const kept = await tx.complianceItem.findMany({ where: older, select: { id: true, requirement: true } })
-      const tag = `[Superseded by PT nr ${mapping.document.number ?? '?'}] `
+      const tag = `[Superseded by ${docLabel(mapping)}] `
       await Promise.all(kept.filter((k) => !k.requirement.startsWith('[Superseded')).map((k) => tx.complianceItem.update({ where: { id: k.id }, data: { requirement: (tag + k.requirement).slice(0, 500), confidence: 'stale' } })))
     }
     const base = 100_000
@@ -181,7 +203,7 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
           const c = mapping.conditions[i]
           return {
             registerId: applied.registerId, origin: 'MUNICIPALITY' as const, section: 'municipal', requirement: c.topic ? `${c.topic}: ${c.text}`.slice(0, 500) : c.text.slice(0, 500),
-            citation: c.citation, source: c.source, because: c.page ? `AI-extracted from page ${c.page} of the planning conditions — check against the document` : 'AI-extracted from the planning conditions — check against the document', confidence: 'ai',
+            citation: c.citation, source: c.source, because: `AI-extracted from ${c.page ? `page ${c.page} of ` : ''}the ${mapping.kind === 'decision_notice' ? 'decision notice' : 'planning conditions'} — check against the document`, confidence: 'ai',
             ruleSetVersion: null, ruleId: null, aiRunId: run.id, sortOrder: base + n * 10, comments: c.mandatory ? null : 'Recommended, not mandatory',
           }
         }),
