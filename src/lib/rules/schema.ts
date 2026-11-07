@@ -24,6 +24,19 @@ export const ProjectParametersSchema = z.object({
   temporary: z.boolean().optional(),
   placeOfWorship: z.boolean().optional(),
   county: z.string().max(80).optional(),
+  conservationArea: z.boolean().optional(),
+  article4: z.boolean().optional(),
+  extensionDepth: z.number().min(0).max(100).optional(),
+  floodZone: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+  siteAreaHa: z.number().min(0).max(10_000).optional(),
+  priorityHabitat: z.boolean().optional(),
+  domesticClient: z.boolean().optional(),
+  contractors: z.number().int().min(0).max(1000).optional(),
+  constructionDays: z.number().int().min(0).max(10_000).optional(),
+  peakWorkers: z.number().int().min(0).max(100_000).optional(),
+  boundaryWork: z.boolean().optional(),
+  cilChargingArea: z.boolean().optional(),
+  radonAffectedArea: z.boolean().optional(),
 })
 
 export type ProjectParametersInput = z.infer<typeof ProjectParametersSchema>
