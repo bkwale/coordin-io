@@ -76,6 +76,14 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
     },
   })
 
+  // People who logged time on this project but aren't project members (or have no allocation yet)
+  // still need a row, or their timesheets are invisible on the plan (Ayo, 7 Nov)
+  const memberIds = new Set(members.map((m: { profile: { id: string } }) => m.profile.id))
+  const loggedOnly = Array.from(new Set(timesheetActuals.map((e: { week: { profileId: string } }) => e.week.profileId))).filter((id) => !memberIds.has(id as string)) as string[]
+  const extraPeople = loggedOnly.length
+    ? await prisma.profile.findMany({ where: { id: { in: loggedOnly }, organisationId: profile.organisationId }, select: { id: true, fullName: true, jobTitle: true } })
+    : []
+
   // Fetch current work stage
   const project = await prisma.project.findUniqueOrThrow({
     where: { id: projectId },
@@ -100,7 +108,10 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId, p
       fullName: m.profile.fullName,
       jobTitle: m.profile.jobTitle,
       role: m.projectRole,
-    })),
+      notMember: false,
+    })).concat(extraPeople.map((p: { id: string; fullName: string; jobTitle: string | null }) => ({
+      profileId: p.id, fullName: p.fullName, jobTitle: p.jobTitle, role: null, notMember: true,
+    }))),
     weeks,
     currentWorkStage: project.currentWorkStage,
     timesheetActuals: actualsMap,

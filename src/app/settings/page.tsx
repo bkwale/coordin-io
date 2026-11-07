@@ -52,6 +52,9 @@ interface TeamData {
   offices: Array<{ id: string; name: string; city: string }>
   total: number
   active: number
+  onboarding?: number
+  pendingInvites?: number
+  onboardingInvites?: number
   viewerPermission?: string
   viewerProfileId?: string
 }
@@ -508,6 +511,7 @@ function TeamSection() {
 
   // Invite form state
   const [showInvite, setShowInvite] = useState(false)
+  const [showDeactivated, setShowDeactivated] = useState(false)
   const [invEmail, setInvEmail] = useState('')
   const [invName, setInvName] = useState('')
   const [invJob, setInvJob] = useState('')
@@ -675,7 +679,7 @@ function TeamSection() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mt-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 mb-8">
         <div className="bg-surface-50 rounded-lg p-4 text-center">
           <p className="text-2xl font-semibold text-ink-900">{team?.total || 0}</p>
           <p className="text-[11px] text-ink-400 mt-1">Total Members</p>
@@ -685,10 +689,14 @@ function TeamSection() {
           <p className="text-[11px] text-ink-400 mt-1">Active</p>
         </div>
         <div className="bg-surface-50 rounded-lg p-4 text-center">
-          <p className="text-2xl font-semibold text-amber-600">
-            {team?.members?.filter((m) => m.status === 'INVITED').length || 0}
-          </p>
+          <p className="text-2xl font-semibold text-blue-600">{team?.onboarding || 0}</p>
+          <p className="text-[11px] text-ink-400 mt-1">Onboarding</p>
+          {!!team?.onboardingInvites && <p className="text-[10px] text-ink-300 mt-0.5">{team.onboardingInvites} onboarding link{team.onboardingInvites === 1 ? '' : 's'} not finished</p>}
+        </div>
+        <div className="bg-surface-50 rounded-lg p-4 text-center">
+          <p className="text-2xl font-semibold text-amber-600">{team?.pendingInvites || 0}</p>
           <p className="text-[11px] text-ink-400 mt-1">Pending Invites</p>
+          <p className="text-[10px] text-ink-300 mt-0.5">sent, not yet accepted</p>
         </div>
       </div>
 
@@ -777,7 +785,13 @@ function TeamSection() {
         )}
       </div>
 
-      {/* Team List */}
+      {/* Team List — leavers (deactivated) hidden unless asked for */}
+      {!!team?.members?.some((m) => m.status === 'DEACTIVATED') && (
+        <label className="flex items-center gap-2 mb-2 text-[12px] text-ink-500 justify-end">
+          <input type="checkbox" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} />
+          Show deactivated ({team.members.filter((m) => m.status === 'DEACTIVATED').length})
+        </label>
+      )}
       {team?.members && team.members.length > 0 ? (
         <div className="border border-surface-200 rounded-lg overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full min-w-[640px]">
@@ -794,7 +808,7 @@ function TeamSection() {
               </tr>
             </thead>
             <tbody>
-              {team.members.map((member) => {
+              {team.members.filter((m) => showDeactivated || m.status !== 'DEACTIVATED').map((member) => {
                 const isEditing = editingId === member.id
                 const isSelf = member.id === viewerProfileId
                 return (

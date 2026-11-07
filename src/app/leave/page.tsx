@@ -1769,7 +1769,7 @@ function AdminRulesPanel() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error?.message || 'Failed to update allocation')
+        throw new Error((typeof body.error === 'string' ? body.error : body.error?.message) || 'Failed to update allocation')
       }
       toast('Leave allocation updated', 'success')
       setEditingAllowance(null)

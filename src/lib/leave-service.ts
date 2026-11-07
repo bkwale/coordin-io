@@ -51,7 +51,8 @@ export async function updateLeaveWithBalance(
         create: {
           profileId: leaveRequest.profileId,
           year,
-          allocation: 25,
+          // The person's own allowance, not a hard-coded 25
+          allocation: (await tx.employeeProfile.findUnique({ where: { profileId: leaveRequest.profileId }, select: { annualLeaveAllocation: true } }))?.annualLeaveAllocation ?? 25,
           used: leaveRequest.days,
           carriedForward: 0,
         },

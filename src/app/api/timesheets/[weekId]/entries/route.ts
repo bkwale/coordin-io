@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { parseBody, optionalString, optionalId, requireNumber } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
+import { assertBookableProject } from '@/lib/timesheets/bookable-projects'
 
 const LOCATION_TYPES = ['office', 'site', 'remote', 'travel'] as const
 
@@ -90,6 +91,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const hours = requireNumber(body.hours, 'hours', { min: 0.01, max: 24 })
 
   const projectId = optionalId(body.projectId, 'Project ID')
+  await assertBookableProject(profile.organisationId, projectId)
   const taskId = optionalId(body.taskId, 'Task ID')
   const workStage = optionalString(body.workStage, 'Work stage', 100)
   const activity = optionalString(body.activity, 'Activity', 500)
