@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError, PermissionError } from '@/lib/errors'
+import { fileLink } from '@/lib/storage-links'
 import { canManageHR } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
 
@@ -104,20 +105,11 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new ValidationError(`Upload failed: ${uploadError.message}`)
   }
 
-  // Generate signed URL (1-year expiry)
-  const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
-
-  const { data: signedData, error: signError } = await supabaseAdmin.storage
-    .from('documents')
-    .createSignedUrl(storagePath, ONE_YEAR_SECONDS)
-
-  if (signError || !signedData?.signedUrl) {
-    console.error('[HR_DOC_UPLOAD] Signed URL error:', signError?.message)
-    throw new ValidationError('File uploaded but failed to generate access URL')
-  }
+  // Store a stable app link; /api/files signs a 1-hour URL each time the file is opened
+  const fileUrl = fileLink('documents', storagePath)
 
   return success({
-    url: signedData.signedUrl,
+    url: fileUrl,
     fileName: file.name,
     fileSize: file.size,
     contentType: file.type,

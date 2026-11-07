@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError } from '@/lib/errors'
+import { fileLink } from '@/lib/storage-links'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -139,20 +140,11 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       throw new ValidationError(`Upload failed: ${uploadError.message}`)
     }
 
-    // Generate a signed URL with 1-year expiry (in seconds)
-    const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
-
-    const { data: signedData, error: signError } = await supabaseAdmin.storage
-      .from('documents')
-      .createSignedUrl(storagePath, ONE_YEAR_SECONDS)
-
-    if (signError || !signedData?.signedUrl) {
-      console.error('[DOCUMENT_UPLOAD] Signed URL error:', signError?.message)
-      throw new ValidationError('File uploaded but failed to generate access URL')
-    }
+    // Store a stable app link; /api/files signs a 1-hour URL each time the file is opened
+    const fileUrl = fileLink('documents', storagePath)
 
     return success({
-      url: signedData.signedUrl,
+      url: fileUrl,
       fileName: file.name,
       fileSize: file.size,
       contentType: file.type,

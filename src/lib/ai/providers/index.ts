@@ -3,12 +3,16 @@
  * Primary: Mistral (EU-hosted). Fallback: Claude.
  */
 
+import { maskPersonalData } from '../pii-mask'
+
 export interface ChatRequest {
   system: string
   user: string
   json?: boolean
   temperature?: number
   maxTokens?: number
+  /** The organisation opted in to the non-EU backup model. Off by default: Mistral (EU) only. */
+  allowFallback?: boolean
 }
 
 export interface ChatResult {
@@ -16,6 +20,8 @@ export interface ChatResult {
   model: string
   tokens: number
   provider: 'mistral' | 'claude'
+  /** Personal-data items masked before sending to the backup model. */
+  masked?: number
 }
 
 /** Per-provider budget. Primary + fallback must finish inside the 300 s function limit so the run is always marked FAILED, never left RUNNING. */
@@ -113,7 +119,7 @@ async function attempt(provider: AIProvider, call: () => Promise<ChatResult>, ti
 export async function chat(req: ChatRequest): Promise<ChatResult> {
   const primary = process.env.AI_PRIMARY_MODEL || 'mistral-large-latest'
   const fallback = process.env.AI_FALLBACK_MODEL || 'claude-sonnet-4-5'
-  const fallbackAvailable = !!process.env.ANTHROPIC_API_KEY
+  const fallbackAvailable = !!process.env.ANTHROPIC_API_KEY && req.allowFallback === true
   let primaryErr: unknown
   if (await isProviderOpen('mistral')) {
     primaryErr = new AIProviderError('mistral', 'unavailable', 'mistral skipped: marked unavailable after repeated failures')
@@ -123,7 +129,10 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
   // Wrong key / bad request on the primary is our bug, not an outage — don't paper over it with the fallback
   if (!fallbackAvailable || (primaryErr instanceof AIProviderError && primaryErr.kind === 'bad_output')) throw primaryErr
   if (await isProviderOpen('claude')) throw primaryErr
-  return attempt('claude', () => claude(req, fallback), FALLBACK_TIMEOUT_MS)
+  // Leaving the EU: mask personal data first
+  const sys = maskPersonalData(req.system), usr = maskPersonalData(req.user)
+  const r = await attempt('claude', () => claude({ ...req, system: sys.text, user: usr.text }, fallback), FALLBACK_TIMEOUT_MS)
+  return { ...r, masked: sys.masked + usr.masked }
 }
 
 const isTimeout = (e: unknown) => e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')

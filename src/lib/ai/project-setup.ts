@@ -19,6 +19,7 @@ import { applyProjectParameters, APPLY_TX_OPTIONS } from '@/lib/rules/apply'
 import { ProjectParametersSchema } from '@/lib/rules/schema'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { ValidationError, NotFoundError } from '@/lib/errors'
+import { fileLink } from '@/lib/storage-links'
 
 export type SetupDocumentKind = 'planning_conditions' | 'brief' | 'decision_notice'
 export const SETUP_DOCUMENT_KINDS: SetupDocumentKind[] = ['planning_conditions', 'brief', 'decision_notice']
@@ -253,7 +254,5 @@ async function uploadToStorage(organisationId: string, projectId: string, file: 
   const path = `${organisationId}/${projectId}/setup/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
   const { error } = await admin.storage.from('documents').upload(path, Buffer.from(file.bytes), { contentType: 'application/pdf', upsert: false })
   if (error) throw new ValidationError(`Upload failed: ${error.message}`)
-  const { data, error: signErr } = await admin.storage.from('documents').createSignedUrl(path, 365 * 24 * 60 * 60)
-  if (signErr || !data?.signedUrl) throw new ValidationError('Uploaded but could not create an access link')
-  return { path, url: data.signedUrl, size: file.bytes.byteLength }
+  return { path, url: fileLink('documents', path), size: file.bytes.byteLength }
 }

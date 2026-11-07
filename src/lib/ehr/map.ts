@@ -17,7 +17,7 @@ export function fetchedLabel(b: EhrBuilding): string {
 export function ehrToValues(b: EhrBuilding): EhrValue[] {
   const att = fetchedLabel(b)
   const out: EhrValue[] = []
-  const bt = buildingTypeFromUseCode(b.useCode)
+  const bt = buildingTypeFromUseCode(b.useCode, b.useLabel)
   if (bt) out.push({ key: 'buildingType', value: bt, label: `${b.useLabel ?? bt} (${b.useCode})`, attribution: att })
   if (b.storeysAbove != null) out.push({ key: 'storeys', value: Math.round(b.storeysAbove), label: `${b.storeysAbove} storeys above ground`, attribution: att })
   if (b.heightM != null) out.push({ key: 'height', value: b.heightM, label: `${b.heightM} m`, attribution: att })

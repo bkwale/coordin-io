@@ -110,10 +110,23 @@ describe('chat() when the model is down', () => {
     await expect(chat({ system: 's', user: 'u' })).rejects.toMatchObject({ kind: 'unavailable' })
   })
 
-  it('falls back to Claude when configured and Mistral is down', async () => {
+  it('falls back to Claude only when the organisation opted in, and masks personal data first', async () => {
     process.env.ANTHROPIC_API_KEY = 'c'
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).includes('mistral') ? new Response('x', { status: 500 }) : claudeOk('{"ok":true}'))))
-    await expect(chat({ system: 's', user: 'u' })).resolves.toMatchObject({ provider: 'claude' })
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => (String(url).includes('mistral') ? new Response('x', { status: 500 }) : claudeOk('{"ok":true}')))
+    vi.stubGlobal('fetch', fetchMock)
+    const r = await chat({ system: 's', user: 'Applicant: Mari Tamm, mari.tamm@example.ee, +372 5123 4567', allowFallback: true })
+    expect(r).toMatchObject({ provider: 'claude' })
+    expect(r.masked).toBeGreaterThanOrEqual(3)
+    const sent = String((fetchMock.mock.calls.find((c) => !String(c[0]).includes('mistral'))?.[1] as RequestInit).body)
+    expect(sent).not.toMatch(/Mari Tamm|mari\.tamm@|5123 4567/)
+  })
+
+  it('never leaves the EU when the organisation has not opted in', async () => {
+    process.env.ANTHROPIC_API_KEY = 'c'
+    const fetchMock = vi.fn(async (url: string) => (String(url).includes('mistral') ? new Response('x', { status: 500 }) : claudeOk('{"ok":true}')))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(chat({ system: 's', user: 'u' })).rejects.toBeTruthy()
+    expect(fetchMock.mock.calls.every((c) => String(c[0]).includes('mistral'))).toBe(true)
   })
 
   it('once the breaker is open, fails immediately without calling Mistral and reports the outage once', async () => {
@@ -192,9 +205,10 @@ describe('availability', () => {
     delete process.env.MISTRAL_API_KEY
     expect(await aiAvailability()).toMatchObject({ available: false, reason: 'not_configured', message: expect.stringMatching(/by hand/) })
   })
-  it('primary down but fallback up → still available', async () => {
+  it('primary down but fallback up → available only for organisations that opted in', async () => {
     process.env.ANTHROPIC_API_KEY = 'c'
     for (let i = 0; i < 3; i++) await health.recordProviderFailure('mistral')
-    expect((await aiAvailability()).available).toBe(true)
+    expect((await aiAvailability({ fallbackAllowed: true })).available).toBe(true)
+    expect((await aiAvailability()).available).toBe(false)
   })
 })

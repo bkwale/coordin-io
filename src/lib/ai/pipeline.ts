@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { chat, parseJsonWithMeta } from './providers'
 import { classifyAIError, AI_FAILURE_LABEL } from './failures'
 import { captureError } from '@/lib/error-reporting'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 
 export type Stage = { name: string; status: 'running' | 'done' | 'failed'; ms?: number; detail?: string; at: string }
 
@@ -72,7 +73,10 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
 
     await push({ name: 'extract', status: 'running', detail: 'reading with AI' })
     const te = Date.now()
-    const result = await chat({ system, user, json: true, maxTokens: opts.maxTokens })
+    // Non-EU backup model only if this organisation opted in (Settings → Modules); personal data is masked first
+    const orgId = opts.organisationId ?? (await prisma.aIRun.findUnique({ where: { id: runId }, select: { organisationId: true } }).catch(() => null))?.organisationId ?? null
+    const allowFallback = orgId ? await isFeatureEnabled(orgId, 'ai_fallback').catch(() => false) : false
+    const result = await chat({ system, user, json: true, maxTokens: opts.maxTokens, allowFallback })
     const { value: raw, repaired } = parseJsonWithMeta(result.text)
     const normalised = opts.normalise ? opts.normalise(raw) : raw
     const parsed = opts.schema.safeParse(normalised)
@@ -80,7 +84,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
       const issues = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
       throw new Error(`Model output failed validation: ${issues}`)
     }
-    await push({ name: 'extract', status: 'done', ms: Date.now() - te, detail: `${result.provider}/${result.model}${repaired ? ' · output cut short' : ''}` })
+    await push({ name: 'extract', status: 'done', ms: Date.now() - te, detail: `${result.provider}/${result.model}${result.provider === 'claude' ? ` · EU service down, backup used${result.masked ? ` · ${result.masked} personal details masked` : ''}` : ''}${repaired ? ' · output cut short' : ''}` })
 
     await push({ name: 'map', status: 'running' })
     let output = parsed.data
