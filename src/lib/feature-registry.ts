@@ -14,6 +14,7 @@ export const FEATURE_REGISTRY = {
   documents:        { label: 'Document Management',   default: true,  description: 'Drawing register, document control, transmittals' },
   approvals:        { label: 'Approval Workflows',    default: true,  description: 'Multi-step approval routing for leave, expenses, requests' },
   invoicing:        { label: 'Invoicing',             default: false, description: 'Inbound invoice reception, parsing, categorisation, and accounting sync' },
+  ai_fallback:      { label: 'AI backup reader (outside EU)', default: false, description: 'If the EU AI service is down, read documents with a US-hosted model instead. Names, emails, phone numbers and ID numbers are masked first. Off: you fill in by hand until the EU service is back.' },
   riba_tracking:    { label: 'RIBA Stage Tracking',   default: false, description: 'RIBA work stage gates, transition history, prerequisite validation, and resource planning' },
 } as const
 

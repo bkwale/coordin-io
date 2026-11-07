@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { assertProjectWrite } from '@/lib/project-write-access'
 import { success, error } from '@/lib/api-response'
@@ -24,7 +25,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   if (limited) return limited
 
   // Model down: say so now, before anything is uploaded or stored — the architect fills it in by hand
-  const ai = await aiAvailability()
+  const ai = await aiAvailability({ fallbackAllowed: await isFeatureEnabled(profile.organisationId, 'ai_fallback').catch(() => false) })
   if (!ai.available) return NextResponse.json({ error: ai.message, code: 'AI_UNAVAILABLE', manual: true }, { status: 503 })
 
   let form: FormData
