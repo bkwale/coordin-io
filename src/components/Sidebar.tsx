@@ -24,7 +24,7 @@ import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
 const MAIN_ITEMS = [
   { href: '/my-work', label: 'My Work', icon: ClipboardList },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/ai', label: 'AI Teammate', icon: Sparkles },
+  { href: '/ai', label: 'AI Reader', icon: Sparkles, featureKey: 'ai_reader' },
   { href: '/projects', label: 'Projects', icon: FolderOpen, featureKey: 'projects' },
   { href: '/leave', label: 'Leave', icon: CalendarDays, featureKey: 'staffing' },
   { href: '/expenses', label: 'Expenses', icon: Wallet, featureKey: 'staffing' },

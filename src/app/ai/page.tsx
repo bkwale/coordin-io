@@ -1,26 +1,47 @@
 'use client'
 
-import { Bot } from 'lucide-react'
+import Link from 'next/link'
+import { FileText, FolderOpen } from 'lucide-react'
+import { FeatureGate } from '@/components/FeatureGate'
 
-export default function AIPage() {
+/**
+ * AI Reader — shown only when the organisation has the AI Reader module on (Settings → Modules).
+ * Reading happens inside a project (Regulatory page) so every value is confirmed against its source.
+ * A cross-project hub (awaiting confirmation / failed / applied) comes when more practices use the reader.
+ */
+export default function AIReaderPage() {
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <div className="mb-6">
-        <h1 className="text-[22px] font-semibold text-ink-900">AI Assistant</h1>
-        <p className="text-[13px] text-ink-400 mt-1">Ask questions about architecture, building regulations, and project management</p>
-      </div>
+    <FeatureGate feature="ai_reader">
+      <div className="max-w-2xl">
+        <h1 className="text-[22px] font-semibold text-ink-900">AI Reader</h1>
+        <p className="text-[13px] text-ink-400 mt-1">Turn planning documents into your project’s regulatory checklist. You confirm every value against the page it came from.</p>
 
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-ink-50 flex items-center justify-center mb-5">
-          <Bot className="w-8 h-8 text-ink-300" />
+        <div className="mt-6 rounded-xl border border-surface-200 bg-white p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0"><FileText className="w-4 h-4 text-ink-500" /></div>
+            <div className="text-[13px] text-ink-600 leading-relaxed">
+              <div className="font-medium text-ink-900 mb-1">What it reads</div>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Estonian planning conditions (projekteerimistingimused)</li>
+                <li>English planning decision notices — conditions, deadlines, refusal reasons</li>
+                <li>Client briefs</li>
+              </ul>
+            </div>
+          </div>
         </div>
-        <h2 className="text-[17px] font-semibold text-ink-700 mb-2">Coming Soon</h2>
-        <p className="text-[13px] text-ink-400 max-w-sm leading-relaxed">
-          The AI assistant is currently under development. It will be able to answer
-          questions about building regulations, RIBA stages, contract administration,
-          and other architecture and construction topics.
-        </p>
+
+        <div className="mt-4 rounded-xl border border-surface-200 bg-white p-5">
+          <div className="font-medium text-[13px] text-ink-900 mb-1">How to use it</div>
+          <ol className="list-decimal pl-4 text-[13px] text-ink-600 space-y-0.5">
+            <li>Open a project and go to <b>Compliance → Regulatory</b>.</li>
+            <li>Choose <b>Pre-fill from a document</b> and drop in the PDF.</li>
+            <li>Check each value and condition, then press <b>Generate checklist</b>.</li>
+          </ol>
+          <Link href="/projects" className="inline-flex items-center gap-2 mt-4 px-3 py-2 rounded-lg bg-accent-500 text-white text-[12px] font-medium">
+            <FolderOpen className="w-4 h-4" /> Go to projects
+          </Link>
+        </div>
       </div>
-    </div>
+    </FeatureGate>
   )
 }

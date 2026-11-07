@@ -1,7 +1,7 @@
 'use client'
 
 import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
-import { FEATURE_REGISTRY, type FeatureKey } from '@/lib/feature-flags'
+import { FEATURE_REGISTRY, type FeatureKey } from '@/lib/feature-registry'
 import { ShieldOff } from 'lucide-react'
 import Link from 'next/link'
 
