@@ -16,7 +16,9 @@ interface Member {
   profileId: string
   fullName: string
   jobTitle: string | null
-  role: string
+  role: string | null
+  /** Logged time on this project but isn't a project member */
+  notMember?: boolean
 }
 
 interface Allocation {
@@ -104,13 +106,13 @@ export default function ResourcePlanningPage() {
   // Show members who have allocations + any added via the dropdown
   const [addedMemberIds, setAddedMemberIds] = useState<Set<string>>(new Set())
 
-  const displayedMembers = allMembers.filter(
-    m => allocatedMemberIds.has(m.profileId) || addedMemberIds.has(m.profileId)
-  )
+  // Anyone with timesheet hours in view gets a row too — planned or not
+  const loggedMemberIds = new Set(Object.keys(data?.timesheetActuals ?? {}).map((k) => k.split('::')[0]))
+  const shown = (id: string) => allocatedMemberIds.has(id) || addedMemberIds.has(id) || loggedMemberIds.has(id)
 
-  const unallocatedMembers = allMembers.filter(
-    m => !allocatedMemberIds.has(m.profileId) && !addedMemberIds.has(m.profileId)
-  )
+  const displayedMembers = allMembers.filter((m) => shown(m.profileId))
+
+  const unallocatedMembers = allMembers.filter((m) => !shown(m.profileId) && !m.notMember)
 
   // Save an allocation
   const saveAllocation = async (profileId: string, weekStart: string, hours: number) => {
@@ -339,7 +341,7 @@ export default function ResourcePlanningPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-ink-800 truncate">{member.fullName}</p>
-                            <p className="text-[10px] text-ink-400 truncate">{member.role || member.jobTitle || '—'}</p>
+                            <p className="text-[10px] text-ink-400 truncate">{member.notMember ? 'Logged time · not on project team' : member.role || member.jobTitle || '—'}</p>
                           </div>
                         </div>
                       </td>

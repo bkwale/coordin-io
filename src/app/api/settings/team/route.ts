@@ -10,7 +10,8 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     throw new PermissionError('Only Project Leads and above can view team settings')
   }
 
-  const [members, offices] = await Promise.all([
+  const now = new Date()
+  const [members, offices, pendingInvites, onboardingInvites] = await Promise.all([
     prisma.profile.findMany({
       where: { organisationId: profile.organisationId },
       orderBy: [{ status: 'asc' }, { fullName: 'asc' }],
@@ -24,6 +25,14 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
       select: { id: true, name: true, city: true },
       orderBy: { name: 'asc' },
     }),
+    // Account invitations not yet accepted (a person only gets a profile once they accept)
+    prisma.invitation.count({
+      where: { organisationId: profile.organisationId, status: { in: ['PENDING', 'SENT'] }, revokedAt: null, expiresAt: { gt: now } },
+    }),
+    // Onboarding links sent but not finished
+    prisma.onboardingSelfServiceToken.count({
+      where: { profile: { organisationId: profile.organisationId }, completedAt: null, revokedAt: null, expiresAt: { gt: now } },
+    }).catch(() => 0),
   ])
 
   return NextResponse.json({
@@ -46,6 +55,9 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     offices,
     total: members.length,
     active: members.filter((m: any) => m.status === 'ACTIVE').length,
+    onboarding: members.filter((m: any) => m.status === 'ONBOARDING').length,
+    pendingInvites,
+    onboardingInvites,
     viewerPermission: profile.orgPermission,
     viewerProfileId: profile.id,
   })

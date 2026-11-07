@@ -52,6 +52,9 @@ interface TeamData {
   offices: Array<{ id: string; name: string; city: string }>
   total: number
   active: number
+  onboarding?: number
+  pendingInvites?: number
+  onboardingInvites?: number
   viewerPermission?: string
   viewerProfileId?: string
 }
@@ -675,7 +678,7 @@ function TeamSection() {
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mt-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 mb-8">
         <div className="bg-surface-50 rounded-lg p-4 text-center">
           <p className="text-2xl font-semibold text-ink-900">{team?.total || 0}</p>
           <p className="text-[11px] text-ink-400 mt-1">Total Members</p>
@@ -685,10 +688,14 @@ function TeamSection() {
           <p className="text-[11px] text-ink-400 mt-1">Active</p>
         </div>
         <div className="bg-surface-50 rounded-lg p-4 text-center">
-          <p className="text-2xl font-semibold text-amber-600">
-            {team?.members?.filter((m) => m.status === 'INVITED').length || 0}
-          </p>
+          <p className="text-2xl font-semibold text-blue-600">{team?.onboarding || 0}</p>
+          <p className="text-[11px] text-ink-400 mt-1">Onboarding</p>
+          {!!team?.onboardingInvites && <p className="text-[10px] text-ink-300 mt-0.5">{team.onboardingInvites} onboarding link{team.onboardingInvites === 1 ? '' : 's'} not finished</p>}
+        </div>
+        <div className="bg-surface-50 rounded-lg p-4 text-center">
+          <p className="text-2xl font-semibold text-amber-600">{team?.pendingInvites || 0}</p>
           <p className="text-[11px] text-ink-400 mt-1">Pending Invites</p>
+          <p className="text-[10px] text-ink-300 mt-0.5">sent, not yet accepted</p>
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { canPerform } from '@/lib/role-permissions'
 import { hasFullStaffingAccess } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
+import { invalidateCache, cacheKey } from '@/lib/cache'
 
 /**
  * GET /api/staffing/employees/[profileId]/profile
@@ -516,6 +517,18 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       create: { profileId, ...empData },
       update: empData,
     })
+  }
+
+  // Leave balances read this year's LeaveBalance row first, so a changed allowance must land there too —
+  // otherwise HR's edit is saved but every balance screen keeps showing the old figure (Ayo, 7 Nov)
+  if (typeof empData.annualLeaveAllocation === 'number') {
+    await modulesPrisma.leaveBalance.updateMany({
+      where: { profileId, year: new Date().getFullYear() },
+      data: { allocation: empData.annualLeaveAllocation },
+    })
+  }
+  if (Object.keys(empData).length > 0 || Object.keys(profileData).length > 0) {
+    await invalidateCache(cacheKey.staffingAll(profile.organisationId))
   }
 
   // ── Auto-generate probation reviews when probation fields are set ──
