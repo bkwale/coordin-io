@@ -20,7 +20,16 @@ type Params = {
   detailedPlanExists?: boolean; detailedPlanAgeYears?: number
   nearMajorRoad?: boolean; districtHeatingAvailable?: boolean; urbanArea?: boolean
   seasonalUseOnly?: boolean; temporary?: boolean; placeOfWorship?: boolean; county?: string
+  // England
+  conservationArea?: boolean; article4?: boolean; extensionDepth?: number; extensionHeight?: number; extensionStoreys?: number; floodZone?: 1 | 2 | 3
+  siteAreaHa?: number; priorityHabitat?: boolean; domesticClient?: boolean; contractors?: number
+  constructionDays?: number; peakWorkers?: number; boundaryWork?: boolean; cilChargingArea?: boolean; radonAffectedArea?: boolean
 }
+
+/** Answers that only mean something in one jurisdiction — dropped when the architect switches, so they never reach the other rule set. */
+const EE_ONLY: (keyof Params)[] = ['detailedPlanExists', 'detailedPlanAgeYears', 'urbanArea', 'districtHeatingAvailable', 'seasonalUseOnly', 'placeOfWorship', 'county', 'heatedArea', 'enclosedNetArea', 'nearMajorRoad', 'timberStructure']
+const GB_ONLY: (keyof Params)[] = ['conservationArea', 'article4', 'extensionDepth', 'extensionHeight', 'extensionStoreys', 'floodZone', 'siteAreaHa', 'priorityHabitat', 'domesticClient', 'contractors', 'constructionDays', 'peakWorkers', 'boundaryWork', 'cilChargingArea', 'radonAffectedArea']
+const GB_DEFAULTS: Partial<Params> = { contractors: 1 }
 type Item = { id: string; ruleId: string | null; requirement: string; titleLocal: string | null; citation: string | null; source: string | null; because: string | null; confidence: string | null; comments: string | null; status: string; section: string | null; addedByArchitect: boolean; ruleSetVersion: string | null }
 type Data = { profile: { version: number; parameters: Params; ruleSetVersion: string | null; createdAt: string } | null; register: { id: string; name: string; templateVersion: string | null; updatedAt: string } | null; grouped: Record<string, Item[]>; added: Item[]; disciplineLabels: Record<string, { en: string; et: string }>; municipal: Item[]; counts: { generated: number; added: number; municipal: number; stale: number }; currentRuleSetVersion: string | null; outdated: boolean }
 
@@ -70,6 +79,23 @@ export default function RegulatoryPage() {
     return next
   })
   const isBlock = form.buildingType === 'apartment_block'
+  const isGB = form.jurisdiction === 'GB'
+  const switchJurisdiction = (j: Params['jurisdiction']) => {
+    // Limits read from the other country's documents no longer apply; area estimates start fresh
+    setBounds({ maxHeightM: null, maxStoreys: null })
+    setAreaEdited({ heated: false, enclosed: false })
+    setForm((f) => switchedForm(f, j))
+  }
+  const switchedForm = (f: Params, j: Params['jurisdiction']): Params => {
+    if (f.jurisdiction === j) return f
+    const next: Params = { ...f, jurisdiction: j }
+    for (const k of j === 'GB' ? EE_ONLY : GB_ONLY) delete next[k]
+    // Same key, different meaning: "temporary" is ≤ 2 years in Estonia, ≤ 5 in England; protected area differs too
+    delete next.temporary; delete next.protectedArea
+    if (j === 'GB') Object.assign(next, { ...GB_DEFAULTS, ...next })
+    if (j === 'EE') Object.assign(next, { heatedArea: Math.round(f.grossFloorArea * 0.9), enclosedNetArea: Math.round(f.grossFloorArea * 0.9), detailedPlanExists: false, urbanArea: false, ...next })
+    return next
+  }
 
   async function generate() {
     setRunning(true); setDiff(null)
@@ -111,6 +137,7 @@ export default function RegulatoryPage() {
       {/* ── Questionnaire ─────────────────────────────────── */}
       <aside className="w-[340px] shrink-0 rounded-xl border border-surface-200 bg-white p-5 sticky top-4">
         <DocumentPrefill
+          jurisdiction={form.jurisdiction}
           projectId={projectId}
           onApplyValues={(values, b) => { applyValues(values); if (b) setBounds(b) }}
           onPending={setPendingRun}
@@ -120,25 +147,34 @@ export default function RegulatoryPage() {
         <div className="flex items-center gap-2 mb-1"><Scale className="w-4 h-4 text-accent-600" /><h2 className="text-[14px] font-semibold text-ink-900">Project parameters</h2></div>
         <p className="text-[11px] text-ink-400 mb-4">Answer what you know. The engine only uses deterministic rules — no AI judgement.</p>
 
-        <Field label="Jurisdiction"><Select value={form.jurisdiction} onChange={(v) => set('jurisdiction', v as Params['jurisdiction'])} options={[['EE', 'Estonia — Ehitusseadustik'], ['GB', 'UK — rule set coming', true], ['PL', 'Poland — rule set coming', true]]} /></Field>
+        <Field label="Jurisdiction"><Select value={form.jurisdiction} onChange={(v) => switchJurisdiction(v as Params['jurisdiction'])} options={[['EE', 'Estonia — Ehitusseadustik'], ['GB', 'England — planning, Building Regs, BSA, CDM'], ['PL', 'Poland — rule set coming', true]]} /></Field>
+        {isGB && <p className="text-[10px] text-ink-400 -mt-1 mb-2">England only. Wales, Scotland and Northern Ireland have their own rules and are not covered yet.</p>}
         <Field label="Building type"><Select value={form.buildingType} onChange={(v) => set('buildingType', v as Params['buildingType'])} options={[['detached_house', 'Detached house'], ['semi_detached', 'Semi-detached'], ['terraced', 'Terraced'], ['apartment_block', 'Apartment block'], ['non_residential', 'Non-residential'], ['other', 'Other']]} /></Field>
         <Field label="Work"><Select value={form.workType} onChange={(v) => set('workType', v as Params['workType'])} options={[['new_build', 'New build'], ['extension', 'Extension'], ['reconstruction', 'Reconstruction'], ['change_of_use', 'Change of use'], ['demolition', 'Demolition']]} /></Field>
         <div className="grid grid-cols-3 gap-2">
           <Field label="Gross m²"><Num value={form.grossFloorArea} onChange={(v) => set('grossFloorArea', v)} /></Field>
-          <Field label="Height m" hint={bounds.maxHeightM != null ? `≤ ${bounds.maxHeightM} per PT` : undefined}><Num value={form.height} onChange={(v) => set('height', v)} step={0.1} invalid={bounds.maxHeightM != null && form.height > bounds.maxHeightM} /></Field>
-          <Field label="Storeys" hint={bounds.maxStoreys != null ? `≤ ${bounds.maxStoreys} per PT` : undefined}><Num value={form.storeys} onChange={(v) => set('storeys', v)} invalid={bounds.maxStoreys != null && form.storeys > bounds.maxStoreys} /></Field>
+          <Field label="Height m" hint={bounds.maxHeightM != null ? `≤ ${bounds.maxHeightM} per ${isGB ? "conditions" : "PT"}` : undefined}><Num value={form.height} onChange={(v) => set('height', v)} step={0.1} invalid={bounds.maxHeightM != null && form.height > bounds.maxHeightM} /></Field>
+          <Field label="Storeys" hint={bounds.maxStoreys != null ? `≤ ${bounds.maxStoreys} per ${isGB ? "conditions" : "PT"}` : undefined}><Num value={form.storeys} onChange={(v) => set('storeys', v)} invalid={bounds.maxStoreys != null && form.storeys > bounds.maxStoreys} /></Field>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        {!isGB && <div className="grid grid-cols-2 gap-2">
           <Field label="Heated m²" hint={areaEdited.heated ? undefined : '≈ 90% of gross'}><Num value={form.heatedArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, heated: true })); set('heatedArea', v) }} /></Field>
           <Field label="Enclosed net m²" hint={areaEdited.enclosed ? undefined : '≈ 90% of gross'}><Num value={form.enclosedNetArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, enclosed: true })); set('enclosedNetArea', v) }} /></Field>
-        </div>
+        </div>}
+        {isGB && form.workType === 'extension' && <>
+          <Field label="Rear extension depth (m beyond original rear wall)" hint="blank if not known"><OptNum value={form.extensionDepth} onChange={(v) => set('extensionDepth', v)} step={0.1} /></Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Extension height (m)" hint="eaves/ridge of the extension"><OptNum value={form.extensionHeight} onChange={(v) => set('extensionHeight', v)} step={0.1} /></Field>
+            <Field label="Extension storeys"><OptNum value={form.extensionStoreys} onChange={(v) => set('extensionStoreys', v === undefined ? undefined : Math.round(v))} /></Field>
+          </div>
+        </>}
+        {isGB && form.buildingType !== 'apartment_block' && form.buildingType !== 'non_residential' && (form.workType === 'new_build' || form.workType === 'change_of_use') && <Field label="Dwellings (new homes in the scheme)"><Num value={form.apartments ?? 1} onChange={(v) => set('apartments', Math.max(1, Math.round(v)))} /></Field>}
         {isBlock && <div className="grid grid-cols-2 gap-2">
           <Field label="Apartments"><Num value={form.apartments ?? 0} onChange={(v) => set('apartments', v)} /></Field>
           <Field label="Parking spaces"><Num value={form.parkingSpaces ?? 0} onChange={(v) => set('parkingSpaces', v)} /></Field>
         </div>}
         {!isBlock && <Field label="Parking spaces"><Num value={form.parkingSpaces ?? 0} onChange={(v) => set('parkingSpaces', v)} /></Field>}
 
-        <div className="mt-3 space-y-1.5">
+        {!isGB && <div className="mt-3 space-y-1.5">
           <Toggle label="Detailed plan (detailplaneering) in force" value={!!form.detailedPlanExists} onChange={(v) => set('detailedPlanExists', v)} />
           {form.detailedPlanExists && <Field label="Plan age (years)"><Num value={form.detailedPlanAgeYears ?? 0} onChange={(v) => set('detailedPlanAgeYears', v)} /></Field>}
           <Toggle label="Urban area (municipal water/sewage)" value={!!form.urbanArea} onChange={(v) => set('urbanArea', v)} />
@@ -149,7 +185,34 @@ export default function RegulatoryPage() {
           <Toggle label="Near major road / airport" value={!!form.nearMajorRoad} onChange={(v) => set('nearMajorRoad', v)} />
           <Toggle label="Seasonal use only (< 4 months/yr)" value={!!form.seasonalUseOnly} onChange={(v) => set('seasonalUseOnly', v)} />
           <Toggle label="Temporary (≤ 2 years)" value={!!form.temporary} onChange={(v) => set('temporary', v)} />
-        </div>
+        </div>}
+        {isGB && <>
+          <Section label="Site and designations" />
+          <div className="space-y-1.5">
+            <Toggle label="Listed building" value={!!form.heritage} onChange={(v) => set('heritage', v)} />
+            <Toggle label="Conservation area" value={!!form.conservationArea} onChange={(v) => set('conservationArea', v)} />
+            <Toggle label="National Park, National Landscape or World Heritage Site" value={!!form.protectedArea} onChange={(v) => set('protectedArea', v)} />
+            <Toggle label="Article 4 direction" value={!!form.article4} onChange={(v) => set('article4', v)} />
+            <Toggle label="Priority habitat on site" value={!!form.priorityHabitat} onChange={(v) => set('priorityHabitat', v)} />
+            <Toggle label="Radon affected area (UKradon map)" value={!!form.radonAffectedArea} onChange={(v) => set('radonAffectedArea', v)} />
+            <Toggle label="Temporary (≤ 5 years)" value={!!form.temporary} onChange={(v) => set('temporary', v)} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <Field label="Site area (ha)" hint="red line"><OptNum value={form.siteAreaHa} onChange={(v) => set('siteAreaHa', v)} step={0.01} /></Field>
+            <Field label="Flood zone"><Select value={form.floodZone ? String(form.floodZone) : ''} onChange={(v) => set('floodZone', v ? (Number(v) as 1 | 2 | 3) : undefined)} options={[['', 'Not known'], ['1', 'Zone 1'], ['2', 'Zone 2'], ['3', 'Zone 3']]} /></Field>
+          </div>
+          <Field label="Council charges CIL"><Select value={form.cilChargingArea === undefined ? '' : form.cilChargingArea ? 'yes' : 'no'} onChange={(v) => set('cilChargingArea', v === '' ? undefined : v === 'yes')} options={[['', 'Not known'], ['yes', 'Yes'], ['no', 'No']]} /></Field>
+          <Section label="Construction (CDM 2015)" />
+          <div className="space-y-1.5">
+            <Toggle label="Domestic client (householder, own home)" value={!!form.domesticClient} onChange={(v) => set('domesticClient', v)} />
+            <Toggle label="Work on or near a boundary / party wall" value={!!form.boundaryWork} onChange={(v) => set('boundaryWork', v)} />
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            <Field label="Contractors"><Num value={form.contractors ?? 1} onChange={(v) => set('contractors', Math.max(0, Math.round(v)))} /></Field>
+            <Field label="Site days"><OptNum value={form.constructionDays} onChange={(v) => set('constructionDays', v === undefined ? undefined : Math.round(v))} /></Field>
+            <Field label="Peak workers"><OptNum value={form.peakWorkers} onChange={(v) => set('peakWorkers', v === undefined ? undefined : Math.round(v))} /></Field>
+          </div>
+        </>}
         {form.jurisdiction === 'EE' && <Field label="County"><Select value={form.county ?? ''} onChange={(v) => set('county', v || undefined)} options={[['', '—'], ...EE_COUNTIES.map((c) => [c, c] as [string, string])]} /></Field>}
 
         <button onClick={generate} disabled={running || (bounds.maxHeightM != null && form.height > bounds.maxHeightM) || (bounds.maxStoreys != null && form.storeys > bounds.maxStoreys)} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent-500 text-white text-[13px] font-medium hover:bg-accent-600 disabled:opacity-50">
@@ -173,7 +236,7 @@ export default function RegulatoryPage() {
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-900 flex gap-2 mb-4">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <span className="font-medium">Generated from {data.register.templateVersion} on {new Date(data.register.updatedAt).toLocaleDateString()}</span> from the parameters you entered. This is an organiser, not a legal opinion: it does not replace your professional judgement, the municipality’s design conditions, or the detailed plan. If something is missing, add it below — that feeds back into the rule set.
+                <span className="font-medium">Generated from {data.register.templateVersion} on {new Date(data.register.updatedAt).toLocaleDateString()}</span> from the parameters you entered. This is an organiser, not a legal opinion: it does not replace your professional judgement, the planning authority’s conditions, or local plan policy. If something is missing, add it below — that feeds back into the rule set.
               </div>
             </div>
 
@@ -194,7 +257,7 @@ export default function RegulatoryPage() {
                 <p className="text-[11px] text-ink-400">{data.counts.generated} obligations from the rule set · {data.counts.added} added by the practice{diff && (diff.added.length || diff.removed.length) ? ` · since last run: +${diff.added.length} / −${diff.removed.length}` : ''}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setLang(lang === 'en' ? 'et' : 'en')} title="Titles in Estonian; rationale stays in English for now" className="text-[11px] px-2 py-1 rounded-md border border-surface-300 text-ink-500 hover:text-ink-900">{lang === 'en' ? 'ET' : 'EN'}</button>
+                {data.register.templateVersion?.startsWith('EE') && <button onClick={() => setLang(lang === 'en' ? 'et' : 'en')} title="Titles in Estonian; rationale stays in English for now" className="text-[11px] px-2 py-1 rounded-md border border-surface-300 text-ink-500 hover:text-ink-900">{lang === 'en' ? 'ET' : 'EN'}</button>}
                 <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-md border border-surface-300 text-ink-700 hover:border-accent-400"><Plus className="w-3.5 h-3.5" />Add missing item</button>
               </div>
             </div>
@@ -280,6 +343,11 @@ function Row({ item, lang, isNew }: { item: Item; lang: 'en' | 'et'; isNew?: boo
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="block mb-2"><span className="block text-[11px] text-ink-500 mb-1">{label}{hint && <span className="ml-1 text-ink-300">· {hint}</span>}</span>{children}</label> }
 function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: Array<[string, string] | [string, string, boolean]> }) { return <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white">{options.map(([v, l, disabled]) => <option key={v} value={v} disabled={!!disabled}>{l}</option>)}</select> }
 function Num({ value, onChange, step = 1, invalid }: { value: number; onChange: (v: number) => void; step?: number; invalid?: boolean }) { return <input type="number" step={step} min={0} value={Number.isFinite(value) ? value : 0} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className={cn('w-full text-[13px] px-2.5 py-1.5 rounded-md border bg-white', invalid ? 'border-red-400 bg-red-50' : 'border-surface-300')} /> }
+function Section({ label }: { label: string }) { return <div className="mt-4 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">{label}</div> }
+/** Number input where blank means "not known" (undefined) — rules treat unknown cautiously. */
+function OptNum({ value, onChange, step = 1 }: { value: number | undefined; onChange: (v: number | undefined) => void; step?: number }) {
+  return <input type="number" step={step} min={0} value={value ?? ''} placeholder="—" onChange={(e) => onChange(e.target.value === '' ? undefined : Math.max(0, parseFloat(e.target.value) || 0))} className="w-full text-[13px] px-2.5 py-1.5 rounded-md border border-surface-300 bg-white" />
+}
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return <button type="button" onClick={() => onChange(!value)} className="w-full flex items-center justify-between text-[12px] text-ink-700 py-1"><span>{label}</span><span className={cn('inline-block w-8 h-4 rounded-full relative shrink-0 transition-colors', value ? 'bg-accent-500' : 'bg-surface-300')}><span className={cn('absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all', value ? 'left-[18px]' : 'left-0.5')} /></span></button>
 }

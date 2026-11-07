@@ -29,6 +29,23 @@ export interface ProjectParameters {
   temporary?: boolean           // ≤ 2 years
   placeOfWorship?: boolean
   county?: string               // for radon zones (EE: Harju, Tallinn…)
+
+  // ── England (GB) — all optional; unknown answers keep the conservative route ──
+  conservationArea?: boolean    // Article 2(3) land: conservation area
+  article4?: boolean            // Article 4 direction removes permitted development rights
+  extensionDepth?: number       // m — how far a rear extension projects beyond the original rear wall
+  /** England: the extension's own height (m) and storeys, for permitted-development limits. */
+  extensionHeight?: number; extensionStoreys?: number
+  floodZone?: 1 | 2 | 3         // Environment Agency flood zone
+  siteAreaHa?: number           // hectares inside the red line
+  priorityHabitat?: boolean     // site contains priority habitat (BNG small-site exemption lost)
+  domesticClient?: boolean      // CDM: client is a householder doing work on their own home
+  contractors?: number          // CDM / Part 2A: more than one contractor → principal designer + principal contractor
+  constructionDays?: number     // CDM: working days on site
+  peakWorkers?: number          // CDM: most people on site at the same time
+  boundaryWork?: boolean        // Party Wall etc. Act 1996: work on/near a boundary or party wall
+  cilChargingArea?: boolean     // council charges Community Infrastructure Levy
+  radonAffectedArea?: boolean   // UKradon map: basic or full protection area
 }
 
 export interface Rule {

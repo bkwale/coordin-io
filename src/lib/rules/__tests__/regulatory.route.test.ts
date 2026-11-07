@@ -172,9 +172,9 @@ describe('POST /api/projects/[id]/regulatory', () => {
   })
 
   it('rejects jurisdictions with no rule set yet', async () => {
-    const res = await post({ ...DETACHED, jurisdiction: 'GB' })
+    const res = await post({ ...DETACHED, jurisdiction: 'PL' })
     expect(res.status).toBe(400)
-    expect((await json(res)).error).toMatch(/GB/)
+    expect((await json(res)).error).toMatch(/PL/)
   })
 
   it('first run: creates profile v1, a REGULATORY register, one item per checklist entry, audits every citation', async () => {

@@ -130,7 +130,8 @@ vi.mock('@/lib/rules/apply', () => ({
 }))
 // Minimal Prisma where-matcher: equality, { not: x }, and undefined = no filter
 const matches = (i: Row, where: Row) => Object.entries(where).every(([k, v]) =>
-  v !== null && typeof v === 'object' && 'not' in (v as Row) ? i[k] !== (v as Row).not : i[k] === v)
+  v !== null && typeof v === 'object' && 'in' in (v as Row) ? ((v as Row).in as unknown[]).includes(i[k])
+    : v !== null && typeof v === 'object' && 'not' in (v as Row) ? i[k] !== (v as Row).not : i[k] === v)
 const tx = {
   complianceItem: {
     deleteMany: vi.fn(async ({ where }: Row) => { const b = db.items.length; db.items = db.items.filter((i) => !matches(i, where)); return { count: b - db.items.length } }),
@@ -140,16 +141,17 @@ const tx = {
   },
   aIRun: { updateMany: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id && (!where.status || x.status === where.status)); if (!r) return { count: 0 }; Object.assign(r, data); return { count: 1 } }), update: vi.fn(async ({ where, data }: Row) => { const r = db.runs.find((x) => x.id === where.id)!; Object.assign(r, data); return r }) },
 }
-let newerRun: Row | null = null
-vi.mock('@/lib/prisma', () => ({ prisma: { aIRun: { findUnique: vi.fn(async ({ where }: Row) => db.runs.find((r) => r.id === where.id) ?? null), findFirst: vi.fn(async () => newerRun) }, $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) } }))
+/** Other APPLIED setup runs on the project (what prisma.aIRun.findMany returns). */
+let priorRuns: Row[] = []
+vi.mock('@/lib/prisma', () => ({ prisma: { aIRun: { findUnique: vi.fn(async ({ where }: Row) => db.runs.find((r) => r.id === where.id) ?? null), findMany: vi.fn(async () => priorRuns) }, $transaction: vi.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)) } }))
 vi.mock('@/lib/audit', () => ({ recordAuditEvent: (...a: unknown[]) => audit(...a), AuditActions: { AI_PROJECT_CONFIGURED: 'ai.project_configured' } }))
 
 const { confirmProjectSetup } = await import('@/lib/ai/project-setup')
 const PARAMS = { jurisdiction: 'EE', buildingType: 'detached_house', workType: 'new_build', grossFloorArea: 160, height: 7, storeys: 2, heatedArea: 150, enclosedNetArea: 150, detailedPlanExists: false }
-const seed = (over: Row = {}) => { db.runs.push({ id: 'run-1', surface: 'PROJECT_SETUP', projectId: 'proj-1', status: 'AWAITING_CONFIRMATION', promptVersion: 'pt-0.2', model: 'mistral/x', inputSummary: JSON.stringify({ documentId: 'doc-1' }), mapping: mapPlanningConditions(pt()), ...over }) }
+const seed = (over: Row = {}) => { db.runs.push({ id: 'run-1', surface: 'PROJECT_SETUP', projectId: 'proj-1', status: 'AWAITING_CONFIRMATION', promptVersion: 'pt-0.2', model: 'mistral/x', inputSummary: JSON.stringify({ documentId: 'doc-1' }), mapping: mapPlanningConditions(pt()), createdAt: new Date('2026-11-01T10:00:00Z'), ...over }) }
 const base = { projectId: 'proj-1', organisationId: 'org-1', runId: 'run-1', actorProfileId: 'prof-1', actorAuthUserId: 'auth-1' }
 
-beforeEach(() => { newerRun = null; db.runs = []; db.items = []; db.registers = []; db.profiles = []; applied.calls = []; audit.mockClear() })
+beforeEach(() => { priorRuns = []; db.runs = []; db.items = []; db.registers = []; db.profiles = []; applied.calls = []; audit.mockClear() })
 
 describe('confirmProjectSetup', () => {
   it('writes profile with sourceRunId, accepted conditions as MUNICIPALITY items citing the PT, marks run APPLIED, audits', async () => {
@@ -183,6 +185,7 @@ describe('confirmProjectSetup', () => {
       { id: 'old-worked', registerId: 'reg-1', origin: 'MUNICIPALITY', aiRunId: 'run-0', status: 'IN_PROGRESS', requirement: 'Old facade condition' },
       { id: 'rule-1', registerId: 'reg-1', origin: 'RULE', aiRunId: null, status: 'NOT_STARTED', requirement: 'Rule item' },
     )
+    priorRuns = [{ id: 'run-0', createdAt: new Date('2026-10-01T10:00:00Z'), mapping: db.runs[0].mapping }]
     await confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [0] })
     expect(db.items.find((i) => i.id === 'old-untouched')).toBeUndefined()
     const worked = db.items.find((i) => i.id === 'old-worked')!
@@ -193,14 +196,14 @@ describe('confirmProjectSetup', () => {
   it('refuses an older planning-conditions run once a newer document is applied', async () => {
     seed()
     const mine = db.runs[0].mapping as any
-    newerRun = { id: 'run-new', mapping: { ...mine, document: { ...mine.document, issuedAt: '2027-01-01', number: '2699999/00099' } } }
+    priorRuns = [{ id: 'run-new', createdAt: new Date('2026-11-05T10:00:00Z'), mapping: { ...mine, document: { ...mine.document, issuedAt: '2027-01-01', number: '2699999/00099' } } }]
     await expect(confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [] } as any)).rejects.toThrow(/newer planning-conditions document/)
     expect(db.runs[0].status).toBe('AWAITING_CONFIRMATION')
   })
   it('allows it when this document is issued later than the applied one', async () => {
     seed()
     const mine = db.runs[0].mapping as any
-    newerRun = { id: 'run-old', mapping: { ...mine, document: { ...mine.document, issuedAt: '2020-01-01' } } }
+    priorRuns = [{ id: 'run-old', createdAt: new Date('2026-11-05T10:00:00Z'), mapping: { ...mine, document: { ...mine.document, issuedAt: '2020-01-01' } } }]
     await expect(confirmProjectSetup({ ...base, parameters: PARAMS, acceptedConditions: [] } as any)).resolves.toBeTruthy()
   })
   it('refuses to confirm the same run twice (atomic claim)', async () => {

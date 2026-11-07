@@ -225,3 +225,112 @@ export function normaliseBrief(raw: unknown): unknown {
   r.warnings = r.warnings.filter((w: unknown) => typeof w === 'string').map((w: string) => w.slice(0, 200)).slice(0, 10)
   return r
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * England — planning decision notices (TCPA 1990). Conditions are the payload:
+ * each becomes a checklist item the architect accepts. No numeric bounds come
+ * from a decision notice — the approved plans are the bounds, and we list them.
+ * ──────────────────────────────────────────────────────────────────────────── */
+export const DECISION_OUTCOMES = ['granted', 'refused', 'prior_approval_not_required', 'prior_approval_granted', 'prior_approval_refused', 'certificate_granted', 'certificate_refused', 'details_approved', 'other'] as const
+export const GB_APPLICATION_TYPES = ['householder', 'full', 'outline', 'reserved_matters', 'listed_building_consent', 'prior_approval', 'lawful_development_certificate', 'approval_of_details', 'variation_of_condition', 'other'] as const
+export const CONDITION_TIMINGS = ['time_limit', 'approved_plans', 'pre_commencement', 'pre_superstructure', 'pre_occupation', 'compliance', 'other'] as const
+const WORK_TYPES = ['new_build', 'extension', 'reconstruction', 'change_of_use', 'demolition'] as const
+const BUILDING_TYPES = ['detached_house', 'apartment_block', 'semi_detached', 'terraced', 'non_residential', 'other'] as const
+
+export const DecisionNoticeSchema = z.object({
+  document: z.object({
+    kind: z.enum(['decision_notice', 'other']),
+    reference: Paged(z.string()),           // "22/4128", "ZA25/26701/HH", "2024/2028/P"
+    authority: Paged(z.string()),           // "London Borough of Brent"
+    decisionDate: Paged(z.string()),        // ISO date
+    decision: Paged(z.enum(DECISION_OUTCOMES)),
+    applicationType: Paged(z.enum(GB_APPLICATION_TYPES)),
+    parentPermission: Paged(z.string()),    // outline / original permission for RM, details, s73
+  }),
+  site: z.object({ address: Paged(z.string()), postcode: Paged(z.string()) }),
+  proposal: z.object({
+    description: Paged(z.string()),
+    workType: Paged(z.enum(WORK_TYPES)),
+    buildingType: Paged(z.enum(BUILDING_TYPES)),
+    dwellings: Paged(Num),
+    storeys: Paged(Num),
+  }),
+  approvedPlans: z.array(z.object({ ref: z.string().max(120), title: z.string().max(200).nullable() })).max(100),
+  conditions: z.array(z.object({
+    number: z.number().int().nullable(),
+    heading: z.string().max(80).nullable(),
+    text: z.string().max(2000),
+    reason: z.string().max(600).nullable(),
+    page: z.number().int().nullable(),
+    timing: z.enum(CONDITION_TIMINGS),
+  })).max(100),
+  refusalReasons: z.array(z.object({ number: z.number().int().nullable(), text: z.string().max(2000), page: z.number().int().nullable() })).max(20),
+  timeLimitYears: Paged(Num),
+  language: z.enum(['et', 'en', 'pl', 'other']),
+  warnings: z.array(z.string().max(200)).max(10),
+})
+export type DecisionNotice = z.infer<typeof DecisionNoticeSchema>
+
+/** Coerce what models return for decision notices: wrapped enums, "three" for 3, string condition numbers, missing arrays. */
+export function normaliseDecisionNotice(raw: unknown): unknown {
+  const r = (typeof raw === 'object' && raw) ? JSON.parse(JSON.stringify(raw)) : {}
+  const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 }
+  const num = (v: unknown): number | null => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null
+    if (typeof v === 'string') { const s = v.trim().toLowerCase(); if (WORDS[s] != null) return WORDS[s]; const m = s.replace(/,/g, '').match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null }
+    return null
+  }
+  const leaf = (o: any) => (o && typeof o === 'object' && !Array.isArray(o) ? o : { value: o ?? null })
+  const fix = (o: any) => {
+    if (o.value === undefined) o.value = null
+    if (o.value && typeof o.value === 'object' && 'value' in o.value) o.value = o.value.value
+    if (typeof o.confidence !== 'number') o.confidence = o.value === null ? 0 : 0.5
+    o.confidence = Math.max(0, Math.min(1, o.confidence))
+    if (o.quote !== undefined && o.quote !== null && typeof o.quote !== 'string') o.quote = String(o.quote)
+    if (typeof o.quote === 'string' && o.quote.length > 300) o.quote = o.quote.slice(0, 297) + '…'
+    if (o.page !== undefined && o.page !== null && (typeof o.page !== 'number' || !Number.isInteger(o.page) || o.page < 1)) o.page = null
+    return o
+  }
+  const str = (o: any) => { const f = fix(leaf(o)); if (f.value !== null && typeof f.value !== 'string') f.value = String(f.value); return f }
+  const en = (o: any, allowed: readonly string[]) => { const f = fix(leaf(o)); if (f.value !== null && !allowed.includes(String(f.value))) { f.value = allowed.includes('other') ? 'other' : null; f.confidence = Math.min(f.confidence, 0.3) } return f }
+  const n = (o: any) => { const f = fix(leaf(o)); if (f.value !== null) f.value = num(f.value); return f }
+
+  r.document = r.document && typeof r.document === 'object' ? r.document : {}
+  const d = r.document
+  for (const k of ['reference', 'authority', 'decisionDate', 'parentPermission']) d[k] = str(d[k])
+  d.decision = en(d.decision, DECISION_OUTCOMES)
+  d.applicationType = en(d.applicationType, GB_APPLICATION_TYPES)
+  // Models often omit the kind flag. Only an explicit "other" counts against the document; otherwise a decision + reference is enough.
+  const kind = d.kind && typeof d.kind === 'object' ? d.kind.value : d.kind
+  d.kind = kind === 'decision_notice' || (kind !== 'other' && d.decision.value !== null && d.reference.value !== null) ? 'decision_notice' : 'other'
+  r.site = r.site && typeof r.site === 'object' ? r.site : {}
+  for (const k of ['address', 'postcode']) r.site[k] = str(r.site[k])
+  r.proposal = r.proposal && typeof r.proposal === 'object' ? r.proposal : {}
+  const p = r.proposal
+  p.description = str(p.description)
+  p.workType = en(p.workType, WORK_TYPES); if (p.workType.value === 'other') p.workType.value = null
+  p.buildingType = en(p.buildingType, BUILDING_TYPES)
+  for (const k of ['dwellings', 'storeys']) { p[k] = n(p[k]); if (p[k].value !== null) p[k].value = Math.round(p[k].value) }
+  r.timeLimitYears = n(r.timeLimitYears)
+
+  const int = (v: unknown) => { const x = num(v); return x === null ? null : Math.round(x) }
+  r.approvedPlans = (Array.isArray(r.approvedPlans) ? r.approvedPlans : []).map((x: any) => {
+    const ref = typeof x === 'string' ? x : x?.ref ?? x?.reference ?? x?.number
+    return ref ? { ref: String(ref).slice(0, 120), title: x?.title == null ? null : String(x.title).slice(0, 200) } : null
+  }).filter(Boolean).slice(0, 100)
+  r.conditions = (Array.isArray(r.conditions) ? r.conditions : []).map((c: any) => {
+    const text = typeof c === 'string' ? c : c?.text
+    if (!text) return null
+    const timing = CONDITION_TIMINGS.includes(c?.timing) ? c.timing : 'other'
+    return { number: int(c?.number), heading: c?.heading == null ? null : String(c.heading).slice(0, 80), text: String(text).slice(0, 2000), reason: c?.reason == null ? null : String(c.reason).slice(0, 600), page: Number.isInteger(c?.page) && c.page > 0 ? c.page : null, timing }
+  }).filter(Boolean).slice(0, 100)
+  r.refusalReasons = (Array.isArray(r.refusalReasons) ? r.refusalReasons : []).map((c: any) => {
+    const text = typeof c === 'string' ? c : c?.text
+    return text ? { number: int(c?.number), text: String(text).slice(0, 2000), page: Number.isInteger(c?.page) && c.page > 0 ? c.page : null } : null
+  }).filter(Boolean).slice(0, 20)
+  if (r.language && typeof r.language === 'object') r.language = r.language.value
+  if (!['et', 'en', 'pl', 'other'].includes(r.language)) r.language = 'en'
+  if (!Array.isArray(r.warnings)) r.warnings = []
+  r.warnings = r.warnings.filter((w: unknown) => typeof w === 'string').map((w: string) => w.slice(0, 200)).slice(0, 10)
+  return r
+}

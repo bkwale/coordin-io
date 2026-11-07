@@ -1,5 +1,6 @@
 import type { Jurisdiction, RuleSet } from './types'
 import { EE_RULESET } from './datasets/ee'
+import { GB_RULESET } from './datasets/gb'
 
 export * from './types'
 export { match, groupByDiscipline, diffChecklists } from './engine'
@@ -7,6 +8,7 @@ export { match, groupByDiscipline, diffChecklists } from './engine'
 /** Registry of jurisdiction rule sets. UK and PL datasets slot in here. */
 const RULESETS: Partial<Record<Jurisdiction, RuleSet>> = {
   EE: EE_RULESET,
+  GB: GB_RULESET, // England only (v1)
 }
 
 export function getRuleSet(jurisdiction: Jurisdiction): RuleSet | null {
