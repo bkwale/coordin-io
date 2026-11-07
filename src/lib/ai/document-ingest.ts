@@ -50,30 +50,28 @@ export function paginateText(text: string, pageChars = 4000): string[] {
 export async function pdfToPages(bytes: Uint8Array): Promise<string[]> {
   if (bytes.byteLength > INGEST_LIMITS.maxBytes) throw new IngestError('too_large', INGEST_MESSAGE.too_large)
   if (!sniffPdf(bytes)) throw new IngestError('not_pdf', INGEST_MESSAGE.not_pdf)
-  // pdf-parse (pdf.js 1.10) — import the lib entry, not the package index (its index runs a debug self-test under ESM).
-  // Pass a plain Uint8Array copy, never a Node Buffer: pdf.js 1.10 misreads pooled Buffer slices and throws "bad XRef entry".
-  const mod = await import('pdf-parse/lib/pdf-parse.js')
-  const pdfParse = (mod.default ?? mod) as unknown as (data: Uint8Array, opts?: Record<string, unknown>) => Promise<{ numpages: number; text: string }>
+  // unpdf (maintained, serverless build of current pdf.js). Copy into a fresh Uint8Array — pdf.js detaches the buffer it is given.
   const data = new Uint8Array(bytes.byteLength); data.set(bytes)
   const pages: string[] = []
-  let result: { numpages: number }
   try {
-    result = await pdfParse(data, {
-      max: INGEST_LIMITS.maxPages,
-      pagerender: async (pageData: { getTextContent: (o: Record<string, unknown>) => Promise<{ items: Array<{ str: string; transform: number[] }> }> }) => {
-        const tc = await pageData.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false })
-        // group by line (y coordinate) so columns don't interleave into one long line
-        let lastY: number | null = null, out = ''
-        for (const it of tc.items) {
-          const y = Math.round(it.transform[5])
-          if (lastY !== null && Math.abs(y - lastY) > 2) out += '\n'
-          else if (out && !out.endsWith('\n')) out += ' '
-          out += it.str; lastY = y
-        }
-        pages.push(out)
-        return out
-      },
-    })
+    const { getDocumentProxy } = await import('unpdf')
+    const pdf = await getDocumentProxy(data)
+    const n = Math.min(pdf.numPages, INGEST_LIMITS.maxPages)
+    for (let i = 1; i <= n; i++) {
+      const page = await pdf.getPage(i)
+      const tc = await page.getTextContent()
+      // group by line (y coordinate) so columns don't interleave into one long line
+      let lastY: number | null = null, out = ''
+      for (const it of tc.items as Array<{ str?: string; transform?: number[]; hasEOL?: boolean }>) {
+        if (typeof it.str !== 'string' || !it.transform) continue
+        const y = Math.round(it.transform[5])
+        if (lastY !== null && Math.abs(y - lastY) > 2) out += '\n'
+        else if (out && !out.endsWith('\n') && !out.endsWith(' ') && it.str && !it.str.startsWith(' ')) out += ' '
+        out += it.str; lastY = y
+      }
+      pages.push(out)
+    }
+    await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.()
   } catch (e) {
     throw new IngestError('unreadable', INGEST_MESSAGE.unreadable + (e instanceof Error && /password/i.test(e.message) ? ' (password-protected)' : ''))
   }
