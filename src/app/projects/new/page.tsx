@@ -259,7 +259,7 @@ export default function NewProjectPage() {
   useEffect(() => {
     fetch('/api/settings/team')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d?.members) setOrgMembers(d.members) })
+      .then(d => { if (d?.members) setOrgMembers(d.members.filter((m: { status?: string }) => m.status !== 'DEACTIVATED')) })
       .catch(() => {})
   }, [])
 

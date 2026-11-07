@@ -198,7 +198,7 @@ export default function CompliancePage() {
     fetch('/api/settings/team')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.members) setTeamMembers(data.members.map((m: { id: string; fullName: string }) => ({ id: m.id, fullName: m.fullName })))
+        if (data?.members) setTeamMembers(data.members.filter((m: { status?: string }) => m.status !== 'DEACTIVATED').map((m: { id: string; fullName: string }) => ({ id: m.id, fullName: m.fullName })))
       })
       .catch(() => {})
   }, [])

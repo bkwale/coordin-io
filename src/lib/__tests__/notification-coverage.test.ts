@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+// Assignment guard has its own tests (assignable.test.ts); these suites cover notifications
+vi.mock('@/lib/assignable', () => ({ assertAssignable: vi.fn(async () => {}) }))
 import {
   createMockProfile,
   createAdminProfile,

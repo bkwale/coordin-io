@@ -10,6 +10,7 @@ import { canPerform } from '@/lib/role-permissions'
 
 import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 import { formatMilestoneTaskNumber } from '@/lib/task-numbering'
+import { assertAssignable } from '@/lib/assignable'
 import type { TaskStatus, OrgPermission } from '@/generated/prisma/client'
 
 /**
@@ -119,6 +120,8 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
   const ownerId = 'ownerId' in body ? optionalId(body.ownerId, 'Owner ID') : undefined
   const reviewerId = 'reviewerId' in body ? optionalId(body.reviewerId, 'Reviewer ID') : undefined
   const milestoneId = 'milestoneId' in body ? optionalId(body.milestoneId, 'Milestone ID') : undefined
+  // Only newly chosen people are checked — an existing owner who later left doesn't block other edits
+  await assertAssignable(profile.organisationId, [ownerId !== currentTask.ownerId ? ownerId : null, reviewerId !== currentTask.reviewerId ? reviewerId : null])
   const status = optionalEnum(body.status, 'Status', ['NOT_STARTED', 'IN_PROGRESS', 'READY_FOR_REVIEW', 'COMPLETED', 'BLOCKED', 'CHANGES_REQUIRED'] as const)
 
   // Validate status transition if changing status
