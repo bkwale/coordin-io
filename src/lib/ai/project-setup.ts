@@ -168,15 +168,19 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
 
   // An older planning-conditions document must not supersede a newer one that is already applied
   const carriesConditions = mapping.kind === 'planning_conditions' || mapping.kind === 'decision_notice'
+  let replaces: string[] = []
   if (carriesConditions) {
-    const newer = await prisma.aIRun.findFirst({
-      where: { projectId: input.projectId, surface: 'PROJECT_SETUP', status: 'APPLIED', id: { not: run.id }, createdAt: { gt: run.createdAt } },
-      select: { id: true, mapping: true },
+    const others = await prisma.aIRun.findMany({
+      where: { projectId: input.projectId, surface: 'PROJECT_SETUP', status: 'APPLIED', id: { not: run.id } },
+      select: { id: true, mapping: true, createdAt: true },
     })
-    const newerMap = newer?.mapping as unknown as ProjectSetupMapping | null
-    if (newerMap && newerMap.kind === mapping.kind) {
-      const a = mapping.document.issuedAt, b = newerMap.document.issuedAt
-      if (!a || !b || a <= b) throw new ValidationError(`A newer ${mapping.kind === 'decision_notice' ? 'decision notice' : 'planning-conditions document'} (${docLabel(newerMap)}) is already applied — upload this one again if it really replaces it`)
+    const prior = others.map((o) => ({ id: o.id, createdAt: o.createdAt, mapping: o.mapping as unknown as ProjectSetupMapping | null }))
+    replaces = supersededRunIds(mapping, prior)
+    // An older document must not supersede a newer one about the same thing
+    const newer = prior.find((o) => replaces.includes(o.id) && o.createdAt > run.createdAt)
+    if (newer?.mapping) {
+      const a = mapping.document.issuedAt, b = newer.mapping.document.issuedAt
+      if (!a || !b || a <= b) throw new ValidationError(`A newer ${mapping.kind === 'decision_notice' ? 'decision notice' : 'planning-conditions document'} (${docLabel(newer.mapping)}) is already applied — upload this one again if it really replaces it`)
     }
   }
 
@@ -189,8 +193,8 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
     await tx.complianceItem.deleteMany({ where: { registerId: applied.registerId, origin: 'MUNICIPALITY', aiRunId: run.id } })
     // A newer planning-conditions document supersedes the previous one's conditions.
     // Untouched items go; items someone has worked on stay, flagged, so no work is lost. Briefs carry no conditions — leave PT items alone.
-    if (carriesConditions) {
-      const older = { registerId: applied.registerId, origin: 'MUNICIPALITY' as const, aiRunId: { not: run.id } }
+    if (replaces.length) {
+      const older = { registerId: applied.registerId, origin: 'MUNICIPALITY' as const, aiRunId: { in: replaces } }
       await tx.complianceItem.deleteMany({ where: { ...older, status: 'NOT_STARTED' } })
       const kept = await tx.complianceItem.findMany({ where: older, select: { id: true, requirement: true } })
       const tag = `[Superseded by ${docLabel(mapping)}] `
@@ -225,6 +229,22 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
   })
 
   return { profileVersion: result.profile.version, ruleSetVersion: result.ruleSetVersion, ruleItems: result.checklist.length, municipalItems: accepted.length, diff: { added: result.diff.added.map((i) => i.ruleId), removed: result.diff.removed.map((i) => i.ruleId) } }
+}
+
+/**
+ * Which earlier runs' municipal items a newly confirmed document replaces.
+ *  - Estonian PT: a new PT replaces every earlier PT for the project.
+ *  - English decision notices: several run side by side (planning + listed building consent, outline + reserved matters,
+ *    approvals of details). A notice replaces only an earlier upload of the same application, and a s73 variation
+ *    replaces the permission it varies.
+ */
+export function supersededRunIds(mapping: ProjectSetupMapping, prior: Array<{ id: string; mapping: ProjectSetupMapping | null }>): string[] {
+  if (mapping.kind === 'planning_conditions') return prior.filter((o) => o.mapping?.kind === 'planning_conditions').map((o) => o.id)
+  if (mapping.kind !== 'decision_notice') return []
+  const ref = mapping.document.number
+  const varies = mapping.document.legalBasis === 'variation_of_condition' ? mapping.document.parent ?? null : null
+  return prior.filter((o) => o.mapping?.kind === 'decision_notice' && o.mapping.document.number != null &&
+    (o.mapping.document.number === ref || o.mapping.document.number === varies)).map((o) => o.id)
 }
 
 async function uploadToStorage(organisationId: string, projectId: string, file: { name: string; bytes: Uint8Array; contentType: string }) {

@@ -27,6 +27,8 @@ export const ProjectParametersSchema = z.object({
   conservationArea: z.boolean().optional(),
   article4: z.boolean().optional(),
   extensionDepth: z.number().min(0).max(100).optional(),
+  extensionHeight: z.number().min(0).max(50).optional(),
+  extensionStoreys: z.number().int().min(0).max(10).optional(),
   floodZone: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   siteAreaHa: z.number().min(0).max(10_000).optional(),
   priorityHabitat: z.boolean().optional(),

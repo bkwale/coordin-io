@@ -38,7 +38,12 @@ export function DocumentPrefill({ projectId, jurisdiction = 'EE', onApplyValues,
   const [open, setOpen] = useState(false)
   const official: Kind = jurisdiction === 'GB' ? 'decision_notice' : 'planning_conditions'
   const [kind, setKind] = useState<Kind>(official)
-  useEffect(() => { setKind((k) => (k === 'brief' ? k : official)) }, [official])
+  const firstOfficial = useRef(official)
+  useEffect(() => {
+    setKind((k) => (k === 'brief' ? k : official))
+    // A run read under the other country's rules is not relevant any more
+    if (firstOfficial.current !== official) { firstOfficial.current = official; if (pollRef.current) clearInterval(pollRef.current); pollRef.current = null; setRun(null); setBusy(false); onPending(null) }
+  }, [official]) // eslint-disable-line react-hooks/exhaustive-deps
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [run, setRun] = useState<Run | null>(null)

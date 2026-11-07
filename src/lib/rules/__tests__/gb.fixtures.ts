@@ -117,6 +117,15 @@ export const GB_FIXTURES: Fixture[] = [
   { name: 'GB terraced new house — sound testing', params: newHouse({ buildingType: 'terraced' }), expect: ['GB.SOUND.PRE_COMPLETION_TESTING'] },
   { name: 'GB radon affected area — radon protection', params: newHouse({ radonAffectedArea: true }), expect: ['GB.ENV.RADON'] },
   { name: 'GB no radon flag — no radon item', params: newHouse(), expect: [], absent: ['GB.ENV.RADON'] },
+  // ── Review fixes (7 Nov): unit counts for houses, extension's own dims, CoU fire, hospitals ──
+  { name: 'GB 12 terraced houses on 0.3 ha, 1,100 m² — major development by unit count', params: newHouse({ buildingType: 'terraced', apartments: 12, siteAreaHa: 0.3, grossFloorArea: 990 }), expect: ['GB.PLANNING.MAJOR_DEVELOPMENT'] },
+  { name: 'GB single new house — not major', params: newHouse(), expect: [], absent: ['GB.PLANNING.MAJOR_DEVELOPMENT'] },
+  { name: 'GB 3.5 m single-storey extension to an 8 m two-storey house — PD on the extension\'s own dims', params: semiExt({ height: 8, storeys: 2, extensionHeight: 3.5, extensionStoreys: 1 }), expect: ['GB.PLANNING.PERMITTED_DEVELOPMENT'], absent: ['GB.PLANNING.HOUSEHOLDER_APPLICATION'] },
+  { name: 'GB 4.5 m tall extension — over the PD height limit even on a bungalow', params: semiExt({ extensionHeight: 4.5 }), expect: ['GB.PLANNING.HOUSEHOLDER_APPLICATION'], absent: ['GB.PLANNING.PERMITTED_DEVELOPMENT'] },
+  { name: 'GB office-to-flats conversion 20 m — sprinklers, wayfinding, info box, evacuation alert', params: flats({ workType: 'change_of_use', height: 20, storeys: 6 }), expect: ['GB.FIRE.SPRINKLERS_11M', 'GB.FIRE.WAYFINDING_11M', 'GB.FIRE.SECURE_INFORMATION_BOX', 'GB.FIRE.EVACUATION_ALERT'] },
+  { name: 'GB change of use in Flood Zone 3 — FRA but no sequential test', params: flats({ workType: 'change_of_use', floodZone: 3 }), expect: ['GB.PLANNING.FLOOD_RISK_ASSESSMENT'], absent: ['GB.PLANNING.SEQUENTIAL_TEST'] },
+  { name: 'GB 20 m non-residential — check whether hospital/care home (HRB in design)', params: office({ height: 20, storeys: 5 }), expect: ['GB.SUPERVISION.HRB_HOSPITAL_CARE_HOME_CHECK'], absent: ['GB.SUPERVISION.HRB_BSR_BCA'] },
+  { name: 'GB 12 m office — no hospital/care-home check', params: office(), expect: [], absent: ['GB.SUPERVISION.HRB_HOSPITAL_CARE_HOME_CHECK'] },
 ]
 
 export const GB_RULE_IDS = Array.from(new Set(GB_FIXTURES.flatMap((f) => [...f.expect, ...(f.absent ?? [])]))).sort()

@@ -23,7 +23,8 @@ const area = (p: P) => p.grossFloorArea ?? 0
 const h = (p: P) => p.height ?? 0
 const st = (p: P) => p.storeys ?? 1
 /** New homes created by the project. */
-const dwellings = (p: P) => (isFlats(p) ? p.apartments ?? 2 : isHouse(p) && (isNew(p) || isCoU(p)) ? 1 : 0)
+/** Houses: a scheme of several houses carries its unit count in `apartments` (shown as "Dwellings" for England). */
+const dwellings = (p: P) => (isFlats(p) ? p.apartments ?? 2 : isHouse(p) && (isNew(p) || isCoU(p)) ? Math.max(1, p.apartments ?? 1) : 0)
 const newDwelling = (p: P) => (isNew(p) || isCoU(p)) && dwellings(p) >= 1
 const residential = (p: P) => isHouse(p) || isFlats(p)
 const designated = (p: P) => Boolean(p.conservationArea || p.protectedArea)
@@ -34,13 +35,16 @@ const pdLimit = (p: P) => (isDetached(p) ? 4 : 3)
 const largerLimit = (p: P) => (isDetached(p) ? 8 : 6)
 const houseExt = (p: P) => isHouse(p) && isExt(p)
 const depth = (p: P) => p.extensionDepth
+/** Permitted-development limits are about the extension, not the house: use its own height/storeys when given. */
+const extH = (p: P) => p.extensionHeight ?? h(p)
+const extSt = (p: P) => p.extensionStoreys ?? st(p)
 const pdRear = (p: P) =>
-  houseExt(p) && !p.article4 && depth(p) !== undefined && h(p) <= 4 && st(p) <= 1 && (depth(p) as number) <= pdLimit(p)
+  houseExt(p) && !p.article4 && depth(p) !== undefined && extH(p) <= 4 && extSt(p) <= 1 && (depth(p) as number) <= pdLimit(p)
 const pdTwoStorey = (p: P) =>
-  houseExt(p) && !p.article4 && !designated(p) && st(p) === 2 && depth(p) !== undefined && (depth(p) as number) <= 3
+  houseExt(p) && !p.article4 && !designated(p) && extSt(p) === 2 && depth(p) !== undefined && (depth(p) as number) <= 3
 const isPD = (p: P) => pdRear(p) || pdTwoStorey(p)
 const largerHomeExt = (p: P) =>
-  houseExt(p) && !p.article4 && !designated(p) && st(p) <= 1 && h(p) <= 4 && depth(p) !== undefined &&
+  houseExt(p) && !p.article4 && !designated(p) && extSt(p) <= 1 && extH(p) <= 4 && depth(p) !== undefined &&
   (depth(p) as number) > pdLimit(p) && (depth(p) as number) <= largerLimit(p)
 const householderApp = (p: P) => houseExt(p) && !isPD(p) && !largerHomeExt(p)
 const fullPlanning = (p: P) => (isNew(p) || isCoU(p) || isBuild(p)) && !houseExt(p)
@@ -131,7 +135,7 @@ const rules: Rule[] = [
   g({ id: 'GB.PLANNING.FLOOD_RISK_ASSESSMENT', discipline: 'planning', title: 'Site-specific flood risk assessment', citation: 'NPPF paras 170–182; DMPO Sch.4', source: NPPF, confidence: 'high',
     applies: (p) => needsPlanningPermission(p) && ((p.floodZone ?? 1) >= 2 || (p.siteAreaHa ?? 0) >= 1), because: (p) => (p.floodZone ?? 1) >= 2 ? `Flood Zone ${p.floodZone}` : `Site ${p.siteAreaHa} ha ≥ 1 ha in Flood Zone 1` }),
   g({ id: 'GB.PLANNING.SEQUENTIAL_TEST', discipline: 'planning', title: 'Flood sequential test', citation: 'NPPF paras 173–175', source: NPPF, confidence: 'medium',
-    applies: (p) => fullPlanning(p) && (p.floodZone ?? 1) >= 2 && !isExt(p), requirement: 'Show there are no reasonably available sites at lower flood risk (not needed for minor development or change of use).' }),
+    applies: (p) => fullPlanning(p) && (p.floodZone ?? 1) >= 2 && !isExt(p) && !isCoU(p), requirement: 'Show there are no reasonably available sites at lower flood risk (not needed for minor development or change of use).' }),
   g({ id: 'GB.PLANNING.CIL', discipline: 'planning', title: 'Community Infrastructure Levy — assume liability, claim exemptions before starting', citation: 'CIL Regs 2010 reg.42, 54A–54D', source: CIL, confidence: 'medium',
     applies: (p) => p.cilChargingArea !== false && (isBuild(p) || isCoU(p)) && (newDwelling(p) || area(p) >= 100),
     because: (p) => newDwelling(p) ? 'Creates a new dwelling' : `${area(p)} m² new floorspace ≥ 100 m²`,
@@ -175,6 +179,9 @@ const rules: Rule[] = [
     applies: (p) => isNew(p) || isCoU(p) }),
 
   // ── HIGHER-RISK BUILDINGS (Building Safety Act) ────────────────────────────
+  g({ id: 'GB.SUPERVISION.HRB_HOSPITAL_CARE_HOME_CHECK', discipline: 'supervision', title: 'Check: is this a hospital or care home? Tall ones are higher-risk during design and construction', citation: 'HRB (Descriptions and Supplementary Provisions) Regs 2023 reg.2', source: BSA, confidence: 'low',
+    applies: (p) => isNonRes(p) && (isBuild(p) || isCoU(p)) && tall(p), because: (p) => `${h(p)} m / ${st(p)} storeys`,
+    requirement: 'Hospitals and care homes ≥ 18 m or ≥ 7 storeys follow the higher-risk regime (BSR as building control, Gateways 2 and 3) during design and construction, but are not registered for occupation. Confirm the use.' }),
   g({ id: 'GB.SUPERVISION.HRB_BSR_BCA', discipline: 'supervision', title: 'Higher-risk building — Building Safety Regulator is the building control authority', citation: 'BSA 2022 s.120D; Building Act 1984 s.91ZA', source: BSA, confidence: 'high',
     applies: isHRB, because: (p) => `${h(p)} m / ${st(p)} storeys with ${dwellings(p)} residential units` }),
   g({ id: 'GB.SUPERVISION.GATEWAY_2', discipline: 'supervision', title: 'Gateway 2 — building control approval from the BSR before any work starts', citation: 'HRB Procedures Regs 2023 regs 3–12', source: HRBP, confidence: 'high',
@@ -219,13 +226,13 @@ const rules: Rule[] = [
   // ── FIRE ───────────────────────────────────────────────────────────────────
   g({ id: 'GB.FIRE.PART_B', discipline: 'fire', title: 'Fire safety (Part B): escape, spread, structure, access', citation: 'Building Regs Sch.1 Part B; AD B', source: AD('B'), confidence: 'high', applies: (p) => brApplies(p) }),
   g({ id: 'GB.FIRE.SPRINKLERS_11M', discipline: 'fire', title: 'Sprinklers throughout — flats with a storey above 11 m', citation: 'AD B Vol 1, para 7.4', source: AD('B'), confidence: 'high',
-    applies: (p) => isBuild(p) && isFlats(p) && h(p) > 11, because: (p) => `${h(p)} m > 11 m` }),
+    applies: (p) => (isBuild(p) || isCoU(p)) && isFlats(p) && h(p) > 11, because: (p) => `${h(p)} m > 11 m` }),
   g({ id: 'GB.FIRE.WAYFINDING_11M', discipline: 'fire', title: 'Wayfinding signage for firefighters (flats > 11 m)', citation: 'AD B Vol 1, para 15.14', source: AD('B'), confidence: 'high',
-    applies: (p) => isBuild(p) && isFlats(p) && h(p) > 11 }),
+    applies: (p) => (isBuild(p) || isCoU(p)) && isFlats(p) && h(p) > 11 }),
   g({ id: 'GB.FIRE.SECURE_INFORMATION_BOX', discipline: 'fire', title: 'Secure information box (flats > 11 m)', citation: 'AD B Vol 1, para 15.15', source: AD('B'), confidence: 'high',
-    applies: (p) => isBuild(p) && isFlats(p) && h(p) > 11 }),
+    applies: (p) => (isBuild(p) || isCoU(p)) && isFlats(p) && h(p) > 11 }),
   g({ id: 'GB.FIRE.EVACUATION_ALERT', discipline: 'fire', title: 'Evacuation alert system (flats ≥ 18 m)', citation: 'AD B Vol 1, para 1.33; BS 8629', source: AD('B'), confidence: 'high',
-    applies: (p) => isBuild(p) && isFlats(p) && h(p) >= 18 }),
+    applies: (p) => (isBuild(p) || isCoU(p)) && isFlats(p) && h(p) >= 18 }),
   g({ id: 'GB.FIRE.SECOND_STAIRCASE_18M', discipline: 'fire', title: 'Second staircase — new residential buildings over 18 m', citation: 'AD B Vol 1 (2026 amendments, in force 30 Sep 2026)', source: AD('B'), confidence: 'high',
     applies: (p) => isNew(p) && residential(p) && h(p) > 18 && dwellings(p) >= 2, because: (p) => `${h(p)} m > 18 m`,
     requirement: 'Applies to work not covered by the transitional provision (application before 30 Sep 2026 and work sufficiently progressed by 30 Mar 2028).' }),

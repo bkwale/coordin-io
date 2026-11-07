@@ -21,14 +21,14 @@ type Params = {
   nearMajorRoad?: boolean; districtHeatingAvailable?: boolean; urbanArea?: boolean
   seasonalUseOnly?: boolean; temporary?: boolean; placeOfWorship?: boolean; county?: string
   // England
-  conservationArea?: boolean; article4?: boolean; extensionDepth?: number; floodZone?: 1 | 2 | 3
+  conservationArea?: boolean; article4?: boolean; extensionDepth?: number; extensionHeight?: number; extensionStoreys?: number; floodZone?: 1 | 2 | 3
   siteAreaHa?: number; priorityHabitat?: boolean; domesticClient?: boolean; contractors?: number
   constructionDays?: number; peakWorkers?: number; boundaryWork?: boolean; cilChargingArea?: boolean; radonAffectedArea?: boolean
 }
 
 /** Answers that only mean something in one jurisdiction — dropped when the architect switches, so they never reach the other rule set. */
 const EE_ONLY: (keyof Params)[] = ['detailedPlanExists', 'detailedPlanAgeYears', 'urbanArea', 'districtHeatingAvailable', 'seasonalUseOnly', 'placeOfWorship', 'county', 'heatedArea', 'enclosedNetArea', 'nearMajorRoad', 'timberStructure']
-const GB_ONLY: (keyof Params)[] = ['conservationArea', 'article4', 'extensionDepth', 'floodZone', 'siteAreaHa', 'priorityHabitat', 'domesticClient', 'contractors', 'constructionDays', 'peakWorkers', 'boundaryWork', 'cilChargingArea', 'radonAffectedArea']
+const GB_ONLY: (keyof Params)[] = ['conservationArea', 'article4', 'extensionDepth', 'extensionHeight', 'extensionStoreys', 'floodZone', 'siteAreaHa', 'priorityHabitat', 'domesticClient', 'contractors', 'constructionDays', 'peakWorkers', 'boundaryWork', 'cilChargingArea', 'radonAffectedArea']
 const GB_DEFAULTS: Partial<Params> = { contractors: 1 }
 type Item = { id: string; ruleId: string | null; requirement: string; titleLocal: string | null; citation: string | null; source: string | null; because: string | null; confidence: string | null; comments: string | null; status: string; section: string | null; addedByArchitect: boolean; ruleSetVersion: string | null }
 type Data = { profile: { version: number; parameters: Params; ruleSetVersion: string | null; createdAt: string } | null; register: { id: string; name: string; templateVersion: string | null; updatedAt: string } | null; grouped: Record<string, Item[]>; added: Item[]; disciplineLabels: Record<string, { en: string; et: string }>; municipal: Item[]; counts: { generated: number; added: number; municipal: number; stale: number }; currentRuleSetVersion: string | null; outdated: boolean }
@@ -80,13 +80,22 @@ export default function RegulatoryPage() {
   })
   const isBlock = form.buildingType === 'apartment_block'
   const isGB = form.jurisdiction === 'GB'
-  const switchJurisdiction = (j: Params['jurisdiction']) => setForm((f) => {
+  const switchJurisdiction = (j: Params['jurisdiction']) => {
+    // Limits read from the other country's documents no longer apply; area estimates start fresh
+    setBounds({ maxHeightM: null, maxStoreys: null })
+    setAreaEdited({ heated: false, enclosed: false })
+    setForm((f) => switchedForm(f, j))
+  }
+  const switchedForm = (f: Params, j: Params['jurisdiction']): Params => {
+    if (f.jurisdiction === j) return f
     const next: Params = { ...f, jurisdiction: j }
     for (const k of j === 'GB' ? EE_ONLY : GB_ONLY) delete next[k]
+    // Same key, different meaning: "temporary" is ≤ 2 years in Estonia, ≤ 5 in England; protected area differs too
+    delete next.temporary; delete next.protectedArea
     if (j === 'GB') Object.assign(next, { ...GB_DEFAULTS, ...next })
     if (j === 'EE') Object.assign(next, { heatedArea: Math.round(f.grossFloorArea * 0.9), enclosedNetArea: Math.round(f.grossFloorArea * 0.9), detailedPlanExists: false, urbanArea: false, ...next })
     return next
-  })
+  }
 
   async function generate() {
     setRunning(true); setDiff(null)
@@ -151,7 +160,14 @@ export default function RegulatoryPage() {
           <Field label="Heated m²" hint={areaEdited.heated ? undefined : '≈ 90% of gross'}><Num value={form.heatedArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, heated: true })); set('heatedArea', v) }} /></Field>
           <Field label="Enclosed net m²" hint={areaEdited.enclosed ? undefined : '≈ 90% of gross'}><Num value={form.enclosedNetArea ?? 0} onChange={(v) => { setAreaEdited((a) => ({ ...a, enclosed: true })); set('enclosedNetArea', v) }} /></Field>
         </div>}
-        {isGB && form.workType === 'extension' && <Field label="Rear extension depth (m beyond original rear wall)" hint="blank if not known"><OptNum value={form.extensionDepth} onChange={(v) => set('extensionDepth', v)} step={0.1} /></Field>}
+        {isGB && form.workType === 'extension' && <>
+          <Field label="Rear extension depth (m beyond original rear wall)" hint="blank if not known"><OptNum value={form.extensionDepth} onChange={(v) => set('extensionDepth', v)} step={0.1} /></Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Extension height (m)" hint="eaves/ridge of the extension"><OptNum value={form.extensionHeight} onChange={(v) => set('extensionHeight', v)} step={0.1} /></Field>
+            <Field label="Extension storeys"><OptNum value={form.extensionStoreys} onChange={(v) => set('extensionStoreys', v === undefined ? undefined : Math.round(v))} /></Field>
+          </div>
+        </>}
+        {isGB && form.buildingType !== 'apartment_block' && form.buildingType !== 'non_residential' && (form.workType === 'new_build' || form.workType === 'change_of_use') && <Field label="Dwellings (new homes in the scheme)"><Num value={form.apartments ?? 1} onChange={(v) => set('apartments', Math.max(1, Math.round(v)))} /></Field>}
         {isBlock && <div className="grid grid-cols-2 gap-2">
           <Field label="Apartments"><Num value={form.apartments ?? 0} onChange={(v) => set('apartments', v)} /></Field>
           <Field label="Parking spaces"><Num value={form.parkingSpaces ?? 0} onChange={(v) => set('parkingSpaces', v)} /></Field>

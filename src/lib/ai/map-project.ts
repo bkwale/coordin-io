@@ -30,13 +30,15 @@ export interface MunicipalCondition {
   source: string     // "Viljandi Vallavalitsus"
   /** England decision notices: when the condition bites (pre-commencement, pre-occupation …). */
   timing?: string
+  /** Computed by Coordin (deadline, plans list), not quoted from the document — always counts as verified. */
+  derived?: boolean
   /** Set by verifyQuotes: the condition's wording was found in the document. Only verified conditions are pre-ticked. */
   verified?: boolean
 }
 
 export interface ProjectSetupMapping {
   kind: 'planning_conditions' | 'brief' | 'decision_notice'
-  document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; legalBasis: string | null; ehrCode: string | null; address: string | null; projectName?: string | null; client?: string | null }
+  document: { number: string | null; issuer: string | null; issuedAt: string | null; validUntil: string | null; legalBasis: string | null; ehrCode: string | null; address: string | null; projectName?: string | null; client?: string | null; parent?: string | null }
   prefills: Prefill[]
   conditions: MunicipalCondition[]
   bounds: { maxHeightM: number | null; maxStoreys: number | null; maxFootprint: { value: number; unit: string } | null; minSetbackM: number | null }
@@ -244,7 +246,7 @@ export function verifyQuotes(mapping: ProjectSetupMapping, pages: string[]): Pro
     let { page, citation } = c
     if (page != null && (page < 1 || page > pages.length)) { page = null; citation = citation.replace(/ p\.\d+$/, ''); badPages++ }
     const t = squash(c.text)
-    const verified = t.length >= 3 && (doc.includes(t) || wordCoverage(t, doc) >= 0.6)
+    const verified = !!c.derived || (t.length >= 3 && (doc.includes(t) || wordCoverage(t, doc) >= 0.6))
     if (!verified) unverifiedConds++
     return { ...c, page, citation, verified }
   })
@@ -263,7 +265,7 @@ const TIMING_LABEL: Record<string, string> = {
 }
 const TIME_LIMIT = /\b(begun|commenced|begin|start(ed)?)\b.{0,40}\b(not later than|before|within)\b.{0,40}\b(expiration of )?(three|five|\d) years\b/i
 const APPROVED_PLANS = /\b(in accordance with the following (approved )?(plans|drawings?|documents)|relates to the following (approved )?plans|carried out in accordance with the (approved|submitted) plans)/i
-const PRE_COMMENCEMENT = /\b(prior to (the )?commencement|prior to (the )?development commencing|before (the )?(development|works?) (commences?|begins?|starts?)|no development (shall|must|will) (take place|commence|begin|start)|prior to any (works|development) (commencing|starting))/i
+const PRE_COMMENCEMENT = /\b((development|works?)\b[^.]{0,80}\b(shall|must|will) not (commence|begin|start|take place)|no (part of the )?development\b[^.]{0,60}\b(shall|must|will) (take place|commence|begin|start)|prior to (the )?commencement|prior to (the )?development commencing|before (the )?(development|works?) (commences?|begins?|starts?)|no development (shall|must|will) (take place|commence|begin|start)|prior to any (works|development) (commencing|starting))/i
 const PRE_OCCUPATION = /\b(prior to (the )?(first )?(occupation|use)\b|before (the )?(first )?occupation|shall not be occupied (unless|until))/i
 const PRE_SUPER = /\b(above[- ]ground works|superstructure|damp[- ]proof course|external walling)/i
 
@@ -279,12 +281,12 @@ export function commencementDeadline(decisionDate: string | null, years: number 
 
 /** The model's timing label is a hint; the wording decides when it clearly says "prior to commencement" etc. */
 export function conditionTiming(text: string, modelTiming: string): string {
-  if (modelTiming === 'time_limit' || modelTiming === 'approved_plans') return modelTiming
-  // A trigger in the wording beats any label
+  // A trigger in the wording beats any label — a pre-commencement obligation must never hide behind "approved plans"
   if (PRE_COMMENCEMENT.test(text)) return 'pre_commencement'
   if (PRE_SUPER.test(text) && /\b(prior to|before|until)\b/i.test(text)) return 'pre_superstructure'
   if (PRE_OCCUPATION.test(text)) return 'pre_occupation'
-  // Only relabel what the model left unclassified — never override a trigger it found
+  if (modelTiming === 'time_limit' || modelTiming === 'approved_plans') return modelTiming
+  // Only relabel what the model left unclassified
   if (modelTiming === 'other' || modelTiming === 'compliance') {
     if (TIME_LIMIT.test(text)) return 'time_limit'
     if (APPROVED_PLANS.test(text)) return 'approved_plans'
@@ -301,7 +303,7 @@ export function conditionSignals(texts: string[]): { m42: boolean; m43: boolean;
     m43: /M4\s*\(\s*3\s*\)/i.test(all),
     waterLitres: water ? parseInt(water[1], 10) : null,
     bng: /biodiversity gain plan|biodiversity net gain|\bBNG\b/i.test(all),
-    pdRemoved: /permitted development|Schedule 2.{0,40}(General )?Permitted Development/i.test(all) && /\b(no|shall not|notwithstanding)\b/i.test(all),
+    pdRemoved: texts.some((t) => /permitted development/i.test(t) && /\b(notwithstanding|no (extensions?|buildings?|alterations?|development)|shall not)\b/i.test(t)),
   }
 }
 
@@ -341,17 +343,26 @@ export function mapDecisionNotice(dn: DecisionNotice): ProjectSetupMapping {
   }
 
   // Derived: commencement deadline. Default 3 years (s.91) when a time-limit condition exists but the number was missed.
+  // Only for permissions that start their own clock: s73 variations keep the original limit (s73(5)); reserved matters and
+  // discharges run off the parent; outline's limit is for applying for reserved matters (s.92).
   const hasTimeLimit = (dn.conditions ?? []).some((c) => conditionTiming(c.text, c.timing) === 'time_limit')
   const years = v(dn.timeLimitYears) ?? (hasTimeLimit ? 3 : null)
-  const deadline = !refused && appType !== 'approval_of_details' ? commencementDeadline(decided, years) : null
-  if (deadline) {
-    conditions.unshift({ topic: 'Commencement deadline', text: `Begin development no later than ${deadline} (${years} years from the decision on ${decided!.slice(0, 10)}), or the permission lapses. Discharge all pre-commencement conditions first.`, page: dn.timeLimitYears.page ?? null, mandatory: true, citation: cite(null, dn.timeLimitYears.page ?? null), source, timing: 'time_limit' })
+  const ownClock = !refused && (appType === 'full' || appType === 'householder' || appType === 'listed_building_consent' || appType === 'outline' || appType === 'other' || appType === null)
+  const dateTrusted = (dn.document.decisionDate.confidence ?? 0) >= 0.8 && !!dn.document.decisionDate.quote
+  const deadline = ownClock && dateTrusted ? commencementDeadline(decided, years) : null
+  if (ownClock && years && !dateTrusted) warnings.push('The decision date could not be confirmed from the notice — work out the commencement deadline by hand')
+  if (deadline && appType === 'outline') {
+    conditions.unshift({ topic: 'Reserved matters deadline', text: `Apply for approval of all reserved matters no later than ${deadline} (${years} years from the outline decision on ${decided!.slice(0, 10)}). Development must then begin within the period set by the outline conditions (normally 2 years from the final reserved-matters approval).`, page: dn.timeLimitYears.page ?? null, mandatory: true, citation: cite(null, dn.timeLimitYears.page ?? null), source, timing: 'time_limit', derived: true })
+    if (deadline < new Date().toISOString().slice(0, 10)) warnings.push(`The reserved-matters deadline was ${deadline} — unless reserved matters were applied for in time, this outline permission has lapsed`)
+  } else if (deadline) {
+    conditions.unshift({ topic: 'Commencement deadline', text: `Begin development no later than ${deadline} (${years} years from the decision on ${decided!.slice(0, 10)}), or the permission lapses. Discharge all pre-commencement conditions first.`, page: dn.timeLimitYears.page ?? null, mandatory: true, citation: cite(null, dn.timeLimitYears.page ?? null), source, timing: 'time_limit', derived: true })
     if (deadline < new Date().toISOString().slice(0, 10)) warnings.push(`The time limit expired on ${deadline} — unless development lawfully began before then, this permission has lapsed`)
   }
+  if (!refused && appType === 'variation_of_condition') warnings.push('A section 73 variation cannot extend the time limit — the commencement deadline is the original permission\'s')
 
   // Derived: approved plans, as one item the architect can tick against the drawing register
   const plans = dn.approvedPlans ?? []
-  if (plans.length && !refused) conditions.push({ topic: 'Approved plans', text: `Build in accordance with the ${plans.length} approved drawing${plans.length > 1 ? 's' : ''}/documents: ${plans.map((p) => p.ref).join('; ')}`.slice(0, 1200), page: null, mandatory: true, citation: cite(null, null), source, timing: 'approved_plans' })
+  if (plans.length && !refused) conditions.push({ topic: 'Approved plans', text: `Build in accordance with the ${plans.length} approved drawing${plans.length > 1 ? 's' : ''}/documents: ${plans.map((p) => p.ref).join('; ')}`.slice(0, 1200), page: null, mandatory: true, citation: cite(null, null), source, timing: 'approved_plans', derived: true })
 
   const sig = conditionSignals((dn.conditions ?? []).map((c) => c.text))
   if (!refused) {
@@ -373,7 +384,7 @@ export function mapDecisionNotice(dn: DecisionNotice): ProjectSetupMapping {
 
   return {
     kind: 'decision_notice',
-    document: { number: ref, issuer: lpa, issuedAt: decided, validUntil: deadline, legalBasis: appType, ehrCode: null, address: v(dn.site.address) },
+    document: { number: ref, issuer: lpa, issuedAt: decided, validUntil: deadline, legalBasis: appType, ehrCode: null, address: v(dn.site.address), parent: v(dn.document.parentPermission) },
     prefills,
     conditions: dedupe(conditions),
     bounds: { maxHeightM: null, maxStoreys: null, maxFootprint: null, minSetbackM: null },

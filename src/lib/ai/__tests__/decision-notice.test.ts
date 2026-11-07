@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+vi.mock('@/lib/prisma', () => ({ prisma: {} }))
+vi.mock('@/lib/prisma-modules', () => ({ modulesPrisma: {} }))
 import { DecisionNoticeSchema, normaliseDecisionNotice, type DecisionNotice } from '../schemas-documents'
 import { mapDecisionNotice, conditionTiming, commencementDeadline, conditionSignals, pinApplicationReference, verifyQuotes } from '../map-project'
 import { decisionNoticeUser, DECISION_NOTICE_SYSTEM } from '../prompts/decision-notice'
+import { supersededRunIds } from '../project-setup'
+import { mapPlanningConditions } from '../map-project'
 
 /**
  * Fixtures are cut down from public English decision notices:
@@ -209,5 +213,55 @@ describe('decision notices — normaliser and schema', () => {
   it('the prompt treats the document as data and marks pages', () => {
     expect(DECISION_NOTICE_SYSTEM).toMatch(/untrusted DATA/)
     expect(decisionNoticeUser(['a', 'b'])).toContain('<<PAGE 2>>\nb')
+  })
+})
+
+describe('decision notices — review fixes', () => {
+  it('common English pre-commencement phrasings are caught whatever the model said', () => {
+    for (const t of ['Development shall not commence until a drainage scheme has been approved', 'No development, other than demolition, shall take place until a CEMP has been approved', 'No part of the development shall commence until details are approved', 'The works shall not begin until the surveys are approved', 'Before development commences, a tree protection plan shall be submitted']) {
+      expect(conditionTiming(t, 'compliance'), t).toBe('pre_commencement')
+      expect(conditionTiming(t, 'approved_plans'), t).toBe('pre_commencement')
+    }
+  })
+  it('a s73 variation and reserved matters get no deadline of their own; outline gets a reserved-matters deadline', () => {
+    const s73 = brent(); s73.document.applicationType = P('variation_of_condition' as const, 'Variation of condition 2'); s73.document.parentPermission = P('21/1000', '21/1000')
+    const m73 = mapDecisionNotice(s73)
+    expect(m73.document.validUntil).toBeNull()
+    expect(m73.warnings.join(' ')).toMatch(/cannot extend the time limit/)
+    const outline = brent(); outline.document.applicationType = P('outline' as const, 'Outline')
+    const mo = mapDecisionNotice(outline)
+    expect(mo.conditions[0]).toMatchObject({ topic: 'Reserved matters deadline', derived: true })
+    expect(mo.warnings.join(' ')).not.toMatch(/time limit expired/)
+  })
+  it('an unconfirmed decision date gives no deadline, and says so', () => {
+    const dn = brent(); dn.document.decisionDate = P('2023-06-13', null, 1, 0.5)
+    const m = mapDecisionNotice(dn)
+    expect(m.document.validUntil).toBeNull()
+    expect(m.warnings.join(' ')).toMatch(/could not be confirmed/)
+  })
+  it('derived items (deadline, plans list) count as verified', () => {
+    const m = verifyQuotes(mapDecisionNotice(brent()), ['unrelated text'])
+    expect(m.conditions.filter((c) => c.derived).every((c) => c.verified)).toBe(true)
+  })
+  it('permitted-development removal needs both phrases in the same condition', () => {
+    expect(conditionSignals(['No details shall be submitted', 'permitted development rights are noted']).pdRemoved).toBe(false)
+  })
+})
+
+describe('which earlier documents a confirmed one replaces', () => {
+  const dnRun = (id: string, number: string, legalBasis = 'full', parent: string | null = null) => ({ id, mapping: { ...mapDecisionNotice(brent()), document: { ...mapDecisionNotice(brent()).document, number, legalBasis, parent } } })
+  const ptRun = (id: string) => ({ id, mapping: mapPlanningConditions({ document: { kind: 'planning_conditions', number: { value: '1', confidence: 1 }, issuedAt: { value: null, confidence: 0 }, issuer: { value: null, confidence: 0 }, validUntil: { value: null, confidence: 0 }, legalBasis: { value: null, confidence: 0 } }, site: { ehrCode: { value: null, confidence: 0 }, address: { value: null, confidence: 0 }, cadastralUnit: { value: null, confidence: 0 }, county: { value: null, confidence: 0 }, municipality: { value: null, confidence: 0 }, landUse: { value: null, confidence: 0 } }, building: { plannedActivity: { value: null, confidence: 0 }, useCodes: [], buildingName: { value: null, confidence: 0 } }, limits: { maxFootprint: { value: null, confidence: 0 }, maxHeight: { value: null, confidence: 0 }, maxStoreys: { value: null, confidence: 0 }, minSetback: { value: null, confidence: 0 }, roofNote: { value: null, confidence: 0 }, architecturalNote: { value: null, confidence: 0 } }, utilities: { water: { value: null, confidence: 0 }, sewage: { value: null, confidence: 0 }, electricity: { value: null, confidence: 0 }, heating: { value: null, confidence: 0 }, access: { value: null, confidence: 0 } }, surveysRequired: [], heritage: { value: null, confidence: 0 }, environment: { value: null, confidence: 0 }, fireSafety: { value: null, confidence: 0 }, conditions: [], language: 'et', warnings: [] } as any) })
+  const prior = [dnRun('lbc', '22/4129/LBC'), dnRun('same', '22/4128'), dnRun('outline', '21/1000'), ptRun('pt')]
+  it('a decision notice replaces only an earlier upload of the same application', () => {
+    expect(supersededRunIds(dnRun('new', '22/4128').mapping, prior)).toEqual(['same'])
+  })
+  it('a s73 variation also replaces the permission it varies', () => {
+    expect(supersededRunIds(dnRun('new', '23/0500', 'variation_of_condition', '21/1000').mapping, prior)).toEqual(['outline'])
+  })
+  it('reserved matters leave the outline alone', () => {
+    expect(supersededRunIds(dnRun('new', '23/0600', 'reserved_matters', '21/1000').mapping, prior)).toEqual([])
+  })
+  it('an Estonian PT still replaces every earlier PT, and nothing else', () => {
+    expect(supersededRunIds(ptRun('new').mapping, prior)).toEqual(['pt'])
   })
 })

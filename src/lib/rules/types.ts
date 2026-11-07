@@ -34,6 +34,8 @@ export interface ProjectParameters {
   conservationArea?: boolean    // Article 2(3) land: conservation area
   article4?: boolean            // Article 4 direction removes permitted development rights
   extensionDepth?: number       // m — how far a rear extension projects beyond the original rear wall
+  /** England: the extension's own height (m) and storeys, for permitted-development limits. */
+  extensionHeight?: number; extensionStoreys?: number
   floodZone?: 1 | 2 | 3         // Environment Agency flood zone
   siteAreaHa?: number           // hectares inside the red line
   priorityHabitat?: boolean     // site contains priority habitat (BNG small-site exemption lost)
