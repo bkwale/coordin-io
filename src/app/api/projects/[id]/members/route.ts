@@ -6,6 +6,7 @@ import { NotFoundError, ConflictError } from '@/lib/errors'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { requireId, requireEnum, parseBody } from '@/lib/validation'
+import { assertAssignable } from '@/lib/assignable'
 import type { ProjectRole } from '@/generated/prisma/client'
 
 const VALID_PROJECT_ROLES: readonly ProjectRole[] = [
@@ -45,6 +46,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const body = await parseBody(request)
   const profileId = requireId(body.profileId, 'Profile ID')
   const projectRole = requireEnum(body.projectRole, 'Project role', VALID_PROJECT_ROLES)
+  await assertAssignable(profile.organisationId, [profileId])
 
   // Verify target profile exists in same org
   const targetProfile = await prisma.profile.findFirst({

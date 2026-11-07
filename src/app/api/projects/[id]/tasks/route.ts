@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
+import { assertAssignable } from '@/lib/assignable'
 import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import {
@@ -110,6 +111,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
   const instructions = optionalString(body.instructions, 'Instructions', 5000)
   const ownerId = optionalId(body.ownerId, 'Owner ID')
   const reviewerId = optionalId(body.reviewerId, 'Reviewer ID')
+  await assertAssignable(profile.organisationId, [ownerId, reviewerId])
   const stage = optionalEnum(body.stage, 'Stage', ['BRIEF', 'CONCEPT', 'SPATIAL_COORDINATION', 'WORKING_DRAWINGS', 'CONSTRUCTION', 'HANDOVER', 'OPERATIONS'] as const)
   const discipline = optionalString(body.discipline, 'Discipline', 100)
   const block = optionalString(body.block, 'Block', 100)
