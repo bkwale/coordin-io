@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError } from '@/lib/errors'
+import { fileLink } from '@/lib/storage-links'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = new Set([
@@ -16,7 +17,7 @@ const ALLOWED_TYPES = new Set([
  * POST /api/upload/receipt — Upload an expense receipt to Supabase Storage.
  *
  * Accepts multipart/form-data with a single `file` field.
- * Returns `{ url: string }` — a signed URL with 1-year expiry.
+ * Returns `{ url: string }` — a stable link (/api/files…) that opens the file through a 1-hour signed URL.
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const formData = await request.formData()
@@ -74,19 +75,11 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new ValidationError(`Upload failed: ${uploadError.message}`)
   }
 
-  // Generate a signed URL with 1-year expiry (in seconds)
-  const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60
+  // Generate a stable link (/api/files…) that opens the file through a 1-hour signed URL (in seconds)
+  // Store a stable app link; /api/files signs a 1-hour URL each time the file is opened
+  const fileUrl = fileLink('receipts', storagePath)
 
-  const { data: signedData, error: signError } = await supabaseAdmin.storage
-    .from('receipts')
-    .createSignedUrl(storagePath, ONE_YEAR_SECONDS)
-
-  if (signError || !signedData?.signedUrl) {
-    console.error('[RECEIPT_UPLOAD] Signed URL error:', signError?.message)
-    throw new ValidationError('File uploaded but failed to generate access URL')
-  }
-
-  return success({ url: signedData.signedUrl }, 201)
+  return success({ url: fileUrl }, 201)
   } catch (err) {
     if (err instanceof ValidationError) throw err
     console.error('[RECEIPT_UPLOAD] Unexpected error:', err)
