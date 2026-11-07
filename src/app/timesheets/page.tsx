@@ -220,7 +220,7 @@ export default function TimesheetsPage() {
       // Parallelize independent fetches — profile, projects, and timesheets list
       const [meRes, projRes, res] = await Promise.all([
         fetch('/api/me'),
-        fetch('/api/projects?pageSize=100'),
+        fetch('/api/timesheets/projects'),
         fetch(`/api/timesheets?page=1&pageSize=52`),
       ])
 

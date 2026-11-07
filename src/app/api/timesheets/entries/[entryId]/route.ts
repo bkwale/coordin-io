@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { parseBody, optionalString, optionalId, requireNumber } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { NextResponse } from 'next/server'
+import { assertBookableProject } from '@/lib/timesheets/bookable-projects'
 
 const LOCATION_TYPES = ['office', 'site', 'remote', 'travel'] as const
 
@@ -60,6 +61,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   if (body.projectId !== undefined) {
     updateData.projectId = optionalId(body.projectId, 'Project ID')
+    await assertBookableProject(profile.organisationId, updateData.projectId as string | null)
   }
 
   if (body.taskId !== undefined) {

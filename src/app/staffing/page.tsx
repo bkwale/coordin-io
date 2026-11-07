@@ -77,6 +77,7 @@ interface StaffingData {
   byDepartment: Record<string, number>
   expiringDocs: ExpiringDoc[]
   employees: Employee[]
+  formerEmployees?: Employee[]
 }
 
 interface EmployeeDetail {
@@ -476,7 +477,9 @@ export default function StaffingPage() {
 
   const filteredEmployees = useMemo(() => {
     if (!data) return []
-    return data.employees.filter((e) => {
+    // Leavers only appear when "Deactivated" is chosen in the status filter
+    const pool = statusFilter === 'DEACTIVATED' ? (data.formerEmployees ?? []) : data.employees
+    return pool.filter((e) => {
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
         if (

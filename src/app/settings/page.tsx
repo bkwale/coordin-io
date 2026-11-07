@@ -511,6 +511,7 @@ function TeamSection() {
 
   // Invite form state
   const [showInvite, setShowInvite] = useState(false)
+  const [showDeactivated, setShowDeactivated] = useState(false)
   const [invEmail, setInvEmail] = useState('')
   const [invName, setInvName] = useState('')
   const [invJob, setInvJob] = useState('')
@@ -784,7 +785,13 @@ function TeamSection() {
         )}
       </div>
 
-      {/* Team List */}
+      {/* Team List — leavers (deactivated) hidden unless asked for */}
+      {!!team?.members?.some((m) => m.status === 'DEACTIVATED') && (
+        <label className="flex items-center gap-2 mb-2 text-[12px] text-ink-500 justify-end">
+          <input type="checkbox" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} />
+          Show deactivated ({team.members.filter((m) => m.status === 'DEACTIVATED').length})
+        </label>
+      )}
       {team?.members && team.members.length > 0 ? (
         <div className="border border-surface-200 rounded-lg overflow-x-auto -mx-4 sm:mx-0">
           <table className="w-full min-w-[640px]">
@@ -801,7 +808,7 @@ function TeamSection() {
               </tr>
             </thead>
             <tbody>
-              {team.members.map((member) => {
+              {team.members.filter((m) => showDeactivated || m.status !== 'DEACTIVATED').map((member) => {
                 const isEditing = editingId === member.id
                 const isSelf = member.id === viewerProfileId
                 return (

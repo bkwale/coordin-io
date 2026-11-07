@@ -296,7 +296,7 @@ async function fetchStaffingDashboard(
 
   return {
     metrics: {
-      totalEmployees: allProfiles.length,
+      totalEmployees: allProfiles.filter((p) => p.status !== 'DEACTIVATED').length,
       activeEmployees: activeEmployees.length,
       onboarding: onboardingCount,
       // Utilisation metrics — zeroed for MANAGER, populated for HR+
@@ -314,7 +314,9 @@ async function fetchStaffingDashboard(
     byOffice: Object.values(byOffice),
     byDepartment,
     expiringDocs: showUtilisation ? expiringDocs : [],
-    employees: allProfiles.map(mapStaffingEmployee),
+    // Deactivated people (leavers) are hidden from every list and picker; Staffing can still show them on request
+    employees: allProfiles.filter((p) => p.status !== 'DEACTIVATED').map(mapStaffingEmployee),
+    formerEmployees: allProfiles.filter((p) => p.status === 'DEACTIVATED').map(mapStaffingEmployee),
     roles,
   }
 }
