@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fileLink, parseFileLink, canOpenFile } from '../storage-links'
+import { fileLink, parseFileLink, canOpenFile, fileScope } from '../storage-links'
 
 const hr = (role: string) => role === 'HR' || role === 'ADMIN' || role === 'OWNER'
 const me = { id: 'p1', organisationId: 'org1', orgPermission: 'MEMBER' }
@@ -30,5 +30,15 @@ describe('file links — stable app link, 1-hour signed URL on open', () => {
     expect(canOpenFile(me, 'documents', 'org1/../org2/a.pdf', hr)).toBe(false)
     expect(canOpenFile(me, 'documents', '/org1/a.pdf', hr)).toBe(false)
     expect(canOpenFile(me, 'documents', '', hr)).toBe(false)
+    // encoded traversal: storage URLs are not re-encoded, so %2e%2e would collapse to .. at the storage server
+    for (const p of ['org1/%2e%2e/org2/a.pdf', 'org1/%252e%252e/org2/a.pdf', 'org1/.%2E/org2/a.pdf', 'org1%2F..%2Forg2/a.pdf', 'org1/./a.pdf', 'org1//a.pdf', 'org1\\..\\org2/a.pdf', 'org1/../../receipts/x'])
+      expect(canOpenFile(me, 'documents', p, hr), p).toBe(false)
+    expect(canOpenFile(me, 'documents', 'org1/%252e%252e/hr/org1/p2/contract.pdf', hr)).toBe(false)
+  })
+  it('scopes project documents and receipts for the database check', () => {
+    expect(fileScope('documents', 'org1/proj1/123-a.pdf')).toEqual({ kind: 'project', projectId: 'proj1' })
+    expect(fileScope('documents', 'org1/proj1/setup/123-a.pdf')).toEqual({ kind: 'project', projectId: 'proj1' })
+    expect(fileScope('receipts', 'org1/p1/1-r.pdf')).toEqual({ kind: 'receipt', ownerId: 'p1' })
+    expect(fileScope('documents', 'hr/org1/p1/c.pdf')).toEqual({ kind: 'none' })
   })
 })

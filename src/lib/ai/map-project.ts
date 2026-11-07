@@ -56,7 +56,7 @@ const meta = (f: PagedField<unknown> | undefined | null) => ({ confidence: f?.co
  *   11101 Üksikelamu · 11102 Ridaelamu või kaksikelamu sektsioon (own roof + ground-level entrance) · 11103 Suvila, aiamaja
  *   11212 Kahe korteriga elamu · 11221 Ridaelamu · 11222 Muu kolme või enama korteriga elamu
  *   113xx Hoolekandeasutused / ühiselamud · 12xxx Mitteelamud · 2xxxx Rajatised
- * The label (when given) decides 11102: "kaksik…" = semi-detached, otherwise terraced.
+ * 11102 is terraced unless the label says kaksikelamu without ridaelamu (the official label names both).
  */
 export function buildingTypeFromUseCode(code: string | null | undefined, label?: string | null): ProjectParameters['buildingType'] | null {
   if (!code) return null
@@ -65,7 +65,8 @@ export function buildingTypeFromUseCode(code: string | null | undefined, label?:
   switch (c) {
     case '11101': return 'detached_house'
     case '11103': return 'detached_house'
-    case '11102': return label && /kaksik/i.test(label) ? 'semi_detached' : 'terraced'
+    // The official label names both ("Ridaelamu või kaksikelamu sektsioon") — only a label that says kaksikelamu alone means semi-detached
+    case '11102': return label && /kaksik/i.test(label) && !/ridaelamu/i.test(label) ? 'semi_detached' : 'terraced'
     case '11212': return 'semi_detached'        // two dwellings in one building
     case '11221': return 'terraced'             // row house as a whole building
     case '11222': return 'apartment_block'

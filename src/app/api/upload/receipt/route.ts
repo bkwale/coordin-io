@@ -75,7 +75,6 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new ValidationError(`Upload failed: ${uploadError.message}`)
   }
 
-  // Generate a stable link (/api/files…) that opens the file through a 1-hour signed URL (in seconds)
   // Store a stable app link; /api/files signs a 1-hour URL each time the file is opened
   const fileUrl = fileLink('receipts', storagePath)
 

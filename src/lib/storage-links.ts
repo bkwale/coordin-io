@@ -8,6 +8,7 @@ import type { OrgPermission } from '@/generated/prisma/client'
 export const FILE_BUCKETS = ['documents', 'receipts'] as const
 export type FileBucket = (typeof FILE_BUCKETS)[number]
 export const SIGNED_LINK_SECONDS = 60 * 60
+const SAFE_PATH = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
 
 export function fileLink(bucket: FileBucket, path: string): string {
   return `/api/files?b=${bucket}&p=${encodeURIComponent(path)}`
@@ -38,10 +39,26 @@ export function canOpenFile(
   path: string,
   canManageHR: (role: OrgPermission) => boolean,
 ): boolean {
-  if (!path || path.includes('..') || path.startsWith('/')) return false
+  // Only the characters our upload routes ever write. Rejects %-encoding (storage URLs are not re-encoded,
+  // so %2e%2e would collapse to ..), backslashes, empty segments and . / .. segments.
+  if (!SAFE_PATH.test(path)) return false
   const parts = path.split('/')
+  if (parts.some((seg) => seg === '.' || seg === '..')) return false
   if (bucket === 'documents' && parts[0] === 'hr') {
     return parts[1] === viewer.organisationId && (parts[2] === viewer.id || canManageHR(viewer.orgPermission as OrgPermission))
   }
   return parts[0] === viewer.organisationId
+}
+
+/**
+ * Second check, needing the database: what the viewer could see in the app itself.
+ *  - project documents (<org>/<projectId>/…): project members, or roles that see every project
+ *  - receipts (<org>/<profileId>/…): the claimant, or people who approve expenses
+ * Returns the projectId to check membership for, or null when no lookup is needed.
+ */
+export function fileScope(bucket: FileBucket, path: string): { kind: 'project'; projectId: string } | { kind: 'receipt'; ownerId: string } | { kind: 'none' } {
+  const parts = path.split('/')
+  if (bucket === 'receipts') return { kind: 'receipt', ownerId: parts[1] ?? '' }
+  if (bucket === 'documents' && parts[0] !== 'hr' && parts.length >= 3) return { kind: 'project', projectId: parts[1] }
+  return { kind: 'none' }
 }

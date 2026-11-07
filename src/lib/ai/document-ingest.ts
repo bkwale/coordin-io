@@ -53,9 +53,10 @@ export async function pdfToPages(bytes: Uint8Array): Promise<string[]> {
   // unpdf (maintained, serverless build of current pdf.js). Copy into a fresh Uint8Array — pdf.js detaches the buffer it is given.
   const data = new Uint8Array(bytes.byteLength); data.set(bytes)
   const pages: string[] = []
+  let pdf: Awaited<ReturnType<typeof import('unpdf')['getDocumentProxy']>> | null = null
   try {
     const { getDocumentProxy } = await import('unpdf')
-    const pdf = await getDocumentProxy(data)
+    pdf = await getDocumentProxy(data)
     const n = Math.min(pdf.numPages, INGEST_LIMITS.maxPages)
     for (let i = 1; i <= n; i++) {
       const page = await pdf.getPage(i)
@@ -70,10 +71,12 @@ export async function pdfToPages(bytes: Uint8Array): Promise<string[]> {
         out += it.str; lastY = y
       }
       pages.push(out)
+      page.cleanup?.()
     }
-    await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.()
   } catch (e) {
     throw new IngestError('unreadable', INGEST_MESSAGE.unreadable + (e instanceof Error && /password/i.test(e.message) ? ' (password-protected)' : ''))
+  } finally {
+    await (pdf as unknown as { destroy?: () => Promise<void> } | null)?.destroy?.()?.catch?.(() => {})
   }
   const cleaned = pages.map(cleanText)
   const total = cleaned.reduce((a, p) => a + p.length, 0)
