@@ -1752,7 +1752,7 @@ function AuditSection() {
     setOffset(0)
   }
 
-  async function handleExport() {
+  async function handleExport(kind?: 'ai') {
     if (!fromDate || !toDate) {
       setExportError('Select both From and To dates to export')
       return
@@ -1763,7 +1763,8 @@ function AuditSection() {
       const params = new URLSearchParams()
       params.set('from', fromDate)
       params.set('to', toDate)
-      if (actionFilter) params.set('action', actionFilter)
+      if (actionFilter && !kind) params.set('action', actionFilter)
+      if (kind) params.set('kind', kind)
 
       const res = await fetch(`/api/audit/export?${params}`)
       if (res.status === 429) {
@@ -1779,7 +1780,7 @@ function AuditSection() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `audit-${fromDate}-to-${toDate}.csv`
+      a.download = `${kind === 'ai' ? 'ai-runs' : 'audit'}-${fromDate}-to-${toDate}.csv`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -1850,12 +1851,21 @@ function AuditSection() {
             />
           </div>
           <button
-            onClick={handleExport}
+            onClick={() => handleExport()}
             disabled={exporting || !fromDate || !toDate}
             className="flex items-center gap-2 px-4 py-2 bg-ink-900 text-white text-[12px] font-medium rounded-lg hover:bg-ink-800 disabled:opacity-50 transition-colors"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Export CSV
+          </button>
+          <button
+            onClick={() => handleExport('ai')}
+            disabled={exporting || !fromDate || !toDate}
+            title="One row per AI run: model, prompt version, source document, who confirmed it, what was accepted or changed"
+            className="flex items-center gap-2 px-4 py-2 border border-ink-200 text-ink-800 text-[12px] font-medium rounded-lg hover:bg-surface-50 disabled:opacity-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export AI runs
           </button>
         </div>
 

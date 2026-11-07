@@ -6,6 +6,7 @@ import { withAuth } from '@/lib/with-auth'
 import { canPerform } from '@/lib/role-permissions'
 import { HR_VISIBLE_PREFIXES, AUDIT_ACTION_LABELS, recordAuditEvent, AuditActions, getAuditPrefixesForRole } from '@/lib/audit'
 import { RateLimitedError, ValidationError, PermissionError } from '@/lib/errors'
+import { buildAiRunRows, aiRunsCsv, csvCell } from '@/lib/ai/audit-export'
 
 const EXPORT_COOLDOWN_MS = 60_000 // 1 minute
 const MAX_DATE_RANGE_DAYS = 90
@@ -62,6 +63,20 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   const isFullAccess = canPerform(profile.orgPermission, 'audit', 'view_all')
   const rolePrefixes = getAuditPrefixesForRole(profile.orgPermission)
+
+  // ?kind=ai — one row per AI run: model, prompt version, source document, who confirmed, what was accepted.
+  // Spans every project, so only roles that can see the whole audit trail may export it.
+  if (url.searchParams.get('kind') === 'ai') {
+    if (!isFullAccess) throw new PermissionError('Only practice admins can export the AI run log')
+    const rows = await buildAiRunRows(profile.organisationId, fromDate, toDate)
+    await recordAuditEvent({
+      organisationId: profile.organisationId, actorId: profile.id, action: AuditActions.AUDIT_EXPORTED,
+      entityType: 'AuditExport', entityId: `export-ai-${Date.now()}`, metadata: { from, to, kind: 'ai', runCount: rows.length },
+    }).catch(() => {})
+    return new NextResponse(aiRunsCsv(rows), {
+      headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="ai-runs-${from}-to-${to}.csv"` },
+    })
+  }
 
   // Build where clause
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,12 +150,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   }).catch(() => {})
 
   // Build CSV
-  const escCsv = (s: string) => {
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`
-    }
-    return s
-  }
+  const escCsv = (s: string) => csvCell(s)
 
   const rows = [
     'Date,Time,Action,Actor,Actor Role,Entity Type,Entity ID,Details',
