@@ -28,7 +28,6 @@ export function CommandPalette() {
     { label: 'Fee Quotes', sublabel: 'Quote pipeline', href: '/fee-quotes', icon: <Receipt className="w-4 h-4" />, category: 'Pages' },
     { label: 'Analytics', sublabel: 'Portfolio health', href: '/analytics/portfolio', icon: <BarChart3 className="w-4 h-4" />, category: 'Pages' },
     { label: 'Settings', sublabel: 'Admin controls', href: '/settings/admin', icon: <Settings className="w-4 h-4" />, category: 'Pages' },
-    { label: 'AI Teammate', sublabel: 'Ask anything', href: '/ai', icon: <Sparkles className="w-4 h-4" />, category: 'Pages' },
     // Dynamic items will be fetched from APIs when search is available
   ]
 
