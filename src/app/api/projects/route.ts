@@ -5,7 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { canPerform } from '@/lib/role-permissions'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { ValidationError } from '@/lib/errors'
-import { resolveCurrency, currencyForCountry, orgCountry } from '@/lib/region'
+import { resolveCurrency, firmCurrency, orgCountry } from '@/lib/region'
 import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 
 /**
@@ -157,7 +157,7 @@ export const POST = withAuth(async (request: NextRequest, { profile, authUserId 
 
   // Currency: what the wizard sent, else the firm's own (never the old NGN column default)
   const org = await prisma.organisation.findUnique({ where: { id: profile.organisationId }, select: { defaultCurrency: true, settings: true, offices: { select: { country: true, isHeadOffice: true } } } })
-  const resolvedCurrency = resolveCurrency(currency, org?.defaultCurrency, currencyForCountry(orgCountry(org)))
+  const resolvedCurrency = currency ? resolveCurrency(currency) : firmCurrency(org, orgCountry(org))
   const run = setupRunId
     ? await prisma.aIRun.findFirst({ where: { id: setupRunId, organisationId: profile.organisationId, projectId: null, surface: 'PROJECT_SETUP', createdBy: authUserId }, select: { id: true } })
     : null

@@ -71,7 +71,9 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   // Currency validation
   const validCurrencies: string[] = ['NGN', 'GBP', 'USD', 'EUR']
   // Defaults follow the firm's country (EUR + 24% VAT in Estonia, GBP + 20% in the UK)
-  const firm = await firmDefaults(profile.organisationId)
+  const firmRaw = await firmDefaults(profile.organisationId)
+  // Nigerian firms keep the defaults they always had (GBP, 20%) — only new countries change
+  const firm = firmRaw.country === 'NG' ? { ...firmRaw, currency: 'GBP' as const, vatRate: 20 } : firmRaw
   const currency = (typeof body.currency === 'string' && validCurrencies.includes(body.currency)
     ? body.currency
     : firm.currency) as 'NGN' | 'GBP' | 'USD' | 'EUR'

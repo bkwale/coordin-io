@@ -33,7 +33,7 @@ export function normaliseBic(v: string): string | null {
 
 export function normaliseSortCode(v: string): string | null {
   const d = v.replace(/[\s-]/g, '')
-  return /^\d{6}$/.test(d) ? `${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4)}` : null
+  return /^\d{6}$/.test(d) ? d : null // stored as 6 digits, like existing records
 }
 
 export interface BankInput { accountNumber?: string | null; sortCode?: string | null; bankCode?: string | null }
@@ -55,6 +55,7 @@ export function validateBank(format: BankFormat, input: BankInput): { ok: true; 
     if (!/^\d{8}$/.test(digits)) return { ok: false, error: 'UK account numbers are 8 digits' }
     return { ok: true, accountNumber: digits, sortCode: sc, bankCode: null }
   }
-  if (!/^\d{10}$/.test(acc)) return { ok: false, error: 'Account number must be exactly 10 digits (NUBAN)' }
-  return { ok: true, accountNumber: acc, sortCode: null, bankCode: (input.bankCode ?? '').trim() || null }
+  const nuban = acc.replace(/\s/g, '')
+  if (!/^\d{10}$/.test(nuban)) return { ok: false, error: 'Account number must be exactly 10 digits (NUBAN)' }
+  return { ok: true, accountNumber: nuban, sortCode: null, bankCode: (input.bankCode ?? '').trim() || null }
 }

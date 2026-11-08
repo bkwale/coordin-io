@@ -34,3 +34,14 @@ describe('region', () => {
     expect(COUNTRIES.NG.stageFramework).toBe('NIGERIAN_CWA')
   })
 })
+
+describe('firmCurrency', () => {
+  it('treats the old NGN column default as unset for non-Nigerian firms', async () => {
+    const { firmCurrency } = await import('../region')
+    expect(firmCurrency({ defaultCurrency: 'NGN' }, 'EE')).toBe('EUR')
+    expect(firmCurrency({ defaultCurrency: 'NGN' }, 'GB')).toBe('GBP')
+    expect(firmCurrency({ defaultCurrency: 'NGN' }, 'NG')).toBe('NGN')
+    expect(firmCurrency({ defaultCurrency: 'USD' }, 'EE')).toBe('USD')
+    expect(firmCurrency({ defaultCurrency: 'NGN' }, null)).toBe('NGN')
+  })
+})

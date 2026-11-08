@@ -1,5 +1,5 @@
 import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
-import { bankFormatFor, validateBank } from '@/lib/bank-format'
+import { bankFormatFor, validateBank, normaliseSortCode } from '@/lib/bank-format'
 import { prisma } from '@/lib/prisma'
 import { firmDefaults } from '@/lib/region-server'
 import { NextRequest } from 'next/server'
@@ -474,7 +474,11 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (bankAccountNumber !== null) {
       const office = await prisma.profile.findUnique({ where: { id: profileId }, select: { office: { select: { country: true } } } }).catch(() => null)
       const format = bankFormatFor(office?.office?.country, await firmCountryOf(profile.organisationId))
-      const checked = validateBank(format, { accountNumber: bankAccountNumber, sortCode: bankSortCode, bankCode })
+      // UK: an account-number change can reuse the sort code already on file
+      const storedSort = format === 'uk_sort_code' && !bankSortCode
+        ? (await modulesPrisma.confidentialEmployeeData.findUnique({ where: { profileId }, select: { bankSortCode: true } }).catch(() => null))?.bankSortCode ?? null
+        : null
+      const checked = validateBank(format, { accountNumber: bankAccountNumber, sortCode: bankSortCode ?? storedSort, bankCode })
       if (!checked.ok) throw new ValidationError(checked.error)
       bankConfidentialData.bankAccountNumber = checked.accountNumber
       if (checked.sortCode) bankConfidentialData.bankSortCode = checked.sortCode
@@ -483,7 +487,11 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (bankCode !== null && bankConfidentialData.bankCode === undefined) bankConfidentialData.bankCode = bankCode
     if (bankAccountName !== null) bankConfidentialData.bankAccountName = bankAccountName
     if (bankName !== null) bankConfidentialData.bankName = bankName
-    if (bankSortCode !== null && bankConfidentialData.bankSortCode === undefined && bankAccountNumber === null) bankConfidentialData.bankSortCode = bankSortCode
+    if (bankSortCode !== null && bankConfidentialData.bankSortCode === undefined && bankAccountNumber === null) {
+      const sc = normaliseSortCode(bankSortCode)
+      if (!sc) throw new ValidationError('Sort code must be 6 digits, e.g. 20-00-00')
+      bankConfidentialData.bankSortCode = sc
+    }
     if (bankVerified !== null) {
       bankConfidentialData.bankVerified = bankVerified
       if (bankVerified) bankConfidentialData.bankVerifiedAt = new Date()

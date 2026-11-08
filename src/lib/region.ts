@@ -58,7 +58,7 @@ export function countryCode(v: string | null | undefined): CountryCode | null {
   const t = (v ?? '').trim().toLowerCase()
   if (!t) return null
   if (t === 'ee' || t.startsWith('eston') || t === 'eesti') return 'EE'
-  if (t === 'gb' || t === 'uk' || t.startsWith('england') || t.startsWith('united kingdom') || t.startsWith('great britain') || t === 'wales' || t === 'scotland') return 'GB'
+  if (t === 'gb' || t === 'uk' || t.startsWith('england') || t.startsWith('united kingdom') || t.startsWith('great britain')) return 'GB'
   if (t === 'ng' || t.startsWith('nigeria')) return 'NG'
   return null
 }
@@ -105,6 +105,15 @@ export function defaultJurisdiction(input: { projectJurisdiction?: string | null
 export function resolveCurrency(...candidates: Array<string | null | undefined>): CurrencyCode {
   for (const c of candidates) if (c === 'EUR' || c === 'GBP' || c === 'NGN' || c === 'USD') return c
   return 'EUR'
+}
+
+/**
+ * The firm's currency. organisations.default_currency is NOT NULL with an old NGN default, so a stored NGN on a
+ * non-Nigerian firm is treated as "never chosen" and the country's currency wins.
+ */
+export function firmCurrency(org: { defaultCurrency?: string | null } | null | undefined, country: CountryCode | null | undefined): CurrencyCode {
+  if (org?.defaultCurrency === 'NGN' && country && country !== 'NG') return COUNTRIES[country].currency
+  return resolveCurrency(org?.defaultCurrency, country ? COUNTRIES[country].currency : null)
 }
 
 /** Standard VAT rate for a firm/country; null = unknown (caller asks the user). */

@@ -61,7 +61,7 @@ export default function NewFeeQuotePage() {
   // Firm defaults: EUR + 24% VAT in Estonia, GBP + 20% in the UK — until the user changes them
   const firm = useFirmRegion()
   const [touched, setTouched] = useState(false)
-  useEffect(() => { if (firm && !touched) { setCurrency(firm.currency); if (firm.vatRate != null) setTaxRate(firm.vatRate) } }, [firm, touched])
+  useEffect(() => { if (firm && !touched && firm.country !== 'NG') { setCurrency(firm.currency); if (firm.vatRate != null) setTaxRate(firm.vatRate) } }, [firm, touched])
   const [validUntil, setValidUntil] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)

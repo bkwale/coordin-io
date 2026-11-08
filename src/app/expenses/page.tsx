@@ -211,7 +211,7 @@ export default function ExpensesPage() {
       category: formCategory,
       description: formDescription.trim(),
       amount: amt,
-      currency: formCurrency || homeCurrency,
+      currency: formCurrency || firm?.currency || homeCurrency,
       ...(formProjectId ? { projectId: formProjectId } : {}),
       ...(formCostCode.trim() ? { costCode: formCostCode.trim() } : {}),
       ...(formSupplier.trim() ? { supplier: formSupplier.trim() } : {}),

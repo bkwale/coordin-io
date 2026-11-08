@@ -37,6 +37,7 @@ export function StartFromDocument({ jurisdiction, onRead, onSkip }: {
   const fileRef = useRef<HTMLInputElement>(null)
   const lastFile = useRef<File | null>(null)
   const poll = useRef<ReturnType<typeof setInterval> | null>(null)
+  const delivered = useRef<string | null>(null)
   useEffect(() => () => { if (poll.current) clearInterval(poll.current) }, [])
 
   function stop(message?: string) {
@@ -69,7 +70,7 @@ export function StartFromDocument({ jurisdiction, onRead, onSkip }: {
         if (data.status === 'FAILED') stop()
         if (data.status === 'AWAITING_CONFIRMATION' && data.mapping) {
           stop()
-          onRead({ runId: data.id, mapping: data.mapping, file: lastFile.current })
+          if (delivered.current !== data.id) { delivered.current = data.id; onRead({ runId: data.id, mapping: data.mapping, file: lastFile.current }) }
         }
       }, POLL_MS)
     } catch { stop('Could not reach Coordin. Check your connection and try again, or carry on by hand.') }
@@ -140,9 +141,13 @@ export function StartFromDocument({ jurisdiction, onRead, onSkip }: {
         )}
       </div>
 
-      <button type="button" onClick={onSkip} className="text-[13px] text-ink-500 hover:text-ink-800 underline underline-offset-2">
-        {m ? 'Continue' : 'No document — fill in by hand'}
-      </button>
+      {busy ? (
+        <p className="text-[12px] text-ink-400">Reading — this usually takes under a minute. Stay on this step until it finishes.</p>
+      ) : (
+        <button type="button" onClick={onSkip} className="text-[13px] text-ink-500 hover:text-ink-800 underline underline-offset-2">
+          {m ? 'Continue' : 'No document — fill in by hand'}
+        </button>
+      )}
     </div>
   )
 }

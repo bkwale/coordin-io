@@ -1,11 +1,11 @@
 /** Country defaults that need the database. Pure rules live in ./region. */
 import { prisma } from '@/lib/prisma'
-import { orgCountry, resolveCurrency, currencyForCountry, vatRateFor, COUNTRIES, type CountryCode, type CurrencyCode } from '@/lib/region'
+import { orgCountry, resolveCurrency, firmCurrency, vatRateFor, COUNTRIES, type CountryCode, type CurrencyCode } from '@/lib/region'
 
 export async function firmDefaults(organisationId: string): Promise<{ country: CountryCode | null; currency: CurrencyCode; vatRate: number | null }> {
   const org = await prisma.organisation.findUnique({ where: { id: organisationId }, select: { settings: true, defaultCurrency: true, offices: { select: { country: true, isHeadOffice: true } } } })
   const country = orgCountry(org)
-  return { country, currency: resolveCurrency(org?.defaultCurrency, currencyForCountry(country)), vatRate: vatRateFor(country) }
+  return { country, currency: firmCurrency(org, country), vatRate: vatRateFor(country) }
 }
 
 /** Currency for a new commercial record on a project: the project's, else the firm's. */

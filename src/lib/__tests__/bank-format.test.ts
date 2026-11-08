@@ -9,13 +9,13 @@ describe('bank formats', () => {
     expect(normaliseIban('EE3822002210')).toBeNull()
   })
   it('formats UK sort codes', () => {
-    expect(normaliseSortCode('200000')).toBe('20-00-00')
+    expect(normaliseSortCode('20-00-00')).toBe('200000')
     expect(normaliseSortCode('20 00 0')).toBeNull()
   })
   it('validates per country', () => {
     expect(validateBank('iban', { accountNumber: 'EE382200221020145685', bankCode: 'HABAEE2X' })).toMatchObject({ ok: true, bankCode: 'HABAEE2X' })
     expect(validateBank('iban', { accountNumber: '1234567890' }).ok).toBe(false)
-    expect(validateBank('uk_sort_code', { accountNumber: '31926819', sortCode: '60-16-13' })).toMatchObject({ ok: true, sortCode: '60-16-13' })
+    expect(validateBank('uk_sort_code', { accountNumber: '31926819', sortCode: '60-16-13' })).toMatchObject({ ok: true, sortCode: '601613' })
     expect(validateBank('uk_sort_code', { accountNumber: '3192681', sortCode: '601613' }).ok).toBe(false)
     expect(validateBank('nuban', { accountNumber: '0123456789', bankCode: '058' }).ok).toBe(true)
   })

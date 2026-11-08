@@ -44,7 +44,8 @@ export default function DeliveryPage() {
     setSelected((cur) => cur ?? json.data.stages.find((s: Stage) => s.status !== 'PASSED')?.id ?? json.data.stages[0]?.id ?? null)
     // Start on the framework for the project's country: Estonian stages in Estonia, RIBA in the UK, CWA's guide for CWA
     const d = json.data as Delivery
-    const preferred = (d.firmCountry === 'NG' || d.firmCountry == null) && d.country !== 'EE' && d.country !== 'GB' ? 'CWA' : (d.country ?? d.firmCountry) === 'EE' ? 'EVS' : 'RIBA'
+    // CWA (Nigerian firm) always starts on its own guide, wherever the project is
+    const preferred = d.firmCountry === 'NG' || d.firmCountry == null ? 'CWA' : (d.country ?? d.firmCountry) === 'EE' ? 'EVS' : 'RIBA'
     setSetup((s) => ({ ...s, framework: preferred, accorOverlay: preferred === 'CWA' && (d.projectType === 'HOTEL' || d.projectType === 'RESORT') }))
   }, [projectId, toast])
   useEffect(() => {

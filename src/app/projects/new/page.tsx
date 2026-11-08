@@ -304,6 +304,9 @@ export default function NewProjectPage() {
   const cc = countryCode(resolvedCountry)
   const cp = cc ? COUNTRIES[cc] : null
   const ruleSet = cp?.jurisdiction ?? null
+  // CWA (Nigerian firm) keeps every compliance option it had; other firms get the regulatory checklist instead
+  const legacyCompliance = orgRegion?.country === 'NG' || !ruleSet
+  const showUkDuties = cc === 'GB' || orgRegion?.country === 'NG'
   const steps = STEP_DEFS.filter(d => d.key !== 'operator' || isHospitality)
   const cur: StepKey = steps[Math.min(step, steps.length) - 1].key
   const setCountry = (v: string) => {
@@ -387,16 +390,16 @@ export default function NewProjectPage() {
     if (form.workStageFramework) p.workStageFramework = form.workStageFramework
 
     // Step 6
-    p.isBRPD = cc === 'GB' ? form.isBRPD : false
-    p.isCDM = cc === 'GB' ? form.isCDM : false
+    p.isBRPD = showUkDuties ? form.isBRPD : false
+    p.isCDM = showUkDuties ? form.isCDM : false
     const fw: string[] = []
-    if (form.compBuildingRegs) fw.push('BUILDING_REGS')
-    if (form.compPlanning) fw.push('PLANNING')
-    if (form.compFireSafety) fw.push('FIRE_SAFETY')
+    if (legacyCompliance && form.compBuildingRegs) fw.push('BUILDING_REGS')
+    if (legacyCompliance && form.compPlanning) fw.push('PLANNING')
+    if (legacyCompliance && form.compFireSafety) fw.push('FIRE_SAFETY')
     if (form.compEDGE) fw.push('EDGE')
     if (form.compBREEAM) fw.push('BREEAM')
     if (form.compLEED) fw.push('LEED')
-    if (form.compOperatorReqs) fw.push('OPERATOR_REQS')
+    if (isHospitality && form.compOperatorReqs) fw.push('OPERATOR_REQS')
     if (form.complianceCustom.trim()) fw.push(form.complianceCustom.trim())
     if (fw.length) p.complianceFrameworks = fw.join(',')
 
@@ -840,7 +843,7 @@ export default function NewProjectPage() {
         {/* ═══ Step 6 — Compliance ════════════════════ */}
         {cur === 'compliance' && (
           <div className="space-y-4">
-            {ruleSet ? (
+            {ruleSet && !legacyCompliance ? (
               <div className="rounded-lg border border-accent-200 bg-accent-50/50 p-3 text-[13px] text-ink-700">
                 <b>The regulatory checklist is built for you.</b> After you create the project, Coordin opens its Regulatory page{reading ? ' with the document you read, ready to review' : ''} and builds the {ruleSet === 'EE' ? 'Estonian (Ehitusseadustik)' : 'England (planning, Building Regulations, Building Safety Act, CDM)'} checklist — every item with the law it comes from.
               </div>
@@ -849,7 +852,7 @@ export default function NewProjectPage() {
             )}
 
             {/* BRPD + CDM — UK duties only */}
-            {cc === 'GB' && <div className="space-y-2">
+            {showUkDuties && <div className="space-y-2">
               <label className="flex items-start gap-3 p-3 border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer transition-colors">
                 <input type="checkbox" checked={form.isBRPD} onChange={e => update('isBRPD', e.target.checked)} className="w-4 h-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500 mt-0.5" />
                 <div>
@@ -872,7 +875,7 @@ export default function NewProjectPage() {
             <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">{ruleSet ? 'Certifications and client requirements' : 'Requirements'}</p>
             <div className="space-y-2">
               {([
-                ...(ruleSet ? [] : [['compBuildingRegs', 'Building regulations'], ['compPlanning', 'Planning'], ['compFireSafety', 'Fire and life safety']] as const),
+                ...(legacyCompliance ? [['compBuildingRegs', 'Building regulations'], ['compPlanning', 'Planning'], ['compFireSafety', 'Fire and life safety']] as const : []),
                 ['compEDGE', 'EDGE'],
                 ['compBREEAM', 'BREEAM'],
                 ['compLEED', 'LEED'],

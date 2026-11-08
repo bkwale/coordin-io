@@ -271,6 +271,10 @@ export async function attachSetupDocument(input: { projectId: string; organisati
   const kind: SetupDocumentKind = summary.kind && SETUP_DOCUMENT_KINDS.includes(summary.kind) ? summary.kind : 'planning_conditions'
   const storage = await uploadToStorage(input.organisationId, input.projectId, input.file)
   const document = await prisma.$transaction(async (tx) => {
+    // Two attaches at once: only the first files the document
+    const fresh = await tx.aIRun.findUnique({ where: { id: run.id }, select: { inputSummary: true } })
+    const already = (() => { try { return (JSON.parse(fresh?.inputSummary ?? '{}') as { documentId?: string | null }).documentId ?? null } catch { return null } })()
+    if (already) return { id: already }
     const doc = await tx.document.create({
       data: {
         projectId: input.projectId, title: `${TITLE[kind]} — ${input.file.name}`, documentType: 'CERTIFICATE', discipline: 'Planning', securityLevel: 'INTERNAL', status: 'ISSUED', currentRevision: 'A',
