@@ -439,7 +439,10 @@ export default function NewProjectPage() {
         throw new Error(b?.error || `Failed to create project (${res.status})`)
       }
 
-      const { project } = await res.json()
+      // API answers { data: { project } }; reading { project } left project undefined (team never added, no redirect)
+      const body = await res.json().catch(() => null)
+      const project = (body?.data?.project ?? body?.project) as { id: string } | undefined
+      if (!project?.id) throw new Error('The project was created but Coordin could not open it — find it under Projects')
 
       // Add team members (PM first, then extras)
       const allMembers = [...teamMembers]
