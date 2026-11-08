@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { firmDefaults } from '@/lib/region-server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -52,15 +53,17 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   // Currency validation
   const validCurrencies: string[] = ['NGN', 'GBP', 'USD', 'EUR']
+  // Defaults follow the firm's country (EUR + 24% VAT in Estonia, GBP + 20% in the UK)
+  const firm = await firmDefaults(profile.organisationId)
   const currencyStr = typeof body.currency === 'string' && validCurrencies.includes(body.currency)
     ? body.currency
-    : 'GBP'
+    : firm.currency
   const currency = currencyStr as 'NGN' | 'GBP' | 'USD' | 'EUR'
 
-  // Tax rate (default 20%)
+  // Tax rate: what was sent, else the firm's standard VAT rate
   const taxRate = typeof body.taxRate === 'number' && !isNaN(body.taxRate)
     ? body.taxRate
-    : 20
+    : (firm.vatRate ?? 20)
 
   // Validate line items
   const rawLineItems = body.lineItems

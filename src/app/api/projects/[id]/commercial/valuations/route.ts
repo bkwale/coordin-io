@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { projectCurrency } from '@/lib/region-server'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -41,7 +42,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const body = await parseBody(request)
 
   const period = requireString(body.period, 'Period', 100)
-  const currency = optionalEnum(body.currency, 'Currency', CURRENCIES) ?? 'NGN'
+  const currency = optionalEnum(body.currency, 'Currency', CURRENCIES) ?? (await projectCurrency(projectId))
   const retentionPct = optionalNumber(body.retentionPct, 'Retention %', { min: 0, max: 100 }) ?? 5
   const notes = optionalString(body.notes, 'Notes', 5000)
 

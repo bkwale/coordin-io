@@ -42,11 +42,11 @@ interface OrgSettings {
 }
 
 const VALID_TIMEZONES = [
-  'Europe/London', 'Europe/Berlin', 'America/New_York', 'Africa/Lagos', 'Asia/Dubai',
+  'Europe/London', 'Europe/Tallinn', 'Europe/Berlin', 'America/New_York', 'Africa/Lagos', 'Asia/Dubai',
 ]
 
 const VALID_DATE_FORMATS = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD', 'D MMM YYYY']
-const VALID_NUMBER_FORMATS = ['en-GB', 'de-DE']
+const VALID_NUMBER_FORMATS = ['en-GB', 'et-EE', 'de-DE']
 const VALID_WEEK_STARTS = ['monday', 'sunday']
 const VALID_LANGUAGES = ['en']
 
@@ -146,7 +146,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   })
 
   const existing = (org?.settings as OrgSettings) ?? {}
+  // Keep every other key in settings (country, sandbox, practiceLabel…) — this route only owns regional + numbering
   const merged: OrgSettings = {
+    ...(existing as Record<string, unknown>),
     regional: { ...existing.regional, ...incoming.regional },
     numbering: {
       project: { ...existing.numbering?.project, ...incoming.numbering?.project },

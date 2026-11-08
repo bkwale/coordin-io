@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { projectCurrency } from '@/lib/region-server'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -51,7 +52,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const reason = optionalEnum(body.reason, 'Reason', VARIATION_REASONS) ?? 'DESIGN_CHANGE'
   const initiatedBy = optionalString(body.initiatedBy, 'Initiated by', 200)
   const amount = optionalNumber(body.amount, 'Amount')
-  const currency = optionalEnum(body.currency, 'Currency', CURRENCIES) ?? 'NGN'
+  const currency = optionalEnum(body.currency, 'Currency', CURRENCIES) ?? (await projectCurrency(projectId))
   const timeImpactDays = optionalNumber(body.timeImpactDays, 'Time impact (days)', { min: 0 })
   const linkedDocumentId = optionalId(body.linkedDocumentId, 'Linked document ID')
   const linkedTaskId = optionalId(body.linkedTaskId, 'Linked task ID')

@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { projectCurrency } from '@/lib/region-server'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -56,7 +57,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const owner = optionalString(body.owner, 'Owner', 200)
   const mitigationPlan = optionalString(body.mitigationPlan, 'Mitigation plan', 5000)
   const amount = optionalNumber(body.amount, 'Amount', { min: 0 })
-  const currency = optionalEnum(body.currency, 'Currency', CURRENCIES) ?? 'NGN'
+  const currency = optionalEnum(body.currency, 'Currency', CURRENCIES) ?? (await projectCurrency(projectId))
 
   const risk = await prisma.commercialRisk.create({
     data: {
