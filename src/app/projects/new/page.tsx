@@ -106,8 +106,8 @@ const PROJECT_ROLES = [
 const FRAMEWORK_STAGES: Record<string, { id: string; name: string }[]> = {
   EVS_932: [
     { id: '1', name: 'Eskiisprojekt — sketch design' },
-    { id: '2', name: 'Eelprojekt — preliminary design (planning conditions)' },
-    { id: '3', name: 'Põhiprojekt — main design (building permit)' },
+    { id: '2', name: 'Eelprojekt — preliminary design (building permit application)' },
+    { id: '3', name: 'Põhiprojekt — main design (before works start)' },
     { id: '4', name: 'Tööprojekt — working design' },
     { id: '5', name: 'Ehitus — construction and supervision' },
     { id: '6', name: 'Kasutusluba — occupancy permit and handover' },

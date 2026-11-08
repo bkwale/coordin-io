@@ -2,25 +2,30 @@
  * Delivery frameworks — persistence (FEAT-017). Routes stay thin; all rules live here or in frameworks.ts.
  */
 import { prisma } from '@/lib/prisma'
+import { countryCode } from '@/lib/region'
+import { firmDefaults } from '@/lib/region-server'
 import { recordAuditEvent } from '@/lib/audit'
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors'
 import { buildStages, gateDecisionProblems, statusForDecision, TEMPLATE_VERSIONS, FRAMEWORK_LABELS, ITEM_KIND_LABELS, stageProgress } from './frameworks'
 import type { Framework, GateDecision, ItemKind } from './types'
 
-export const FRAMEWORKS: Framework[] = ['RIBA', 'CWA', 'CUSTOM']
+export const FRAMEWORKS: Framework[] = ['RIBA', 'EVS', 'CWA', 'CUSTOM']
 const ITEM_STATUSES = ['OPEN', 'DONE', 'NOT_APPLICABLE'] as const
 const STAGE_MANUAL_STATUSES = ['NOT_STARTED', 'IN_PROGRESS'] as const
 const DECISIONS: GateDecision[] = ['PASS', 'CONDITIONAL_PASS', 'HOLD']
 
 export async function getDelivery(projectId: string) {
   const [project, stages] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { deliveryFramework: true, accorOverlay: true, projectType: true } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { deliveryFramework: true, accorOverlay: true, projectType: true, siteCountry: true, jurisdiction: true, organisationId: true } }),
     prisma.deliveryStage.findMany({ where: { projectId }, orderBy: { sortOrder: 'asc' }, include: { items: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] } } }),
   ])
   return {
     framework: project?.deliveryFramework ?? null,
     accorOverlay: project?.accorOverlay ?? false,
     projectType: project?.projectType ?? null,
+    // Which framework to offer first: the project's country (EVS in Estonia, RIBA in the UK); CWA's own guide only for CWA
+    country: countryCode(project?.jurisdiction) ?? countryCode(project?.siteCountry) ?? null,
+    firmCountry: project ? (await firmDefaults(project.organisationId).catch(() => null))?.country ?? null : null,
     stages: stages.map((s) => ({ ...s, progress: stageProgress(s.items) })),
     catalogue: { frameworks: FRAMEWORK_LABELS, itemKinds: ITEM_KIND_LABELS },
   }
@@ -31,7 +36,7 @@ export async function applyFramework(opts: {
   projectId: string; organisationId: string; actorId: string
   framework: Framework; accorOverlay?: boolean; customStages?: { name: string; code?: string }[]
 }) {
-  if (!FRAMEWORKS.includes(opts.framework)) throw new ValidationError('framework must be RIBA, CWA or CUSTOM')
+  if (!FRAMEWORKS.includes(opts.framework)) throw new ValidationError('framework must be RIBA, EVS, CWA or CUSTOM')
   let built
   try { built = buildStages(opts.framework, { accorOverlay: !!opts.accorOverlay, customStages: opts.customStages }) }
   catch (e) { throw new ValidationError(e instanceof Error ? e.message : 'Invalid stages') }
