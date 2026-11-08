@@ -15,7 +15,7 @@ type Stage = {
   status: string; designFreeze: boolean; decision: string | null; decisionNotes: string | null; decidedAt: string | null
   plannedStart: string | null; plannedEnd: string | null; items: Item[]; progress: { total: number; resolved: number; pct: number }
 }
-type Delivery = { framework: string | null; accorOverlay: boolean; projectType: string | null; stages: Stage[]; catalogue: { frameworks: Record<string, string>; itemKinds: Record<string, string> } }
+type Delivery = { framework: string | null; accorOverlay: boolean; projectType: string | null; country?: string | null; firmCountry?: string | null; stages: Stage[]; catalogue: { frameworks: Record<string, string>; itemKinds: Record<string, string> } }
 type Member = { profile: { id: string; fullName: string } }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -42,7 +42,11 @@ export default function DeliveryPage() {
     if (!res.ok) { toast(json.error || 'Failed to load delivery stages', 'error'); return }
     setData(json.data)
     setSelected((cur) => cur ?? json.data.stages.find((s: Stage) => s.status !== 'PASSED')?.id ?? json.data.stages[0]?.id ?? null)
-    if (json.data.projectType === 'HOTEL' || json.data.projectType === 'RESORT') setSetup((s) => ({ ...s, accorOverlay: true }))
+    // Start on the framework for the project's country: Estonian stages in Estonia, RIBA in the UK, CWA's guide for CWA
+    const d = json.data as Delivery
+    // CWA (Nigerian firm) always starts on its own guide, wherever the project is
+    const preferred = d.firmCountry === 'NG' || d.firmCountry == null ? 'CWA' : (d.country ?? d.firmCountry) === 'EE' ? 'EVS' : 'RIBA'
+    setSetup((s) => ({ ...s, framework: preferred, accorOverlay: preferred === 'CWA' && (d.projectType === 'HOTEL' || d.projectType === 'RESORT') }))
   }, [projectId, toast])
   useEffect(() => {
     load()
@@ -78,7 +82,7 @@ export default function DeliveryPage() {
           <p className="text-[13px] text-ink-500 mt-1">Choose how this project's stages and gates are managed. Each stage gets its deliverables, responsibilities and approvals.</p>
         </div>
         <div className="grid gap-2">
-          {(['CWA', 'RIBA', 'CUSTOM'] as const).map((f) => (
+          {((data.firmCountry === 'NG' || data.firmCountry == null) ? (['CWA', 'RIBA', 'EVS', 'CUSTOM'] as const) : (data.country ?? data.firmCountry) === 'EE' ? (['EVS', 'RIBA', 'CUSTOM'] as const) : (['RIBA', 'EVS', 'CUSTOM'] as const)).map((f) => (
             <label key={f} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer ${setup.framework === f ? 'border-ink-900 bg-ink-25' : 'border-ink-200 bg-white'}`}>
               <input type="radio" className="mt-1" checked={setup.framework === f} onChange={() => setSetup({ ...setup, framework: f })} />
               <div>
@@ -86,6 +90,7 @@ export default function DeliveryPage() {
                 <div className="text-[12px] text-ink-500">
                   {f === 'CWA' && 'G0 Brief & Feasibility → G10 Handover. Drawings, reports, exit criteria and the six-step CWA approval chain from the Project Delivery Guide Rev A.'}
                   {f === 'RIBA' && 'Stages 0–7, Strategic Definition to Use, with core tasks per stage.'}
+                  {f === 'EVS' && 'Eskiisprojekt → eelprojekt → põhiprojekt → tööprojekt, then construction and occupancy permit — with the building-register steps at each stage.'}
                   {f === 'CUSTOM' && 'Name your own stages; add deliverables as you go.'}
                 </div>
               </div>

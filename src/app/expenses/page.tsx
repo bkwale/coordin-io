@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useFirmRegion } from '@/lib/use-firm-region'
 import {
   Wallet, Plus, Loader2, AlertTriangle, RefreshCw,
   X, ArrowRight, Ban, Upload, Paperclip, FileCheck, ExternalLink, Download,
@@ -114,7 +115,10 @@ export default function ExpensesPage() {
   const [formCategory, setFormCategory] = useState('TRAVEL')
   const [formDescription, setFormDescription] = useState('')
   const [formAmount, setFormAmount] = useState('')
-  const [formCurrency, setFormCurrency] = useState('NGN')
+  const firm = useFirmRegion()
+  const homeCurrency = firm?.currency ?? 'EUR'
+  const [formCurrency, setFormCurrency] = useState('')
+  useEffect(() => { if (firm && !formCurrency) setFormCurrency(firm.currency) }, [firm]) // eslint-disable-line react-hooks/exhaustive-deps
   const [formProjectId, setFormProjectId] = useState('')
   const [formCostCode, setFormCostCode] = useState('')
   const [formSupplier, setFormSupplier] = useState('')
@@ -207,7 +211,7 @@ export default function ExpensesPage() {
       category: formCategory,
       description: formDescription.trim(),
       amount: amt,
-      currency: formCurrency,
+      currency: formCurrency || firm?.currency || homeCurrency,
       ...(formProjectId ? { projectId: formProjectId } : {}),
       ...(formCostCode.trim() ? { costCode: formCostCode.trim() } : {}),
       ...(formSupplier.trim() ? { supplier: formSupplier.trim() } : {}),
@@ -220,7 +224,7 @@ export default function ExpensesPage() {
       setFormCategory('TRAVEL')
       setFormDescription('')
       setFormAmount('')
-      setFormCurrency('NGN')
+      setFormCurrency(homeCurrency)
       setFormProjectId('')
       setFormCostCode('')
       setFormSupplier('')
@@ -237,7 +241,7 @@ export default function ExpensesPage() {
     setFormCategory('TRAVEL')
     setFormDescription('')
     setFormAmount('')
-    setFormCurrency('NGN')
+    setFormCurrency(homeCurrency)
     setFormProjectId('')
     setFormCostCode('')
     setFormSupplier('')
@@ -295,7 +299,7 @@ export default function ExpensesPage() {
 
   const formatTotals = (byCurrency: Record<string, number>) => {
     const entries = Object.entries(byCurrency)
-    if (entries.length === 0) return formatAmount(0, 'NGN')
+    if (entries.length === 0) return formatAmount(0, homeCurrency)
     return entries.map(([cur, amt]) => formatAmount(amt, cur)).join(', ')
   }
 
@@ -418,7 +422,7 @@ export default function ExpensesPage() {
               type="text"
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="e.g. Taxi to site visit — Lekki Phase 1"
+              placeholder="e.g. Taxi to site visit"
               className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
               maxLength={1000}
               required

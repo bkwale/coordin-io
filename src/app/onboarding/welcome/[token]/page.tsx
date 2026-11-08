@@ -49,6 +49,7 @@ interface VerifyResponse {
     }
     organisation: { id: string; name: string }
     managerName: string | null
+    bankFormat?: 'iban' | 'uk_sort_code' | 'nuban'
     expiresAt: string
     // Seven-day window; null for older invitations without an onboarding assignment
     window: { started: boolean; days: number; dueAt: string | null; dueLabel: string | null; daysRemaining: number | null } | null
@@ -367,6 +368,7 @@ export default function SelfServiceWelcomePage() {
                 {isActive && !isCompleted && (
                   <div className="mt-2 bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
                     <StepForm
+                      bankFormat={data?.bankFormat ?? 'iban'}
                       step={step.step as StepName}
                       submitting={submitting}
                       onSubmit={(formData) => submitStep(step.step as StepName, formData)}
@@ -445,7 +447,9 @@ function StepForm({
   onSubmit,
   onCancel,
   token,
+  bankFormat,
 }: {
+  bankFormat: 'iban' | 'uk_sort_code' | 'nuban'
   step: StepName
   submitting: boolean
   onSubmit: (data: Record<string, unknown>) => void
@@ -456,7 +460,7 @@ function StepForm({
     case 'PERSONAL_DETAILS':
       return <PersonalDetailsForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
     case 'BANK_DETAILS':
-      return <BankDetailsForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
+      return <BankDetailsForm format={bankFormat} submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
     case 'HMO_ENROLMENT':
       return <HmoEnrolmentForm submitting={submitting} onSubmit={onSubmit} onCancel={onCancel} />
     case 'DOCUMENT_UPLOAD':
@@ -514,14 +518,15 @@ function PersonalDetailsForm({ submitting, onSubmit, onCancel }: { submitting: b
 }
 
 // ── Bank Details ──
-function BankDetailsForm({ submitting, onSubmit, onCancel }: { submitting: boolean; onSubmit: (d: Record<string, unknown>) => void; onCancel: () => void }) {
+function BankDetailsForm({ format, submitting, onSubmit, onCancel }: { format: 'iban' | 'uk_sort_code' | 'nuban'; submitting: boolean; onSubmit: (d: Record<string, unknown>) => void; onCancel: () => void }) {
   const [bankAccountName, setBankAccountName] = useState('')
   const [bankAccountNumber, setBankAccountNumber] = useState('')
   const [bankSortCode, setBankSortCode] = useState('')
+  const [bankCode, setBankCode] = useState('')
   const [bankName, setBankName] = useState('')
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ bankAccountName, bankAccountNumber, bankSortCode, bankName }) }} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ bankAccountName, bankAccountNumber, bankSortCode, bankName, bankCode }) }} className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
         <Banknote className="h-4 w-4 text-blue-600" />
         <h3 className="font-medium text-sm text-gray-900">Bank Details for Payroll</h3>
@@ -537,14 +542,33 @@ function BankDetailsForm({ submitting, onSubmit, onCancel }: { submitting: boole
           <input type="text" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} className={inputClass} placeholder="Name on account" required />
         </Field>
         <Field label="Bank Name">
-          <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass} placeholder="e.g. Barclays" />
+          <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass} placeholder={format === 'iban' ? 'e.g. Swedbank' : format === 'nuban' ? 'e.g. GTBank' : 'e.g. Barclays'} />
         </Field>
-        <Field label="Account Number" required>
-          <input type="text" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className={inputClass} placeholder="8-digit account number" maxLength={8} required />
-        </Field>
-        <Field label="Sort Code">
-          <input type="text" value={bankSortCode} onChange={(e) => setBankSortCode(e.target.value)} className={inputClass} placeholder="XX-XX-XX" maxLength={8} />
-        </Field>
+        {format === 'iban' && (
+          <>
+            <Field label="IBAN" required>
+              <input type="text" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.toUpperCase())} className={inputClass} placeholder="EE38 2200 2210 2014 5685" maxLength={42} required />
+            </Field>
+            <Field label="BIC / SWIFT">
+              <input type="text" value={bankCode} onChange={(e) => setBankCode(e.target.value.toUpperCase())} className={inputClass} placeholder="e.g. HABAEE2X" maxLength={11} />
+            </Field>
+          </>
+        )}
+        {format === 'uk_sort_code' && (
+          <>
+            <Field label="Account Number" required>
+              <input type="text" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))} className={inputClass} placeholder="8-digit account number" maxLength={8} required />
+            </Field>
+            <Field label="Sort Code" required>
+              <input type="text" value={bankSortCode} onChange={(e) => setBankSortCode(e.target.value)} className={inputClass} placeholder="XX-XX-XX" maxLength={8} required />
+            </Field>
+          </>
+        )}
+        {format === 'nuban' && (
+          <Field label="Account Number (NUBAN)" required>
+            <input type="text" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))} className={inputClass} placeholder="10-digit account number" maxLength={10} required />
+          </Field>
+        )}
       </div>
 
       <FormButtons submitting={submitting} onCancel={onCancel} />

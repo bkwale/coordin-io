@@ -9,6 +9,7 @@ import type { Framework, FrameworkStageTemplate, FrameworkItemTemplate, GateDeci
 
 export const FRAMEWORK_LABELS: Record<Framework, string> = {
   RIBA: 'RIBA Plan of Work',
+  EVS: 'Estonian design stages (EVS 932)',
   CWA: 'CWA Project Delivery Framework (G0–G10)',
   CUSTOM: 'Custom project stages',
 }
@@ -47,7 +48,22 @@ export const RIBA_STAGES: FrameworkStageTemplate[] = RIBA_NAMES.map((name, i) =>
     .map((t) => ({ kind: (t.required_flag ? 'EXIT_CRITERION' : 'DELIVERABLE') as ItemKind, title: t.task_title })),
 }))
 
-export const TEMPLATE_VERSIONS: Record<Framework, string> = { RIBA: 'RIBA-2020', CWA: CWA_TEMPLATE_VERSION, CUSTOM: 'custom' }
+/**
+ * Estonian design stages (EVS 932:2017 Ehitusprojekt) with the permits that hang off them:
+ * the building permit application needs at least an eelprojekt; works start on a põhiprojekt; occupancy permit at the end.
+ */
+const X = (title: string) => ({ kind: 'EXIT_CRITERION' as ItemKind, title })
+const D = (title: string) => ({ kind: 'DELIVERABLE' as ItemKind, title })
+export const EVS_STAGES: FrameworkStageTemplate[] = [
+  { code: 'E1', name: 'Eskiisprojekt — sketch design', items: [X('Design brief (lähteülesanne) agreed with the client'), X('Topographic survey (geodeetiline alusplaan) obtained'), D('Sketch plans, sections and massing'), X('Client approval of the sketch design')] },
+  { code: 'E2', name: 'Eelprojekt — preliminary design', items: [X('Planning conditions (projekteerimistingimused) or detailed plan checked against the design'), D('Architectural plans, sections and façades to scale'), D('Structural, services and fire safety concepts'), D('Utility connection conditions (liitumistingimused) requested'), X('Building permit application submitted in the building register (EHR)')] },
+  { code: 'E3', name: 'Põhiprojekt — main design', items: [X('All disciplines coordinated'), D('Energy performance calculation'), D('Expert assessment (ekspertiis) where required'), X('Building permit or notice in force before works start')] },
+  { code: 'E4', name: 'Tööprojekt — working design', items: [D('Working drawings and details'), D('Specifications and bill of quantities'), D('Tender documents')] },
+  { code: 'E5', name: 'Ehitus — construction', items: [X("Owner's supervision (omanikujärelevalve) appointed"), D('Author supervision (autorijärelevalve) visits recorded'), D('Construction log (ehituspäevik) kept'), D('As-built documentation')] },
+  { code: 'E6', name: 'Kasutusluba — occupancy and handover', items: [X('Occupancy permit (kasutusluba) application submitted in EHR'), D('Use and maintenance manual (kasutus- ja hoolduskava)'), X('Handover to the client')] },
+]
+
+export const TEMPLATE_VERSIONS: Record<Framework, string> = { RIBA: 'RIBA-2020', EVS: 'EVS-932-2017', CWA: CWA_TEMPLATE_VERSION, CUSTOM: 'custom' }
 
 export type BuiltStage = FrameworkStageTemplate & { sortOrder: number }
 
@@ -61,7 +77,7 @@ export function buildStages(framework: Framework, opts: { accorOverlay?: boolean
       code: (s.code?.trim() || `S${i + 1}`).slice(0, 12), name: s.name.trim().slice(0, 120), items: [], sortOrder: i,
     }))
   }
-  const base = framework === 'CWA' ? CWA_GATES : RIBA_STAGES
+  const base = framework === 'CWA' ? CWA_GATES : framework === 'EVS' ? EVS_STAGES : RIBA_STAGES
   return base.map((s, i) => ({
     ...s,
     sortOrder: i,

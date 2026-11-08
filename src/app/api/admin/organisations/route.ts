@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { countryCode, currencyForCountry, COUNTRIES } from '@/lib/region'
 import { withSuperAdmin } from '@/lib/with-super-admin'
 import { prisma } from '@/lib/prisma'
 
@@ -35,7 +36,11 @@ export const GET = withSuperAdmin(async (_request: NextRequest) => {
 /** POST /api/admin/organisations — Create a new organisation */
 export const POST = withSuperAdmin(async (request: NextRequest) => {
   const body = await request.json()
-  const { name, slug, defaultCurrency = 'NGN', adminEmail, adminName } = body
+  const { name, slug, adminEmail, adminName } = body
+  // The firm's country sets its defaults (currency, time zone); currency can still be chosen
+  const country = countryCode(typeof body.country === 'string' ? body.country : null)
+  const defaultCurrency = ['EUR', 'GBP', 'NGN', 'USD'].includes(body.defaultCurrency) ? body.defaultCurrency : (currencyForCountry(country) ?? 'EUR')
+  const settings = country ? { country, regional: { timezone: COUNTRIES[country].timezone, dateFormat: 'DD/MM/YYYY', numberFormat: country === 'EE' ? 'et-EE' : 'en-GB', weekStart: 'monday', language: 'en' } } : {}
 
   if (!name || !slug) {
     return NextResponse.json(
@@ -59,12 +64,13 @@ export const POST = withSuperAdmin(async (request: NextRequest) => {
 
   // Create org
   const orgResult = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    `INSERT INTO organisations (name, slug, default_currency)
-     VALUES ($1, $2, $3::\"Currency\")
+    `INSERT INTO organisations (name, slug, default_currency, currencies, settings)
+     VALUES ($1, $2, $3::\"Currency\", ARRAY[$3::\"Currency\"], $4::jsonb)
      RETURNING id`,
     name,
     slug,
     defaultCurrency,
+    JSON.stringify(settings),
   )
 
   const orgId = orgResult[0].id

@@ -36,7 +36,8 @@ function AdminOrganisationsPage() {
   // Form state
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
-  const [currency, setCurrency] = useState('NGN')
+  const [country, setCountry] = useState('EE')
+  const [currency, setCurrency] = useState('EUR')
   const [adminName, setAdminName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
 
@@ -77,6 +78,7 @@ function AdminOrganisationsPage() {
           name,
           slug,
           defaultCurrency: currency,
+          country,
           adminName: adminName || undefined,
           adminEmail: adminEmail || undefined,
         }),
@@ -93,7 +95,8 @@ function AdminOrganisationsPage() {
       setShowForm(false)
       setName('')
       setSlug('')
-      setCurrency('NGN')
+      setCountry('EE')
+      setCurrency('EUR')
       setAdminName('')
       setAdminEmail('')
       loadOrgs()
@@ -143,7 +146,7 @@ function AdminOrganisationsPage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="CWA Homes Limited"
+                  placeholder="e.g. Kask & Partnerid OÜ"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 />
               </div>
@@ -162,6 +165,20 @@ function AdminOrganisationsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Country
+                </label>
+                <select
+                  value={country}
+                  onChange={(e) => { setCountry(e.target.value); setCurrency(e.target.value === 'GB' ? 'GBP' : e.target.value === 'NG' ? 'NGN' : 'EUR') }}
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  <option value="EE">Estonia</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="NG">Nigeria</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Default Currency
                 </label>
                 <select
@@ -169,10 +186,10 @@ function AdminOrganisationsPage() {
                   onChange={(e) => setCurrency(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 >
-                  <option value="NGN">NGN — Nigerian Naira</option>
-                  <option value="GBP">GBP — British Pounds</option>
-                  <option value="USD">USD — US Dollars</option>
                   <option value="EUR">EUR — Euros</option>
+                  <option value="GBP">GBP — British Pounds</option>
+                  <option value="NGN">NGN — Nigerian Naira</option>
+                  <option value="USD">USD — US Dollars</option>
                 </select>
               </div>
             </div>

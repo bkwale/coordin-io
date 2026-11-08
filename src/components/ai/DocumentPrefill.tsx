@@ -80,7 +80,14 @@ export function DocumentPrefill({ projectId, jurisdiction = 'EE', onApplyValues,
       const res = await fetch(`/api/projects/${projectId}/setup/extract`, { method: 'POST', body: fd })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) { setErr({ message: body.error || 'Could not start', ref: body.ref, manual: body.manual || res.status >= 500 }); setBusy(false); return }
-      const id = body.data.runId as string
+      startPolling(body.data.runId as string)
+    } catch {
+      setErr({ message: 'Could not reach Coordin. Check your connection and try again — or fill in the details by hand.', manual: true }); setBusy(false)
+    }
+  }
+
+  function startPolling(id: string) {
+      setBusy(true)
       if (pollRef.current) clearInterval(pollRef.current)
       const startedAt = Date.now()
       let fails = 0
@@ -107,8 +114,17 @@ export function DocumentPrefill({ projectId, jurisdiction = 'EE', onApplyValues,
           }
         }
       }, POLL_MS)
-    } catch { setErr({ message: 'Could not reach Coordin. Check your connection and try again — or fill in the details by hand.', manual: true }); setBusy(false) }
   }
+
+  // A reading still waiting for confirmation (e.g. the page was closed mid-review) reappears when the page opens
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/projects/${projectId}/setup/runs`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => { const id = b?.data?.runId as string | undefined; if (alive && id) { setOpen(true); startPolling(id) } })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const canRetry = run?.status === 'FAILED' && run.errorKind !== 'config' && run.errorKind !== 'input' && (lastFile.current || text.trim().length >= 300)
   function retry() { if (run) submit(lastFile.current, run.id) }

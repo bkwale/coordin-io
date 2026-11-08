@@ -7,6 +7,7 @@ import { ValidationError } from '@/lib/errors'
 import { getRuleSet, groupByDiscipline, DISCIPLINE_LABELS } from '@/lib/rules'
 import { applyProjectParameters, APPLY_TX_OPTIONS } from '@/lib/rules/apply'
 import { ProjectParametersSchema } from '@/lib/rules/schema'
+import { defaultJurisdiction, orgCountry } from '@/lib/region'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,9 +18,10 @@ export { STALE_PREFIX } from '@/lib/rules/apply'
  * Latest project profile (questionnaire answers), the REGULATORY register and its items grouped by discipline.
  */
 export const GET = withProjectAccess(async (_request: NextRequest, { projectId }) => {
-  const [profile, register] = await Promise.all([
+  const [profile, register, proj] = await Promise.all([
     prisma.projectProfile.findFirst({ where: { projectId }, orderBy: { version: 'desc' } }),
     prisma.complianceRegister.findFirst({ where: { projectId, registerType: 'REGULATORY' }, include: { items: { orderBy: { sortOrder: 'asc' } } } }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { jurisdiction: true, siteCountry: true, organisation: { select: { settings: true, defaultCurrency: true, offices: { select: { country: true, isHeadOffice: true } } } } } }),
   ])
   const items = register?.items ?? []
   const generated = items.filter((i) => i.origin === 'RULE')
@@ -38,6 +40,7 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
     disciplineLabels: DISCIPLINE_LABELS,
     counts: { generated: generated.length, added: added.length, municipal: municipal.length, stale: generated.filter((i) => i.confidence === 'stale').length },
     currentRuleSetVersion,
+    defaultJurisdiction: defaultJurisdiction({ projectJurisdiction: proj?.jurisdiction, siteCountry: proj?.siteCountry, orgCountry: orgCountry(proj?.organisation) }),
     outdated: !!(register?.templateVersion && currentRuleSetVersion && register.templateVersion !== currentRuleSetVersion),
   })
 })

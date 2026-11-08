@@ -231,6 +231,7 @@ const CLIENT_TYPE_LABELS: Record<string, string> = {
 }
 
 const FRAMEWORK_LABELS: Record<string, string> = {
+  EVS_932: 'Estonian design stages (EVS 932)',
   RIBA: 'RIBA',
   NIGERIAN_CWA: 'Nigerian CWA',
   INTERNATIONAL: 'International',

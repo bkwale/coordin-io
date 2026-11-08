@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { bankFormatFor } from '@/lib/bank-format'
+import { firmDefaults } from '@/lib/region-server'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { checkRateLimit, RateLimitPresets } from '@/lib/rate-limit'
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest) {
           startDate: true,
           jobTitle: true,
           avatarUrl: true,
+          office: { select: { country: true } },
         },
       },
       organisation: {
@@ -121,6 +124,8 @@ export async function GET(request: NextRequest) {
       name: selfServiceToken.organisation.name,
     },
     managerName,
+    // Which bank fields to ask for: IBAN (Estonia/EU), sort code (UK), NUBAN (Nigeria)
+    bankFormat: bankFormatFor(selfServiceToken.profile.office?.country, (await firmDefaults(selfServiceToken.organisation.id).catch(() => null))?.country ?? null),
     expiresAt: selfServiceToken.expiresAt,
     window: await windowForLink(selfServiceToken.assignmentId ?? null),
     steps,

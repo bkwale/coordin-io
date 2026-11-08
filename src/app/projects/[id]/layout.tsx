@@ -4,6 +4,7 @@ import { usePathname, useParams } from 'next/navigation'
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { countryCode, type CountryCode } from '@/lib/region'
 import {
   LayoutDashboard, ListChecks, FileText, PoundSterling,
   ShieldCheck, HardHat, GitBranch,
@@ -14,6 +15,8 @@ import {
 interface SubTab {
   label: string
   href: string // relative to basePath
+  /** Hide for projects in these countries (UK-only registers make no sense on an Estonian project) */
+  hideIn?: CountryCode[]
 }
 
 interface TabDef {
@@ -86,8 +89,8 @@ const PROJECT_TABS: TabDef[] = [
     routes: ['/regulatory', '/brpd', '/brpd/changelog', '/building-regs', '/design-risks'],
     subTabs: [
       { label: 'Regulatory', href: '/regulatory' },
-      { label: 'BRPD', href: '/brpd' },
-      { label: 'Building Regs', href: '/building-regs' },
+      { label: 'BRPD', href: '/brpd', hideIn: ['EE'] },
+      { label: 'Building Regs', href: '/building-regs', hideIn: ['EE'] },
       { label: 'Design Risks', href: '/design-risks' },
     ],
   },
@@ -123,6 +126,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
 
   const [projectName, setProjectName] = useState<string | null>(null)
   const [workStageFramework, setWorkStageFramework] = useState<string | null>(null)
+  const [country, setCountry] = useState<CountryCode | null>(null)
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
@@ -130,16 +134,18 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       .then(data => {
         if (data?.data?.project?.name) setProjectName(data.data.project.name)
         if (data?.data?.project?.workStageFramework) setWorkStageFramework(data.data.project.workStageFramework)
+        const p = data?.data?.project
+        setCountry(countryCode(p?.jurisdiction) ?? countryCode(p?.siteCountry))
       })
       .catch(() => {})
   }, [projectId])
 
   // Filter tabs based on project framework
   const visibleTabs = useMemo(() =>
-    PROJECT_TABS.filter(tab =>
-      !tab.frameworks || (workStageFramework && tab.frameworks.includes(workStageFramework))
-    ),
-    [workStageFramework]
+    PROJECT_TABS
+      .filter(tab => !tab.frameworks || (workStageFramework && tab.frameworks.includes(workStageFramework)))
+      .map(tab => (tab.subTabs ? { ...tab, subTabs: tab.subTabs.filter(st => !(country && st.hideIn?.includes(country))) } : tab)),
+    [workStageFramework, country]
   )
 
   // Determine active tab and sub-route

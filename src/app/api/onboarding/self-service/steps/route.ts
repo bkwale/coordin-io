@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { bankFormatFor, validateBank } from '@/lib/bank-format'
+import { firmDefaults } from '@/lib/region-server'
+import { prisma } from '@/lib/prisma'
 import { markSubmittedFromSelfService, startWindowOnActivation } from '@/lib/onboarding/window-service'
 import { success } from '@/lib/api-response'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -213,14 +216,15 @@ async function processBankDetails(profileId: string, _organisationId: string, da
     throw new Error('Bank account name and number are required')
   }
 
-  // Sort code validation (UK format: 6 digits)
-  if (bankData.bankSortCode) {
-    const sortCode = String(bankData.bankSortCode).replace(/[-\s]/g, '')
-    if (!/^\d{6}$/.test(sortCode)) {
-      throw new Error('Sort code must be 6 digits')
-    }
-    bankData.bankSortCode = sortCode
-  }
+  // Check the format the person's country uses: IBAN (Estonia/EU), sort code + 8 digits (UK), NUBAN (Nigeria)
+  const who = await prisma.profile.findUnique({ where: { id: profileId }, select: { office: { select: { country: true } } } }).catch(() => null)
+  const format = bankFormatFor(who?.office?.country, (await firmDefaults(_organisationId).catch(() => null))?.country ?? null)
+  const checked = validateBank(format, { accountNumber: String(bankData.bankAccountNumber), sortCode: bankData.bankSortCode as string | undefined, bankCode: bankData.bankCode as string | undefined })
+  if (!checked.ok) throw new Error(checked.error)
+  bankData.bankAccountNumber = checked.accountNumber
+  bankData.bankSortCode = checked.sortCode
+  if (format !== 'nuban') bankData.bankCode = checked.bankCode
+  else if (!bankData.bankCode) delete bankData.bankCode
 
   bankData.bankVerified = false
   bankData.bankApprovalStatus = 'PENDING'

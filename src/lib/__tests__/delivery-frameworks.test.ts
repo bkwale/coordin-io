@@ -127,3 +127,14 @@ describe('delivery service', () => {
     await expect(updateItem('p1', 'i', { documentUrl: 'javascript:alert(1)' }, { ...actor, canApprove: false })).rejects.toThrow(/http/)
   })
 })
+
+describe('Estonian design stages (EVS 932)', () => {
+  it('builds six stages with permit steps and no CWA approval chain or Accor items', async () => {
+    const { buildStages } = await import('@/lib/delivery/frameworks')
+    const s = buildStages('EVS', { accorOverlay: true })
+    expect(s.map((x) => x.code)).toEqual(['E1', 'E2', 'E3', 'E4', 'E5', 'E6'])
+    expect(s[1].items.some((i) => /building permit application/i.test(i.title))).toBe(true)
+    expect(s[5].items.some((i) => /kasutusluba/i.test(i.title))).toBe(true)
+    expect(s.flatMap((x) => x.items).some((i) => i.kind === 'APPROVAL' || i.kind === 'ACCOR')).toBe(false)
+  })
+})

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { orgCountry, countryCode } from '@/lib/region'
 import { withAuth } from '@/lib/with-auth'
 import { prisma } from '@/lib/prisma'
 import { ValidationError, PermissionError } from '@/lib/errors'
@@ -27,6 +28,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     logoUrl: org.logoUrl,
     defaultCurrency: org.defaultCurrency,
     currencies: org.currencies,
+    country: orgCountry(org),
     offices: org.offices.map((o: any) => ({
       id: o.id,
       name: o.name,
@@ -47,6 +49,8 @@ export const PATCH = withAuth(
 
     const body = await request.json()
     const { name, logoUrl, defaultCurrency, currencies } = body
+    const country = body.country === undefined ? undefined : countryCode(typeof body.country === 'string' ? body.country : null)
+    if (body.country !== undefined && body.country !== null && body.country !== '' && !country) throw new ValidationError('Country must be Estonia, United Kingdom or Nigeria')
 
     if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
       throw new ValidationError('Organisation name is required')
@@ -73,6 +77,12 @@ export const PATCH = withAuth(
     if (logoUrl !== undefined) updateData.logoUrl = logoUrl
     if (defaultCurrency !== undefined) updateData.defaultCurrency = defaultCurrency
     if (currencies !== undefined) updateData.currencies = currencies
+    if (body.country !== undefined) {
+      // The firm's country drives defaults (questionnaire, VAT, stages). Merged into settings — nothing else there changes.
+      const current = await prisma.organisation.findUnique({ where: { id: profile.organisationId }, select: { settings: true } })
+      const prev = (current?.settings && typeof current.settings === 'object' ? current.settings : {}) as Record<string, unknown>
+      updateData.settings = { ...prev, country: country ?? null }
+    }
 
     const updated = await prisma.organisation.update({
       where: { id: profile.organisationId },
@@ -86,6 +96,7 @@ export const PATCH = withAuth(
       logoUrl: updated.logoUrl,
       defaultCurrency: updated.defaultCurrency,
       currencies: updated.currencies,
+      country: countryCode((updated.settings as { country?: string } | null)?.country ?? null),
     })
   },
 )

@@ -374,7 +374,7 @@ function OrganisationSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [form, setForm] = useState({ name: '', logoUrl: '', defaultCurrency: 'GBP' as string })
+  const [form, setForm] = useState({ name: '', logoUrl: '', defaultCurrency: 'GBP' as string, country: '' as string })
 
   useEffect(() => {
     fetch('/api/settings/organisation')
@@ -388,6 +388,7 @@ function OrganisationSection() {
           name: data.name || '',
           logoUrl: data.logoUrl || '',
           defaultCurrency: data.defaultCurrency || 'GBP',
+          country: data.country || '',
         })
       })
       .catch(() => {})
@@ -457,6 +458,21 @@ function OrganisationSection() {
               <img src={form.logoUrl} alt="Logo preview" className="w-full h-full object-contain" />
             </div>
           )}
+        </FieldGroup>
+
+        {/* Country — sets the regulatory checklist, VAT, stages and time zone defaults */}
+        <FieldGroup label="Country">
+          <select
+            value={form.country}
+            onChange={(e) => setForm({ ...form, country: e.target.value })}
+            className="settings-input"
+          >
+            <option value="">Not set</option>
+            <option value="EE">Estonia</option>
+            <option value="GB">United Kingdom</option>
+            <option value="NG">Nigeria</option>
+          </select>
+          <p className="text-[11px] text-ink-400 mt-1">New projects open on this country’s regulations, VAT rate and design stages. Each project can still choose another country.</p>
         </FieldGroup>
 
         {/* Default Currency */}
@@ -1375,6 +1391,7 @@ function RegionalSection() {
         <FieldGroup label="Timezone">
           <select className="settings-input" value={regional.timezone} onChange={(e) => update('timezone', e.target.value)}>
             <option value="Europe/London">Europe/London (GMT/BST)</option>
+            <option value="Europe/Tallinn">Europe/Tallinn (EET/EEST)</option>
             <option value="Europe/Berlin">Europe/Berlin (CET/CEST)</option>
             <option value="America/New_York">America/New_York (EST/EDT)</option>
             <option value="Africa/Lagos">Africa/Lagos (WAT)</option>
@@ -1394,6 +1411,7 @@ function RegionalSection() {
         <FieldGroup label="Number Format">
           <select className="settings-input" value={regional.numberFormat} onChange={(e) => update('numberFormat', e.target.value)}>
             <option value="en-GB">1,234.56 (UK/US)</option>
+            <option value="et-EE">1 234,56 (Estonia)</option>
             <option value="de-DE">1.234,56 (EU)</option>
           </select>
         </FieldGroup>

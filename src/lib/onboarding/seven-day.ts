@@ -55,7 +55,7 @@ export function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * DAY_MS)
 }
 
-/** Organisation time zone for deadlines. No per-org setting yet; CWA is in Lagos. */
+/** Fallback time zone for deadlines when the caller doesn't pass the firm's (see firmTimezone in region-server). */
 export const ORG_TIMEZONE = process.env.ORG_TIMEZONE || 'Africa/Lagos'
 
 /** Offset (ms) of `tz` from UTC at instant `d`. */
@@ -190,9 +190,11 @@ export const SELF_SERVICE_TITLES: Record<EmployeeType, Partial<Record<SelfServic
  * Steps the employee completes themselves. Existing staff skip contracts and HMO enrolment,
  * and only confirm payroll when HR says it is needed.
  */
-export function selfServiceSteps(type: EmployeeType, opts: { includePayroll?: boolean } = {}): SelfServiceStep[] {
+export function selfServiceSteps(type: EmployeeType, opts: { includePayroll?: boolean; includeHealthInsurance?: boolean } = {}): SelfServiceStep[] {
   if (type === 'NEW') {
-    return ['PERSONAL_DETAILS', 'EMERGENCY_CONTACTS', 'BANK_DETAILS', 'HMO_ENROLMENT', 'DOCUMENT_UPLOAD', 'POLICY_ACKNOWLEDGEMENT', 'EQUIPMENT_REQUEST']
+    // Private health insurance (HMO) enrolment is a Nigerian practice; elsewhere it's not part of onboarding
+    const hmo: SelfServiceStep[] = opts.includeHealthInsurance === false ? [] : ['HMO_ENROLMENT']
+    return ['PERSONAL_DETAILS', 'EMERGENCY_CONTACTS', 'BANK_DETAILS', ...hmo, 'DOCUMENT_UPLOAD', 'POLICY_ACKNOWLEDGEMENT', 'EQUIPMENT_REQUEST']
   }
   const steps: SelfServiceStep[] = ['PERSONAL_DETAILS', 'EMERGENCY_CONTACTS']
   if (opts.includePayroll) steps.push('BANK_DETAILS')

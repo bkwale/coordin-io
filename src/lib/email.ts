@@ -396,10 +396,13 @@ interface SelfServiceOnboardingEmailParams {
   token: string
   expiresAt: Date
   startDate?: string | null
+  /** Include the health insurance (HMO) step — Nigerian firms only. Default true. */
+  healthInsurance?: boolean
 }
 
 export async function sendSelfServiceOnboardingEmail(params: SelfServiceOnboardingEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const { to, employeeName, organisationName, senderName, token, expiresAt, startDate } = params
+  const healthInsurance = params.healthInsurance !== false
   const welcomeUrl = `${APP_URL}/onboarding/welcome/${token}`
   const expiryDate = expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -408,8 +411,8 @@ export async function sendSelfServiceOnboardingEmail(params: SelfServiceOnboardi
       from: FROM_EMAIL,
       to,
       subject: `Complete your onboarding — ${organisationName}`,
-      html: buildSelfServiceHtml({ employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate }),
-      text: buildSelfServiceText({ employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate }),
+      html: buildSelfServiceHtml({ employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate, healthInsurance }),
+      text: buildSelfServiceText({ employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate, healthInsurance }),
     })
 
     if (error) {
@@ -427,9 +430,10 @@ export async function sendSelfServiceOnboardingEmail(params: SelfServiceOnboardi
 
 function buildSelfServiceHtml(params: {
   employeeName: string; organisationName: string; senderName: string
-  welcomeUrl: string; expiryDate: string; startDate?: string | null
+  welcomeUrl: string; expiryDate: string; startDate?: string | null; healthInsurance?: boolean
 }): string {
   const { employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate } = params
+  const hmo = params.healthInsurance !== false
 
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -441,8 +445,8 @@ function buildSelfServiceHtml(params: {
 <table style="width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px;">
 <tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">1. Confirm your personal details</td></tr>
 <tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">2. Submit your bank details for payroll</td></tr>
-<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">3. Enrol in health insurance (HMO)</td></tr>
-<tr><td style="padding: 8px 12px;">4. Confirm your documents</td></tr>
+${hmo ? '<tr><td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">3. Enrol in health insurance (HMO)</td></tr>' : ''}
+<tr><td style="padding: 8px 12px;">${hmo ? 4 : 3}. Confirm your documents</td></tr>
 </table>
 <a href="${welcomeUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; margin: 8px 0;">Start onboarding</a>
 <p style="font-size: 13px; color: #666; margin-top: 16px;">You'll have 7 days to finish once you press <strong>Begin</strong>, and you can come back to the link as often as you like. The link itself is valid until ${expiryDate}; if it expires, ask your HR team to send a new one.</p>
@@ -453,9 +457,10 @@ function buildSelfServiceHtml(params: {
 
 function buildSelfServiceText(params: {
   employeeName: string; organisationName: string; senderName: string
-  welcomeUrl: string; expiryDate: string; startDate?: string | null
+  welcomeUrl: string; expiryDate: string; startDate?: string | null; healthInsurance?: boolean
 }): string {
   const { employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate } = params
+  const hmo = params.healthInsurance !== false
 
   return `Welcome to ${organisationName}
 
@@ -466,8 +471,7 @@ ${senderName} has invited you to complete your onboarding${startDate ? ' ahead o
 You'll need to:
 1. Confirm your personal details
 2. Submit your bank details for payroll
-3. Enrol in health insurance (HMO)
-4. Confirm your documents
+${hmo ? '3. Enrol in health insurance (HMO)\n4. Confirm your documents' : '3. Confirm your documents'}
 
 Start here: ${welcomeUrl}
 

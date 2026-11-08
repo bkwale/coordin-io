@@ -7,6 +7,7 @@ const ctx = vi.hoisted(() => {
   return { prisma, start: vi.fn().mockResolvedValue(undefined), win: vi.fn() }
 })
 vi.mock('@/lib/prisma-modules', () => ({ modulesPrisma: ctx.prisma }))
+vi.mock('@/lib/region-server', () => ({ firmTimezone: vi.fn().mockResolvedValue('Africa/Lagos'), firmDefaults: vi.fn().mockResolvedValue({ country: 'NG', currency: 'NGN', vatRate: 7.5 }) }))
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn().mockResolvedValue(null), RateLimitPresets: { auth: {} } }))
 vi.mock('@/lib/onboarding/window-service', () => ({
   startWindowOnActivation: (...a: unknown[]) => ctx.start(...a),

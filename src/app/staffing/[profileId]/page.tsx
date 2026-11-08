@@ -95,6 +95,8 @@ interface EmployeeProfileData {
     bankName: string | null
     bankCode: string | null
     sortCode: string | null
+    /** iban (Estonia/EU), uk_sort_code (UK), nuban (Nigeria) — from the person's office, else the firm's country */
+    format?: 'iban' | 'uk_sort_code' | 'nuban'
     verified: boolean
     verifiedAt: string | null
     approvalStatus: string | null
@@ -1236,16 +1238,20 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [isVerified, setIsVerified] = useState(bankDetails?.verified ?? false)
   const [editing, setEditing] = useState(false)
+  const format = bankDetails?.format ?? 'iban'
+  const isNuban = format === 'nuban'
+  const [bankNameText, setBankNameText] = useState(bankDetails?.bankName ?? '')
 
-  // Fetch banks list
+  // Fetch banks list (Nigerian accounts only — checked with Paystack)
   useEffect(() => {
+    if (!isNuban) return
     fetch('/api/staffing/banks')
       .then((r) => r.json())
       .then((d) => {
         if (d.data?.banks) setBanks(d.data.banks)
       })
       .catch(() => {})
-  }, [])
+  }, [isNuban])
 
   const canSubmit = isSelf || hasHRAccess
   const canApprove = hasHRAccess && !isSelf
@@ -1288,12 +1294,16 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
   }
 
   const submitBankDetails = async () => {
-    if (!verifiedName || !isVerified) {
+    if (isNuban && (!verifiedName || !isVerified)) {
       showToast('Please verify your account first', 'error')
       return
     }
+    if (!isNuban && !verifiedName.trim()) {
+      showToast('Enter the account holder name', 'error')
+      return
+    }
     setSubmitting(true)
-    const bankName = banks.find((b) => b.code === selectedBank)?.name ?? ''
+    const bankName = isNuban ? (banks.find((b) => b.code === selectedBank)?.name ?? '') : bankNameText.trim()
     try {
       const res = await fetch(`/api/staffing/employees/${employee.id}/profile`, {
         method: 'PATCH',
@@ -1301,10 +1311,11 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
         body: JSON.stringify({
           bankAccountNumber: accountNumber,
           bankCode: selectedBank,
-          bankAccountName: verifiedName,
+          bankAccountName: verifiedName.trim(),
           bankName,
           bankSortCode: sortCode || undefined,
-          bankVerified: true,
+          // Only Nigerian accounts are checked automatically; others are approved by HR
+          bankVerified: isNuban,
         }),
       })
       const result = await res.json()
@@ -1384,7 +1395,43 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
   if (editing || (!hasExisting && canSubmit)) {
     return (
       <div className="pt-4 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {!isNuban && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Account holder name</label>
+              <input type="text" value={verifiedName} onChange={(e) => setVerifiedName(e.target.value)} placeholder="Name as it appears on the account" className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-ink-600 mb-1">Bank</label>
+              <input type="text" value={bankNameText} onChange={(e) => setBankNameText(e.target.value)} placeholder={format === 'iban' ? 'e.g. Swedbank' : 'e.g. Barclays'} className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            {format === 'iban' ? (
+              <>
+                <div>
+                  <label className="block text-[12px] font-medium text-ink-600 mb-1">IBAN</label>
+                  <input type="text" maxLength={42} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.toUpperCase())} placeholder="EE38 2200 2210 2014 5685" className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-ink-600 mb-1">BIC / SWIFT (optional)</label>
+                  <input type="text" maxLength={11} value={selectedBank} onChange={(e) => setSelectedBank(e.target.value.toUpperCase())} placeholder="e.g. HABAEE2X" className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-[12px] font-medium text-ink-600 mb-1">Sort code</label>
+                  <input type="text" maxLength={8} value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="20-00-00" className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-ink-600 mb-1">Account number</label>
+                  <input type="text" maxLength={8} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ''))} placeholder="8 digits" className="w-full px-3 py-2 rounded-lg border border-ink-200 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </>
+            )}
+            <p className="md:col-span-2 text-[11px] text-ink-400">{isSelf && !hasHRAccess ? 'HR checks and approves these details before they are used for pay.' : 'Saved as approved.'}</p>
+          </div>
+        )}
+        {isNuban && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-[12px] font-medium text-ink-600 mb-1">Bank</label>
             <select
@@ -1438,11 +1485,11 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
               </div>
             </div>
           )}
-        </div>
+        </div>}
         <div className="flex items-center gap-2 pt-2">
           <button
             onClick={submitBankDetails}
-            disabled={submitting || !isVerified}
+            disabled={submitting || (isNuban ? !isVerified : !accountNumber.trim())}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-ink-900 text-white text-[13px] font-medium hover:bg-ink-800 disabled:opacity-50 transition-colors"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1457,7 +1504,7 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
             </button>
           )}
         </div>
-        {!isVerified && accountNumber.length === 10 && selectedBank && (
+        {isNuban && !isVerified && accountNumber.length === 10 && selectedBank && (
           <p className="text-[12px] text-amber-600 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" /> Click Verify to confirm the account before submitting
           </p>
@@ -1474,7 +1521,7 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
           {statusBadge}
           {bankDetails?.verified && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">
-              <Shield className="w-3 h-3" /> Paystack Verified
+              <Shield className="w-3 h-3" /> {isNuban ? 'Paystack Verified' : 'Verified'}
             </span>
           )}
         </div>
@@ -1494,7 +1541,7 @@ function BankDetailsContent({ data, onRefresh }: { data: EmployeeProfileData; on
           <p className="text-[13px] text-ink-900 mt-0.5">{bankDetails?.accountName || 'Not provided'}</p>
         </div>
         <div>
-          <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">Account Number</span>
+          <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wide">{format === 'iban' ? 'IBAN' : 'Account Number'}</span>
           <p className="text-[13px] text-ink-900 mt-0.5 font-mono">{bankDetails?.accountNumber || 'Not provided'}</p>
         </div>
         <div>

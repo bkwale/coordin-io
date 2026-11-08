@@ -12,6 +12,7 @@ const ctx = vi.hoisted(() => {
   return { prisma, profileRef: { current: null as any }, notify: vi.fn().mockResolvedValue({}), audit: vi.fn().mockResolvedValue(undefined) }
 })
 vi.mock('@/lib/prisma-modules', () => ({ modulesPrisma: ctx.prisma }))
+vi.mock('@/lib/region-server', () => ({ firmTimezone: vi.fn().mockResolvedValue('Africa/Lagos'), firmDefaults: vi.fn().mockResolvedValue({ country: 'NG', currency: 'NGN', vatRate: 7.5 }) }))
 vi.mock('@/lib/prisma', () => ({ prisma: ctx.prisma }))
 vi.mock('@/lib/audit', () => ({ recordAuditEvent: (...a: unknown[]) => ctx.audit(...a) }))
 vi.mock('@/lib/org-settings', () => ({ getEffectiveProbationMonths: vi.fn().mockResolvedValue(3) }))

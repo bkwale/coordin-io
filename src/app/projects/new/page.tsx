@@ -6,21 +6,26 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { getProjectTypeIcon } from '@/lib/project-icons'
+import { COUNTRIES, COUNTRY_OPTIONS, countryCode, type CountryCode } from '@/lib/region'
+import { StartFromDocument, type WizardReading } from '@/components/ai/StartFromDocument'
+import { wizardPrefill } from '@/lib/ai/wizard-prefill'
 
 // ═══════════════════════════════════════════════════════
 // Static configuration — dropdown options & step metadata
 // ═══════════════════════════════════════════════════════
 
-const STEPS = [
-  { number: 1, title: 'General Information', desc: 'Project name, client, and key dates' },
-  { number: 2, title: 'Location', desc: 'Site address and planning authorities' },
-  { number: 3, title: 'Development Type', desc: 'Build type and existing conditions' },
-  { number: 4, title: 'Client & Operator', desc: 'Operator and hospitality details' },
-  { number: 5, title: 'Work Stages', desc: 'Framework and stage planning' },
-  { number: 6, title: 'Compliance', desc: 'Regulatory and certification requirements' },
-  { number: 7, title: 'Metrics', desc: 'Areas, units, and budget (optional)' },
-  { number: 8, title: 'Project Team', desc: 'Assign roles and team members' },
-  { number: 9, title: 'Review', desc: 'Confirm and create project' },
+type StepKey = 'start' | 'general' | 'location' | 'development' | 'operator' | 'stages' | 'compliance' | 'metrics' | 'team' | 'review'
+const STEP_DEFS: { key: StepKey; title: string; desc: string }[] = [
+  { key: 'start', title: 'Start', desc: 'Start from a document, or fill in by hand' },
+  { key: 'general', title: 'General Information', desc: 'Project name, client, and key dates' },
+  { key: 'location', title: 'Location', desc: 'Site address and planning authorities' },
+  { key: 'development', title: 'Development Type', desc: 'Build type and existing conditions' },
+  { key: 'operator', title: 'Hotel Operator', desc: 'Operator and hospitality details' },
+  { key: 'stages', title: 'Work Stages', desc: 'Framework and stage planning' },
+  { key: 'compliance', title: 'Compliance', desc: 'Regulations and certifications' },
+  { key: 'metrics', title: 'Metrics', desc: 'Areas, units, and budget (optional)' },
+  { key: 'team', title: 'Project Team', desc: 'Assign roles and team members' },
+  { key: 'review', title: 'Review', desc: 'Confirm and create project' },
 ]
 
 const CLIENT_TYPES = [
@@ -47,10 +52,10 @@ const PROJECT_TYPES = [
 ]
 
 const CURRENCIES = [
-  { value: 'NGN', label: 'NGN (₦)' },
-  { value: 'GBP', label: 'GBP (£)' },
-  { value: 'USD', label: 'USD ($)' },
   { value: 'EUR', label: 'EUR (€)' },
+  { value: 'GBP', label: 'GBP (£)' },
+  { value: 'NGN', label: 'NGN (₦)' },
+  { value: 'USD', label: 'USD ($)' },
 ]
 
 const DEVELOPMENT_TYPES = [
@@ -71,6 +76,7 @@ const MANAGEMENT_TYPES = [
 ]
 
 const WORK_STAGE_FRAMEWORKS = [
+  { value: 'EVS_932', label: 'Estonian design stages (EVS 932)' },
   { value: 'RIBA', label: 'RIBA Plan of Work (0-7)' },
   { value: 'NIGERIAN_CWA', label: 'Nigerian / CWA Stages' },
   { value: 'INTERNATIONAL', label: 'International' },
@@ -98,6 +104,14 @@ const PROJECT_ROLES = [
 ]
 
 const FRAMEWORK_STAGES: Record<string, { id: string; name: string }[]> = {
+  EVS_932: [
+    { id: '1', name: 'Eskiisprojekt — sketch design' },
+    { id: '2', name: 'Eelprojekt — preliminary design (building permit application)' },
+    { id: '3', name: 'Põhiprojekt — main design (before works start)' },
+    { id: '4', name: 'Tööprojekt — working design' },
+    { id: '5', name: 'Ehitus — construction and supervision' },
+    { id: '6', name: 'Kasutusluba — occupancy permit and handover' },
+  ],
   RIBA: [
     { id: '0', name: 'Stage 0 — Strategic Definition' },
     { id: '1', name: 'Stage 1 — Preparation and Briefing' },
@@ -236,6 +250,9 @@ export default function NewProjectPage() {
   const { toast } = useToast()
 
   const [step, setStep] = useState(1)
+  const [reading, setReading] = useState<WizardReading | null>(null)
+  const [orgRegion, setOrgRegion] = useState<{ country: CountryCode | null; currency: string } | null>(null)
+  const [stageTouched, setStageTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState(false)
@@ -263,18 +280,58 @@ export default function NewProjectPage() {
       .catch(() => {})
   }, [])
 
+  // ── Firm defaults: country, currency, stage framework ──
+  useEffect(() => {
+    fetch('/api/org/region', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(b => {
+        const d = b?.data as { country: CountryCode | null; currency: string } | undefined
+        if (!d) return
+        setOrgRegion(d)
+        setForm(prev => ({
+          ...prev,
+          currency: prev.currency || d.currency || '',
+          siteCountry: prev.siteCountry || (d.country ? COUNTRIES[d.country].name : ''),
+          workStageFramework: prev.workStageFramework || (d.country ? COUNTRIES[d.country].stageFramework : ''),
+        }))
+      })
+      .catch(() => {})
+  }, [])
+
   // ── Derived ─────────────────────────────────────────
   const isHospitality = form.projectType === 'HOTEL' || form.projectType === 'RESORT'
   const resolvedCountry = form.siteCountry === 'OTHER' ? form.siteCountryOther : form.siteCountry
+  const cc = countryCode(resolvedCountry)
+  const cp = cc ? COUNTRIES[cc] : null
+  const ruleSet = cp?.jurisdiction ?? null
+  // CWA (Nigerian firm) keeps every compliance option it had; other firms get the regulatory checklist instead
+  const legacyCompliance = orgRegion?.country === 'NG' || !ruleSet
+  const showUkDuties = cc === 'GB' || orgRegion?.country === 'NG'
+  const steps = STEP_DEFS.filter(d => d.key !== 'operator' || isHospitality)
+  const cur: StepKey = steps[Math.min(step, steps.length) - 1].key
+  const setCountry = (v: string) => {
+    const c = countryCode(v === 'OTHER' ? '' : v)
+    setForm(prev => ({ ...prev, siteCountry: v, ...(c && !stageTouched ? { workStageFramework: COUNTRIES[c].stageFramework } : {}) }) as typeof INITIAL)
+  }
+  const applyReading = (r: WizardReading) => {
+    setReading(r)
+    const f = wizardPrefill(r.mapping)
+    // Fill only what's empty — never overwrite what the architect typed
+    setForm(prev => {
+      const next = { ...prev } as Record<string, unknown>
+      for (const [k, v] of Object.entries(f)) if (v && !next[k]) next[k] = v
+      return next as typeof INITIAL
+    })
+  }
   const stages = form.workStageFramework ? FRAMEWORK_STAGES[form.workStageFramework] || [] : []
 
   // ── Validation ──────────────────────────────────────
   const handleNext = () => {
-    if (step === 1 && !form.name.trim()) {
+    if (cur === 'general' && !form.name.trim()) {
       setError('Project name is required')
       return
     }
-    setStep(prev => Math.min(prev + 1, STEPS.length))
+    setStep(prev => Math.min(prev + 1, steps.length))
   }
   const handlePrev = () => setStep(prev => Math.max(prev - 1, 1))
 
@@ -303,6 +360,8 @@ export default function NewProjectPage() {
     const locParts = [form.siteCity, form.siteRegion, resolvedCountry].filter(Boolean)
     if (locParts.length) p.location = locParts.join(', ')
     if (resolvedCountry) p.siteCountry = resolvedCountry
+    if (ruleSet) p.jurisdiction = ruleSet
+    if (reading) p.setupRunId = reading.runId
     setStr('siteRegion', form.siteRegion)
     setStr('siteCity', form.siteCity)
     setStr('siteAddress', form.siteAddress)
@@ -331,16 +390,16 @@ export default function NewProjectPage() {
     if (form.workStageFramework) p.workStageFramework = form.workStageFramework
 
     // Step 6
-    p.isBRPD = form.isBRPD
-    p.isCDM = form.isCDM
+    p.isBRPD = showUkDuties ? form.isBRPD : false
+    p.isCDM = showUkDuties ? form.isCDM : false
     const fw: string[] = []
-    if (form.compBuildingRegs) fw.push('BUILDING_REGS')
-    if (form.compPlanning) fw.push('PLANNING')
-    if (form.compFireSafety) fw.push('FIRE_SAFETY')
+    if (legacyCompliance && form.compBuildingRegs) fw.push('BUILDING_REGS')
+    if (legacyCompliance && form.compPlanning) fw.push('PLANNING')
+    if (legacyCompliance && form.compFireSafety) fw.push('FIRE_SAFETY')
     if (form.compEDGE) fw.push('EDGE')
     if (form.compBREEAM) fw.push('BREEAM')
     if (form.compLEED) fw.push('LEED')
-    if (form.compOperatorReqs) fw.push('OPERATOR_REQS')
+    if (isHospitality && form.compOperatorReqs) fw.push('OPERATOR_REQS')
     if (form.complianceCustom.trim()) fw.push(form.complianceCustom.trim())
     if (fw.length) p.complianceFrameworks = fw.join(',')
 
@@ -399,9 +458,19 @@ export default function NewProjectPage() {
         }
       }
 
+      // File the document that was read into the new project's Documents (non-blocking)
+      if (reading?.file) {
+        const fd = new FormData()
+        fd.set('runId', reading.runId)
+        fd.set('file', reading.file)
+        await fetch(`/api/projects/${project.id}/setup/attach`, { method: 'POST', body: fd }).catch(() => null)
+      }
+
       toast(asDraft ? 'Project saved as draft' : 'Project created successfully', 'success')
       setCreated(true)
-      setTimeout(() => router.push('/projects'), 1500)
+      // Straight to the regulatory checklist where there's one to build — that's where the reading is reviewed
+      const next = ruleSet || reading ? `/projects/${project.id}/regulatory` : `/projects/${project.id}`
+      setTimeout(() => router.push(next), 1200)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setSubmitting(false)
@@ -418,13 +487,13 @@ export default function NewProjectPage() {
           </svg>
         </div>
         <h2 className="text-xl sm:text-2xl font-display text-slate-900 mb-2">Project Created</h2>
-        <p className="text-sm text-slate-500">Redirecting to projects...</p>
+        <p className="text-sm text-slate-500">{ruleSet || reading ? 'Opening the regulatory checklist…' : 'Opening the project…'}</p>
       </div>
     )
   }
 
   // ── Render ──────────────────────────────────────────
-  const pct = Math.round(((step - 1) / STEPS.length) * 100)
+  const pct = Math.round(((step - 1) / steps.length) * 100)
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
@@ -438,7 +507,7 @@ export default function NewProjectPage() {
       {/* Header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-display text-slate-900">Create New Project</h1>
-        <p className="text-sm text-slate-500 mt-1">Step {step} of {STEPS.length} — {STEPS[step - 1].title}</p>
+        <p className="text-sm text-slate-500 mt-1">Step {step} of {steps.length} — {steps[step - 1].title}</p>
       </div>
 
       {/* ── Progress bar + step indicators ───────────── */}
@@ -451,9 +520,9 @@ export default function NewProjectPage() {
           <div className="h-full bg-brand-500 transition-all duration-300" style={{ width: `${pct}%` }} />
         </div>
         <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
-          {STEPS.map(s => (
+          {steps.map((d, i) => ({ ...d, number: i + 1 })).map(s => (
             <button
-              key={s.number}
+              key={s.key}
               onClick={() => { if (s.number <= step) setStep(s.number) }}
               className={cn(
                 'flex-1 min-w-0 py-1.5 rounded text-[10px] font-medium transition-all text-center truncate px-1',
@@ -474,8 +543,8 @@ export default function NewProjectPage() {
       {/* ── Form body ────────────────────────────────── */}
       <div className="card-premium p-4 sm:p-6 space-y-5">
         <div>
-          <h2 className="text-base sm:text-lg font-display text-slate-900">{STEPS[step - 1].title}</h2>
-          <p className="text-sm text-slate-500 mt-1">{STEPS[step - 1].desc}</p>
+          <h2 className="text-base sm:text-lg font-display text-slate-900">{steps[step - 1].title}</h2>
+          <p className="text-sm text-slate-500 mt-1">{steps[step - 1].desc}</p>
         </div>
         <div className="border-t border-surface-200/60" />
 
@@ -483,8 +552,26 @@ export default function NewProjectPage() {
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
         )}
 
+        {/* ═══ Start — from a document or by hand ═════ */}
+        {cur === 'start' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Country of the site</label>
+                <select value={form.siteCountry} onChange={e => setCountry(e.target.value)} className={fieldCls}>
+                  <option value="">Select country...</option>
+                  {COUNTRY_OPTIONS.map(c => <option key={c} value={COUNTRIES[c].name}>{COUNTRIES[c].name}</option>)}
+                  <option value="OTHER">Other</option>
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">{ruleSet ? `Coordin builds the ${ruleSet === 'EE' ? 'Estonian' : 'English'} regulatory checklist for this project.` : 'No regulatory rule set for this country yet — everything else works the same.'}</p>
+              </div>
+            </div>
+            <StartFromDocument jurisdiction={ruleSet} onRead={applyReading} onSkip={() => setStep(2)} />
+          </div>
+        )}
+
         {/* ═══ Step 1 — General Information ═══════════ */}
-        {step === 1 && (
+        {cur === 'general' && (
           <div className="space-y-4">
             <div>
               <label className={labelCls}>Project Name *</label>
@@ -550,14 +637,13 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 2 — Location ══════════════════════ */}
-        {step === 2 && (
+        {cur === 'location' && (
           <div className="space-y-4">
             <div>
               <label className={labelCls}>Country</label>
-              <select value={form.siteCountry} onChange={e => update('siteCountry', e.target.value)} className={fieldCls}>
+              <select value={form.siteCountry} onChange={e => setCountry(e.target.value)} className={fieldCls}>
                 <option value="">Select country...</option>
-                <option value="United Kingdom">United Kingdom</option>
-                <option value="Nigeria">Nigeria</option>
+                {COUNTRY_OPTIONS.map(c => <option key={c} value={COUNTRIES[c].name}>{COUNTRIES[c].name}</option>)}
                 <option value="OTHER">Other</option>
               </select>
             </div>
@@ -569,30 +655,30 @@ export default function NewProjectPage() {
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelCls}>State or Region</label>
-                <input type="text" value={form.siteRegion} onChange={e => update('siteRegion', e.target.value)} placeholder="e.g. Lagos State" className={`${fieldCls} placeholder:text-ink-300`} />
+                <label className={labelCls}>{cp?.regionLabel ?? 'State or Region'}</label>
+                <input type="text" value={form.siteRegion} onChange={e => update('siteRegion', e.target.value)} placeholder={cp?.placeholders.region ?? 'Region'} className={`${fieldCls} placeholder:text-ink-300`} />
               </div>
               <div>
                 <label className={labelCls}>City</label>
-                <input type="text" value={form.siteCity} onChange={e => update('siteCity', e.target.value)} placeholder="e.g. Lagos" className={`${fieldCls} placeholder:text-ink-300`} />
+                <input type="text" value={form.siteCity} onChange={e => update('siteCity', e.target.value)} placeholder={cp?.placeholders.city ?? 'City'} className={`${fieldCls} placeholder:text-ink-300`} />
               </div>
             </div>
             <div>
               <label className={labelCls}>Full Address</label>
-              <textarea value={form.siteAddress} onChange={e => update('siteAddress', e.target.value)} placeholder="Full site address..." rows={2} className={`${fieldCls} placeholder:text-ink-300 resize-none`} />
+              <textarea value={form.siteAddress} onChange={e => update('siteAddress', e.target.value)} placeholder={cp?.placeholders.address ?? 'Full site address...'} rows={2} className={`${fieldCls} placeholder:text-ink-300 resize-none`} />
             </div>
             <div>
               <label className={labelCls}>Postcode</label>
-              <input type="text" value={form.sitePostcode} onChange={e => update('sitePostcode', e.target.value)} placeholder="e.g. SW1A 1AA" className={`${fieldCls} placeholder:text-ink-300`} />
+              <input type="text" value={form.sitePostcode} onChange={e => update('sitePostcode', e.target.value)} placeholder={cp?.placeholders.postcode ?? 'Postcode'} className={`${fieldCls} placeholder:text-ink-300`} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Latitude (optional)</label>
-                <input type="number" step="any" value={form.mapLatitude} onChange={e => update('mapLatitude', e.target.value)} placeholder="e.g. 6.5244" className={`${fieldCls} placeholder:text-ink-300`} />
+                <input type="number" step="any" value={form.mapLatitude} onChange={e => update('mapLatitude', e.target.value)} placeholder={cc === 'EE' ? 'e.g. 59.4370' : cc === 'GB' ? 'e.g. 51.5072' : 'e.g. 6.5244'} className={`${fieldCls} placeholder:text-ink-300`} />
               </div>
               <div>
                 <label className={labelCls}>Longitude (optional)</label>
-                <input type="number" step="any" value={form.mapLongitude} onChange={e => update('mapLongitude', e.target.value)} placeholder="e.g. 3.3792" className={`${fieldCls} placeholder:text-ink-300`} />
+                <input type="number" step="any" value={form.mapLongitude} onChange={e => update('mapLongitude', e.target.value)} placeholder={cc === 'EE' ? 'e.g. 24.7536' : cc === 'GB' ? 'e.g. -0.1276' : 'e.g. 3.3792'} className={`${fieldCls} placeholder:text-ink-300`} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -602,21 +688,10 @@ export default function NewProjectPage() {
                   type="text"
                   value={form.planningAuthority}
                   onChange={e => update('planningAuthority', e.target.value)}
-                  placeholder={
-                    form.siteCountry === 'United Kingdom'
-                      ? 'e.g. Westminster City Council'
-                      : form.siteCountry === 'Nigeria'
-                      ? 'e.g. Lagos State Physical Planning Permit Authority'
-                      : 'Enter authority name...'
-                  }
+                  placeholder={cp?.placeholders.planningAuthority ?? 'Enter authority name...'}
                   className={`${fieldCls} placeholder:text-ink-300`}
                 />
-                {form.siteCountry === 'United Kingdom' && (
-                  <p className="text-[11px] text-slate-400 mt-1">UK local planning authority for this site</p>
-                )}
-                {form.siteCountry === 'Nigeria' && (
-                  <p className="text-[11px] text-slate-400 mt-1">Nigerian state planning authority or FCT equivalent</p>
-                )}
+                {cp && <p className="text-[11px] text-slate-400 mt-1">{cp.planningHint}</p>}
               </div>
               <div>
                 <label className={labelCls}>Building Control Authority</label>
@@ -624,11 +699,7 @@ export default function NewProjectPage() {
                   type="text"
                   value={form.buildingControlAuthority}
                   onChange={e => update('buildingControlAuthority', e.target.value)}
-                  placeholder={
-                    form.siteCountry === 'United Kingdom'
-                      ? 'e.g. Approved Inspector or Local Authority'
-                      : 'Enter authority name...'
-                  }
+                  placeholder={cp?.placeholders.buildingControl ?? 'Enter authority name...'}
                   className={`${fieldCls} placeholder:text-ink-300`}
                 />
               </div>
@@ -637,7 +708,7 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 3 — Development Type ══════════════ */}
-        {step === 3 && (
+        {cur === 'development' && (
           <div className="space-y-4">
             <div>
               <label className={labelCls}>Development Type</label>
@@ -672,7 +743,7 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 4 — Client & Operator ═════════════ */}
-        {step === 4 && (
+        {cur === 'operator' && (
           <div className="space-y-4">
             {isHospitality ? (
               <>
@@ -735,11 +806,11 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 5 — Work Stages ═══════════════════ */}
-        {step === 5 && (
+        {cur === 'stages' && (
           <div className="space-y-4">
             <div>
               <label className={labelCls}>Framework</label>
-              <select value={form.workStageFramework} onChange={e => update('workStageFramework', e.target.value)} className={fieldCls}>
+              <select value={form.workStageFramework} onChange={e => { setStageTouched(true); update('workStageFramework', e.target.value) }} className={fieldCls}>
                 <option value="">Select framework...</option>
                 {WORK_STAGE_FRAMEWORKS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
@@ -770,12 +841,18 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 6 — Compliance ════════════════════ */}
-        {step === 6 && (
+        {cur === 'compliance' && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-600">Select all applicable compliance and certification requirements.</p>
+            {ruleSet && !legacyCompliance ? (
+              <div className="rounded-lg border border-accent-200 bg-accent-50/50 p-3 text-[13px] text-ink-700">
+                <b>The regulatory checklist is built for you.</b> After you create the project, Coordin opens its Regulatory page{reading ? ' with the document you read, ready to review' : ''} and builds the {ruleSet === 'EE' ? 'Estonian (Ehitusseadustik)' : 'England (planning, Building Regulations, Building Safety Act, CDM)'} checklist — every item with the law it comes from.
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">Select all applicable compliance and certification requirements.</p>
+            )}
 
-            {/* BRPD + CDM — separate booleans */}
-            <div className="space-y-2">
+            {/* BRPD + CDM — UK duties only */}
+            {showUkDuties && <div className="space-y-2">
               <label className="flex items-start gap-3 p-3 border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer transition-colors">
                 <input type="checkbox" checked={form.isBRPD} onChange={e => update('isBRPD', e.target.checked)} className="w-4 h-4 rounded border-surface-300 text-brand-600 focus:ring-brand-500 mt-0.5" />
                 <div>
@@ -790,20 +867,19 @@ export default function NewProjectPage() {
                   <span className="text-[11px] text-slate-400">Construction (Design and Management) Regulations</span>
                 </div>
               </label>
-            </div>
+            </div>}
 
             <div className="border-t border-surface-200/60" />
 
             {/* Compliance frameworks — stored as comma-separated */}
+            <p className="text-[11px] text-ink-400 uppercase tracking-[0.08em] font-semibold">{ruleSet ? 'Certifications and client requirements' : 'Requirements'}</p>
             <div className="space-y-2">
               {([
-                ['compBuildingRegs', 'Building regulations'],
-                ['compPlanning', 'Planning'],
-                ['compFireSafety', 'Fire and life safety'],
+                ...(legacyCompliance ? [['compBuildingRegs', 'Building regulations'], ['compPlanning', 'Planning'], ['compFireSafety', 'Fire and life safety']] as const : []),
                 ['compEDGE', 'EDGE'],
                 ['compBREEAM', 'BREEAM'],
                 ['compLEED', 'LEED'],
-                ['compOperatorReqs', 'Operator requirements'],
+                ...(isHospitality ? [['compOperatorReqs', 'Operator requirements']] as const : []),
               ] as const).map(([key, label]) => (
                 <label key={key} className="flex items-center gap-3 p-3 border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer transition-colors">
                   <input
@@ -825,7 +901,7 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 7 — Metrics ═══════════════════════ */}
-        {step === 7 && (
+        {cur === 'metrics' && (
           <div className="space-y-4">
             <p className="text-sm text-slate-500">All fields are optional and can be updated later.</p>
 
@@ -905,7 +981,7 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 8 — Project Team ══════════════════ */}
-        {step === 8 && (
+        {cur === 'team' && (
           <div className="space-y-4">
             <p className="text-sm text-slate-500">Assign team members to the project. Members can also be added later.</p>
 
@@ -981,7 +1057,7 @@ export default function NewProjectPage() {
         )}
 
         {/* ═══ Step 9 — Review ════════════════════════ */}
-        {step === 9 && (
+        {cur === 'review' && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600 font-medium">Review your project details before creating.</p>
 
@@ -1130,7 +1206,7 @@ export default function NewProjectPage() {
             Previous
           </button>
 
-          {step < STEPS.length ? (
+          {step < steps.length ? (
             <button onClick={handleNext} className="px-6 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors shadow-sm text-center">
               Next
             </button>

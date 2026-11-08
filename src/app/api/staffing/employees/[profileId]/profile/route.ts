@@ -1,4 +1,7 @@
 import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
+import { bankFormatFor, validateBank, normaliseSortCode } from '@/lib/bank-format'
+import { prisma } from '@/lib/prisma'
+import { firmDefaults } from '@/lib/region-server'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -10,6 +13,11 @@ import { canPerform } from '@/lib/role-permissions'
 import { hasFullStaffingAccess } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
 import { invalidateCache, cacheKey } from '@/lib/cache'
+
+/** The firm's country for bank-format defaults; never fails the request. */
+async function firmCountryOf(organisationId: string) {
+  try { return (await firmDefaults(organisationId)).country } catch { return null }
+}
 
 /**
  * GET /api/staffing/employees/[profileId]/profile
@@ -75,6 +83,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const hasHRAccess = hasFullStaffingAccess(profile.orgPermission as OrgPermission)
   const isSelf = profileId === profile.id
   const showConfidential = hasHRAccess || isSelf
+  const firmCountry = showConfidential ? await firmCountryOf(profile.organisationId) : null
 
   // Fetch confidential data separately — only when authorized
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -294,6 +303,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
           bankName: confidential?.bankName ?? null,
           bankCode: confidential?.bankCode ?? null,
           sortCode: confidential?.bankSortCode ?? null,
+          format: bankFormatFor(employee.office?.country, firmCountry),
           verified: confidential?.bankVerified ?? false,
           verifiedAt: confidential?.bankVerifiedAt ?? null,
           approvalStatus: confidential?.bankApprovalStatus ?? null,
@@ -453,18 +463,35 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   // HR: edit bank details directly → status APPROVED
   const bankConfidentialData: Record<string, unknown> = {}
   if (isSelf || hasHRAccess) {
-    const bankAccountNumber = optionalString(body.bankAccountNumber as unknown, 'bankAccountNumber', 10)
-    const bankCode = optionalString(body.bankCode as unknown, 'bankCode', 10)
+    const bankAccountNumber = optionalString(body.bankAccountNumber as unknown, 'bankAccountNumber', 40)
+    const bankCode = optionalString(body.bankCode as unknown, 'bankCode', 11)
     const bankAccountName = optionalString(body.bankAccountName as unknown, 'bankAccountName', 200)
     const bankName = optionalString(body.bankName as unknown, 'bankName', 200)
     const bankSortCode = optionalString(body.bankSortCode as unknown, 'bankSortCode', 10)
-    const bankVerified = typeof body.bankVerified === 'boolean' ? body.bankVerified : null
+    let bankVerified = typeof body.bankVerified === 'boolean' ? body.bankVerified : null
 
-    if (bankAccountNumber !== null) bankConfidentialData.bankAccountNumber = bankAccountNumber
-    if (bankCode !== null) bankConfidentialData.bankCode = bankCode
+    // Format follows the person's office country (else the firm's): IBAN in Estonia, sort code in the UK, NUBAN in Nigeria
+    if (bankAccountNumber !== null) {
+      const office = await prisma.profile.findUnique({ where: { id: profileId }, select: { office: { select: { country: true } } } }).catch(() => null)
+      const format = bankFormatFor(office?.office?.country, await firmCountryOf(profile.organisationId))
+      // UK: an account-number change can reuse the sort code already on file
+      const storedSort = format === 'uk_sort_code' && !bankSortCode
+        ? (await modulesPrisma.confidentialEmployeeData.findUnique({ where: { profileId }, select: { bankSortCode: true } }).catch(() => null))?.bankSortCode ?? null
+        : null
+      const checked = validateBank(format, { accountNumber: bankAccountNumber, sortCode: bankSortCode ?? storedSort, bankCode })
+      if (!checked.ok) throw new ValidationError(checked.error)
+      bankConfidentialData.bankAccountNumber = checked.accountNumber
+      if (checked.sortCode) bankConfidentialData.bankSortCode = checked.sortCode
+      if (format !== 'nuban') { bankConfidentialData.bankCode = checked.bankCode; bankVerified = false } // only Nigerian accounts can be checked automatically
+    }
+    if (bankCode !== null && bankConfidentialData.bankCode === undefined) bankConfidentialData.bankCode = bankCode
     if (bankAccountName !== null) bankConfidentialData.bankAccountName = bankAccountName
     if (bankName !== null) bankConfidentialData.bankName = bankName
-    if (bankSortCode !== null) bankConfidentialData.bankSortCode = bankSortCode
+    if (bankSortCode !== null && bankConfidentialData.bankSortCode === undefined && bankAccountNumber === null) {
+      const sc = normaliseSortCode(bankSortCode)
+      if (!sc) throw new ValidationError('Sort code must be 6 digits, e.g. 20-00-00')
+      bankConfidentialData.bankSortCode = sc
+    }
     if (bankVerified !== null) {
       bankConfidentialData.bankVerified = bankVerified
       if (bankVerified) bankConfidentialData.bankVerifiedAt = new Date()

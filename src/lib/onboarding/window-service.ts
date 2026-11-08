@@ -3,6 +3,7 @@
  * Pure rules live in ./seven-day.ts.
  */
 import { modulesPrisma } from '@/lib/prisma-modules'
+import { firmTimezone } from '@/lib/region-server'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { recordAuditEvent } from '@/lib/audit'
 import { captureError } from '@/lib/error-reporting'
@@ -70,14 +71,14 @@ export interface LinkWindow { started: boolean; days: number; startAt: string | 
 /** The seven-day window as the employee sees it on their invitation link (one source of truth). */
 export async function windowForLink(assignmentId: string | null): Promise<LinkWindow | null> {
   if (!assignmentId) return null
-  const a = await modulesPrisma.onboardingAssignment.findUnique({ where: { id: assignmentId }, select: { windowDays: true, windowStartAt: true, windowDueAt: true } })
+  const a = await modulesPrisma.onboardingAssignment.findUnique({ where: { id: assignmentId }, select: { windowDays: true, windowStartAt: true, windowDueAt: true, organisationId: true } })
   if (!a) return null
   return {
     started: !!a.windowStartAt,
     days: normaliseWindowDays(a.windowDays ?? 7),
     startAt: a.windowStartAt ? new Date(a.windowStartAt).toISOString() : null,
     dueAt: a.windowDueAt ? new Date(a.windowDueAt).toISOString() : null,
-    dueLabel: a.windowDueAt ? formatDueDate(a.windowDueAt) : null,
+    dueLabel: a.windowDueAt ? formatDueDate(a.windowDueAt, await firmTimezone(a.organisationId)) : null,
     daysRemaining: daysLeft({ windowDueAt: a.windowDueAt }),
   }
 }
@@ -105,7 +106,7 @@ export async function startWindowOnActivation(assignmentId: string | null, token
     select: { id: true, windowStartAt: true, windowDays: true, organisationId: true, profileId: true },
   })
   if (!a || a.windowStartAt) return
-  const w = windowFor(now, a.windowDays ?? 7)
+  const w = windowFor(now, a.windowDays ?? 7, await firmTimezone(a.organisationId))
   const started = await modulesPrisma.$transaction(async (tx: Tx) => {
     const res = await tx.onboardingAssignment.updateMany({ where: { id: a.id, windowStartAt: null }, data: w })
     if (res.count !== 1) return false
@@ -185,7 +186,7 @@ async function processReminderPage(open: ReminderRow[], now: Date, result: Remin
           data: { remindersSent: { push: day } },
         })
         if (claimed.count === 1) {
-          const due = formatDueDate(a.windowDueAt as Date)
+          const due = formatDueDate(a.windowDueAt as Date, await firmTimezone(a.organisationId))
           await createNotification({
             profileId: a.profileId,
             type: NOTIFICATION_EVENTS.ONBOARDING_TASK_DUE,

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useFirmRegion } from '@/lib/use-firm-region'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react'
@@ -57,6 +58,10 @@ export default function NewFeeQuotePage() {
   const [description, setDescription] = useState('')
   const [currency, setCurrency] = useState('GBP')
   const [taxRate, setTaxRate] = useState(20)
+  // Firm defaults: EUR + 24% VAT in Estonia, GBP + 20% in the UK — until the user changes them
+  const firm = useFirmRegion()
+  const [touched, setTouched] = useState(false)
+  useEffect(() => { if (firm && !touched && firm.country !== 'NG') { setCurrency(firm.currency); if (firm.vatRate != null) setTaxRate(firm.vatRate) } }, [firm, touched])
   const [validUntil, setValidUntil] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -170,7 +175,7 @@ export default function NewFeeQuotePage() {
               <label className="block text-[12px] font-medium text-ink-500 mb-1">Currency</label>
               <select
                 value={currency}
-                onChange={e => setCurrency(e.target.value)}
+                onChange={e => { setTouched(true); setCurrency(e.target.value) }}
                 className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
               >
                 {CURRENCIES.map(c => (
@@ -206,7 +211,7 @@ export default function NewFeeQuotePage() {
               <input
                 type="number"
                 value={taxRate}
-                onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
+                onChange={e => { setTouched(true); setTaxRate(parseFloat(e.target.value) || 0) }}
                 min={0}
                 max={100}
                 step={0.5}
