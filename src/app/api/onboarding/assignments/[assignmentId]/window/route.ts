@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { firmTimezone } from '@/lib/region-server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -38,13 +39,14 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (isSubject && action !== 'submit') throw new PermissionError('You cannot change or verify your own onboarding window')
 
   const now = new Date()
+  const tz = await firmTimezone(profile.organisationId)
   const data: Record<string, unknown> = {}
   const meta: Record<string, unknown> = {}
 
   if (action === 'start') {
     if (assignment.submittedAt || assignment.verifiedAt) throw new ConflictError('This onboarding has already been submitted')
     const start = optionalDate(body.startDate, 'startDate') ?? now
-    Object.assign(data, windowFor(start, assignment.windowDays ?? 7), { remindersSent: [], missedNotifiedAt: null })
+    Object.assign(data, windowFor(start, assignment.windowDays ?? 7, tz), { remindersSent: [], missedNotifiedAt: null })
     meta.startAt = start.toISOString()
   }
 
@@ -52,7 +54,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     if (assignment.verifiedAt) throw new ConflictError('This onboarding has already been verified')
     if (!assignment.windowDueAt) throw new ConflictError('The seven-day window has not started yet — start it first')
     const days = normaliseWindowDays(body.days)
-    const due = extendedDueDate(assignment.windowDueAt, days, now)
+    const due = extendedDueDate(assignment.windowDueAt, days, now, tz)
     Object.assign(data, { windowDueAt: due, missedNotifiedAt: null })
     meta.days = days
     meta.from = assignment.windowDueAt
@@ -106,7 +108,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       await createNotification({
         profileId: assignment.profileId,
         type: NOTIFICATION_EVENTS.ONBOARDING_TASK_DUE,
-        title: `Your onboarding is due by ${formatDueDate(data.windowDueAt as Date)}`,
+        title: `Your onboarding is due by ${formatDueDate(data.windowDueAt as Date, tz)}`,
         linkUrl: '/onboarding',
       })
     }

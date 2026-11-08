@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { firmDefaults } from '@/lib/region-server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -86,7 +87,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     if (isEmployeeType(assignment.employeeType)) employeeType = assignment.employeeType
   }
   // New starters get the full set; existing staff skip contracts/HMO and confirm payroll only when HR asks (Ayo 1.2)
-  const steps = selfServiceSteps(employeeType, { includePayroll: body.includePayroll === true })
+  const firm = await firmDefaults(profile.organisationId)
+  const steps = selfServiceSteps(employeeType, { includePayroll: body.includePayroll === true, includeHealthInsurance: firm.country === 'NG' || firm.country === null })
 
   // Generate secure token (32 bytes = 64 hex chars)
   const token = crypto.randomBytes(32).toString('hex')
@@ -162,6 +164,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     : null
 
   const emailResult = await sendSelfServiceOnboardingEmail({
+    healthInsurance: steps.includes('HMO_ENROLMENT'),
     to: targetProfile.email,
     employeeName: targetProfile.fullName || 'there',
     organisationName: targetProfile.organisation?.name || 'your organisation',

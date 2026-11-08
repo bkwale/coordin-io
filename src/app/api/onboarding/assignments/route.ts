@@ -1,4 +1,5 @@
 import { isProbationClosed } from '@/lib/staffing/probation'
+import { firmTimezone } from '@/lib/region-server'
 class SkipProbation extends Error {}
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
@@ -208,6 +209,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   // Create assignment and tasks in a transaction
+  const tz = await firmTimezone(profile.organisationId)
   const assignment = await modulesPrisma.$transaction(async (tx: typeof modulesPrisma) => {
     // Create the assignment
     const newAssignment = await tx.onboardingAssignment.create({
@@ -222,7 +224,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         employeeType,
         addOnTemplateIds: addOns.map((t: { id: string }) => t.id),
         windowDays,
-        ...(windowStart ? windowFor(windowStart, windowDays) : {}),
+        ...(windowStart ? windowFor(windowStart, windowDays, tz) : {}),
       },
     })
 
@@ -235,7 +237,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     }
     // Window started now: employee tasks fall due at the window deadline, not the employment start + 7
     if (windowStart) {
-      await applyWindowDates(tx, newAssignment.id, targetProfileId, windowFor(windowStart, windowDays).windowDueAt)
+      await applyWindowDates(tx, newAssignment.id, targetProfileId, windowFor(windowStart, windowDays, tz).windowDueAt)
     }
 
     return newAssignment
