@@ -30,6 +30,7 @@ function matchWhere(row: Item, where: Item): boolean {
 }
 
 const tx = {
+  project: { findUnique: vi.fn(async () => ({ jurisdiction: null, siteCountry: 'Estonia', organisation: { settings: {}, defaultCurrency: 'EUR', offices: [] } })) },
   projectProfile: {
     findFirst: vi.fn(async ({ where }: Item) => {
       const rows = db.profiles.filter((r) => matchWhere(r, where)).sort((a, b) => b.version - a.version)

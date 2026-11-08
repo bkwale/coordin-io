@@ -4,6 +4,8 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { canPerform } from '@/lib/role-permissions'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
+import { ValidationError } from '@/lib/errors'
+import { resolveCurrency, currencyForCountry, orgCountry } from '@/lib/region'
 import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
 
 /**
@@ -72,7 +74,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
  *
  * Accepts all project fields from the 9-step wizard.
  */
-export const POST = withAuth(async (request: NextRequest, { profile }) => {
+export const POST = withAuth(async (request: NextRequest, { profile, authUserId }) => {
   const body = await parseBody(request)
 
   // ── Step 1: General Information ──────────────────────
@@ -95,6 +97,9 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const siteCity = optionalString(body.siteCity, 'City', 200)
   const siteCountry = optionalString(body.siteCountry, 'Country', 200)
   const siteRegion = optionalString(body.siteRegion, 'Region', 200)
+  const jurisdiction = optionalString(body.jurisdiction, 'Jurisdiction', 100)
+  // A document read in the wizard before the project existed ("Start from a document")
+  const setupRunId = optionalString(body.setupRunId, 'Setup run', 64)
   const sitePostcode = optionalString(body.sitePostcode, 'Postcode', 20)
   const mapLatitude = optionalNumber(body.mapLatitude, 'Latitude', { min: -90, max: 90 })
   const mapLongitude = optionalNumber(body.mapLongitude, 'Longitude', { min: -180, max: 180 })
@@ -150,9 +155,18 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const toVal = (n: number | null): number | undefined =>
     n !== null ? n : undefined
 
+  // Currency: what the wizard sent, else the firm's own (never the old NGN column default)
+  const org = await prisma.organisation.findUnique({ where: { id: profile.organisationId }, select: { defaultCurrency: true, settings: true, offices: { select: { country: true, isHeadOffice: true } } } })
+  const resolvedCurrency = resolveCurrency(currency, org?.defaultCurrency, currencyForCountry(orgCountry(org)))
+  const run = setupRunId
+    ? await prisma.aIRun.findFirst({ where: { id: setupRunId, organisationId: profile.organisationId, projectId: null, surface: 'PROJECT_SETUP', createdBy: authUserId }, select: { id: true } })
+    : null
+  if (setupRunId && !run) throw new ValidationError('That document reading was not found — read the document again, or continue without it')
+
   const project = await prisma.project.create({
     data: {
       organisationId: profile.organisationId,
+      jurisdiction: jurisdiction || undefined,
       name,
       code: code || undefined,
       description: description || undefined,
@@ -160,7 +174,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
       projectType: projectType || undefined,
       stage: stage || undefined,
       status: status || undefined,
-      currency: currency || undefined,
+      currency: resolvedCurrency,
       clientBrand: clientBrand || undefined,
       clientType: clientType || undefined,
       officeId: officeId || undefined,
@@ -210,13 +224,16 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     },
   })
 
+  // Hand the reading to the new project; the architect reviews and confirms it on the Regulatory page
+  if (run) await prisma.aIRun.updateMany({ where: { id: run.id, projectId: null }, data: { projectId: project.id } })
+
   await recordAuditEvent({
     organisationId: profile.organisationId,
     actorId: profile.id,
     action: AuditActions.PROJECT_CREATED,
     entityType: 'Project',
     entityId: project.id,
-    metadata: { projectName: project.name },
+    metadata: { projectName: project.name, ...(run ? { setupRunId: run.id } : {}) },
   })
 
   return success({ project }, 201)

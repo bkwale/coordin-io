@@ -29,7 +29,8 @@ const TITLE: Record<SetupDocumentKind, string> = { planning_conditions: 'Projekt
 export function docLabel(m: ProjectSetupMapping): string { return m.kind === 'decision_notice' ? `Decision ${m.document.number ?? '?'}` : `PT nr ${m.document.number ?? '?'}` }
 
 export interface StartProjectSetupInput {
-  projectId: string
+  /** null = read before the project exists (new-project wizard). Nothing is stored; the run is linked when the project is created. */
+  projectId: string | null
   organisationId: string
   authorProfileId: string
   authUserId: string
@@ -51,7 +52,7 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
 
   if (input.file) {
     pages = await pdfToPages(input.file.bytes) // throws IngestError
-    if (!input.reuseDocumentId) storage = await uploadToStorage(organisationId, projectId, input.file)
+    if (!input.reuseDocumentId && projectId) storage = await uploadToStorage(organisationId, projectId, input.file)
   } else if (input.text && input.text.trim()) {
     pages = capPages(paginateText(input.text))
     if (pages.join('').length < 300) throw new IngestError('empty', 'Paste at least a few paragraphs of the document')
@@ -64,12 +65,12 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
     const document = storage
       ? await tx.document.create({
           data: {
-            projectId, title, documentType: 'CERTIFICATE', discipline: 'Planning', securityLevel: 'INTERNAL', status: 'ISSUED', currentRevision: 'A',
+            projectId: projectId!, title, documentType: 'CERTIFICATE', discipline: 'Planning', securityLevel: 'INTERNAL', status: 'ISSUED', currentRevision: 'A',
             revisions: { create: { revision: 'A', authorId: authorProfileId, fileUrl: storage!.url, fileSize: storage!.size, status: 'ISSUED', issuePurpose: kind } },
           },
         })
       : input.reuseDocumentId
-        ? await tx.document.findFirst({ where: { id: input.reuseDocumentId, projectId } })
+        ? (projectId ? await tx.document.findFirst({ where: { id: input.reuseDocumentId, projectId } }) : null)
         : null
     const run = await tx.aIRun.create({
       data: {
@@ -255,4 +256,29 @@ async function uploadToStorage(organisationId: string, projectId: string, file: 
   const { error } = await admin.storage.from('documents').upload(path, Buffer.from(file.bytes), { contentType: 'application/pdf', upsert: false })
   if (error) throw new ValidationError(`Upload failed: ${error.message}`)
   return { path, url: fileLink('documents', path), size: file.bytes.byteLength }
+}
+
+/**
+ * A document read in the new-project wizard (before the project existed) is filed in the project's Documents
+ * once the project is created, and the run points at it — same as a reading started on the Regulatory page.
+ */
+export async function attachSetupDocument(input: { projectId: string; organisationId: string; runId: string; authorProfileId: string; file: { name: string; bytes: Uint8Array; contentType: string } }) {
+  const run = await prisma.aIRun.findFirst({ where: { id: input.runId, projectId: input.projectId, organisationId: input.organisationId, surface: 'PROJECT_SETUP' }, select: { id: true, inputSummary: true } })
+  if (!run) throw new NotFoundError('Setup run not found for this project')
+  const summary = (() => { try { return JSON.parse(run.inputSummary) as { kind?: SetupDocumentKind; documentId?: string | null } } catch { return {} } })()
+  if (summary.documentId) return { documentId: summary.documentId } // already filed
+  await pdfToPages(input.file.bytes) // same checks as a reading: a real, readable PDF
+  const kind: SetupDocumentKind = summary.kind && SETUP_DOCUMENT_KINDS.includes(summary.kind) ? summary.kind : 'planning_conditions'
+  const storage = await uploadToStorage(input.organisationId, input.projectId, input.file)
+  const document = await prisma.$transaction(async (tx) => {
+    const doc = await tx.document.create({
+      data: {
+        projectId: input.projectId, title: `${TITLE[kind]} — ${input.file.name}`, documentType: 'CERTIFICATE', discipline: 'Planning', securityLevel: 'INTERNAL', status: 'ISSUED', currentRevision: 'A',
+        revisions: { create: { revision: 'A', authorId: input.authorProfileId, fileUrl: storage.url, fileSize: storage.size, status: 'ISSUED', issuePurpose: kind } },
+      },
+    })
+    await tx.aIRun.update({ where: { id: run.id }, data: { inputSummary: JSON.stringify({ ...summary, documentId: doc.id }) } })
+    return doc
+  })
+  return { documentId: document.id }
 }

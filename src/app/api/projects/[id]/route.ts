@@ -122,7 +122,7 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
     'NEW_BUILD', 'CONVERSION', 'REFURBISHMENT', 'EXTENSION', 'COMPLETION', 'FIT_OUT', 'MIXED',
   ] as const)
   if ('workStageFramework' in body) data.workStageFramework = optionalEnum(body.workStageFramework, 'Work stage framework', [
-    'RIBA', 'NIGERIAN_CWA', 'INTERNATIONAL', 'DESIGN_BUILD', 'CUSTOM',
+    'EVS_932', 'RIBA', 'NIGERIAN_CWA', 'INTERNATIONAL', 'DESIGN_BUILD', 'CUSTOM',
   ] as const)
   if ('budget' in body) data.budget = optionalNumber(body.budget, 'Budget', { min: 0 })
 

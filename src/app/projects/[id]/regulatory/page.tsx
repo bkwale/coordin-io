@@ -57,6 +57,7 @@ export default function RegulatoryPage() {
     const { data } = await res.json()
     setData(data)
     if (data.profile?.parameters) { setForm({ ...DEFAULTS, ...data.profile.parameters }); setAreaEdited({ heated: true, enclosed: true }) }
+    else if (data.defaultJurisdiction && data.defaultJurisdiction !== DEFAULTS.jurisdiction) setForm((f) => switchedForm(f, data.defaultJurisdiction))
     setLoading(false)
   }, [projectId])
   useEffect(() => { load() }, [load])
