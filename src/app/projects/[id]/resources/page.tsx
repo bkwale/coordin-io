@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   Users, Plus, Loader2, Clock, ChevronLeft, ChevronRight,
@@ -325,7 +326,7 @@ export default function ResourcePlanningPage() {
                   >
                     <Users className="w-8 h-8 mx-auto mb-2 text-ink-200" />
                     <p className="text-sm font-medium">No team members allocated</p>
-                    <p className="text-xs mt-1">Add a team member below to start planning</p>
+                    <p className="text-xs mt-1">{allMembers.filter((m) => !m.notMember).length === 0 ? <>This project has no team yet — <Link href={`/projects/${projectId}#team`} className="text-accent-600 underline underline-offset-2">add people on the Dashboard</Link></> : 'Add a team member below to start planning'}</p>
                   </td>
                 </tr>
               ) : (
@@ -513,6 +514,11 @@ export default function ResourcePlanningPage() {
         )}
         {unallocatedMembers.length === 0 && allMembers.length > 0 && (
           <span className="text-[10px] text-ink-400">All project members are shown</span>
+        )}
+        {allMembers.filter((m) => !m.notMember).length === 0 && (
+          <span className="text-[11px] text-ink-500">
+            Only people on the project team can be planned. <Link href={`/projects/${projectId}#team`} className="text-accent-600 underline underline-offset-2">Add them to the team on the Dashboard</Link> first.
+          </span>
         )}
       </div>
 

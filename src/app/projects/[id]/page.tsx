@@ -890,7 +890,7 @@ export default function ProjectDashboard() {
           </div>
 
           {/* Team */}
-          <div className="bg-white rounded-xl border border-ink-100 p-5">
+          <div id="team" className="bg-white rounded-xl border border-ink-100 p-5 scroll-mt-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-ink-400" />

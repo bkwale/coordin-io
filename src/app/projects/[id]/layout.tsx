@@ -200,7 +200,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       {showSubTabs && (
         <div className="flex gap-1 px-1 py-2 overflow-x-auto scrollbar-hide">
           {activeTab.subTabs!.map(st => {
-            const isActiveSub = currentSubRoute === st.href || currentSubRoute.startsWith(st.href + '/')
+            const isActiveSub = currentSubRoute === st.href || (st.href !== '' && currentSubRoute.startsWith(st.href + '/'))
             return (
               <Link
                 key={st.href}
