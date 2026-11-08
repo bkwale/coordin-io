@@ -166,9 +166,9 @@ function ProductPreview() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-md bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] flex items-center justify-center text-white text-sm font-semibold">
-                C
+                H
               </div>
-              <span className="font-semibold text-lg text-gray-900">CWA Homes</span>
+              <span className="font-semibold text-lg text-gray-900">Hartley Rowe Architects</span>
             </div>
             <div className="flex gap-4 text-[12px] text-gray-500 font-medium">
               <span className="text-gray-900 border-b-2 border-[#6366f1] pb-1">Overview</span>
