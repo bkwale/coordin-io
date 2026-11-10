@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { assertOrgProfile, assertOrgOffice, assertOrgRole, assertCanGrant } from '@/lib/tenant'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -215,6 +216,8 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (!hasHRAccess && !isSelf) {
     throw new PermissionError('Only HR managers and admins can update other employees')
   }
+  // The person must belong to the caller's firm (no cross-firm edits)
+  await assertOrgProfile(profileId, profile.organisationId, 'Employee')
 
   const body = await parseBody(request)
 
@@ -239,6 +242,17 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   // HR+-only fields
   const adminFields: Record<string, unknown> = {}
   if (hasHRAccess) {
+    // HR can't change their own access, status, manager or role — another admin does that
+    if (isSelf && role !== 'OWNER' && ['orgPermission', 'status', 'managerId', 'roleId'].some((k) => body[k] !== undefined)) {
+      throw new PermissionError('Ask another admin to change your own access, status or manager')
+    }
+    await Promise.all([
+      body.officeId ? assertOrgOffice(body.officeId as string, profile.organisationId) : null,
+      body.roleId ? assertOrgRole(body.roleId as string, profile.organisationId) : null,
+      body.managerId ? assertOrgProfile(body.managerId as string, profile.organisationId, 'Manager') : null,
+    ])
+    if (body.managerId && body.managerId === profileId) throw new ValidationError('Someone cannot be their own manager')
+    if (body.status !== undefined && !['ACTIVE', 'INVITED', 'ONBOARDING', 'DEACTIVATED'].includes(String(body.status))) throw new ValidationError('Invalid status')
     const jobTitle = optionalString(body.jobTitle, 'jobTitle', 200)
     if (jobTitle !== undefined) adminFields.jobTitle = jobTitle
 
@@ -250,15 +264,8 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     // orgPermission — with privilege escalation guard
     // OWNER can set any level. ADMIN/HR can set up to MANAGER (cannot promote to HR/ADMIN/OWNER).
     if (body.orgPermission !== undefined) {
-      const validPermissions = ['OWNER', 'ADMIN', 'HR', 'MANAGER', 'MEMBER', 'VIEWER']
       const newPerm = body.orgPermission as string
-      if (!validPermissions.includes(newPerm)) {
-        throw new ValidationError(`Invalid permission level: ${newPerm}`)
-      }
-      const highPerms = ['OWNER', 'ADMIN', 'HR']
-      if (highPerms.includes(newPerm) && role !== 'OWNER') {
-        throw new PermissionError('Only the Practice Principal (Owner) can assign HR, Admin, or Owner roles')
-      }
+      assertCanGrant(role, newPerm)
       // Prevent demoting OWNER unless you are OWNER
       if (role !== 'OWNER') {
         const target = await modulesPrisma.profile.findUnique({

@@ -29,8 +29,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const certificateUrl = optionalString(body.certificateUrl, 'certificateUrl', 2000)
 
   // Verify training item exists
-  const trainingItem = await modulesPrisma.trainingItem.findUnique({
-    where: { id: trainingId },
+  const trainingItem = await modulesPrisma.trainingItem.findFirst({
+    where: { id: trainingId, organisationId: profile.organisationId },
   })
   if (!trainingItem) {
     throw new NotFoundError('Training item not found')

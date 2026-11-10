@@ -59,6 +59,8 @@ const ctx = vi.hoisted(() => {
 
 vi.mock('@/lib/prisma-modules', () => ({ modulesPrisma: ctx.prisma }))
 vi.mock('@/lib/prisma', () => ({ prisma: ctx.prisma }))
+// Tenant lookups are unit-tested in tenant.test.ts; here every id belongs to the caller's firm
+vi.mock('@/lib/tenant', async (orig) => ({ ...(await orig<typeof import('@/lib/tenant')>()), assertOrgProfile: vi.fn(async () => {}), assertOrgProfiles: vi.fn(async () => {}), assertOrgOffice: vi.fn(async () => {}), assertOrgRole: vi.fn(async () => {}), assertOrgProject: vi.fn(async () => {}) }))
 vi.mock('@/lib/audit', () => ({
   recordAuditEvent: vi.fn().mockResolvedValue(undefined),
 }))
@@ -754,7 +756,7 @@ describe('POST /api/staffing/training/completions — access control', () => {
 
   it('MANAGER can record training completions (combined guard)', async () => {
     ctx.profileRef.current = createMockProfile({ orgPermission: 'MANAGER' })
-    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety' })
+    mockPrisma.trainingItem.findFirst.mockResolvedValue({ id: 'train-1', title: 'Fire Safety' })
     mockPrisma.profile.findUnique.mockResolvedValue({ id: 'emp-1', organisationId: 'org-1', fullName: 'Alice' })
     mockPrisma.trainingCompletion.upsert.mockResolvedValue({
       id: 'comp-1',
@@ -776,7 +778,7 @@ describe('POST /api/staffing/training/completions — access control', () => {
 
   it('HR can record training completions', async () => {
     ctx.profileRef.current = createMockProfile({ orgPermission: 'HR' })
-    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety' })
+    mockPrisma.trainingItem.findFirst.mockResolvedValue({ id: 'train-1', title: 'Fire Safety' })
     mockPrisma.profile.findUnique.mockResolvedValue({ id: 'emp-1', organisationId: 'org-1', fullName: 'Alice' })
     mockPrisma.trainingCompletion.upsert.mockResolvedValue({
       id: 'comp-1',
@@ -804,7 +806,7 @@ describe('POST /api/staffing/training/completions — access control', () => {
 describe('DELETE /api/staffing/training/[id] — access control', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety', description: '{}' })
+    mockPrisma.trainingItem.findFirst.mockResolvedValue({ id: 'train-1', title: 'Fire Safety', description: '{}' })
   })
 
   it('MEMBER cannot delete training items', async () => {
@@ -847,7 +849,7 @@ describe('DELETE /api/staffing/training/[id] — access control', () => {
 describe('PATCH /api/staffing/training/[id] — access control', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrisma.trainingItem.findUnique.mockResolvedValue({ id: 'train-1', title: 'Fire Safety', description: '{}' })
+    mockPrisma.trainingItem.findFirst.mockResolvedValue({ id: 'train-1', title: 'Fire Safety', description: '{}' })
     mockPrisma.trainingItem.update.mockResolvedValue({ id: 'train-1', title: 'Updated' })
   })
 
@@ -1091,7 +1093,7 @@ describe('GET /api/staffing/training/[id] — MEMBER with/without completion', (
 
   it('MEMBER without completion → 403', async () => {
     // Training exists but MEMBER has no completion record
-    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+    mockPrisma.trainingItem.findFirst.mockResolvedValueOnce({
       id: trainingId,
       title: 'Fire Safety',
       description: null,
@@ -1109,7 +1111,7 @@ describe('GET /api/staffing/training/[id] — MEMBER with/without completion', (
 
   it('MEMBER with completion → 200', async () => {
     // Training exists and MEMBER has a completion record
-    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+    mockPrisma.trainingItem.findFirst.mockResolvedValueOnce({
       id: trainingId,
       title: 'Fire Safety',
       description: null,
@@ -1142,7 +1144,7 @@ describe('GET /api/staffing/training/[id] — MEMBER with/without completion', (
       id: 'mgr-1',
     })
 
-    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+    mockPrisma.trainingItem.findFirst.mockResolvedValueOnce({
       id: trainingId,
       title: 'Fire Safety',
       description: null,
@@ -1160,7 +1162,7 @@ describe('GET /api/staffing/training/[id] — MEMBER with/without completion', (
 
   it('MEMBER with other users completion only → 403', async () => {
     // Training exists but only another user has completed it
-    mockPrisma.trainingItem.findUnique.mockResolvedValueOnce({
+    mockPrisma.trainingItem.findFirst.mockResolvedValueOnce({
       id: trainingId,
       title: 'Fire Safety',
       description: null,

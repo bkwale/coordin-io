@@ -70,6 +70,8 @@ const ctx = vi.hoisted(() => {
 // ---------------------------------------------------------------------------
 
 vi.mock('@/lib/prisma', () => ({ prisma: ctx.prisma }))
+// Tenant lookups are unit-tested in tenant.test.ts; here every id belongs to the caller's firm
+vi.mock('@/lib/tenant', async (orig) => ({ ...(await orig<typeof import('@/lib/tenant')>()), assertOrgProfile: vi.fn(async () => {}), assertOrgProfiles: vi.fn(async () => {}), assertOrgOffice: vi.fn(async () => {}), assertOrgRole: vi.fn(async () => {}), assertOrgProject: vi.fn(async () => {}) }))
 vi.mock('@/lib/prisma-modules', () => ({ modulesPrisma: ctx.prisma }))
 
 vi.mock('@/lib/with-auth', () => ({
@@ -289,7 +291,7 @@ describe('Smoke Workflows', () => {
           email: 'newuser@example.com',
           fullName: 'New User',
           jobTitle: 'Senior Architect',
-          orgPermission: 'ADMIN',
+          orgPermission: 'MANAGER',
         },
       })
 
@@ -303,7 +305,7 @@ describe('Smoke Workflows', () => {
             email: 'newuser@example.com',
             fullName: 'New User',
             jobTitle: 'Senior Architect',
-            orgPermission: 'ADMIN',
+            orgPermission: 'MANAGER',
             organisationId: 'org-1',
           }),
         }),

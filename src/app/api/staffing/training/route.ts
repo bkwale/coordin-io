@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { assertOrgProfile } from '@/lib/tenant'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -46,6 +47,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   // Get training items with their completions
   const trainingItems = await modulesPrisma.trainingItem.findMany({
+    where: { organisationId: profile.organisationId },
     include: {
       completions: {
         where: Object.keys(completionWhere).length > 0 ? completionWhere : undefined,
@@ -150,8 +152,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   const durationMinutes = cpdHours ? Math.round(cpdHours * 60) : null
 
+  if (targetProfileId) await assertOrgProfile(targetProfileId, profile.organisationId, 'Employee')
   const trainingItem = await modulesPrisma.trainingItem.create({
     data: {
+      organisationId: profile.organisationId,
       title,
       description: metadata,
       mandatory: isMandatory,
