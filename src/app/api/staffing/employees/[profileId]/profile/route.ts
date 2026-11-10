@@ -1,6 +1,8 @@
 import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
 import { bankFormatFor, validateBank, normaliseSortCode } from '@/lib/bank-format'
 import { prisma } from '@/lib/prisma'
+import { resolveNigerianAccount } from '@/lib/paystack'
+import { assertOrgOffice, assertOrgProfile } from '@/lib/tenant'
 import { firmDefaults } from '@/lib/region-server'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
@@ -370,8 +372,19 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (availabilityStatus !== null) empData.availabilityStatus = availabilityStatus
   }
 
-  // HR+-only fields
+  // HR+-only fields — HR can't set their own pay, allowance, status, grade, probation or manager (another admin does)
+  const SELF_LOCKED = ['salary', 'salaryCurrency', 'annualLeaveAllocation', 'status', 'managerId', 'grade', 'employmentType', 'probationStatus', 'probationStartDate', 'probationEndDate', 'officeId', 'roleId']
+  if (hasHRAccess && isSelf && profile.orgPermission !== 'OWNER' && SELF_LOCKED.some((k) => body[k] !== undefined)) {
+    throw new PermissionError('Ask another admin to change your own pay, allowance, status or manager')
+  }
   if (hasHRAccess) {
+    for (const k of ['officeId', 'managerId', 'lineManagerId']) {
+      const v = body[k]
+      if (typeof v === 'string' && v) {
+        if (k === 'officeId') await assertOrgOffice(v, profile.organisationId)
+        else await assertOrgProfile(v, profile.organisationId, 'Manager')
+      }
+    }
     // Profile fields
     const jobTitle = optionalString(body.jobTitle as unknown, 'jobTitle', 200)
     if (jobTitle !== null) profileData.jobTitle = jobTitle
@@ -483,10 +496,17 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       bankConfidentialData.bankAccountNumber = checked.accountNumber
       if (checked.sortCode) bankConfidentialData.bankSortCode = checked.sortCode
       if (format !== 'nuban') { bankConfidentialData.bankCode = checked.bankCode; bankVerified = false } // only Nigerian accounts can be checked automatically
+      else if (bankVerified) {
+        // Never trust the browser's "verified": check again with Paystack here and use the name it returns
+        const r = await resolveNigerianAccount(checked.accountNumber, String(bankCode ?? ''))
+        bankVerified = r.verified
+        if (r.verified) { bankConfidentialData.bankAccountName = r.accountName; bankConfidentialData.bankName = r.bankName }
+        else throw new ValidationError(r.error)
+      }
     }
     if (bankCode !== null && bankConfidentialData.bankCode === undefined) bankConfidentialData.bankCode = bankCode
-    if (bankAccountName !== null) bankConfidentialData.bankAccountName = bankAccountName
-    if (bankName !== null) bankConfidentialData.bankName = bankName
+    if (bankAccountName !== null && bankConfidentialData.bankAccountName === undefined) bankConfidentialData.bankAccountName = bankAccountName
+    if (bankName !== null && bankConfidentialData.bankName === undefined) bankConfidentialData.bankName = bankName
     if (bankSortCode !== null && bankConfidentialData.bankSortCode === undefined && bankAccountNumber === null) {
       const sc = normaliseSortCode(bankSortCode)
       if (!sc) throw new ValidationError('Sort code must be 6 digits, e.g. 20-00-00')

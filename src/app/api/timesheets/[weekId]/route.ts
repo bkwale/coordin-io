@@ -98,6 +98,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Only the timesheet owner can perform this action')
   }
 
+  if (MANAGER_STATUSES.includes(newStatus) && isOwner) {
+    throw new PermissionError("You can't approve or reject your own timesheet — only your manager or admin can")
+  }
   if (MANAGER_STATUSES.includes(newStatus) && !isManager && !isAdmin) {
     throw new PermissionError('Only a manager or admin can approve/reject timesheets')
   }

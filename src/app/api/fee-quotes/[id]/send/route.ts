@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { PermissionError } from '@/lib/errors'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
@@ -42,6 +43,9 @@ function extractId(url: string): string {
  * ADMIN/OWNER only.
  */
 export const POST = withAuth(async (request: NextRequest, { profile }) => {
+  if (!['ADMIN', 'OWNER', 'COMMERCIAL', 'FINANCE'].includes(profile.orgPermission as string)) {
+    throw new PermissionError('Only owners, admins, finance or commercial staff can send quotes to clients')
+  }
   const id = extractId(request.url)
 
   const quote = await prisma.feeQuote.findUnique({

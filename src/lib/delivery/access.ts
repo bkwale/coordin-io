@@ -35,3 +35,12 @@ export async function assertDeliveryWrite(ctx: Ctx, min: ProjectRole): Promise<{
 export function canApproveDelivery(r: { isOrgAdmin: boolean; role: ProjectRole | null }): boolean {
   return !!r.role && hasProjectRole(r.role, 'DESIGN_LEAD')
 }
+
+/**
+ * Money on a project (invoices, budgets, POs, variations, tenders, valuations, risks): org Owner/Admin,
+ * Finance or Commercial, or the project's lead. Ordinary members and other view-all roles can read, not write.
+ */
+export async function assertCommercialWrite(ctx: Ctx): Promise<void> {
+  if (['ADMIN', 'OWNER', 'FINANCE', 'COMMERCIAL'].includes(ctx.profile.orgPermission)) return
+  await assertDeliveryWrite(ctx, 'PROJECT_LEAD')
+}

@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { assertCommercialWrite } from '@/lib/delivery/access'
 import { projectCurrency } from '@/lib/region-server'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
@@ -38,7 +39,8 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
 /**
  * POST /api/projects/[id]/commercial/valuations — Create a new valuation.
  */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, profile, membership }) => {
+  await assertCommercialWrite({ profile, projectId, membership })
   const body = await parseBody(request)
 
   const period = requireString(body.period, 'Period', 100)

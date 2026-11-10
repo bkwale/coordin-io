@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { assertCommercialWrite } from '@/lib/delivery/access'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -49,7 +50,8 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
  *
  * Approval requires MANAGER+ org permission.
  */
-export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile, membership }) => {
+  await assertCommercialWrite({ profile, projectId, membership })
   const budgetId = extractBudgetId(request)
   const body = await parseBody(request)
 
@@ -113,7 +115,8 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
  *
  * Only DRAFT budgets can be deleted. Approved/submitted budgets must be superseded instead.
  */
-export const DELETE = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const DELETE = withProjectAccess(async (request: NextRequest, { projectId, profile, membership }) => {
+  await assertCommercialWrite({ profile, projectId, membership })
   const budgetId = extractBudgetId(request)
 
   const existing = await prisma.budget.findFirst({

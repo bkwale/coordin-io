@@ -117,6 +117,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       throw new PermissionError('Only the requester can perform this action')
     }
 
+    if ((isApproverTransition(newStatus) || (isAdminTransition(newStatus) && newStatus !== 'COMPLETED')) && isOwner) {
+      throw new PermissionError("You can't approve or reject your own request — another approver must do it")
+    }
     if (isApproverTransition(newStatus) && !isApproverUser && !isAdmin && !isManager) {
       throw new PermissionError('Only the assigned approver or an admin can perform this action')
     }

@@ -110,6 +110,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (newStatus === 'SUBMITTED' && currentStatus === 'UNDER_REVIEW' && !isOwner) {
     throw new PermissionError('Only the requester can re-submit after info request')
   }
+  // Nobody approves or rejects their own leave, whatever their role
+  if (isOwner && ['LINE_MANAGER_APPROVED', 'HR_APPROVED', 'APPROVED', 'REJECTED', 'UNDER_REVIEW'].includes(newStatus)) {
+    throw new PermissionError("You can't approve or reject your own leave — another approver must do it")
+  }
   if (newStatus === 'UNDER_REVIEW' && !isLineManager && !isApproverUser && !isAdmin) {
     throw new PermissionError('Only the line manager, approver, or an admin can request more information')
   }

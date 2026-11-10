@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { assertCommercialWrite } from '@/lib/delivery/access'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -56,7 +57,8 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
  * To add a tender return, include a `tenderReturn` object in the body.
  * To update the tender itself, include fields directly.
  */
-export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile, membership }) => {
+  await assertCommercialWrite({ profile, projectId, membership })
   const tenderId = extractTenderId(request)
   const body = await parseBody(request)
 

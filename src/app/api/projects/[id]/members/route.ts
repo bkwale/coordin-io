@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { assertProjectWrite } from '@/lib/project-write-access'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -42,7 +43,9 @@ export const GET = withProjectAccess(async (_request: NextRequest, { projectId }
  * POST /api/projects/[id]/members — Add a member to the project.
  * Requires PROJECT_LEAD+ on the project (or MANAGER+ org).
  */
-export const POST = withProjectAccess(async (request: NextRequest, { projectId, project, profile }) => {
+export const POST = withProjectAccess(async (request: NextRequest, { projectId, project, profile, membership: callerMembership }) => {
+  // View-all roles (HR, Legal, Finance, Commercial) can't make themselves project lead
+  await assertProjectWrite({ profile, projectId, membership: callerMembership }, 'PROJECT_LEAD')
   const body = await parseBody(request)
   const profileId = requireId(body.profileId, 'Profile ID')
   const projectRole = requireEnum(body.projectRole, 'Project role', VALID_PROJECT_ROLES)
@@ -146,7 +149,9 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
  * Body: { membershipId, projectRole }
  * Requires PROJECT_LEAD+ on the project.
  */
-export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile, membership: callerMembership }) => {
+  // View-all roles (HR, Legal, Finance, Commercial) can't make themselves project lead
+  await assertProjectWrite({ profile, projectId, membership: callerMembership }, 'PROJECT_LEAD')
   const body = await parseBody(request)
   const membershipId = requireId(body.membershipId, 'Membership ID')
   const projectRole = requireEnum(body.projectRole, 'Project role', VALID_PROJECT_ROLES)
@@ -190,7 +195,9 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
  * Body: { membershipId }
  * Requires PROJECT_LEAD+ on the project.
  */
-export const DELETE = withProjectAccess(async (request: NextRequest, { projectId, project, profile }) => {
+export const DELETE = withProjectAccess(async (request: NextRequest, { projectId, project, profile, membership: callerMembership }) => {
+  // View-all roles (HR, Legal, Finance, Commercial) can't make themselves project lead
+  await assertProjectWrite({ profile, projectId, membership: callerMembership }, 'PROJECT_LEAD')
   const body = await parseBody(request)
   const membershipId = requireId(body.membershipId, 'Membership ID')
 

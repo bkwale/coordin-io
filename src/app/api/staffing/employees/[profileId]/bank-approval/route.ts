@@ -24,6 +24,10 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (!hasHRAccess) {
     throw new PermissionError('Only HR, Admin, or Owner can approve bank details')
   }
+  // Payroll-fraud guard: nobody approves their own bank details
+  if (profileId === profile.id) {
+    throw new PermissionError("You can't approve your own bank details — another HR admin or the Owner must")
+  }
 
   // Verify the target exists and is in the same org
   const target = await modulesPrisma.profile.findUnique({

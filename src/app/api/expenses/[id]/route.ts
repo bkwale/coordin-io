@@ -104,6 +104,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Only the claimant can perform this action')
   }
 
+  // Nobody approves, rejects or pays their own claim
+  if ((isApproverTransition(newStatus) || isAdminTransition(newStatus)) && isOwner) {
+    throw new PermissionError("You can't approve, reject or pay your own expense claim — another approver must do it")
+  }
   if (isApproverTransition(newStatus) && !isClaimApprover && !isAdmin && !isFinance) {
     throw new PermissionError('Only the assigned approver, finance, or an admin can perform this action')
   }

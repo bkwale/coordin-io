@@ -323,6 +323,20 @@ export async function processApprovalStep(
       throw new Error('No pending step found')
     }
 
+    // Who is acting: must be in the same firm, and never the person who submitted the request
+    const actor = await tx.profile.findUnique({ where: { id: approverId }, select: { orgPermission: true, organisationId: true } })
+    if (!actor || (instance.organisationId && actor.organisationId !== instance.organisationId)) {
+      throw new Error('Approval instance not found')
+    }
+    if (instance.submitterId === approverId && action !== 'REQUEST_CHANGES') {
+      throw new Error("You can't approve or reject your own request — another approver must do it")
+    }
+    // A step with no named approver can only be actioned by an admin (never by any member)
+    const namedIds = (effectiveStep.approverIds as string[] ?? [])
+    if (namedIds.length === 0 && !effectiveStep.approverId && !['ADMIN', 'OWNER'].includes(actor.orgPermission)) {
+      throw new Error('This step has no approver assigned — an admin must action it')
+    }
+
     // Verify the approver matches (or is admin)
     const stepApproverIds = (effectiveStep.approverIds as string[] ?? [])
     if (stepApproverIds.length > 1) {
