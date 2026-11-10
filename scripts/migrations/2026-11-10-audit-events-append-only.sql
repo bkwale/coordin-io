@@ -16,3 +16,15 @@ drop trigger if exists audit_events_append_only on public.audit_events;
 create trigger audit_events_append_only
   before update or delete on public.audit_events
   for each row execute function public.audit_events_append_only();
+
+-- TRUNCATE bypasses row triggers: block it with a statement trigger (applied as migration audit_events_no_truncate).
+-- Known, accepted exception: a direct UPDATE that only sets actor_id to null passes (same shape as the FK's ON DELETE SET NULL).
+create or replace function public.audit_events_no_truncate()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  raise exception 'audit_events is append-only (TRUNCATE blocked)' using errcode = '42501';
+end $$;
+drop trigger if exists audit_events_no_truncate on public.audit_events;
+create trigger audit_events_no_truncate
+  before truncate on public.audit_events
+  for each statement execute function public.audit_events_no_truncate();

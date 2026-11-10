@@ -373,9 +373,28 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   // HR+-only fields — HR can't set their own pay, allowance, status, grade, probation or manager (another admin does)
-  const SELF_LOCKED = ['salary', 'salaryCurrency', 'annualLeaveAllocation', 'status', 'managerId', 'grade', 'employmentType', 'probationStatus', 'probationStartDate', 'probationEndDate', 'officeId', 'roleId']
-  if (hasHRAccess && isSelf && profile.orgPermission !== 'OWNER' && SELF_LOCKED.some((k) => body[k] !== undefined)) {
-    throw new PermissionError('Ask another admin to change your own pay, allowance, status or manager')
+  const SELF_LOCKED = [
+    'salary', 'salaryCurrency', 'salaryFrequency', 'benefits', 'pensionProvider', 'pensionContribution', 'hmoProvider', 'hmoPlan', 'dependants', 'noticePeriod',
+    'annualLeaveAllocation', 'status', 'managerId', 'grade', 'employmentType', 'contractType', 'workingHours', 'workingPattern',
+    'probationStatus', 'probationLength', 'probationStartDate', 'probationEndDate', 'officeId', 'roleId',
+  ]
+  if (hasHRAccess && isSelf && profile.orgPermission !== 'OWNER') {
+    // The edit form sends every field on each save, so only a value that actually CHANGES is blocked
+    const [cur, emp, conf] = await Promise.all([
+      prisma.profile.findUnique({ where: { id: profileId }, select: { managerId: true, roleId: true, officeId: true, status: true } }),
+      modulesPrisma.employeeProfile.findUnique({ where: { profileId } }).catch(() => null),
+      modulesPrisma.confidentialEmployeeData.findUnique({ where: { profileId } }).catch(() => null),
+    ])
+    const stored: Record<string, unknown> = { ...(emp ?? {}), ...(conf ?? {}), ...(cur ?? {}) }
+    const norm = (v: unknown): string => {
+      if (v === undefined || v === null || v === '') return ''
+      if (v instanceof Date) return v.toISOString().slice(0, 10)
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10)
+      if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)))) return String(Number(v))
+      return String(v).trim()
+    }
+    const changed = SELF_LOCKED.filter((k) => body[k] !== undefined && norm(body[k]) !== norm(stored[k]))
+    if (changed.length) throw new PermissionError('Ask another admin to change your own pay, benefits, allowance, status, probation or manager')
   }
   if (hasHRAccess) {
     for (const k of ['officeId', 'managerId', 'lineManagerId']) {
@@ -481,7 +500,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     const bankAccountName = optionalString(body.bankAccountName as unknown, 'bankAccountName', 200)
     const bankName = optionalString(body.bankName as unknown, 'bankName', 200)
     const bankSortCode = optionalString(body.bankSortCode as unknown, 'bankSortCode', 10)
-    let bankVerified = typeof body.bankVerified === 'boolean' ? body.bankVerified : null
+    // "Verified" is never taken from the browser: it is set only by the Paystack check below
+    const wantsVerify = body.bankVerified === true
+    let bankVerified: boolean | null = null
+    const storedBank = await modulesPrisma.confidentialEmployeeData.findUnique({ where: { profileId }, select: { bankAccountName: true, bankVerified: true } }).catch(() => null)
 
     // Format follows the person's office country (else the firm's): IBAN in Estonia, sort code in the UK, NUBAN in Nigeria
     if (bankAccountNumber !== null) {
@@ -496,13 +518,17 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       bankConfidentialData.bankAccountNumber = checked.accountNumber
       if (checked.sortCode) bankConfidentialData.bankSortCode = checked.sortCode
       if (format !== 'nuban') { bankConfidentialData.bankCode = checked.bankCode; bankVerified = false } // only Nigerian accounts can be checked automatically
-      else if (bankVerified) {
+      else if (wantsVerify) {
         // Never trust the browser's "verified": check again with Paystack here and use the name it returns
         const r = await resolveNigerianAccount(checked.accountNumber, String(bankCode ?? ''))
         bankVerified = r.verified
         if (r.verified) { bankConfidentialData.bankAccountName = r.accountName; bankConfidentialData.bankName = r.bankName }
         else throw new ValidationError(r.error)
       }
+    }
+    if (bankAccountNumber !== null && bankVerified === null) bankVerified = false // a new number that wasn't checked
+    if (bankAccountNumber === null && bankAccountName !== null && storedBank?.bankVerified && bankAccountName.trim() !== (storedBank.bankAccountName ?? '').trim()) {
+      bankVerified = false // a hand-typed name replaces a verified one — needs checking again
     }
     if (bankCode !== null && bankConfidentialData.bankCode === undefined) bankConfidentialData.bankCode = bankCode
     if (bankAccountName !== null && bankConfidentialData.bankAccountName === undefined) bankConfidentialData.bankAccountName = bankAccountName

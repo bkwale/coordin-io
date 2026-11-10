@@ -24,20 +24,46 @@ function v4Private(ip: string): boolean {
   return false
 }
 
+/** Expand an IPv6 address (any notation, incl. a trailing dotted IPv4) to 8 numbers. */
+function v6Hextets(ip: string): number[] | null {
+  let s = ip.toLowerCase().split('%')[0]
+  const dotted = s.match(/(\d+\.\d+\.\d+\.\d+)$/)
+  if (dotted) {
+    const [a, b, c, d] = dotted[1].split('.').map(Number)
+    s = s.slice(0, -dotted[1].length) + ((a << 8) | b).toString(16) + ':' + ((c << 8) | d).toString(16)
+  }
+  const halves = s.split('::')
+  if (halves.length > 2) return null
+  const head = halves[0] ? halves[0].split(':') : []
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : []
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0
+  if (fill < 0) return null
+  const parts = [...head, ...Array(fill).fill('0'), ...tail]
+  if (parts.length !== 8) return null
+  const nums = parts.map((h) => parseInt(h, 16))
+  return nums.some((n) => !Number.isFinite(n) || n < 0 || n > 0xffff) ? null : nums
+}
+
+const v4From = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`
+
 export function isPrivateAddress(ip: string): boolean {
   const kind = isIP(ip)
   if (kind === 4) return v4Private(ip)
-  if (kind === 6) {
-    const s = ip.toLowerCase()
-    if (s === '::' || s === '::1') return true
-    const mapped = s.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-    if (mapped) return v4Private(mapped[1])
-    if (/^f[cd]/.test(s)) return true // unique local
-    if (/^fe[89ab]/.test(s)) return true // link-local
-    if (/^ff/.test(s)) return true // multicast
-    return false
-  }
-  return true
+  if (kind !== 6) return true
+  const h = v6Hextets(ip)
+  if (!h) return true
+  const zeroTo = (n: number) => h.slice(0, n).every((x) => x === 0)
+  if (h.every((x) => x === 0)) return true // ::
+  if (zeroTo(7) && h[7] === 1) return true // ::1
+  if (zeroTo(5) && h[5] === 0xffff) return v4Private(v4From(h[6], h[7])) // ::ffff:a.b.c.d (any notation)
+  if (zeroTo(6)) return v4Private(v4From(h[6], h[7])) // ::a.b.c.d (IPv4-compatible)
+  if (h[0] === 0x64 && h[1] === 0xff9b && h.slice(2, 6).every((x) => x === 0)) return v4Private(v4From(h[6], h[7])) // NAT64
+  if (h[0] === 0x2002) return v4Private(v4From(h[1], h[2])) // 6to4
+  if ((h[0] & 0xfe00) === 0xfc00) return true // fc00::/7 unique local
+  if ((h[0] & 0xffc0) === 0xfe80) return true // fe80::/10 link-local
+  if ((h[0] & 0xff00) === 0xff00) return true // multicast
+  if (h[0] === 0x2001 && h[1] === 0xdb8) return true // documentation
+  return false
 }
 
 /** Throws UnsafeUrlError unless the URL is http(s) on 80/443 and every resolved address is public. */

@@ -21,6 +21,10 @@ export function sealSecret(plain: string): string {
   if (!plain || plain.startsWith(PREFIX)) return plain
   const k = key()
   if (!k) {
+    // Live sites must never store tokens in plain text
+    if (process.env.VERCEL_ENV === 'production' || process.env.REQUIRE_INTEGRATION_ENCRYPTION === 'on') {
+      throw new Error('INTEGRATION_ENCRYPTION_KEY is not set — integration tokens cannot be stored')
+    }
     if (!warned) { warned = true; console.warn(JSON.stringify({ level: 'warn', event: 'integration_secret_unencrypted', hint: 'set INTEGRATION_ENCRYPTION_KEY' })) }
     return plain
   }

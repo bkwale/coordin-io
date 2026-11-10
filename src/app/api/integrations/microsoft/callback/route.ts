@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { oauthStateMatches } from '@/lib/oauth-state'
+import { oauthStateMatches, clearOAuthState } from '@/lib/oauth-state'
 import { sealSecret, openSecret } from '@/lib/secret-box'
 import { prisma } from '@/lib/prisma'
 import { exchangeCodeForTokens, fetchUserProfile } from '@/lib/integrations/microsoft/oauth'
@@ -155,9 +155,10 @@ export async function GET(request: NextRequest) {
       console.error('[microsoft-callback] Audit event failed')
     }
 
-    return NextResponse.redirect(
+    // The state is single-use: clear its cookie
+    return clearOAuthState(NextResponse.redirect(
       `${baseUrl}/settings?tab=integrations&microsoft=connected&tenant=${encodeURIComponent(tenantName)}`,
-    )
+    ), 'microsoft')
   } catch (err) {
     console.error('[microsoft-callback] OAuth flow failed:', err)
     return NextResponse.redirect(

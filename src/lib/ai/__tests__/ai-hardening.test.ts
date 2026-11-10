@@ -5,7 +5,7 @@ import { cleanText } from '@/lib/ai/document-ingest'
 
 describe('crawler address checks', () => {
   it('flags private, loopback, metadata and CGNAT addresses', () => {
-    for (const ip of ['127.0.0.1', '10.0.0.5', '172.16.1.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1']) {
+    for (const ip of ['127.0.0.1', '10.0.0.5', '172.16.1.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:a9fe:a9fe', '::7f00:1', '64:ff9b::7f00:1', '2002:7f00:1::', '0:0:0:0:0:0:0:1']) {
       expect(isPrivateAddress(ip), ip).toBe(true)
     }
     for (const ip of ['8.8.8.8', '93.184.216.34', '2606:4700::1111']) expect(isPrivateAddress(ip), ip).toBe(false)
@@ -16,6 +16,8 @@ describe('crawler address checks', () => {
     await expect(assertPublicUrl(new URL('http://localhost/'))).rejects.toThrow()
     await expect(assertPublicUrl(new URL('http://169.254.169.254/latest/meta-data'))).rejects.toThrow()
     await expect(assertPublicUrl(new URL('http://[::1]/'))).rejects.toThrow()
+    await expect(assertPublicUrl(new URL('http://[::ffff:127.0.0.1]/'))).rejects.toThrow()
+    await expect(assertPublicUrl(new URL('http://[::ffff:169.254.169.254]/'))).rejects.toThrow()
   })
 })
 

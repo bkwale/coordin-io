@@ -354,6 +354,11 @@ export async function processApprovalStep(
       if ((effectiveStep.approvedByIds as string[] ?? []).includes(approverId)) {
         throw new Error('You have already approved this step')
       }
+    } else if (!effectiveStep.approverId && stepApproverIds.length === 1 && stepApproverIds[0] !== approverId) {
+      // A one-name approverIds list (approverId left null) — only that person or an admin
+      if (!['ADMIN', 'OWNER'].includes(actor.orgPermission)) {
+        throw new Error('You are not the assigned approver for this step')
+      }
     } else if (effectiveStep.approverId && effectiveStep.approverId !== approverId) {
       const approverProfile = await tx.profile.findUnique({
         where: { id: approverId },

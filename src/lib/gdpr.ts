@@ -64,14 +64,14 @@ export type AnonymiseReason = 'retention' | 'erasure_request'
 export async function profilesDueForAnonymisation(now = new Date()) {
   const cutoff = new Date(now.getTime() - retentionDays() * 86_400_000)
   return prisma.profile.findMany({
-    where: { status: 'DEACTIVATED', deactivatedAt: { lt: cutoff }, NOT: { email: { endsWith: '@anonymised.invalid' } } },
+    where: { status: 'DEACTIVATED', deactivatedAt: { lt: cutoff }, orgPermission: { not: 'OWNER' }, NOT: { email: { endsWith: '@anonymised.invalid' } } },
     select: { id: true, organisationId: true, deactivatedAt: true },
   })
 }
 
 export async function anonymiseProfile(input: { profileId: string; organisationId: string; actorId: string | null; reason: AnonymiseReason; now?: Date }) {
   const now = input.now ?? new Date()
-  const p = await prisma.profile.findFirst({ where: { id: input.profileId, organisationId: input.organisationId }, select: { id: true, status: true, deactivatedAt: true, email: true, orgPermission: true } })
+  const p = await prisma.profile.findFirst({ where: { id: input.profileId, organisationId: input.organisationId }, select: { id: true, status: true, deactivatedAt: true, email: true, orgPermission: true, authUserId: true } })
   if (!p) throw new NotFoundError('Person not found')
   if (p.email.endsWith('@anonymised.invalid')) throw new ValidationError('This person has already been anonymised')
   if (p.status !== 'DEACTIVATED') throw new ValidationError('Deactivate this person before anonymising their record')
@@ -94,9 +94,24 @@ export async function anonymiseProfile(input: { profileId: string; organisationI
       where: { profileId: p.id },
       data: { salary: null, salaryFrequency: null, salaryCurrency: null, benefits: null, hmoProvider: null, hmoPlan: null, dependants: null, pensionProvider: null, pensionContribution: null, noticePeriod: null, bankAccountName: null, bankAccountNumber: null, bankName: null, bankCode: null, bankSortCode: null, bankVerified: false, bankRejectionReason: null },
     })
+    // Free-text that can carry health or personal detail (sick-leave reasons, notification text)
+    await tx.leaveRequest.updateMany({ where: { profileId: p.id }, data: { reason: null } })
+    await tx.notification.updateMany({ where: { profileId: p.id }, data: { body: null } })
     await tx.auditEvent.create({
       data: { organisationId: input.organisationId, actorId: input.actorId, action: 'gdpr.profile_anonymised', entityType: 'profile', entityId: p.id, metadata: { reason: input.reason, retentionDays: retentionDays() } },
     })
   })
-  return { anonymised: true, profileId: p.id }
+  // The sign-in account holds the email address too: remove it so they can never sign in again
+  let loginRemoved = !p.authUserId
+  if (p.authUserId && process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+      const { error } = await admin.auth.admin.deleteUser(p.authUserId)
+      loginRemoved = !error
+    } catch { loginRemoved = false }
+  }
+  // Stored files (HR documents, receipts) are listed in the export and kept for the firm's records;
+  // they are removed with the person's record only on a separate, explicit request.
+  return { anonymised: true, profileId: p.id, loginRemoved }
 }

@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const tx = {
   profile: { update: vi.fn() },
   employeeProfile: { updateMany: vi.fn() },
+  leaveRequest: { updateMany: vi.fn() },
+  notification: { updateMany: vi.fn() },
   confidentialEmployeeData: { updateMany: vi.fn() },
   auditEvent: { create: vi.fn() },
 }
