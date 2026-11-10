@@ -5,6 +5,7 @@ import { captureError } from '@/lib/error-reporting'
  */
 import { createRun, runAI } from './pipeline'
 import { crawlPractice, normaliseUrl, CrawlError } from './crawl'
+import { stripInjectionFromPages } from './injection-guard'
 import { PRACTICE_SETUP_SYSTEM, PRACTICE_SETUP_PROMPT_VERSION, practiceSetupUser } from './prompts/practice-setup'
 import { PracticeProfileSchema, normalisePracticeProfile } from './schemas'
 import { mapPracticeProfile, practiceConfidence } from './map-practice'
@@ -70,6 +71,9 @@ export async function executePracticeSetup(runId: string, url: string, registry?
         throw e
       }
       if (!pages.length) throw new Error('The site returned no readable text. We can set up manually. (empty)')
+      const guarded = stripInjectionFromPages(pages)
+      pages = guarded.pages
+      if (guarded.removed) await push({ name: 'read', status: 'done', detail: `Ignored ${guarded.removed} passage${guarded.removed > 1 ? 's' : ''} addressed to an AI system` })
       await push({ name: 'read', status: 'done', detail: `${pages.length} page${pages.length > 1 ? 's' : ''}, ${pages.reduce((a, p) => a + p.text.split(/\s+/).length, 0).toLocaleString()} words` })
       return { system: PRACTICE_SETUP_SYSTEM, user: practiceSetupUser(url, pages), inputForHash: pages.map((p) => p.text).join('\n') }
     },

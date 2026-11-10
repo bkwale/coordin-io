@@ -14,8 +14,9 @@ interface AuditParams {
  * Record an audit event. Every material action in the system
  * must create an audit trail entry.
  */
-export async function recordAuditEvent(params: AuditParams) {
-  return prisma.auditEvent.create({
+/** Pass `db` (a transaction client) to write the event in the same transaction as the change it records. */
+export async function recordAuditEvent(params: AuditParams, db: { auditEvent: { create: typeof prisma.auditEvent.create } } = prisma) {
+  return db.auditEvent.create({
     data: {
       organisationId: params.organisationId,
       actorId: params.actorId ?? null,

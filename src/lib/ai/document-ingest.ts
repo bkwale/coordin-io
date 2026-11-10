@@ -30,7 +30,8 @@ export function sniffPdf(bytes: Uint8Array): boolean {
 
 export function cleanText(s: string): string {
   // strip control chars except \n \t, collapse runs of blank lines, normalise NBSP
-  return s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/ /g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+  // NFKC folds look-alike letters (ｉｇｎｏｒｅ → ignore); \p{Cf} removes zero-width and bidi characters used to hide text
+  return s.normalize('NFKC').replace(/\p{Cf}/gu, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/ /g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 /** Split pasted text into pseudo-pages (~4k chars) so page refs still mean something. */
@@ -47,7 +48,20 @@ export function paginateText(text: string, pageChars = 4000): string[] {
   return pages
 }
 
+/** A hostile PDF can make pdf.js spin; give up after this long. */
+export const PDF_PARSE_TIMEOUT_MS = 30_000
+
 export async function pdfToPages(bytes: Uint8Array): Promise<string[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new IngestError('unreadable', INGEST_MESSAGE.unreadable + ' (took too long to read)')), PDF_PARSE_TIMEOUT_MS) })
+  try {
+    return await Promise.race([pdfToPagesInner(bytes), timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function pdfToPagesInner(bytes: Uint8Array): Promise<string[]> {
   if (bytes.byteLength > INGEST_LIMITS.maxBytes) throw new IngestError('too_large', INGEST_MESSAGE.too_large)
   if (!sniffPdf(bytes)) throw new IngestError('not_pdf', INGEST_MESSAGE.not_pdf)
   // unpdf (maintained, serverless build of current pdf.js). Copy into a fresh Uint8Array — pdf.js detaches the buffer it is given.

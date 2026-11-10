@@ -20,11 +20,25 @@ const PATTERNS: RegExp[] = [
   // Estonian
   /\b(eira|ignoreeri)\w*\b[^.\n]{0,40}\bjuhis/i,
   /\btehisintellekt\w*\b[^.\n]{0,40}\b(juhis|käsk)/i,
+  // Polish
+  /\b(zignoruj|pomiń|zapomnij)\w*\b[^.\n]{0,40}\b(instrukcj|polece)/i,
+  /\b(do|dla)\s+(sztucznej inteligencji|modelu|asystenta|ai)\b/i,
+  // German
+  /\b(ignoriere|vergiss|missachte)\w*\b[^.\n]{0,40}\b(anweisung|vorgabe|regel|instruktion)/i,
+  /\b(an|für)\s+(die\s+|den\s+)?(ki|künstliche intelligenz|sprachmodell|assistenten)\b/i,
+  // Russian
+  /(игнорируй|забудь|не обращай внимания)[^.\n]{0,40}(инструкц|указани|правил)/i,
+  /(для|к)\s+(ии|искусственного интеллекта|нейросети|модели|ассистента)(?![\p{L}])/iu,
 ]
+
+/** Fold look-alikes and strip invisible characters before scanning. */
+export function scanText(s: string): string {
+  return s.normalize('NFKC').replace(/\p{Cf}/gu, '')
+}
 
 export interface InjectionHit { page: number; excerpt: string; paragraph: string }
 
-const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+const norm = (s: string) => scanText(s).toLowerCase().replace(/\s+/g, ' ').trim()
 
 const CLAUSE_START = /^\s*(\d+(\.\d+)*\.?\s|[-•–]\s)/
 const HEADING = /^[\p{Lu}\d\s.,:;()–-]{4,}$/u
@@ -48,8 +62,17 @@ export function segmentBlocks(text: string): string[] {
 }
 
 /** Blocks that contain text addressed to an AI system. */
-export function findInjection(pages: string[]): InjectionHit[] {
+export function findInjection(rawPages: string[]): InjectionHit[] {
   const hits: InjectionHit[] = []
+  const pages = rawPages.map(scanText)
+  // A sentence split across a page break: scan each join too
+  pages.forEach((text, i) => {
+    if (i === 0) return
+    const seam = pages[i - 1].slice(-300).replace(/\s+/g, ' ') + ' ' + text.slice(0, 300).replace(/\s+/g, ' ')
+    const m = PATTERNS.map((re) => seam.match(re)).find(Boolean)
+    const perPage = PATTERNS.some((re) => re.test(pages[i - 1].slice(-300)) || re.test(text.slice(0, 300)))
+    if (m && !perPage) hits.push({ page: i, excerpt: seam.slice(Math.max(0, (m.index ?? 0) - 20), (m.index ?? 0) + 140).trim(), paragraph: norm(seam) })
+  })
   pages.forEach((text, i) => {
     for (const para of segmentBlocks(text)) {
       const m = PATTERNS.map((re) => para.match(re)).find(Boolean)
@@ -99,4 +122,18 @@ export function applyInjectionGuard(mapping: ProjectSetupMapping, pages: string[
     warnings: [warning, ...mapping.warnings.filter((w) => !/instruction|api key|system prompt|manipulat/i.test(w))],
     suspicious: { pages: pagesHit, excerpts: hits.slice(0, 3).map((h) => h.excerpt), dropped, droppedConditions },
   }
+}
+
+/**
+ * Crawled website pages: remove blocks addressed to an AI system before the text reaches the model.
+ * Returns the cleaned pages and how many blocks were removed.
+ */
+export function stripInjectionFromPages<T extends { text: string }>(pages: T[]): { pages: T[]; removed: number } {
+  let removed = 0
+  const out = pages.map((p) => {
+    const blocks = segmentBlocks(scanText(p.text))
+    const kept = blocks.filter((b) => { const bad = PATTERNS.some((re) => re.test(b)); if (bad) removed++; return !bad })
+    return { ...p, text: kept.join('\n') }
+  })
+  return { pages: out, removed }
 }

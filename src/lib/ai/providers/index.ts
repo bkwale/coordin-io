@@ -126,8 +126,10 @@ export async function chat(req: ChatRequest): Promise<ChatResult> {
   } else {
     try { return await attempt('mistral', () => mistral(req, primary), PRIMARY_TIMEOUT_MS) } catch (e) { primaryErr = e }
   }
-  // Wrong key / bad request on the primary is our bug, not an outage — don't paper over it with the fallback
-  if (!fallbackAvailable || (primaryErr instanceof AIProviderError && primaryErr.kind === 'bad_output')) throw primaryErr
+  // Only an outage on the primary sends data to the fallback. A missing/wrong key, a rejected request or bad
+  // output is our bug — never paper over it by sending the document outside the EU.
+  const outage = isTimeout(primaryErr) || (primaryErr instanceof AIProviderError && (primaryErr.kind === 'unavailable' || primaryErr.kind === 'timeout' || primaryErr.kind === 'rate_limited'))
+  if (!fallbackAvailable || !outage) throw primaryErr
   if (await isProviderOpen('claude')) throw primaryErr
   // Leaving the EU: mask personal data first
   const sys = maskPersonalData(req.system), usr = maskPersonalData(req.user)

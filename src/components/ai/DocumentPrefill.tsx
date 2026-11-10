@@ -110,7 +110,8 @@ export function DocumentPrefill({ projectId, jurisdiction = 'EE', onApplyValues,
             setAccepted(pre)
             // Only conditions whose wording was found in the document are pre-ticked — and none if the
             // document contained text addressed to an AI (the architect ticks each one deliberately)
-            setAcceptedConds(new Set(data.mapping.suspicious || (data.mapping.document.validUntil && data.mapping.document.validUntil.slice(0, 10) < new Date().toISOString().slice(0, 10)) ? [] : data.mapping.conditions.flatMap((c, i) => (c.verified && (data.mapping!.kind !== 'decision_notice' || c.mandatory) ? [String(i)] : []))))
+            // Conditions read from a document start unticked — the architect ticks each one (or "All") after reading it
+            setAcceptedConds(new Set())
           }
         }
       }, POLL_MS)

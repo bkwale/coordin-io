@@ -124,28 +124,29 @@ export async function confirmPracticeSetup(input: ConfirmPracticeInput): Promise
       where: { id: run.id },
       data: { status: 'APPLIED', organisationId, confirmedBy: actorAuthUserId, confirmedAt: now, appliedAt: now },
     })
+    // Audit in the same transaction: if it can't be written, nothing is applied
+    await recordAuditEvent({
+      organisationId,
+      actorId: actor?.id ?? undefined,
+      action: AuditActions.AI_PRACTICE_CONFIGURED,
+      entityType: 'organisation',
+      entityId: organisationId,
+      metadata: {
+        runId: run.id,
+        promptVersion: run.promptVersion,
+        model: run.model,
+        profileVersion: version,
+        decisions: decisions.map((d) => ({ key: d.key, featureKey: d.featureKey, on: d.on, source: d.source, reason: d.reason })),
+        overriddenKeys: Object.keys(overrides),
+        keptOn,
+        allowDisable,
+      },
+    }, tx)
     return version
   }, { maxWait: 10_000, timeout: 30_000 })
 
   await invalidateFeatureCache(organisationId)
 
-  await recordAuditEvent({
-    organisationId,
-    actorId: actor?.id ?? undefined,
-    action: AuditActions.AI_PRACTICE_CONFIGURED,
-    entityType: 'organisation',
-    entityId: organisationId,
-    metadata: {
-      runId: run.id,
-      promptVersion: run.promptVersion,
-      model: run.model,
-      profileVersion,
-      decisions: decisions.map((d) => ({ key: d.key, featureKey: d.featureKey, on: d.on, source: d.source, reason: d.reason })),
-      overriddenKeys: Object.keys(overrides),
-      keptOn,
-      allowDisable,
-    },
-  })
 
   return {
     runId: run.id,
