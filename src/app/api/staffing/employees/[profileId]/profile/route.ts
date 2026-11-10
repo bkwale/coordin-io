@@ -557,12 +557,15 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     })
   }
 
-  // Update EmployeeProfile fields via upsert
-  if (Object.keys(empData).length > 0) {
+  // Update EmployeeProfile fields via upsert. Salary, benefits, HMO, pension and notice period live only in
+  // ConfidentialEmployeeData (written below) — never in the old employee_profiles columns again.
+  const LEGACY_CONFIDENTIAL = new Set(['salary', 'salaryFrequency', 'salaryCurrency', 'benefits', 'hmoProvider', 'hmoPlan', 'dependants', 'pensionProvider', 'pensionContribution', 'noticePeriod'])
+  const empWrite = Object.fromEntries(Object.entries(empData).filter(([k]) => !LEGACY_CONFIDENTIAL.has(k)))
+  if (Object.keys(empWrite).length > 0) {
     await modulesPrisma.employeeProfile.upsert({
       where: { profileId },
-      create: { profileId, ...empData },
-      update: empData,
+      create: { profileId, ...empWrite },
+      update: empWrite,
     })
   }
 
@@ -620,7 +623,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     }
   }
 
-  // Dual-write: mirror confidential fields to ConfidentialEmployeeData table
+  // Confidential fields go to ConfidentialEmployeeData only
   const confidentialFieldKeys = [
     'salary', 'salaryFrequency', 'salaryCurrency', 'benefits',
     'hmoProvider', 'hmoPlan', 'dependants',
