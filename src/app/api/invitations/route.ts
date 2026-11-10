@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { assertCanGrant, assertOrgOffice, assertOrgRole, assertOrgProfile } from '@/lib/tenant'
 import { prisma } from '@/lib/prisma'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { generateSecureToken } from '@/lib/tokens'
@@ -20,6 +21,13 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (!email || !fullName) {
     throw new ValidationError('Email and full name are required')
   }
+  // Nobody invites above their own access; only an Owner invites Owner/Admin/HR. Every id must be this firm's.
+  assertCanGrant(profile.orgPermission as string, (orgPermission as string) || 'MEMBER')
+  await Promise.all([
+    assertOrgOffice(officeId, profile.organisationId),
+    assertOrgRole(roleId, profile.organisationId),
+    assertOrgProfile(managerId, profile.organisationId, 'Manager'),
+  ])
 
   // Check for existing active invitation
   const existing = await prisma.invitation.findFirst({

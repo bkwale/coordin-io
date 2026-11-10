@@ -36,7 +36,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     },
   })
 
-  if (!leaveRequest) {
+  // Another firm's request is "not found", never readable
+  if (!leaveRequest || leaveRequest.profile.organisationId !== profile.organisationId) {
     throw new NotFoundError('Leave request not found')
   }
 

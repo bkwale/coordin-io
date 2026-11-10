@@ -17,8 +17,8 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
   const url = new URL(request.url)
   const id = url.pathname.split('/').pop()!
 
-  const item = await modulesPrisma.trainingItem.findUnique({
-    where: { id },
+  const item = await modulesPrisma.trainingItem.findFirst({
+    where: { id, organisationId: profile.organisationId },
     include: {
       completions: {
         include: {
@@ -86,7 +86,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Only HR managers and admins can update training records')
   }
 
-  const existing = await modulesPrisma.trainingItem.findUnique({ where: { id } })
+  const existing = await modulesPrisma.trainingItem.findFirst({ where: { id, organisationId: profile.organisationId } })
   if (!existing) {
     throw new NotFoundError('Training record not found')
   }
@@ -157,7 +157,7 @@ export const DELETE = withAuth(async (request: NextRequest, { profile }) => {
     throw new PermissionError('Only HR managers and admins can delete training records')
   }
 
-  const existing = await modulesPrisma.trainingItem.findUnique({ where: { id } })
+  const existing = await modulesPrisma.trainingItem.findFirst({ where: { id, organisationId: profile.organisationId } })
   if (!existing) {
     throw new NotFoundError('Training record not found')
   }
