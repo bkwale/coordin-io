@@ -57,6 +57,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const entityId = requireString(body.entityId, 'Entity ID', 100)
   const linkType = requireEnum(body.linkType, 'Link type', LINK_TYPES)
   const url = requireString(body.url, 'URL', 2000)
+  if (!/^https?:\/\//i.test(url)) throw new ValidationError('URL must start with https://')
   const label = optionalString(body.label, 'Label', 200) ?? url
 
   // Validate URL format

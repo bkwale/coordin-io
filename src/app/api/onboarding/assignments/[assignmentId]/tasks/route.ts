@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
-import { requireString, optionalString, optionalDate, parseBody } from '@/lib/validation'
+import { requireString, optionalString, optionalDate, parseBody, optionalUrl } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { recordAuditEvent } from '@/lib/audit'
@@ -272,7 +272,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // Evidence
   if (body.evidenceUrl !== undefined) {
-    updateData.evidenceUrl = optionalString(body.evidenceUrl, 'evidenceUrl', 2000) ?? null
+    updateData.evidenceUrl = optionalUrl(body.evidenceUrl, 'evidenceUrl', 2000) ?? null
   }
   if (body.evidenceNote !== undefined) {
     updateData.evidenceNote = optionalString(body.evidenceNote, 'evidenceNote', 2000) ?? null

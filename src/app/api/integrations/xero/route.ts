@@ -1,7 +1,9 @@
 import { NextRequest } from 'next/server'
+import { sealSecret, openSecret } from '@/lib/secret-box'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
+import { bindOAuthState } from '@/lib/oauth-state'
 import { ValidationError, PermissionError, NotFoundError } from '@/lib/errors'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { buildAuthUrl } from '@/lib/integrations/xero/oauth'
@@ -84,7 +86,7 @@ export const POST = withAuth(async (_request: NextRequest, { profile }) => {
     data: {
       organisationId: profile.organisationId,
       xeroTenantId: `pending:${state}`,
-      accessToken: codeVerifier, // temporarily store code verifier here
+      accessToken: sealSecret(codeVerifier), // temporarily store code verifier here (sealed)
       refreshToken: '',
       tokenExpiresAt: new Date(Date.now() + 600_000), // 10min for flow completion
       scopes: [],
@@ -102,7 +104,7 @@ export const POST = withAuth(async (_request: NextRequest, { profile }) => {
     metadata: {},
   })
 
-  return success({ authUrl: url })
+  return bindOAuthState(success({ authUrl: url }), 'xero', state)
 })
 
 /**

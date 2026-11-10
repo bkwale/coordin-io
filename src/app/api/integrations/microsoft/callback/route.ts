@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { oauthStateMatches } from '@/lib/oauth-state'
+import { sealSecret, openSecret } from '@/lib/secret-box'
 import { prisma } from '@/lib/prisma'
 import { exchangeCodeForTokens, fetchUserProfile } from '@/lib/integrations/microsoft/oauth'
 import { recordAuditEvent } from '@/lib/audit'
@@ -37,6 +39,13 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // The state must come back to the same browser that started the flow
+  if (!oauthStateMatches(request, 'microsoft', state)) {
+    return NextResponse.redirect(
+      `${baseUrl}/settings?tab=integrations&microsoft=error&reason=invalid_state`,
+    )
+  }
+
   try {
     // Find the pending connection using the state
     const pendingConnection = await prisma.microsoftConnection.findFirst({
@@ -61,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     // The code verifier was stored in accessToken temporarily
-    const codeVerifier = pendingConnection.accessToken
+    const codeVerifier = openSecret(pendingConnection.accessToken)
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, codeVerifier)
@@ -119,8 +128,8 @@ export async function GET(request: NextRequest) {
         msTenantName: tenantName,
         msUserId: userProfile.id,
         msUserEmail: userProfile.mail || userProfile.userPrincipalName,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: sealSecret(tokens.access_token),
+        refreshToken: sealSecret(tokens.refresh_token),
         tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
         scopes: tokens.scope.split(' '),
         active: true,

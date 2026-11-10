@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { escapeParams } from '@/lib/html'
 
 // ── Resend Client (lazy — avoids crash when RESEND_API_KEY is unset at build time)
 let _resend: Resend | null = null
@@ -74,6 +75,7 @@ function buildLeaveSubmissionHtml(params: {
   managerName: string; employeeName: string; leaveType: string
   startDate: string; endDate: string; days: number; reason?: string | null; organisationName: string
 }): string {
+  params = escapeParams(params) // user-typed names, reasons and items are escaped before they go into HTML
   const { managerName, employeeName, leaveType, startDate, endDate, days, reason, organisationName } = params
   const typeLabel = leaveType.replace(/_/g, ' ').toLowerCase()
   const approveUrl = `${APP_URL}/approvals`
@@ -165,6 +167,7 @@ function buildInvitationHtml(params: {
   activationUrl: string
   expiryDate: string
 }): string {
+  params = escapeParams(params) // user-typed names, reasons and items are escaped before they go into HTML
   const { inviteeName, organisationName, inviterName, activationUrl, expiryDate } = params
 
   return `
@@ -291,6 +294,7 @@ function buildOnboardingHtml(params: {
   onboardingUrl: string
   outstandingItems?: string[]
 }): string {
+  params = escapeParams(params) // user-typed names, reasons and items are escaped before they go into HTML
   const { employeeName, organisationName, senderName, onboardingUrl, outstandingItems } = params
 
   const itemsHtml = outstandingItems && outstandingItems.length > 0
@@ -432,6 +436,7 @@ function buildSelfServiceHtml(params: {
   employeeName: string; organisationName: string; senderName: string
   welcomeUrl: string; expiryDate: string; startDate?: string | null; healthInsurance?: boolean
 }): string {
+  params = escapeParams(params) // user-typed names, reasons and items are escaped before they go into HTML
   const { employeeName, organisationName, senderName, welcomeUrl, expiryDate, startDate } = params
   const hmo = params.healthInsurance !== false
 

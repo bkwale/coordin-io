@@ -236,3 +236,13 @@ export async function parseBody<T = Record<string, unknown>>(
     throw new ValidationError('Invalid JSON body')
   }
 }
+
+/** An optional link: only http(s) or an in-app path. Blocks javascript:, data: and similar. */
+export function optionalUrl(value: unknown, fieldName: string, maxLength: number = 2000): string | null {
+  const v = optionalString(value, fieldName, maxLength)
+  if (v === null) return null
+  if (!(v.startsWith('/') && !v.startsWith('//')) && !/^https?:\/\//i.test(v)) {
+    throw new ValidationError(`${fieldName} must be a web link starting with https://`)
+  }
+  return v
+}

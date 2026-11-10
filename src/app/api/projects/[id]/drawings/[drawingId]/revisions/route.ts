@@ -3,7 +3,7 @@ import { modulesPrisma as prisma } from '@/lib/prisma-modules'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { parseBody, requireString, optionalString, optionalEnum, optionalNumber } from '@/lib/validation'
+import { parseBody, requireString, optionalString, optionalEnum, optionalNumber, optionalUrl } from '@/lib/validation'
 import { NotFoundError } from '@/lib/errors'
 
 const DRAWING_STATUSES = [
@@ -74,7 +74,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const author = optionalString(body.author, 'Author', 200)
   const checker = optionalString(body.checker, 'Checker', 200)
   const approver = optionalString(body.approver, 'Approver', 200)
-  const fileUrl = optionalString(body.fileUrl, 'File URL', 2000)
+  const fileUrl = optionalUrl(body.fileUrl, 'File URL', 2000)
   const fileSize = optionalNumber(body.fileSize, 'File size', { min: 0 })
   const comments = optionalString(body.comments, 'Comments', 5000)
   const transmittalRef = optionalString(body.transmittalRef, 'Transmittal reference', 100)

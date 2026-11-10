@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { requireString, optionalString, optionalDate, parseBody } from '@/lib/validation'
+import { requireString, optionalString, optionalDate, parseBody, optionalUrl } from '@/lib/validation'
 import { ValidationError } from '@/lib/errors'
 
 /**
@@ -50,7 +50,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const provider = optionalString(body.provider, 'Provider', 200)
   const topic = optionalString(body.topic, 'Topic', 500)
   const learningOutcome = optionalString(body.learningOutcome, 'Learning outcome', 2000)
-  const evidenceUrl = optionalString(body.evidenceUrl, 'Evidence URL', 2000)
+  const evidenceUrl = optionalUrl(body.evidenceUrl, 'Evidence URL', 2000)
 
   // Parse date
   const dateStr = body.date

@@ -20,7 +20,7 @@ export async function GET() {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[health] Database check failed:', message)
-    checks.database = { status: 'error', latencyMs: Date.now() - dbStart, error: message }
+    checks.database = { status: 'error', latencyMs: Date.now() - dbStart, error: 'unavailable' }
   }
 
   const allHealthy = Object.values(checks).every((c) => c.status === 'ok')

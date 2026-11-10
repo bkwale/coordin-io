@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { requireString, optionalString, optionalId, requireEnum, parseBody } from '@/lib/validation'
+import { requireString, optionalString, optionalId, requireEnum, parseBody, optionalUrl } from '@/lib/validation'
 import { ValidationError } from '@/lib/errors'
 
 const EXPENSE_CATEGORIES = [
@@ -99,7 +99,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const description = requireString(body.description, 'Description', 1000)
   const currency = requireEnum(body.currency, 'Currency', CURRENCIES)
   const projectId = optionalId(body.projectId, 'Project ID')
-  const receiptUrl = optionalString(body.receiptUrl, 'Receipt URL', 2000)
+  const receiptUrl = optionalUrl(body.receiptUrl, 'Receipt URL', 2000)
   const costCode = optionalString(body.costCode, 'Cost code', 50)
   const supplier = optionalString(body.supplier, 'Supplier', 200)
 

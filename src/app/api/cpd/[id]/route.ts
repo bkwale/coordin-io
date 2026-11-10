@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { requireEnum, optionalString, optionalDate, parseBody } from '@/lib/validation'
+import { requireEnum, optionalString, optionalDate, parseBody, optionalUrl } from '@/lib/validation'
 import { NotFoundError, PermissionError, ValidationError } from '@/lib/errors'
 import type { CPDStatus } from '@/generated/prisma/client'
 
@@ -154,7 +154,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (body.provider !== undefined) updateData.provider = optionalString(body.provider, 'Provider', 200)
   if (body.topic !== undefined) updateData.topic = optionalString(body.topic, 'Topic', 500)
   if (body.learningOutcome !== undefined) updateData.learningOutcome = optionalString(body.learningOutcome, 'Learning outcome', 2000)
-  if (body.evidenceUrl !== undefined) updateData.evidenceUrl = optionalString(body.evidenceUrl, 'Evidence URL', 2000)
+  if (body.evidenceUrl !== undefined) updateData.evidenceUrl = optionalUrl(body.evidenceUrl, 'Evidence URL', 2000)
   if (body.date !== undefined) {
     const d = optionalDate(body.date, 'Date')
     if (d) updateData.date = d

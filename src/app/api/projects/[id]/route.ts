@@ -7,7 +7,7 @@ import { withAuth } from '@/lib/with-auth'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { ValidationError, PermissionError } from '@/lib/errors'
 import { canPerform } from '@/lib/role-permissions'
-import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody, optionalUrl } from '@/lib/validation'
 
 /**
  * GET /api/projects/[id] — Single project detail with members and task counts.
@@ -86,7 +86,7 @@ export const PATCH = withProjectAccess(async (request: NextRequest, { projectId,
 
   // Sprint 2 — additional project fields
   if ('sharepointUrl' in body) {
-    const url = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
+    const url = optionalUrl(body.sharepointUrl, 'SharePoint URL', 2000)
     if (url && !/^https?:\/\//i.test(url)) {
       throw new ValidationError('SharePoint URL must start with http:// or https://')
     }

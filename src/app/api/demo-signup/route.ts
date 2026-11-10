@@ -38,7 +38,7 @@ function validatePayload(body: any): { valid: true; data: SignupPayload } | { va
   if (!body.name || typeof body.name !== 'string' || body.name.trim().length === 0) {
     return { valid: false, error: 'Name is required.' }
   }
-  if (!body.email || typeof body.email !== 'string' || !body.email.includes('@')) {
+  if (!body.email || typeof body.email !== 'string' || !/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(body.email) || body.email.length > 254) {
     return { valid: false, error: 'A valid email is required.' }
   }
   return {
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
 
     // No email service configured — log and return success anyway
     // (the user still gets the "success" UI; emails will work once RESEND_API_KEY is set)
-    console.log('[demo-signup] No RESEND_API_KEY configured. Signup data:', JSON.stringify(data))
+    console.warn('[demo-signup] No RESEND_API_KEY configured — signup not emailed (details withheld from logs)')
 
     return NextResponse.json({
       ok: true,

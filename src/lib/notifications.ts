@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { escapeHtml, safeHref } from '@/lib/html'
 import { Resend } from 'resend'
 
 // ── Resend Client (lazy — avoids crash when RESEND_API_KEY is unset at build time)
@@ -202,7 +203,12 @@ function buildNotificationEmail(params: {
   body: string
   linkUrl?: string
 }): string {
-  const { recipientName, title, body, linkUrl } = params
+  // Titles and bodies carry task, quote and comment text typed by users — escape before building HTML
+  const recipientName = escapeHtml(params.recipientName)
+  const title = escapeHtml(params.title)
+  const body = params.body ? escapeHtml(params.body) : ''
+  const href = safeHref(params.linkUrl)
+  const linkUrl = href ? escapeHtml(href.startsWith('/') ? `${process.env.NEXT_PUBLIC_APP_URL ?? ''}${href}` : href) : ''
 
   const actionButton = linkUrl
     ? `<p style="margin:24px 0"><a href="${linkUrl}" style="background:#2563eb;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:500;display:inline-block">View in Coordin.io</a></p>`

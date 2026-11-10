@@ -1,4 +1,5 @@
 import { captureErrorAndWait } from '@/lib/error-reporting'
+import { safeEqual } from '@/lib/safe-compare'
 import { NextRequest, NextResponse } from 'next/server'
 import { processEscalations } from '@/lib/approval-escalation'
 
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
   }
 
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!safeEqual(authHeader, `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

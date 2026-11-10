@@ -101,6 +101,10 @@ export function withDocumentAccess(handler: DocumentAccessHandler) {
           'AUTH_REQUIRED',
         )
       }
+      // Deactivated people lose project, task and document access immediately (same as withAuth)
+      if (profile.status === 'DEACTIVATED') {
+        throw new AuthError('Your account has been deactivated. Please contact your administrator.', 'AUTH_REQUIRED')
+      }
 
       // 3. Extract documentId from URL
       const url = new URL(request.url)
@@ -238,6 +242,10 @@ export function withRevisionAccess(handler: RevisionAccessHandler) {
           'No profile found for this account. Please contact your administrator.',
           'AUTH_REQUIRED',
         )
+      }
+      // Deactivated people lose project, task and document access immediately (same as withAuth)
+      if (profile.status === 'DEACTIVATED') {
+        throw new AuthError('Your account has been deactivated. Please contact your administrator.', 'AUTH_REQUIRED')
       }
 
       // Extract revisionId from URL
