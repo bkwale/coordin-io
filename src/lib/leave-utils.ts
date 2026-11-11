@@ -36,6 +36,26 @@ export function calculateWorkingDays(startDate: Date, endDate: Date): number {
 }
 
 /**
+ * Days of leave between two dates, inclusive.
+ *  - 'working': Mon–Fri only.
+ *  - 'calendar': every day (Estonia), minus any public holidays passed in.
+ */
+export function calculateLeaveDays(startDate: Date, endDate: Date, basis: 'working' | 'calendar' = 'working', holidays: Date[] = []): number {
+  if (basis === 'working') return calculateWorkingDays(startDate, endDate)
+  if (endDate < startDate) return 0
+  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+  const skip = new Set(holidays.map(key))
+  let count = 0
+  const current = new Date(startDate); current.setHours(0, 0, 0, 0)
+  const end = new Date(endDate); end.setHours(0, 0, 0, 0)
+  while (current <= end) {
+    if (!skip.has(key(current))) count++
+    current.setDate(current.getDate() + 1)
+  }
+  return count
+}
+
+/**
  * Check if a date is a working day (Mon-Fri).
  */
 export function isWorkingDay(date: Date): boolean {
@@ -124,25 +144,26 @@ export function findOverlappingRequest<T extends DateRange & { id: string }>(
 export function validateLeaveRequest(
   startDate: Date,
   endDate: Date,
+  opts: { basis?: 'working' | 'calendar'; holidays?: Date[]; maxDays?: number } = {},
 ): { days: number } {
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
+  const basis = opts.basis ?? 'working'
+  const maxDays = opts.maxDays ?? 25
 
   if (endDate < startDate) {
     throw new ValidationError('End date must be on or after start date')
   }
 
-  const days = calculateWorkingDays(startDate, endDate)
+  const days = calculateLeaveDays(startDate, endDate, basis, opts.holidays ?? [])
 
   if (days === 0) {
     throw new ValidationError(
-      'Leave request must include at least one working day (Mon-Fri)',
+      basis === 'calendar' ? 'Leave request must include at least one day that is not a public holiday' : 'Leave request must include at least one working day (Mon-Fri)',
     )
   }
 
-  if (days > 25) {
+  if (days > maxDays) {
     throw new ValidationError(
-      `Leave request cannot exceed 25 working days (got ${days}). For extended leave, please contact HR.`,
+      `Leave request cannot exceed ${maxDays} ${basis === 'calendar' ? 'calendar' : 'working'} days (got ${days}). For extended leave, please contact HR.`,
     )
   }
 

@@ -13,6 +13,7 @@ import type { LeaveFilterStatus } from '@/lib/leave-filters'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
 import { SkeletonRow } from '@/components/Skeleton'
+import { leaveRules } from '@/lib/region'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -289,6 +290,11 @@ export default function LeavePage() {
   const [showForm, setShowForm] = useState(false)
   const [formType, setFormType] = useState('ANNUAL')
   const [formStart, setFormStart] = useState('')
+  // Estonia counts leave in calendar days; everyone else in working days
+  const [dayBasis, setDayBasis] = useState<'working' | 'calendar'>('working')
+  useEffect(() => {
+    fetch('/api/org/region', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => setDayBasis(leaveRules(d?.data?.country ?? null).dayBasis)).catch(() => {})
+  }, [])
   const [formEnd, setFormEnd] = useState('')
   const [formReason, setFormReason] = useState('')
   const [formHalfDay, setFormHalfDay] = useState(false)
@@ -471,8 +477,12 @@ export default function LeavePage() {
   const workingDaysPreview = useMemo(() => {
     if (!formStart || !formEnd) return null
     if (formHalfDay) return 0.5
+    if (dayBasis === 'calendar') {
+      const a = new Date(formStart), b = new Date(formEnd)
+      return b < a ? 0 : Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1
+    }
     return calculateWorkingDays(formStart, formEnd)
-  }, [formStart, formEnd, formHalfDay])
+  }, [formStart, formEnd, formHalfDay, dayBasis])
 
   /* ── Filter ──────────────────────────────────────── */
 
@@ -609,6 +619,7 @@ export default function LeavePage() {
           formHalfDayPeriod={formHalfDayPeriod}
           setFormHalfDayPeriod={setFormHalfDayPeriod}
           workingDaysPreview={workingDaysPreview}
+          dayBasis={dayBasis}
           handleStatusChange={handleStatusChange}
           selectedRequest={selectedRequest}
           setSelectedRequest={setSelectedRequest}
@@ -694,6 +705,7 @@ interface MyLeaveTabProps {
   formHalfDayPeriod: 'AM' | 'PM'
   setFormHalfDayPeriod: (v: 'AM' | 'PM') => void
   workingDaysPreview: number | null
+  dayBasis?: 'working' | 'calendar'
   handleStatusChange: (id: string, status: string, comment?: string) => void
   selectedRequest: LeaveRequest | null
   setSelectedRequest: (r: LeaveRequest | null) => void
@@ -705,7 +717,7 @@ function MyLeaveTab(props: MyLeaveTabProps) {
     showForm, handleCreate, cancelForm, creating,
     formType, setFormType, formStart, setFormStart, formEnd, setFormEnd,
     formReason, setFormReason, formHalfDay, setFormHalfDay,
-    formHalfDayPeriod, setFormHalfDayPeriod, workingDaysPreview,
+    formHalfDayPeriod, setFormHalfDayPeriod, workingDaysPreview, dayBasis = 'working',
     handleStatusChange, setSelectedRequest, requests,
   } = props
 
@@ -848,7 +860,7 @@ function MyLeaveTab(props: MyLeaveTabProps) {
             <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
               <CalendarDays className="w-4 h-4 text-blue-500" />
               <span className="text-[12px] text-blue-700 font-medium">
-                {workingDaysPreview} working {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}
+                {workingDaysPreview} {dayBasis === 'calendar' ? 'calendar' : 'working'} {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}{dayBasis === 'calendar' ? ' (public holidays are taken off when you submit)' : ''}
                 {formHalfDay && ` (${formHalfDayPeriod} half day)`}
               </span>
             </div>

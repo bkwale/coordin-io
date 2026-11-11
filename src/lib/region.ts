@@ -125,3 +125,86 @@ export function vatRateFor(country: CountryCode | null | undefined): number | nu
 export function currencyForCountry(country: CountryCode | null | undefined): CurrencyCode | null {
   return country ? COUNTRIES[country].currency : null
 }
+
+/* ── Planning / permits wording by country ─────────────────── */
+
+export interface PlanningProfile {
+  /** Page title. */
+  title: string
+  /** Suggested application types (the field stays free text). */
+  applicationTypes: string[]
+  placeholders: { authority: string; type: string; reference: string; portal: string; consultant: string; trigger: string; submission: string }
+  /** Country wording for the shared status list; anything not listed keeps the default label. */
+  statusLabels: Partial<Record<string, string>>
+  conditionTypeLabels: Partial<Record<string, string>>
+  /** What the document the AI reads is called here, or null if Coordin has no reader for this country. */
+  sourceDocument: string | null
+}
+
+const GB_PLANNING: PlanningProfile = {
+  title: 'Planning Applications',
+  applicationTypes: ['Full planning', 'Outline planning', 'Reserved matters', 'Householder', 'Listed building consent', 'Prior approval', 'Lawful development certificate', 'Discharge of conditions', 'Variation of condition (s73)', 'Non-material amendment (s96A)'],
+  placeholders: { authority: 'e.g. London Borough of Camden', type: 'e.g. Full planning, Listed building consent', reference: 'e.g. 2026/1234/FUL', portal: 'https://planning.authority.gov.uk/...', consultant: 'e.g. Smith Planning Ltd', trigger: 'e.g. Before superstructure', submission: 'e.g. Drainage strategy report' },
+  statusLabels: {},
+  conditionTypeLabels: {},
+  sourceDocument: 'planning decision notice',
+}
+
+export const PLANNING: Record<CountryCode, PlanningProfile> = {
+  GB: GB_PLANNING,
+  EE: {
+    title: 'Permits & Planning',
+    applicationTypes: ['Projekteerimistingimused (design conditions)', 'Detailplaneering (detailed plan)', 'Ehitusteatis (building notice)', 'Ehitusluba (building permit)', 'Kasutusteatis (use notice)', 'Kasutusluba (use permit)', 'Muinsuskaitse kooskõlastus (heritage approval)'],
+    placeholders: { authority: 'e.g. Tallinna Linnaplaneerimise Amet', type: 'e.g. Ehitusluba (building permit)', reference: 'e.g. EHR application number', portal: 'https://livekluster.ehr.ee/...', consultant: 'e.g. planning or heritage consultant', trigger: 'e.g. Before construction starts', submission: 'e.g. Tuleohutuse osa (fire safety part)' },
+    statusLabels: {
+      PRE_APPLICATION: 'Pre-application / eelnõu', SUBMITTED: 'Submitted in EHR', INVALID_INFORMATION_REQUIRED: 'Returned — more information needed',
+      VALIDATED: 'Accepted for processing (menetluses)', CONSULTATION: 'Public display / opinions', COMMITTEE: 'Coordination with agencies (kooskõlastamine)',
+      APPROVED: 'Granted', APPEAL: 'Challenge (vaie)', CONDITIONS_DISCHARGE: 'Meeting conditions',
+    },
+    conditionTypeLabels: { PRE_COMMENCEMENT: 'Before construction starts', PRE_OCCUPATION: 'Before the use permit' },
+    sourceDocument: 'planning conditions (projekteerimistingimused)',
+  },
+  NG: {
+    title: 'Planning Applications',
+    applicationTypes: ['Planning permit', 'Development permit', 'Building plan approval', 'Environmental impact assessment', 'Certificate of completion and fitness for habitation'],
+    placeholders: { authority: COUNTRIES.NG.placeholders.planningAuthority, type: 'e.g. Planning permit, Building plan approval', reference: 'e.g. LASPPPA/2026/1234', portal: 'https://...', consultant: 'e.g. town planning consultant', trigger: 'e.g. Before superstructure', submission: 'e.g. Drainage strategy report' },
+    statusLabels: {},
+    conditionTypeLabels: {},
+    sourceDocument: null,
+  },
+}
+
+/** Planning wording for a country; unknown country gets the neutral UK-English set. */
+export function planningProfile(country: CountryCode | null | undefined): PlanningProfile {
+  return country ? PLANNING[country] : GB_PLANNING
+}
+
+/**
+ * Hotel-only parts of a project (schedule of accommodation, operator, room keys).
+ * Nigerian firms and projects of unknown country keep them on every project, as before.
+ */
+export function showsHospitality(input: { country: CountryCode | null | undefined; projectType?: string | null }): boolean {
+  if (!input.country || input.country === 'NG') return true
+  return input.projectType === 'HOTEL' || input.projectType === 'RESORT'
+}
+
+/* ── Leave rules by country ────────────────────────────────── */
+
+export interface LeaveRules {
+  /** 'working' counts Mon–Fri; 'calendar' counts every day (Estonia: Töölepingu seadus § 55). */
+  dayBasis: 'working' | 'calendar'
+  /** Annual allowance used when a person has none set. */
+  annualDays: number
+  /** Public holidays inside annual leave are not counted as leave (Estonia: TLS § 68). */
+  skipPublicHolidays: boolean
+  /** Longest single request before HR must be involved. */
+  maxRequestDays: number
+}
+
+const DEFAULT_LEAVE: LeaveRules = { dayBasis: 'working', annualDays: 25, skipPublicHolidays: false, maxRequestDays: 25 }
+const EE_LEAVE: LeaveRules = { dayBasis: 'calendar', annualDays: 28, skipPublicHolidays: true, maxRequestDays: 35 }
+
+/** Leave rules for a firm's country. Only Estonia differs today; everyone else keeps working days and 25. */
+export function leaveRules(country: CountryCode | null | undefined): LeaveRules {
+  return country === 'EE' ? EE_LEAVE : DEFAULT_LEAVE
+}

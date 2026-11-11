@@ -1046,7 +1046,7 @@ export default function OnboardingManagePage() {
               <label className="block text-[12px] font-medium text-ink-500 mb-1">Who is this for? *</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {([
-                  ['NEW', 'New employee', 'Joining CWA for the first time — contract, payroll, equipment, probation.'],
+                  ['NEW', 'New employee', 'Joining the practice for the first time — contract, payroll, equipment, probation.'],
                   ['EXISTING', 'Existing employee', 'Already employed, joining Coordin — keeps start date, leave and probation status. No re-signing contracts.'],
                 ] as const).map(([value, label, hint]) => (
                   <label key={value} className={`flex items-start gap-2 p-3 border rounded-lg cursor-pointer ${assignForm.employeeType === value ? 'border-ink-900 bg-ink-25' : 'border-ink-200'}`}>

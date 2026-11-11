@@ -159,7 +159,7 @@ function AdminOrganisationsPage() {
                   required
                   value={slug}
                   onChange={(e) => setSlug(e.target.value)}
-                  placeholder="cwa-homes"
+                  placeholder="studio-name"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                 />
               </div>
@@ -219,7 +219,7 @@ function AdminOrganisationsPage() {
                     type="email"
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="ayo@cwahomes.com"
+                    placeholder="owner@studio.com"
                     className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                   />
                 </div>

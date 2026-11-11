@@ -49,7 +49,7 @@ const FAQ_ITEMS = [
   {
     question: 'Is my data secure?',
     answer:
-      'Coordin.io is built on Supabase (PostgreSQL) with row-level security, hosted on Vercel with HTTPS everywhere. We follow UK data protection standards and will be GDPR compliant at launch.',
+      'Coordin.io is built on Supabase (PostgreSQL) with row-level security, hosted on Vercel with HTTPS everywhere. Each practice’s data is kept separate from every other practice’s, and is stored in the EU (Frankfurt). Staff can download their own data, and a practice can have a leaver’s personal data removed.',
   },
   {
     question: 'How do I get started?',

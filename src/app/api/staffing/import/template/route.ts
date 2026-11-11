@@ -16,8 +16,8 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
 
   const template = [
     'fullName,email,jobTitle,department,office,startDate,employmentType,probationMonths',
-    'Jane Smith,jane@example.com,Senior Engineer,Engineering,Lagos Office,2026-11-01,FULL_TIME,3',
-    'John Doe,john@example.com,Project Manager,PMO,Abuja Office,2026-11-15,FULL_TIME,6',
+    'Jane Smith,jane@example.com,Senior Architect,Architecture,Head Office,2026-11-01,FULL_TIME,3',
+    'John Doe,john@example.com,Project Manager,Delivery,Head Office,2026-11-15,FULL_TIME,6',
   ].join('\n')
 
   return new NextResponse(template, {

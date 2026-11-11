@@ -4,9 +4,9 @@ import { usePathname, useParams } from 'next/navigation'
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { countryCode, type CountryCode } from '@/lib/region'
+import { countryCode, showsHospitality, type CountryCode } from '@/lib/region'
 import {
-  LayoutDashboard, ListChecks, FileText, PoundSterling,
+  LayoutDashboard, ListChecks, FileText, Banknote,
   ShieldCheck, HardHat, GitBranch,
 } from 'lucide-react'
 
@@ -17,6 +17,8 @@ interface SubTab {
   href: string // relative to basePath
   /** Hide for projects in these countries (UK-only registers make no sense on an Estonian project) */
   hideIn?: CountryCode[]
+  /** Hotel-only pages (schedule of accommodation): hidden on non-hotel projects outside Nigeria */
+  hospitalityOnly?: boolean
 }
 
 interface TabDef {
@@ -74,7 +76,7 @@ const PROJECT_TABS: TabDef[] = [
   {
     label: 'Commercial',
     href: '/contract-admin',
-    icon: PoundSterling,
+    icon: Banknote,
     routes: ['/contract-admin', '/tender', '/metrics'],
     subTabs: [
       { label: 'Contract Admin', href: '/contract-admin' },
@@ -104,7 +106,7 @@ const PROJECT_TABS: TabDef[] = [
       { label: 'Snags', href: '/snags' },
       { label: 'Planning', href: '/planning' },
       { label: 'Site Queries', href: '/site-queries' },
-      { label: 'SOA', href: '/soa' },
+      { label: 'SOA', href: '/soa', hospitalityOnly: true },
     ],
   },
   {
@@ -127,6 +129,8 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const [projectName, setProjectName] = useState<string | null>(null)
   const [workStageFramework, setWorkStageFramework] = useState<string | null>(null)
   const [country, setCountry] = useState<CountryCode | null>(null)
+  const [projectType, setProjectType] = useState<string | null>(null)
+  const [firmCountry, setFirmCountry] = useState<CountryCode | null>(null)
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
@@ -136,7 +140,12 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         if (data?.data?.project?.workStageFramework) setWorkStageFramework(data.data.project.workStageFramework)
         const p = data?.data?.project
         setCountry(countryCode(p?.jurisdiction) ?? countryCode(p?.siteCountry))
+        setProjectType(p?.projectType ?? null)
       })
+      .catch(() => {})
+    fetch('/api/org/region', { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(d => setFirmCountry((d?.data?.country as CountryCode | null) ?? null))
       .catch(() => {})
   }, [projectId])
 
@@ -144,8 +153,10 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const visibleTabs = useMemo(() =>
     PROJECT_TABS
       .filter(tab => !tab.frameworks || (workStageFramework && tab.frameworks.includes(workStageFramework)))
-      .map(tab => (tab.subTabs ? { ...tab, subTabs: tab.subTabs.filter(st => !(country && st.hideIn?.includes(country))) } : tab)),
-    [workStageFramework, country]
+      .map(tab => (tab.subTabs ? { ...tab, subTabs: tab.subTabs.filter(st =>
+        !(country && st.hideIn?.includes(country)) &&
+        !(st.hospitalityOnly && !showsHospitality({ country: country ?? firmCountry, projectType }))) } : tab)),
+    [workStageFramework, country, firmCountry, projectType]
   )
 
   // Determine active tab and sub-route

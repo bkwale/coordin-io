@@ -6,12 +6,15 @@ import {
   Plus, Filter, Loader2, AlertTriangle, RefreshCw, X,
   Calendar, ExternalLink, FileCheck, Clock,
   CheckCircle2, ChevronDown, ChevronRight,
-  Hash, User, Building2, Landmark, PoundSterling,
+  Hash, User, Building2, Landmark,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
 import { SkeletonRow } from '@/components/Skeleton'
+import Link from 'next/link'
+import { planningProfile } from '@/lib/region'
+import { useProjectRegion } from '@/hooks/use-project-region'
 
 /* ── Types ────────────────────────────────────────────────── */
 
@@ -115,7 +118,7 @@ const COND_TYPE_LABELS: Record<string, string> = {
   ONGOING: 'Ongoing', COMPLIANCE: 'Compliance', INFORMATIVE: 'Informative',
 }
 
-const CURRENCIES = ['GBP', 'NGN', 'USD', 'EUR'] as const
+const CURRENCIES = ['EUR', 'GBP', 'NGN', 'USD'] as const
 
 const ALL_APP_STATUSES: ApplicationStatus[] = [
   'FEASIBILITY', 'PRE_APPLICATION', 'PREPARING', 'SUBMITTED',
@@ -162,7 +165,7 @@ const labelCls = 'block text-[11px] font-medium text-ink-500 mb-1'
 
 /* ── Condition card (shared) ──────────────────────────────── */
 
-function ConditionCard({ cond }: { cond: PlanningCondition }) {
+function ConditionCard({ cond, typeLabels = {} }: { cond: PlanningCondition; typeLabels?: Partial<Record<string, string>> }) {
   const m = COND_STATUS_META[cond.status] || COND_STATUS_META.OUTSTANDING
   return (
     <div className="bg-white rounded-lg border border-ink-100 px-4 py-3">
@@ -173,7 +176,7 @@ function ConditionCard({ cond }: { cond: PlanningCondition }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-ink-50 text-ink-600 text-[10px] font-medium">
-              {COND_TYPE_LABELS[cond.conditionType] || cond.conditionType}
+              {typeLabels[cond.conditionType] || COND_TYPE_LABELS[cond.conditionType] || cond.conditionType}
             </span>
             <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium', m.bg, m.color)}>
               <span className={cn('w-1.5 h-1.5 rounded-full', m.dot)} />
@@ -214,6 +217,16 @@ function ConditionCard({ cond }: { cond: PlanningCondition }) {
 export default function PlanningApplicationsPage() {
   const { id } = useParams<{ id: string }>()
   const { toast } = useToast()
+  const region = useProjectRegion(id)
+  const plan = planningProfile(region.country)
+  const statusLabel = (s: string) => plan.statusLabels[s] || APP_STATUS_LABELS[s] || s
+  const condTypeLabel = (t: string) => plan.conditionTypeLabels[t] || COND_TYPE_LABELS[t] || t
+  // Conditions the AI read from the planning document live on the Regulatory page — show how many, and link there
+  const [municipalCount, setMunicipalCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/projects/${id}/regulatory`).then((r) => (r.ok ? r.json() : null)).then((d) => setMunicipalCount(d?.data?.counts?.municipal ?? 0)).catch(() => setMunicipalCount(null))
+  }, [id])
 
   const [tab, setTab] = useState<PlanningTab>('applications')
   const [applications, setApplications] = useState<PlanningApplication[]>([])
@@ -230,6 +243,8 @@ export default function PlanningApplicationsPage() {
 
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [appForm, setAppForm] = useState<AppFormState>(EMPTY_APP)
+  // Fee currency follows the project (then the firm) until the user picks another
+  useEffect(() => { if (region.currency) setAppForm((f) => (f.fee === '' ? { ...f, currency: region.currency! } : f)) }, [region.currency])
   const { mutate: createApplication, loading: creating, error: createError, clearError: clearCreateError } =
     useApiMutation<PlanningApplication>(`/api/projects/${id}/planning`, 'POST')
 
@@ -293,7 +308,7 @@ export default function PlanningApplicationsPage() {
     else { toast(createError || 'Failed to create application', 'error') }
   }
 
-  const resetAppForm = () => { setShowCreateForm(false); setAppForm(EMPTY_APP); clearCreateError() }
+  const resetAppForm = () => { setShowCreateForm(false); setAppForm({ ...EMPTY_APP, currency: region.currency ?? EMPTY_APP.currency }); clearCreateError() }
 
   /* ── Create condition ───────────────────────────────────── */
 
@@ -367,7 +382,7 @@ export default function PlanningApplicationsPage() {
       {/* ── Header ────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[18px] font-semibold text-ink-900">Planning Applications</h2>
+          <h2 className="text-[18px] font-semibold text-ink-900">{plan.title}</h2>
           <p className="text-[12px] text-ink-400 mt-0.5">{applications.length} application{applications.length !== 1 ? 's' : ''}</p>
         </div>
         {tab === 'applications' && !showCreateForm && (
@@ -376,6 +391,17 @@ export default function PlanningApplicationsPage() {
           </button>
         )}
       </div>
+
+      {plan.sourceDocument && municipalCount !== null && (
+        <div className="rounded-lg border border-accent-200 bg-accent-50/50 px-4 py-3 text-[12px] text-ink-700 flex items-start justify-between gap-3 flex-wrap">
+          <span>
+            {municipalCount > 0
+              ? <>Coordin read <b>{municipalCount} condition{municipalCount === 1 ? '' : 's'}</b> from this project’s {plan.sourceDocument}. They are tracked on the Regulatory page, each with its source line — no need to type them again here.</>
+              : <>Have the {plan.sourceDocument}? Upload it on the Regulatory page and Coordin reads the conditions for you. Use this page for the applications themselves.</>}
+          </span>
+          <Link href={`/projects/${id}/regulatory`} className="shrink-0 font-medium text-accent-700 hover:underline">Open Regulatory →</Link>
+        </div>
+      )}
 
       {/* ── Tabs ──────────────────────────────────────────── */}
       <div className="flex gap-1 border-b border-ink-100">
@@ -394,6 +420,7 @@ export default function PlanningApplicationsPage() {
           {/* Create form */}
           {showCreateForm && (
             <form onSubmit={handleCreateApplication} className="bg-white rounded-xl border-2 border-accent-200 p-5 space-y-4">
+              <datalist id="planning-types">{plan.applicationTypes.map((t) => <option key={t} value={t} />)}</datalist>
               <div className="flex items-center justify-between">
                 <h3 className="text-[14px] font-semibold text-ink-900">New Application</h3>
                 <button type="button" onClick={resetAppForm} className="text-ink-400 hover:text-ink-600 transition-colors"><X className="w-4 h-4" /></button>
@@ -402,11 +429,11 @@ export default function PlanningApplicationsPage() {
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label htmlFor="app-auth" className={labelCls}>Authority <span className="text-red-400">*</span></label>
-                  <input id="app-auth" type="text" value={appForm.authority} onChange={setField('authority')} placeholder="e.g. London Borough of Camden" className={inputCls} maxLength={200} required autoFocus />
+                  <input id="app-auth" type="text" value={appForm.authority} onChange={setField('authority')} placeholder={plan.placeholders.authority} className={inputCls} maxLength={200} required autoFocus />
                 </div>
                 <div className="flex-1">
                   <label htmlFor="app-type" className={labelCls}>Application type <span className="text-red-400">*</span></label>
-                  <input id="app-type" type="text" value={appForm.applicationType} onChange={setField('applicationType')} placeholder="e.g. Full planning, Listed building consent" className={inputCls} maxLength={200} required />
+                  <input id="app-type" type="text" value={appForm.applicationType} onChange={setField('applicationType')} list="planning-types" placeholder={plan.placeholders.type} className={inputCls} maxLength={200} required />
                 </div>
               </div>
 
@@ -416,9 +443,9 @@ export default function PlanningApplicationsPage() {
               </div>
 
               <div className="flex gap-4">
-                <div className="flex-1"><label htmlFor="app-ref" className={labelCls}>Reference</label><input id="app-ref" type="text" value={appForm.reference} onChange={setField('reference')} placeholder="e.g. 2024/1234/FUL" className={inputCls} maxLength={100} /></div>
-                <div className="flex-1"><label htmlFor="app-con" className={labelCls}>Consultant</label><input id="app-con" type="text" value={appForm.consultant} onChange={setField('consultant')} placeholder="e.g. Smith Planning Ltd" className={inputCls} maxLength={200} /></div>
-                <div className="flex-1"><label htmlFor="app-off" className={labelCls}>Case officer</label><input id="app-off" type="text" value={appForm.caseOfficer} onChange={setField('caseOfficer')} placeholder="e.g. J. Davies" className={inputCls} maxLength={200} /></div>
+                <div className="flex-1"><label htmlFor="app-ref" className={labelCls}>Reference</label><input id="app-ref" type="text" value={appForm.reference} onChange={setField('reference')} placeholder={plan.placeholders.reference} className={inputCls} maxLength={100} /></div>
+                <div className="flex-1"><label htmlFor="app-con" className={labelCls}>Consultant</label><input id="app-con" type="text" value={appForm.consultant} onChange={setField('consultant')} placeholder={plan.placeholders.consultant} className={inputCls} maxLength={200} /></div>
+                <div className="flex-1"><label htmlFor="app-off" className={labelCls}>Case officer</label><input id="app-off" type="text" value={appForm.caseOfficer} onChange={setField('caseOfficer')} placeholder="Name" className={inputCls} maxLength={200} /></div>
               </div>
 
               <div className="flex gap-4">
@@ -433,7 +460,7 @@ export default function PlanningApplicationsPage() {
                 <div className="flex-1"><label htmlFor="app-tgt" className={labelCls}>Target decision</label><input id="app-tgt" type="date" value={appForm.targetDecision} onChange={setField('targetDecision')} className={inputCls} /></div>
               </div>
 
-              <div><label htmlFor="app-portal" className={labelCls}>Portal link</label><input id="app-portal" type="url" value={appForm.portalLink} onChange={setField('portalLink')} placeholder="https://planning.authority.gov.uk/..." className={inputCls} maxLength={500} /></div>
+              <div><label htmlFor="app-portal" className={labelCls}>Portal link</label><input id="app-portal" type="url" value={appForm.portalLink} onChange={setField('portalLink')} placeholder={plan.placeholders.portal} className={inputCls} maxLength={500} /></div>
               <div><label htmlFor="app-comm" className={labelCls}>Comments</label><textarea id="app-comm" value={appForm.comments} onChange={setField('comments')} placeholder="Any additional notes..." className={cn(inputCls, 'min-h-[60px]')} maxLength={2000} /></div>
 
               {createError && <p className="text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{createError}</p>}
@@ -453,7 +480,7 @@ export default function PlanningApplicationsPage() {
             <Filter className="w-4 h-4 text-ink-300" />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="text-[11px] text-ink-600 bg-white border border-ink-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-300">
               <option value="">All statuses</option>
-              {ALL_APP_STATUSES.map((s) => <option key={s} value={s}>{APP_STATUS_LABELS[s]}</option>)}
+              {ALL_APP_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </select>
             <input type="text" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} placeholder="Filter by type..." className="text-[11px] text-ink-600 bg-white border border-ink-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300 w-44" />
             {(statusFilter || typeFilter) && (
@@ -487,7 +514,7 @@ export default function PlanningApplicationsPage() {
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-ink-50 text-ink-600 text-[10px] font-medium">{app.applicationType}</span>
                             <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium', m.bg, m.color)}>
-                              <span className={cn('w-1.5 h-1.5 rounded-full', m.dot)} />{APP_STATUS_LABELS[app.status] || app.status}
+                              <span className={cn('w-1.5 h-1.5 rounded-full', m.dot)} />{statusLabel(app.status)}
                             </span>
                           </div>
                           <p className="text-[12px] text-ink-500 mt-2 line-clamp-2">{app.description}</p>
@@ -500,7 +527,7 @@ export default function PlanningApplicationsPage() {
                           <div className="flex items-center gap-4 mt-2 flex-wrap">
                             {app.consultant && <span className="flex items-center gap-1 text-[11px] text-ink-400"><User className="w-3 h-3" /> {app.consultant}</span>}
                             {app.caseOfficer && <span className="flex items-center gap-1 text-[11px] text-ink-400"><Building2 className="w-3 h-3" /> {app.caseOfficer}</span>}
-                            {app.fee != null && <span className="flex items-center gap-1 text-[11px] text-ink-400"><PoundSterling className="w-3 h-3" /> {fmtCurrency(app.fee, app.currency)}</span>}
+                            {app.fee != null && <span className="flex items-center gap-1 text-[11px] text-ink-400">{fmtCurrency(app.fee, app.currency)}</span>}
                             {app._count.conditions > 0 && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ink-50 text-ink-500 text-[10px] font-medium">
                                 <Hash className="w-3 h-3" /> {app._count.conditions} condition{app._count.conditions !== 1 ? 's' : ''}
@@ -545,13 +572,13 @@ export default function PlanningApplicationsPage() {
                               <div className="flex-1">
                                 <label htmlFor="cond-type" className={labelCls}>Condition type</label>
                                 <select id="cond-type" value={condForm.conditionType} onChange={setCondField('conditionType')} className={cn(inputSmCls, 'bg-white')}>
-                                  {ALL_COND_TYPES.map((t) => <option key={t} value={t}>{COND_TYPE_LABELS[t]}</option>)}
+                                  {ALL_COND_TYPES.map((t) => <option key={t} value={t}>{condTypeLabel(t)}</option>)}
                                 </select>
                               </div>
-                              <div className="flex-1"><label htmlFor="cond-trig" className={labelCls}>Trigger stage</label><input id="cond-trig" type="text" value={condForm.triggerStage} onChange={setCondField('triggerStage')} placeholder="e.g. Before superstructure" className={inputSmCls} maxLength={200} /></div>
+                              <div className="flex-1"><label htmlFor="cond-trig" className={labelCls}>Trigger stage</label><input id="cond-trig" type="text" value={condForm.triggerStage} onChange={setCondField('triggerStage')} placeholder={plan.placeholders.trigger} className={inputSmCls} maxLength={200} /></div>
                             </div>
                             <div className="flex gap-3">
-                              <div className="flex-1"><label htmlFor="cond-sub" className={labelCls}>Submission required</label><input id="cond-sub" type="text" value={condForm.submissionRequired} onChange={setCondField('submissionRequired')} placeholder="e.g. Drainage strategy report" className={inputSmCls} maxLength={500} /></div>
+                              <div className="flex-1"><label htmlFor="cond-sub" className={labelCls}>Submission required</label><input id="cond-sub" type="text" value={condForm.submissionRequired} onChange={setCondField('submissionRequired')} placeholder={plan.placeholders.submission} className={inputSmCls} maxLength={500} /></div>
                               <div className="w-40"><label htmlFor="cond-due" className={labelCls}>Due date</label><input id="cond-due" type="date" value={condForm.dueDate} onChange={setCondField('dueDate')} className={inputSmCls} /></div>
                             </div>
                             <div><label htmlFor="cond-comm" className={labelCls}>Comments</label><textarea id="cond-comm" value={condForm.comments} onChange={setCondField('comments')} placeholder="Any additional notes..." className={cn(inputSmCls, 'min-h-[48px]')} maxLength={2000} /></div>
@@ -570,7 +597,7 @@ export default function PlanningApplicationsPage() {
                         ) : conditions.length === 0 ? (
                           <p className="text-[12px] text-ink-400 py-3 text-center">No conditions recorded yet.</p>
                         ) : (
-                          <div className="space-y-2">{conditions.map((c) => <ConditionCard key={c.id} cond={c} />)}</div>
+                          <div className="space-y-2">{conditions.map((c) => <ConditionCard key={c.id} cond={c} typeLabels={plan.conditionTypeLabels} />)}</div>
                         )}
                       </div>
                     )}
@@ -624,7 +651,7 @@ export default function PlanningApplicationsPage() {
                         ) : displayConds.length === 0 ? (
                           <p className="text-[12px] text-ink-400 py-2 text-center">{condStatusFilter ? 'No conditions match the filter.' : 'No conditions found.'}</p>
                         ) : (
-                          displayConds.map((c) => <ConditionCard key={c.id} cond={c} />)
+                          displayConds.map((c) => <ConditionCard key={c.id} cond={c} typeLabels={plan.conditionTypeLabels} />)
                         )}
                       </div>
                     )}

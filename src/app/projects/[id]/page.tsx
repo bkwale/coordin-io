@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { countryCode, countryProfile, COUNTRY_OPTIONS, COUNTRIES } from '@/lib/region'
 import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
 import { TaskStatusBadge } from '@/components/StatusFlow'
 import { useToast } from '@/components/Toast'
@@ -376,9 +377,11 @@ export default function ProjectDashboard() {
   const locationStr = locationParts.length > 0 ? locationParts.join(', ') : project.location || 'Not provided'
 
   // Compliance badges
+  // BRPD and CDM are UK duties: never badge them on an Estonian project (its duties are on the Regulatory card below)
+  const projectCountry = countryCode(project.jurisdiction) ?? countryCode(project.siteCountry)
   const complianceBadges: string[] = []
-  if (project.isBRPD) complianceBadges.push('BRPD')
-  if (project.isCDM) complianceBadges.push('CDM')
+  if (project.isBRPD && projectCountry !== 'EE') complianceBadges.push('BRPD')
+  if (project.isCDM && projectCountry !== 'EE') complianceBadges.push('CDM')
   if (project.complianceFrameworks) {
     project.complianceFrameworks.split(',').forEach(f => {
       const trimmed = f.trim()
@@ -541,7 +544,7 @@ export default function ProjectDashboard() {
           <Row label="Development type" value={DEV_TYPE_LABELS[project.developmentType || ''] || project.developmentType || 'Not provided'} />
           <Row label="Sector" value={project.projectType.replace(/_/g, ' ')} />
           <Row label="Work stage" value={FRAMEWORK_LABELS[project.workStageFramework || ''] || project.workStageFramework || 'Not provided'} />
-          <Row label="Jurisdiction" value={project.jurisdiction || 'Not provided'} />
+          <Row label="Jurisdiction" value={countryProfile(project.jurisdiction)?.name || project.jurisdiction || 'Not provided'} />
           <Row label="Location" value={locationStr} />
           {project.sitePostcode && <Row label="Postcode" value={project.sitePostcode} />}
           <Row label="Start date" value={formatDate(project.startDate)} />
@@ -1509,7 +1512,12 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-ink-600 mb-1">Jurisdiction</label>
-                <input type="text" value={form.jurisdiction} onChange={set('jurisdiction')} className={inputClass} placeholder="England, Nigeria-Lagos..." />
+                <select value={countryCode(form.jurisdiction) ?? form.jurisdiction} onChange={set('jurisdiction')} className={inputClass}>
+                  <option value="">Not set</option>
+                  {COUNTRY_OPTIONS.map((c) => <option key={c} value={c}>{COUNTRIES[c].name}{c === 'GB' ? ' (England)' : ''}</option>)}
+                  {form.jurisdiction && !countryCode(form.jurisdiction) && <option value={form.jurisdiction}>{form.jurisdiction}</option>}
+                </select>
+                <p className="text-[11px] text-ink-400 mt-1">Sets which rule set and permit wording this project uses.</p>
               </div>
             </div>
           </fieldset>

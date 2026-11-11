@@ -4,6 +4,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { ValidationError } from '@/lib/errors'
 import { canPerform } from '@/lib/role-permissions'
+import { COUNTRIES, COUNTRY_OPTIONS, orgCountry, type CountryCode } from '@/lib/region'
 
 /**
  * Organisation settings shape stored in the `settings` JSON column:
@@ -37,6 +38,8 @@ interface NumberingSettings {
 }
 
 interface OrgSettings {
+  /** The firm's home country (EE / GB / NG): drives currency, VAT, time zone, rule set, leave rules */
+  country?: string
   regional?: RegionalSettings
   numbering?: NumberingSettings
 }
@@ -65,9 +68,12 @@ const DEFAULTS: OrgSettings = {
   },
 }
 
-function mergeDefaults(stored: OrgSettings): OrgSettings {
+/** Until a firm saves its own, time zone and number format follow its country. */
+function mergeDefaults(stored: OrgSettings, country: CountryCode | null = null): OrgSettings {
+  const byCountry: RegionalSettings = country ? { timezone: COUNTRIES[country].timezone, numberFormat: country === 'EE' ? 'et-EE' : 'en-GB' } : {}
   return {
-    regional: { ...DEFAULTS.regional, ...stored.regional },
+    country: country ?? undefined,
+    regional: { ...DEFAULTS.regional, ...byCountry, ...stored.regional },
     numbering: {
       project: { ...DEFAULTS.numbering!.project, ...stored.numbering?.project },
       quote: { ...DEFAULTS.numbering!.quote, ...stored.numbering?.quote },
@@ -80,11 +86,11 @@ function mergeDefaults(stored: OrgSettings): OrgSettings {
 export const GET = withAuth(async (_request: NextRequest, { profile }) => {
   const org = await prisma.organisation.findUnique({
     where: { id: profile.organisationId },
-    select: { settings: true },
+    select: { settings: true, defaultCurrency: true, offices: { select: { country: true, isHeadOffice: true } } },
   })
 
   const stored = (org?.settings as OrgSettings) ?? {}
-  return success({ settings: mergeDefaults(stored) })
+  return success({ settings: mergeDefaults(stored, orgCountry(org)) })
 })
 
 // ── PATCH /api/org-settings ────────────────────────────
@@ -99,6 +105,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   if (!incoming || typeof incoming !== 'object') {
     throw new ValidationError('Missing or invalid "settings" object')
+  }
+
+  if (incoming.country !== undefined && !(COUNTRY_OPTIONS as string[]).includes(incoming.country)) {
+    throw new ValidationError('Country must be Estonia, United Kingdom or Nigeria')
   }
 
   // Validate regional settings if provided
@@ -142,13 +152,14 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   // Merge with existing
   const org = await prisma.organisation.findUnique({
     where: { id: profile.organisationId },
-    select: { settings: true },
+    select: { settings: true, defaultCurrency: true, offices: { select: { country: true, isHeadOffice: true } } },
   })
 
   const existing = (org?.settings as OrgSettings) ?? {}
   // Keep every other key in settings (country, sandbox, practiceLabel…) — this route only owns regional + numbering
   const merged: OrgSettings = {
     ...(existing as Record<string, unknown>),
+    ...(incoming.country ? { country: incoming.country } : {}),
     regional: { ...existing.regional, ...incoming.regional },
     numbering: {
       project: { ...existing.numbering?.project, ...incoming.numbering?.project },
@@ -162,5 +173,5 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     data: { settings: JSON.parse(JSON.stringify(merged)) },
   })
 
-  return success({ settings: mergeDefaults(merged) })
+  return success({ settings: mergeDefaults(merged, orgCountry({ ...org, settings: merged })) })
 })
