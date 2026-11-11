@@ -1,4 +1,5 @@
 import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
+import { retentionDays } from '@/lib/gdpr'
 import { bankFormatFor, validateBank, normaliseSortCode } from '@/lib/bank-format'
 import { prisma } from '@/lib/prisma'
 import { resolveNigerianAccount } from '@/lib/paystack'
@@ -317,6 +318,20 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     isAdmin: hasHRAccess,
     hasHRAccess,
     isSelf,
+    privacy: (() => {
+      const senior = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+      const anonymised = String(employee.email ?? '').endsWith('@anonymised.invalid')
+      const days = retentionDays()
+      const at = employee.deactivatedAt ? new Date(employee.deactivatedAt) : null
+      return {
+        canExport: isSelf || hasHRAccess,
+        canAnonymise: senior && !isSelf && employee.status === 'DEACTIVATED' && employee.orgPermission !== 'OWNER',
+        canErase: profile.orgPermission === 'OWNER',
+        anonymised,
+        retentionDays: days,
+        retentionEndsAt: employee.status === 'DEACTIVATED' && at ? new Date(at.getTime() + days * 86_400_000).toISOString() : null,
+      }
+    })(),
   })
 })
 

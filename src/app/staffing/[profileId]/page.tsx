@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { SkeletonRow } from '@/components/Skeleton'
+import { PrivacyActions, type PrivacyInfo } from '@/components/PrivacyActions'
 import { useToast } from '@/components/Toast'
 import { stageMeta } from '@/lib/onboarding/stages'
 import { PROBATION_STATUS_OPTIONS, probationStatusLabel } from '@/lib/staffing/probation'
@@ -108,6 +109,7 @@ interface EmployeeProfileData {
   isAdmin: boolean
   hasHRAccess: boolean
   isSelf: boolean
+  privacy?: PrivacyInfo
 }
 
 interface TrainingRecord {
@@ -518,6 +520,9 @@ export default function EmployeeProfilePage() {
               {sendingOnboardingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {sendingOnboardingEmail ? 'Sending...' : 'Send Onboarding Email'}
             </button>
+          )}
+          {!editing && data.privacy && (
+            <PrivacyActions profileId={emp.id} fullName={emp.fullName} isSelf={isSelf} privacy={data.privacy} onChanged={fetchProfile} />
           )}
           {canEdit && !editing && (
             <button

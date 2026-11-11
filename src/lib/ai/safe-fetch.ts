@@ -1,7 +1,7 @@
 /**
  * Outbound fetch for URLs a user typed in (practice website crawl). Refuses anything that resolves to a
  * private, loopback, link-local, CGNAT or unique-local address, non-standard ports and non-http schemes,
- * re-checks every redirect hop, and caps the body size. Stops the crawler being pointed at internal
+ * re-checks every redirect hop, connects only to the address it checked, and caps the body size. Stops the crawler being pointed at internal
  * services or cloud metadata endpoints.
  */
 import { lookup } from 'node:dns/promises'
@@ -66,15 +66,22 @@ export function isPrivateAddress(ip: string): boolean {
   return false
 }
 
-/** Throws UnsafeUrlError unless the URL is http(s) on 80/443 and every resolved address is public. */
-export async function assertPublicUrl(u: URL): Promise<void> {
+/** The checks every URL must pass, returning the public addresses it resolved to. */
+async function resolvePublic(u: URL): Promise<Array<{ address: string; family: number }>> {
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new UnsafeUrlError('Only http and https links can be read')
   if (u.port && u.port !== '80' && u.port !== '443') throw new UnsafeUrlError('Only standard web ports can be read')
   if (u.username || u.password) throw new UnsafeUrlError('Links with credentials cannot be read')
   const host = u.hostname.replace(/^\[|\]$/g, '')
   if (/^localhost$|\.localhost$|\.local$|\.internal$/i.test(host)) throw new UnsafeUrlError('That address is not a public website')
-  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true, verbatim: true })
+  const ipKind = isIP(host)
+  const addrs = ipKind ? [{ address: host, family: ipKind }] : await lookup(host, { all: true, verbatim: true })
   if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) throw new UnsafeUrlError('That address is not a public website')
+  return addrs
+}
+
+/** Throws UnsafeUrlError unless the URL is http(s) on 80/443 and every resolved address is public. */
+export async function assertPublicUrl(u: URL): Promise<void> {
+  await resolvePublic(u)
 }
 
 const MAX_BYTES = 2_000_000
@@ -96,17 +103,62 @@ export async function readCapped(res: Response, maxBytes = MAX_BYTES): Promise<s
 }
 
 /**
- * One request, no automatic redirects (callers follow them, calling this again per hop),
- * after checking the target is public.
+ * One request, no automatic redirects (callers follow them, calling this again per hop).
+ * The name is resolved ONCE, checked, and the connection is made to that exact address — so a site cannot
+ * answer the check with a public address and the real request with an internal one (DNS rebinding).
+ * The body is read up to MAX_BYTES and returned as a normal Response.
  */
-export async function safeFetch(u: URL, init: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
-  await assertPublicUrl(u)
-  const { timeoutMs = 12_000, ...rest } = init
-  return fetch(u, { ...rest, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
+export async function safeFetch(u: URL, init: { headers?: Record<string, string>; timeoutMs?: number } = {}): Promise<Response> {
+  const addrs = await resolvePublic(u)
+  const pinned = addrs[0]
+  const { timeoutMs = 12_000, headers = {} } = init
+  const mod = u.protocol === 'https:' ? await import('node:https') : await import('node:http')
+  const zlib = await import('node:zlib')
+  return new Promise<Response>((resolve, reject) => {
+    const req = mod.request(u, {
+      method: 'GET',
+      headers: { ...headers, 'accept-encoding': 'gzip, deflate, br' },
+      // Always connect to the address we checked, whatever DNS says now
+      lookup: ((_host: string, opts: unknown, cb: (...a: unknown[]) => void) => {
+        const callback = (typeof opts === 'function' ? opts : cb) as (...a: unknown[]) => void
+        const wantsAll = typeof opts === 'object' && opts !== null && (opts as { all?: boolean }).all
+        if (wantsAll) callback(null, [{ address: pinned.address, family: pinned.family }])
+        else callback(null, pinned.address, pinned.family)
+      }) as never,
+    }, (res) => {
+      const enc = String(res.headers['content-encoding'] ?? '').toLowerCase()
+      const stream = enc === 'gzip' ? res.pipe(zlib.createGunzip()) : enc === 'deflate' ? res.pipe(zlib.createInflate()) : enc === 'br' ? res.pipe(zlib.createBrotliDecompress()) : res
+      const chunks: Buffer[] = []
+      let total = 0, done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        const h = new Headers()
+        for (const [k, v] of Object.entries(res.headers)) {
+          if (v === undefined || k === 'content-encoding' || k === 'content-length' || k === 'transfer-encoding') continue
+          try { h.set(k, Array.isArray(v) ? v.join(', ') : String(v)) } catch { /* skip odd header */ }
+        }
+        const status = res.statusCode ?? 502
+        const noBody = status === 204 || status === 205 || status === 304 || status < 200
+        try { resolve(new Response(noBody ? null : new Uint8Array(Buffer.concat(chunks)), { status: status < 200 ? 502 : status, headers: h })) } catch (e) { reject(e) }
+      }
+      stream.on('data', (c: Buffer) => {
+        total += c.length
+        if (total > MAX_BYTES) { req.destroy(); finish(); return }
+        chunks.push(c)
+      })
+      stream.on('end', finish)
+      stream.on('error', finish) // a cut-off or badly compressed body: keep what arrived
+    })
+    const timer = setTimeout(() => { const e = new Error('The site did not answer in time'); e.name = 'TimeoutError'; req.destroy(e) }, timeoutMs)
+    req.on('error', (e) => { clearTimeout(timer); reject(e) })
+    req.end()
+  })
 }
 
 /** safeFetch that follows up to `maxHops` redirects, re-checking each hop. */
-export async function safeFetchFollow(u: URL, init: RequestInit & { timeoutMs?: number } = {}, maxHops = 5): Promise<Response> {
+export async function safeFetchFollow(u: URL, init: { headers?: Record<string, string>; timeoutMs?: number } = {}, maxHops = 5): Promise<Response> {
   let current = u
   for (let hop = 0; hop <= maxHops; hop++) {
     const res = await safeFetch(current, init)

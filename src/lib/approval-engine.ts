@@ -137,6 +137,26 @@ async function resolveApprover(
 }
 
 /**
+ * Nobody approves their own request. When a step would land on the submitter (they are the named approver,
+ * the only Finance person, their own manager…), hand it to someone else instead of leaving it stuck:
+ * their line manager → the firm's owner → the longest-serving admin. Returns null if there is nobody else;
+ * the step then waits for an admin, and submitWithoutApprover() below reports it.
+ */
+export async function approverOtherThanSubmitter(context: SubmitContext): Promise<string | null> {
+  const mgr = context.submitterManagerId
+  if (mgr && mgr !== context.submitterId) {
+    const m = await prisma.profile.findFirst({ where: { id: mgr, organisationId: context.organisationId, status: 'ACTIVE' }, select: { id: true } })
+    if (m) return m.id
+  }
+  const seniors = await prisma.profile.findMany({
+    where: { organisationId: context.organisationId, status: 'ACTIVE', orgPermission: { in: ['OWNER', 'ADMIN'] as any }, id: { not: context.submitterId } },
+    select: { id: true, orgPermission: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  return (seniors.find((p: { orgPermission: string }) => p.orgPermission === 'OWNER') ?? seniors[0])?.id ?? null
+}
+
+/**
  * Resolve multiple approvers for an AND step.
  * Returns an array of profile IDs.
  */
@@ -203,13 +223,24 @@ export async function createApprovalInstance(
     // Create step instances
     let previousApproverId: string | null = null
     for (const step of route.steps) {
-      const approverId = await resolveApprover(step, context)
+      let approverId = await resolveApprover(step, context)
+      let rerouted = false
+      if (approverId && approverId === context.submitterId) {
+        approverId = await approverOtherThanSubmitter(context)
+        rerouted = true
+      }
 
-      // AND step: resolve multiple approvers
+      // AND step: resolve multiple approvers (the submitter never counts as one of them)
       const isAndStep = (step as any).requireAll === true
       let stepApproverIds: string[] = []
       if (isAndStep) {
-        stepApproverIds = await resolveApprovers(step as any, context)
+        const all = await resolveApprovers(step as any, context)
+        stepApproverIds = all.filter((id) => id !== context.submitterId)
+        if (all.length > 0 && stepApproverIds.length === 0) {
+          const other = await approverOtherThanSubmitter(context)
+          stepApproverIds = other ? [other] : []
+          rerouted = true
+        }
       }
 
       // Skip if same as previous and canSkipIfSameAsPrevious is true
@@ -225,7 +256,7 @@ export async function createApprovalInstance(
         data: {
           instanceId: inst.id,
           stepOrder: step.stepOrder,
-          label: step.label,
+          label: rerouted ? `${step.label} (reassigned — the requester can't approve their own request)`.slice(0, 190) : step.label,
           approverId: isAndStep ? null : approverId,
           approverIds: isAndStep ? stepApproverIds : (approverId ? [approverId] : []),
           approvedByIds: [],

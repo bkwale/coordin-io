@@ -61,6 +61,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
     bankSortCode: string | null
     pensionProvider: string | null
     pensionContribution: number | null
+    noticePeriod: string | null
   }[] = []
 
   try {
@@ -77,6 +78,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
         bankSortCode: true,
         pensionProvider: true,
         pensionContribution: true,
+        noticePeriod: true,
       },
     })
   } catch {
@@ -152,7 +154,7 @@ export const GET = withAuth(async (_request: NextRequest, { profile }) => {
       sortCode: conf?.bankSortCode ?? '',
       pensionProvider: conf?.pensionProvider ?? '',
       pensionContribution: conf?.pensionContribution ?? '',
-      noticePeriod: emp.employeeProfile?.noticePeriod ?? '',
+      noticePeriod: conf?.noticePeriod ?? emp.employeeProfile?.noticePeriod ?? '',
     })
   }
 
