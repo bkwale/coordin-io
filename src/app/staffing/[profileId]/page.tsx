@@ -109,6 +109,8 @@ interface EmployeeProfileData {
   isAdmin: boolean
   hasHRAccess: boolean
   isSelf: boolean
+  /** The firm's country (only sent to people who can see confidential data) */
+  firmCountry?: string | null
   privacy?: PrivacyInfo
 }
 
@@ -1065,7 +1067,7 @@ function EmploymentContent({
   onEditChange: (key: string, val: string) => void
 }) {
   const employment = data.employment
-  const showHmo = !data.bankDetails || data.bankDetails.format === 'nuban'
+  const showHmo = !data.firmCountry || data.firmCountry === 'NG'
 
   if (!employment) {
     return <p className="text-[13px] text-ink-400 pt-4">Employment details are only visible to HR and the employee.</p>

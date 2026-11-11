@@ -11,9 +11,11 @@ export interface ProjectRegion {
   currency: CurrencyCode | null
   projectType: string | null
   jurisdiction: string | null
+  /** The firm's own country, whatever the project's. */
+  firmCountry: CountryCode | null
 }
 
-const EMPTY: ProjectRegion = { loaded: false, country: null, currency: null, projectType: null, jurisdiction: null }
+const EMPTY: ProjectRegion = { loaded: false, country: null, currency: null, projectType: null, jurisdiction: null, firmCountry: null }
 
 /** One place for project pages to learn the project's country, currency and type. */
 export function useProjectRegion(projectId: string | undefined): ProjectRegion {
@@ -35,6 +37,7 @@ export function useProjectRegion(projectId: string | undefined): ProjectRegion {
         currency: cur === 'EUR' || cur === 'GBP' || cur === 'NGN' || cur === 'USD' ? cur : null,
         projectType: project?.projectType ?? null,
         jurisdiction: project?.jurisdiction ?? null,
+        firmCountry: (firm?.country as CountryCode | null) ?? null,
       })
     })
     return () => { live = false }

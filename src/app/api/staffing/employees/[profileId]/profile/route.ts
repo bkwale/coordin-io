@@ -1,4 +1,5 @@
 import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
+import { leaveDefaultForNewEmployee } from '@/lib/leave-defaults'
 import { retentionDays } from '@/lib/gdpr'
 import { bankFormatFor, validateBank, normaliseSortCode } from '@/lib/bank-format'
 import { prisma } from '@/lib/prisma'
@@ -318,6 +319,7 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     isAdmin: hasHRAccess,
     hasHRAccess,
     isSelf,
+    firmCountry,
     privacy: (() => {
       const senior = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
       const anonymised = String(employee.email ?? '').endsWith('@anonymised.invalid')
@@ -605,7 +607,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (Object.keys(empWrite).length > 0) {
     await modulesPrisma.employeeProfile.upsert({
       where: { profileId },
-      create: { profileId, ...empWrite },
+      create: { profileId, ...(await leaveDefaultForNewEmployee(profile.organisationId)), ...empWrite },
       update: empWrite,
     })
   }

@@ -70,7 +70,7 @@ const DEFAULTS: OrgSettings = {
 
 /** Until a firm saves its own, time zone and number format follow its country. */
 function mergeDefaults(stored: OrgSettings, country: CountryCode | null = null): OrgSettings {
-  const byCountry: RegionalSettings = country ? { timezone: COUNTRIES[country].timezone, numberFormat: country === 'EE' ? 'et-EE' : 'en-GB' } : {}
+  const byCountry: RegionalSettings = country && country !== 'NG' ? { timezone: COUNTRIES[country].timezone, numberFormat: country === 'EE' ? 'et-EE' : 'en-GB' } : {}
   return {
     country: country ?? undefined,
     regional: { ...DEFAULTS.regional, ...byCountry, ...stored.regional },

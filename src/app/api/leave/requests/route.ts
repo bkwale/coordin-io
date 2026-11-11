@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { leaveRules } from '@/lib/region'
+import { leaveRules, estonianPublicHolidays } from '@/lib/region'
 import { firmDefaults } from '@/lib/region-server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
@@ -141,7 +141,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   if (rules.skipPublicHolidays && leaveType === 'ANNUAL') {
     try {
       const rows = await prisma.publicHoliday.findMany({
-        where: { organisationId: profile.organisationId, type: 'PUBLIC_HOLIDAY', OR: [{ isRecurring: true }, { date: { gte: startDate, lte: endDate } }] },
+        where: { organisationId: profile.organisationId, type: 'PUBLIC_HOLIDAY', AND: [{ OR: [{ officeId: null }, ...(profile.officeId ? [{ officeId: profile.officeId }] : [])] }, { OR: [{ isRecurring: true }, { date: { gte: startDate, lte: endDate } }] }] },
         select: { date: true, isRecurring: true },
       })
       for (const h of rows) {
@@ -149,6 +149,8 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) holidays.push(new Date(y, h.date.getMonth(), h.date.getDate()))
       }
     } catch { holidays = [] }
+    // Estonia's own public holidays always apply, whether or not the firm has typed them in
+    for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) holidays.push(...estonianPublicHolidays(y))
   }
   const { days: workingDays } = validateLeaveRequest(startDate, endDate, { basis: rules.dayBasis, holidays, maxDays: rules.maxRequestDays })
 

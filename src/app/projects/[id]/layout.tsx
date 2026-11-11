@@ -155,7 +155,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       .filter(tab => !tab.frameworks || (workStageFramework && tab.frameworks.includes(workStageFramework)))
       .map(tab => (tab.subTabs ? { ...tab, subTabs: tab.subTabs.filter(st =>
         !(country && st.hideIn?.includes(country)) &&
-        !(st.hospitalityOnly && !showsHospitality({ country: country ?? firmCountry, projectType }))) } : tab)),
+        !(st.hospitalityOnly && !showsHospitality({ country: firmCountry === 'NG' ? 'NG' : (country ?? firmCountry), projectType }))) } : tab)),
     [workStageFramework, country, firmCountry, projectType]
   )
 

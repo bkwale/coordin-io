@@ -860,7 +860,7 @@ function MyLeaveTab(props: MyLeaveTabProps) {
             <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
               <CalendarDays className="w-4 h-4 text-blue-500" />
               <span className="text-[12px] text-blue-700 font-medium">
-                {workingDaysPreview} {dayBasis === 'calendar' ? 'calendar' : 'working'} {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}{dayBasis === 'calendar' ? ' (public holidays are taken off when you submit)' : ''}
+                {workingDaysPreview} {dayBasis === 'calendar' ? 'calendar' : 'working'} {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}{dayBasis === 'calendar' ? ' (public holidays inside annual leave are not counted)' : ''}
                 {formHalfDay && ` (${formHalfDayPeriod} half day)`}
               </span>
             </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leaveRules, planningProfile, showsHospitality } from '@/lib/region'
+import { leaveRules, planningProfile, showsHospitality, estonianPublicHolidays } from '@/lib/region'
 import { calculateLeaveDays, validateLeaveRequest } from '@/lib/leave-utils'
 import { DEFAULT_TOPICS, topicsForCountry } from '@/lib/knowledge-data'
 
@@ -25,6 +25,14 @@ describe('leave rules by country', () => {
   })
 })
 
+describe('Estonian public holidays', () => {
+  it('has the fixed dates and the movable ones (Good Friday 3 Apr, Easter 5 Apr, Pentecost 24 May 2026)', () => {
+    const days = estonianPublicHolidays(2026).map((x) => `${x.getMonth() + 1}-${x.getDate()}`)
+    for (const k of ['1-1', '2-24', '5-1', '6-23', '6-24', '8-20', '12-24', '12-25', '12-26', '4-3', '4-5', '5-24']) expect(days, k).toContain(k)
+    expect(days.length).toBe(12)
+  })
+})
+
 describe('project pages by country', () => {
   it('schedule of accommodation: hotels only in Estonia and the UK, always for Nigeria or unknown', () => {
     expect(showsHospitality({ country: 'EE', projectType: 'RESIDENTIAL' })).toBe(false)
@@ -39,6 +47,7 @@ describe('project pages by country', () => {
     expect(planningProfile('GB').title).toBe('Planning Applications')
     expect(planningProfile(null)).toBe(planningProfile('GB'))
     expect(planningProfile('NG').sourceDocument).toBeNull()
+    expect(planningProfile('NG').placeholders).toEqual(planningProfile('GB').placeholders)
   })
 })
 
@@ -48,6 +57,8 @@ describe('knowledge base', () => {
     expect(topicsForCountry(DEFAULT_TOPICS, 'EE').slice(0, 3).every((t) => t.country === 'EE')).toBe(true)
     expect(topicsForCountry(DEFAULT_TOPICS, 'GB')[0].country).toBe('GB')
     expect(topicsForCountry(DEFAULT_TOPICS, null)).toBe(DEFAULT_TOPICS)
+    expect(topicsForCountry(DEFAULT_TOPICS, 'NG')).toBe(DEFAULT_TOPICS)
+    expect(DEFAULT_TOPICS[0].id).toBe('riba-plan-of-work')
     expect(new Set(DEFAULT_TOPICS.map((t) => t.id)).size).toBe(DEFAULT_TOPICS.length)
   })
 })

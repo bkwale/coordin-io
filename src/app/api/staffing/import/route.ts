@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { leaveDefaultForNewEmployee } from '@/lib/leave-defaults'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { PermissionError, ValidationError } from '@/lib/errors'
@@ -354,6 +355,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
             update: empUpdate,
             create: {
               profileId: existingProfileId,
+              ...(await leaveDefaultForNewEmployee(profile.organisationId)),
               ...empUpdate,
             },
           })
@@ -379,6 +381,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
         // Create employee profile
         const empData: Record<string, unknown> = {
           profileId: newProfile.id,
+          ...(await leaveDefaultForNewEmployee(profile.organisationId)),
         }
         if (data.employmentType) empData.employmentType = data.employmentType
         if (data.probationMonths) empData.probationLength = data.probationMonths

@@ -43,13 +43,15 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const body = await parseBody(request)
   const name = requireString(body.name, 'Office name', 200)
   const city = requireString(body.city, 'City', 200)
-  // No country given: use the firm's own (never assume Nigeria)
+  // No country given: use the firm's own. A Nigerian firm keeps the stored value it has always had ('NG');
+  // a firm whose country isn't known yet must choose, rather than be assumed Nigerian.
   let country = optionalString(body.country, 'Country', 200)
   if (!country) {
-    let fd: { country: string | null; currency: string } = { country: null, currency: 'EUR' }
-    try { fd = await firmDefaults(profile.organisationId) } catch { /* fall through */ }
-    const code = (fd.country ?? ({ EUR: 'EE', GBP: 'GB', NGN: 'NG' } as Record<string, string>)[fd.currency] ?? 'GB') as 'EE' | 'GB' | 'NG'
-    country = COUNTRIES[code].name
+    let firm: string | null = null
+    try { firm = (await firmDefaults(profile.organisationId)).country } catch { /* unknown */ }
+    if (firm === 'NG') country = 'NG'
+    else if (firm === 'EE' || firm === 'GB') country = COUNTRIES[firm].name
+    else throw new ValidationError("Choose the office's country")
   }
   const isHeadOffice = body.isHeadOffice === true
 

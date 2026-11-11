@@ -1371,7 +1371,7 @@ function RegionalSection() {
       await fetch('/api/org-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: { ...(country ? { country } : {}), regional } }),
+        body: JSON.stringify({ settings: { regional } }),
       })
       setDirty(false)
     } catch {
@@ -1393,21 +1393,7 @@ function RegionalSection() {
       />
 
       <div className="space-y-6 mt-8">
-        <FieldGroup label="Country">
-          <select className="settings-input" value={country} onChange={(e) => {
-            const c = e.target.value
-            setCountry(c); setDirty(true)
-            // Picking a country sets its usual time zone and number format; both stay editable below
-            const tz: Record<string, string> = { EE: 'Europe/Tallinn', GB: 'Europe/London', NG: 'Africa/Lagos' }
-            if (tz[c]) setRegional((prev) => ({ ...prev, timezone: tz[c], numberFormat: c === 'EE' ? 'et-EE' : 'en-GB' }))
-          }}>
-            {!country && <option value="">Not set</option>}
-            <option value="EE">Estonia</option>
-            <option value="GB">United Kingdom</option>
-            <option value="NG">Nigeria</option>
-          </select>
-          <p className="text-[11px] text-ink-300 mt-1">Sets the defaults for new projects, quotes and staff: currency, VAT rate, bank format, leave rules and which building rules apply.</p>
-        </FieldGroup>
+        <p className="text-[12px] text-ink-400">{country ? `Your practice’s country is ${({ EE: 'Estonia', GB: 'the United Kingdom', NG: 'Nigeria' } as Record<string, string>)[country] ?? country}. ` : 'No country is set for your practice yet. '}Change it under Organisation Profile — it sets the currency, VAT rate, leave rules and building rules for new work.</p>
 
         <FieldGroup label="Timezone">
           <select className="settings-input" value={regional.timezone} onChange={(e) => update('timezone', e.target.value)}>

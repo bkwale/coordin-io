@@ -17,58 +17,6 @@ export interface KnowledgeTopic {
 
 export const DEFAULT_TOPICS: KnowledgeTopic[] = [
   {
-    id: 'ee-building-code',
-    country: 'EE',
-    title: 'Estonian Building Code (Ehitusseadustik) — overview',
-    category: 'Regulations',
-    content: `The Building Code (Ehitusseadustik, EhS) is the main law for designing, building and using buildings in Estonia. It sets who may design and supervise, when a notice or a permit is needed, and what must be handed over before a building is used. The current text is published on Riigi Teataja (riigiteataja.ee); always check it there, because the Code was amended in 2026.
-
-Two routes lead to construction. Smaller works need a building notice (ehitusteatis); larger ones need a building permit (ehitusluba). Which applies depends on the type of building, its footprint and its height, as set out in Annex 1 to the Code. After construction the same split applies to use: a use notice (kasutusteatis) or a use permit (kasutusluba), under Annex 2. All of these are filed in the Building Register (Ehitisregister, EHR).
-
-Before design starts, the site's planning position decides the brief. Where a detailed plan (detailplaneering) is in force, the design follows it. Where none is required, the local government issues design conditions (projekteerimistingimused) that set height, building line, use and other limits for the plot. In Coordin, upload that document on the project's Regulatory page and the conditions are read into the checklist for you to confirm.
-
-Related rules sit outside the Code: fire safety requirements for buildings (Minister of the Interior regulation no. 17), minimum energy performance requirements, accessibility requirements, and heritage protection (Muinsuskaitseseadus) for listed buildings and heritage areas. Coordin's regulatory checklist cites the rule behind each item, so you can check it at source.`,
-    tags: ['Ehitusseadustik', 'building code', 'ehitusluba', 'ehitusteatis', 'kasutusluba', 'EHR', 'Estonia'],
-  },
-  {
-    id: 'ee-design-stages',
-    country: 'EE',
-    title: 'Estonian design stages (EVS 932)',
-    category: 'Standards',
-    content: `Estonian standard EVS 932 "Construction design documents" describes what a building design contains at each stage. Contracts, fee proposals and the building permit application normally refer to these stages, so it helps to plan work and fees around them.
-
-Eskiis (sketch design) fixes the architectural idea: layout on the plot, massing, main plans and the look of the building. It is the stage usually discussed with the client and the local government before detailed work starts.
-
-Eelprojekt (preliminary design) develops the sketch into a coordinated design across architecture, structure and building services, to the level needed to apply for the building permit.
-
-Põhiprojekt (main design) fixes the technical solutions in enough detail to price the works and tender them, and to show how the requirements are met.
-
-Tööprojekt (working design) gives the builder the detail needed to build: working drawings, schedules and specifications. It is often prepared alongside construction.
-
-In Coordin, an Estonian project's Delivery tab starts on these four stages. You can rename or add stages to match your own office practice.`,
-    tags: ['EVS 932', 'eskiis', 'eelprojekt', 'põhiprojekt', 'tööprojekt', 'design stages', 'Estonia'],
-  },
-  {
-    id: 'ee-permit-process',
-    country: 'EE',
-    title: 'From design conditions to use permit — the Estonian process',
-    category: 'Process',
-    content: `A typical new-build project in Estonia moves through the following steps. Timings and thresholds are set by the Building Code and its annexes — confirm the current figures on Riigi Teataja or with the local government.
-
-1. Planning position. Check whether a detailed plan (detailplaneering) covers the plot. If not, apply to the local government for design conditions (projekteerimistingimused).
-
-2. Design. Prepare the design to preliminary-design level (eelprojekt) under EVS 932, coordinated with structure, services and fire safety. Listed buildings and heritage areas also need the heritage authority's approval.
-
-3. Building notice or permit. File the building notice (ehitusteatis) or the building permit application (ehitusluba) in the Building Register (EHR). The local government coordinates the application with other agencies before deciding.
-
-4. Construction. Notify the start of works in EHR. The owner arranges owner's supervision (omanikujärelevalve), and the construction is documented as it proceeds.
-
-5. Use. Once the works are complete, file the use notice (kasutusteatis) or apply for the use permit (kasutusluba) with the as-built documentation.
-
-In Coordin, track each application on the project's Permits & Planning page, and the conditions attached to it on the Regulatory page.`,
-    tags: ['projekteerimistingimused', 'detailplaneering', 'ehitusluba', 'kasutusluba', 'EHR', 'omanikujärelevalve', 'Estonia'],
-  },
-  {
     id: 'riba-plan-of-work',
     country: 'GB',
     title: 'RIBA Plan of Work Stages',
@@ -186,6 +134,58 @@ The main application types are: Full Planning Permission (detailed proposals), O
 The determination period is 8 weeks for minor applications and 13 weeks for major applications (or 16 weeks if requiring Environmental Impact Assessment). The planning process includes validation, consultation (neighbours, parish councils, statutory consultees), case officer assessment against the Local Plan and the National Planning Policy Framework (NPPF), and decision by delegated authority or planning committee. Decisions can be appealed to the Planning Inspectorate. Section 106 agreements and the Community Infrastructure Levy (CIL) may apply to larger developments.`,
     tags: ['planning permission', 'NPPF', 'Local Plan', 'Listed Building', 'Section 106', 'development control'],
   },
+  {
+    id: 'ee-building-code',
+    country: 'EE',
+    title: 'Estonian Building Code (Ehitusseadustik) — overview',
+    category: 'Regulations',
+    content: `The Building Code (Ehitusseadustik, EhS) is the main law for designing, building and using buildings in Estonia. It sets who may design and supervise, when a notice or a permit is needed, and what must be handed over before a building is used. The current text is published on Riigi Teataja (riigiteataja.ee); always check it there, because the Code is amended regularly.
+
+Two routes lead to construction. Smaller works need a building notice (ehitusteatis); larger ones need a building permit (ehitusluba). Which applies depends on the type of building, its footprint and its height, as set out in Annex 1 to the Code. After construction the same split applies to use: a use notice (kasutusteatis) or a use permit (kasutusluba), under Annex 2. All of these are filed in the Building Register (Ehitisregister, EHR).
+
+Before design starts, the site's planning position decides the brief. Where a detailed plan (detailplaneering) is in force, the design follows it. Where none is required, the local government issues design conditions (projekteerimistingimused) that set height, building line, use and other limits for the plot. In Coordin, upload that document on the project's Regulatory page and the conditions are read into the checklist for you to confirm.
+
+Related rules sit outside the Code: fire safety requirements for buildings (Minister of the Interior regulation no. 17), minimum energy performance requirements, accessibility requirements, and heritage protection (Muinsuskaitseseadus) for listed buildings and heritage areas. Coordin's regulatory checklist cites the rule behind each item, so you can check it at source.`,
+    tags: ['Ehitusseadustik', 'building code', 'ehitusluba', 'ehitusteatis', 'kasutusluba', 'EHR', 'Estonia'],
+  },
+  {
+    id: 'ee-design-stages',
+    country: 'EE',
+    title: 'Estonian design stages (EVS 932)',
+    category: 'Standards',
+    content: `Estonian standard EVS 932 "Construction design documents" describes what a building design contains at each stage. Contracts, fee proposals and the building permit application normally refer to these stages, so it helps to plan work and fees around them.
+
+Eskiis (sketch design) fixes the architectural idea: layout on the plot, massing, main plans and the look of the building. It is the stage usually discussed with the client and the local government before detailed work starts.
+
+Eelprojekt (preliminary design) develops the sketch into a coordinated design across architecture, structure and building services, to the level needed to apply for the building permit.
+
+Põhiprojekt (main design) fixes the technical solutions in enough detail to price the works and tender them, and to show how the requirements are met.
+
+Tööprojekt (working design) gives the builder the detail needed to build: working drawings, schedules and specifications. It is often prepared alongside construction.
+
+In Coordin, an Estonian project's Delivery tab starts on these four stages. You can rename or add stages to match your own office practice.`,
+    tags: ['EVS 932', 'eskiis', 'eelprojekt', 'põhiprojekt', 'tööprojekt', 'design stages', 'Estonia'],
+  },
+  {
+    id: 'ee-permit-process',
+    country: 'EE',
+    title: 'From design conditions to use permit — the Estonian process',
+    category: 'Process',
+    content: `A typical new-build project in Estonia moves through the following steps. Timings and thresholds are set by the Building Code and its annexes — confirm the current figures on Riigi Teataja or with the local government.
+
+1. Planning position. Check whether a detailed plan (detailplaneering) covers the plot. If not, apply to the local government for design conditions (projekteerimistingimused).
+
+2. Design. Prepare the design to preliminary-design level (eelprojekt) under EVS 932, coordinated with structure, services and fire safety. Listed buildings and heritage areas also need the heritage authority's approval.
+
+3. Building notice or permit. File the building notice (ehitusteatis) or the building permit application (ehitusluba) in the Building Register (EHR). The local government coordinates the application with other agencies before deciding.
+
+4. Construction. Notify the start of works in EHR. The owner arranges owner's supervision (omanikujärelevalve) where the Code requires it, and the construction is documented as it proceeds.
+
+5. Use. Once the works are complete, file the use notice (kasutusteatis) or apply for the use permit (kasutusluba) with the as-built documentation.
+
+In Coordin, track each application on the project's Permits & Planning page, and the conditions attached to it on the Regulatory page.`,
+    tags: ['projekteerimistingimused', 'detailplaneering', 'ehitusluba', 'kasutusluba', 'EHR', 'omanikujärelevalve', 'Estonia'],
+  },
 ]
 
 /**
@@ -197,7 +197,7 @@ export function findTopicById(id: string): KnowledgeTopic | undefined {
 
 /** Topics about the firm's own country first, then general ones, then other countries. */
 export function topicsForCountry(topics: KnowledgeTopic[], country: string | null | undefined): KnowledgeTopic[] {
-  if (!country) return topics
+  if (!country || country === 'NG') return topics
   const rank = (t: KnowledgeTopic) => (t.country === country ? 0 : !t.country ? 1 : 2)
   return topics.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t)
 }

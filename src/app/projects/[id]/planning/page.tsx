@@ -118,7 +118,7 @@ const COND_TYPE_LABELS: Record<string, string> = {
   ONGOING: 'Ongoing', COMPLIANCE: 'Compliance', INFORMATIVE: 'Informative',
 }
 
-const CURRENCIES = ['EUR', 'GBP', 'NGN', 'USD'] as const
+const CURRENCIES = ['GBP', 'NGN', 'USD', 'EUR'] as const
 
 const ALL_APP_STATUSES: ApplicationStatus[] = [
   'FEASIBILITY', 'PRE_APPLICATION', 'PREPARING', 'SUBMITTED',
@@ -218,7 +218,7 @@ export default function PlanningApplicationsPage() {
   const { id } = useParams<{ id: string }>()
   const { toast } = useToast()
   const region = useProjectRegion(id)
-  const plan = planningProfile(region.country)
+  const plan = planningProfile(region.firmCountry === 'NG' ? 'NG' : region.country)
   const statusLabel = (s: string) => plan.statusLabels[s] || APP_STATUS_LABELS[s] || s
   const condTypeLabel = (t: string) => plan.conditionTypeLabels[t] || COND_TYPE_LABELS[t] || t
   // Conditions the AI read from the planning document live on the Regulatory page — show how many, and link there
@@ -244,7 +244,7 @@ export default function PlanningApplicationsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [appForm, setAppForm] = useState<AppFormState>(EMPTY_APP)
   // Fee currency follows the project (then the firm) until the user picks another
-  useEffect(() => { if (region.currency) setAppForm((f) => (f.fee === '' ? { ...f, currency: region.currency! } : f)) }, [region.currency])
+  useEffect(() => { if (region.currency && region.country && region.country !== 'NG') setAppForm((f) => (f.fee === '' ? { ...f, currency: region.currency! } : f)) }, [region.currency, region.country])
   const { mutate: createApplication, loading: creating, error: createError, clearError: clearCreateError } =
     useApiMutation<PlanningApplication>(`/api/projects/${id}/planning`, 'POST')
 
@@ -308,7 +308,7 @@ export default function PlanningApplicationsPage() {
     else { toast(createError || 'Failed to create application', 'error') }
   }
 
-  const resetAppForm = () => { setShowCreateForm(false); setAppForm({ ...EMPTY_APP, currency: region.currency ?? EMPTY_APP.currency }); clearCreateError() }
+  const resetAppForm = () => { setShowCreateForm(false); setAppForm({ ...EMPTY_APP, currency: region.country && region.country !== 'NG' ? region.currency ?? EMPTY_APP.currency : EMPTY_APP.currency }); clearCreateError() }
 
   /* ── Create condition ───────────────────────────────────── */
 
