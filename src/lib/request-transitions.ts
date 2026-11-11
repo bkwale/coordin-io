@@ -50,14 +50,16 @@ const VALID_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
 const LEAVE_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
   DRAFT: ['SUBMITTED', 'WITHDRAWN'],
   SUBMITTED: ['LINE_MANAGER_APPROVED', 'UNDER_REVIEW', 'REJECTED', 'WITHDRAWN'],
-  LINE_MANAGER_APPROVED: ['HR_APPROVED', 'UNDER_REVIEW', 'REJECTED'],
-  HR_APPROVED: ['APPROVED', 'REJECTED'],
+  // The requester can withdraw at any point before final approval, so the dates free up for a new request
+  LINE_MANAGER_APPROVED: ['HR_APPROVED', 'UNDER_REVIEW', 'REJECTED', 'WITHDRAWN'],
+  HR_APPROVED: ['APPROVED', 'REJECTED', 'WITHDRAWN'],
+  // Approved leave is cancelled, not withdrawn: by the requester before it starts, or by HR/admin at any time
   APPROVED: ['CANCELLED'],
   REJECTED: [],
   CANCELLED: [],
   WITHDRAWN: [],
   // UNDER_REVIEW = "request info" — requester can re-submit
-  UNDER_REVIEW: ['SUBMITTED'],
+  UNDER_REVIEW: ['SUBMITTED', 'WITHDRAWN'],
   FULFILMENT_IN_PROGRESS: [],
   COMPLETED: [],
 }

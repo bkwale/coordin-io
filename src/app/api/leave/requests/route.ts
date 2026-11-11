@@ -39,7 +39,16 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   let where: Record<string, unknown>
 
-  if (showAll && (profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER')) {
+  const upcomingApproved = url.searchParams.get('upcoming') === 'true'
+  if (showAll && upcomingApproved && ['HR', 'ADMIN', 'OWNER'].includes(profile.orgPermission as string)) {
+    // HR/Admin/Owner: approved leave that is current or still to come — the list they can cancel from
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    where = {
+      profile: { organisationId: profile.organisationId },
+      status: 'APPROVED',
+      endDate: { gte: today },
+    }
+  } else if (showAll && (profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER')) {
     // Admin/Owner sees all org requests
     where = {
       profile: { organisationId: profile.organisationId },
