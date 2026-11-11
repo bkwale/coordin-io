@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isSoleOwner, recordSoleOwnerSelfApproval } from '@/lib/sole-owner'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -106,7 +107,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
 
   // Nobody approves, rejects or pays their own claim
   if ((isApproverTransition(newStatus) || isAdminTransition(newStatus)) && isOwner) {
-    throw new PermissionError("You can't approve, reject or pay your own expense claim — another approver must do it")
+    // …except the owner of a firm with nobody else who could (audited)
+    if (!(await isSoleOwner(profile))) throw new PermissionError("You can't approve, reject or pay your own expense claim — another approver must do it")
+    await recordSoleOwnerSelfApproval(profile, 'expense_claim', id, newStatus)
   }
   if (isApproverTransition(newStatus) && !isClaimApprover && !isAdmin && !isFinance) {
     throw new PermissionError('Only the assigned approver, finance, or an admin can perform this action')

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isSoleOwner, recordSoleOwnerSelfApproval } from '@/lib/sole-owner'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
@@ -26,7 +27,9 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   }
   // Payroll-fraud guard: nobody approves their own bank details
   if (profileId === profile.id) {
-    throw new PermissionError("You can't approve your own bank details — another HR admin or the Owner must")
+    // …except the owner of a firm with nobody else who could (audited)
+    if (!(await isSoleOwner(profile))) throw new PermissionError("You can't approve your own bank details — another HR admin or the Owner must")
+    await recordSoleOwnerSelfApproval(profile, 'bank_details', profileId, 'reviewed')
   }
 
   // Verify the target exists and is in the same org

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isSoleOwner, recordSoleOwnerSelfApproval } from '@/lib/sole-owner'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -118,7 +119,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     }
 
     if ((isApproverTransition(newStatus) || (isAdminTransition(newStatus) && newStatus !== 'COMPLETED')) && isOwner) {
-      throw new PermissionError("You can't approve or reject your own request — another approver must do it")
+      // …except the owner of a firm with nobody else who could (audited)
+      if (!(await isSoleOwner(profile))) throw new PermissionError("You can't approve or reject your own request — another approver must do it")
+      await recordSoleOwnerSelfApproval(profile, 'service_request', id, newStatus)
     }
     if (isApproverTransition(newStatus) && !isApproverUser && !isAdmin && !isManager) {
       throw new PermissionError('Only the assigned approver or an admin can perform this action')

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isSoleOwner, recordSoleOwnerSelfApproval } from '@/lib/sole-owner'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -99,7 +100,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
 
   if (MANAGER_STATUSES.includes(newStatus) && isOwner) {
-    throw new PermissionError("You can't approve or reject your own timesheet — only your manager or admin can")
+    // …except the owner of a firm with nobody else who could (audited)
+    if (!(await isSoleOwner(profile))) throw new PermissionError("You can't approve or reject your own timesheet — only your manager or admin can")
+    await recordSoleOwnerSelfApproval(profile, 'timesheet_week', weekId, newStatus)
   }
   if (MANAGER_STATUSES.includes(newStatus) && !isManager && !isAdmin) {
     throw new PermissionError('Only a manager or admin can approve/reject timesheets')

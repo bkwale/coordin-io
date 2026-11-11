@@ -277,6 +277,9 @@ export function getAuditPrefixesForRole(
  * Human-readable labels for audit actions.
  */
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'approval.self_approved_sole_owner': 'Owner approved their own request (sole owner)',
+  'gdpr.data_exported': 'Personal data exported',
+  'gdpr.profile_anonymised': 'Record anonymised',
   // Invitations
   'invitation.created': 'Sent invitation',
   'invitation.sent': 'Resent invitation email',

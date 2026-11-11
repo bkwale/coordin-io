@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { isSoleOwner, SELF_APPROVED_ACTION } from './sole-owner'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { notifyMentions } from '@/lib/mentions'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
@@ -355,12 +356,17 @@ export async function processApprovalStep(
     }
 
     // Who is acting: must be in the same firm, and never the person who submitted the request
-    const actor = await tx.profile.findUnique({ where: { id: approverId }, select: { orgPermission: true, organisationId: true } })
+    const actor = await tx.profile.findUnique({ where: { id: approverId }, select: { orgPermission: true, organisationId: true, managerId: true } })
     if (!actor || (instance.organisationId && actor.organisationId !== instance.organisationId)) {
       throw new Error('Approval instance not found')
     }
     if (instance.submitterId === approverId && action !== 'REQUEST_CHANGES') {
-      throw new Error("You can't approve or reject your own request — another approver must do it")
+      // The one exception: the owner of a firm with nobody else who could approve (always audited)
+      const sole = await isSoleOwner({ id: approverId, organisationId: actor.organisationId, orgPermission: actor.orgPermission, managerId: actor.managerId }, tx as any)
+      if (!sole) throw new Error("You can't approve or reject your own request — another approver must do it")
+      await tx.auditEvent.create({
+        data: { organisationId: actor.organisationId, actorId: approverId, action: SELF_APPROVED_ACTION, entityType: 'approval_instance', entityId: instance.id, metadata: { decision: action, reason: 'Sole owner — no other owner, admin or line manager to approve' } },
+      })
     }
     // A step with no named approver can only be actioned by an admin (never by any member)
     const namedIds = (effectiveStep.approverIds as string[] ?? [])

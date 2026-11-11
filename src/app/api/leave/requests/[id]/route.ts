@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isSoleOwner, recordSoleOwnerSelfApproval } from '@/lib/sole-owner'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -112,7 +113,9 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   }
   // Nobody approves or rejects their own leave, whatever their role
   if (isOwner && ['LINE_MANAGER_APPROVED', 'HR_APPROVED', 'APPROVED', 'REJECTED', 'UNDER_REVIEW'].includes(newStatus)) {
-    throw new PermissionError("You can't approve or reject your own leave — another approver must do it")
+    // …except the owner of a firm with nobody else who could (audited)
+    if (!(await isSoleOwner(profile))) throw new PermissionError("You can't approve or reject your own leave — another approver must do it")
+    await recordSoleOwnerSelfApproval(profile, 'leave_request', id, newStatus)
   }
   if (newStatus === 'UNDER_REVIEW' && !isLineManager && !isApproverUser && !isAdmin) {
     throw new PermissionError('Only the line manager, approver, or an admin can request more information')
