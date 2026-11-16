@@ -135,6 +135,9 @@ export const DELETE = withAuth(async (_request: NextRequest, { profile }) => {
     data: {
       active: false,
       disconnectedAt: new Date(),
+      // A disconnected integration keeps no usable credentials
+      accessToken: '',
+      refreshToken: '',
     },
   })
 

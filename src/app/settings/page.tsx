@@ -1473,6 +1473,23 @@ function IntegrationsSection() {
   })
   const [connectingXero, setConnectingXero] = useState(false)
   const [connectingMs, setConnectingMs] = useState(false)
+  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [integrationError, setIntegrationError] = useState<string | null>(null)
+
+  // Disconnect, so the connection can be made again from scratch
+  const disconnect = async (key: 'xero' | 'microsoft') => {
+    setDisconnecting(true); setIntegrationError(null)
+    try {
+      const res = await fetch(`/api/integrations/${key}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Could not disconnect')
+      setStatus((st) => ({ ...st, [key]: { connected: false, loading: false } }))
+      setConfirmDisconnect(null)
+    } catch (e) {
+      setIntegrationError(e instanceof Error ? e.message : 'Could not disconnect')
+    } finally { setDisconnecting(false) }
+  }
 
   useEffect(() => {
     // Fetch all integration statuses in parallel
@@ -1515,12 +1532,13 @@ function IntegrationsSection() {
   }, [])
 
   const connectXero = async () => {
-    setConnectingXero(true)
+    setConnectingXero(true); setIntegrationError(null)
     try {
       const res = await fetch('/api/integrations/xero', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'connect' }) })
-      const data = await res.json()
-      if (data?.data?.authUrl) window.location.href = data.data.authUrl
-    } catch { /* toast error */ }
+      const data = await res.json().catch(() => ({}))
+      if (data?.data?.authUrl) { window.location.href = data.data.authUrl; return }
+      setIntegrationError((typeof data.error === 'string' ? data.error : data.error?.message) || 'Could not start the Xero connection. Please try again.')
+    } catch { setIntegrationError('Could not reach Coordin. Check your connection and try again.') }
     setConnectingXero(false)
   }
 
@@ -1556,6 +1574,7 @@ function IntegrationsSection() {
       detail: status.xero.tenantName ? `Connected to ${status.xero.tenantName}` : undefined,
       onConnect: connectXero,
       connecting: connectingXero,
+      disconnectKey: 'xero' as const,
       available: true,
     },
     {
@@ -1569,6 +1588,7 @@ function IntegrationsSection() {
         : undefined,
       onConnect: connectMicrosoft,
       connecting: connectingMs,
+      disconnectKey: 'microsoft' as const,
       available: true,
     },
     {
@@ -1593,6 +1613,10 @@ function IntegrationsSection() {
         description="Connect Coordin.io with the tools your practice already uses"
       />
 
+      {integrationError && (
+        <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-800">{integrationError}</div>
+      )}
+
       <div className="mt-6 space-y-4">
         {INTEGRATIONS.map((integration) => (
           <div key={integration.name} className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
@@ -1616,6 +1640,21 @@ function IntegrationsSection() {
             </div>
             {integration.loading ? (
               <Loader2 className="w-4 h-4 animate-spin text-ink-300" />
+            ) : integration.connected && 'disconnectKey' in integration && integration.disconnectKey ? (
+              confirmDisconnect === integration.disconnectKey ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-ink-500">Disconnect {integration.name}? Syncing stops until you connect again.</span>
+                  <button onClick={() => disconnect(integration.disconnectKey!)} disabled={disconnecting} className="text-[12px] text-white bg-red-600 hover:bg-red-700 font-medium px-3 py-1.5 rounded-lg disabled:opacity-50">
+                    {disconnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Disconnect'}
+                  </button>
+                  <button onClick={() => setConfirmDisconnect(null)} className="text-[12px] text-ink-500 hover:text-ink-700 font-medium px-2 py-1.5">Keep</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-emerald-600 font-medium">Active</span>
+                  <button onClick={() => { setConfirmDisconnect(integration.disconnectKey!); setIntegrationError(null) }} className="text-[12px] text-ink-500 hover:text-red-600 font-medium px-3 py-1.5 border border-surface-300 rounded-lg hover:border-red-200">Disconnect</button>
+                </div>
+              )
             ) : integration.connected ? (
               <span className="text-[11px] text-emerald-600 font-medium">Active</span>
             ) : integration.available && integration.onConnect ? (
