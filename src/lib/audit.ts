@@ -193,6 +193,8 @@ export const AuditActions = {
   AI_PRACTICE_SETUP_RUN: 'ai.practice_setup_run',
   AI_PRACTICE_CONFIGURED: 'ai.practice_configured',
   AI_PROJECT_CONFIGURED: 'ai.project_configured',
+  AI_SUMMARY_RUN: 'ai.summary_run',
+  AI_SUMMARY_TASKS_CREATED: 'ai.summary_tasks_created',
   PROJECT_EHR_LINKED: 'project.ehr_linked',
   PROJECT_EHR_UNLINKED: 'project.ehr_unlinked',
 
@@ -432,6 +434,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'ai.practice_setup_run': 'Ran AI practice setup',
   'ai.practice_configured': 'Applied AI practice configuration',
   'ai.project_configured': 'Applied AI project configuration',
+  'ai.summary_run': 'Summarised a document with AI',
+  'ai.summary_tasks_created': 'Created tasks from an AI document summary',
   'project.ehr_linked': 'Linked Ehitisregister building',
   'project.ehr_unlinked': 'Unlinked Ehitisregister building',
 
