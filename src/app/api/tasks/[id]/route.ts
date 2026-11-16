@@ -239,7 +239,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
       profileId: ownerId,
       type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
       title: `You were assigned a task: ${task.title}`,
-      linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+      linkUrl: `/tasks/${task.id}`,
     }).catch(() => {})
   }
   if (reviewerId && reviewerId !== profile.id) {
@@ -247,7 +247,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
       profileId: reviewerId,
       type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
       title: `You were assigned as reviewer: ${task.title}`,
-      linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+      linkUrl: `/tasks/${task.id}`,
     }).catch(() => {})
   }
   if (status && status !== currentTask.status) {
@@ -256,7 +256,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
         profileId: currentTask.reviewerId,
         type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
         title: `Task ready for review: ${task.title}`,
-        linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+        linkUrl: `/tasks/${task.id}`,
       }).catch(() => {})
     }
     if ((status === 'COMPLETED' || status === 'CHANGES_REQUIRED') && currentTask.ownerId && currentTask.ownerId !== profile.id) {
@@ -264,7 +264,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
         profileId: currentTask.ownerId,
         type: NOTIFICATION_EVENTS.TASK_STATUS_CHANGED,
         title: `Task ${status === 'COMPLETED' ? 'completed' : 'needs changes'}: ${task.title}`,
-        linkUrl: `/projects/${currentTask.projectId}/tasks/${task.id}`,
+        linkUrl: `/tasks/${task.id}`,
       }).catch(() => {})
     }
   }

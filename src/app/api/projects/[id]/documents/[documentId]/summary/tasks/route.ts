@@ -45,7 +45,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   for (const c of result.created) {
     const pick = picks.find((p) => p.index === c.index)
     if (pick?.ownerId && pick.ownerId !== profile.id) {
-      await createNotification({ profileId: pick.ownerId, type: NOTIFICATION_EVENTS.TASK_ASSIGNED, title: `You were assigned a task: ${c.title}`, linkUrl: `/projects/${projectId}/tasks/${c.taskId}` }).catch(() => {})
+      await createNotification({ profileId: pick.ownerId, type: NOTIFICATION_EVENTS.TASK_ASSIGNED, title: `You were assigned a task: ${c.title}`, linkUrl: `/tasks/${c.taskId}` }).catch(() => {})
     }
   }
   return success({ created: result.created, skipped: result.skipped, tasks: result.made }, 201)

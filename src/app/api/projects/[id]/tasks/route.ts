@@ -195,7 +195,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
       profileId: ownerId,
       type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
       title: `You were assigned a task: ${task.title}`,
-      linkUrl: `/projects/${projectId}/tasks/${task.id}`,
+      linkUrl: `/tasks/${task.id}`,
     }).catch(() => {})
   }
   if (reviewerId && reviewerId !== profile.id && reviewerId !== ownerId) {
@@ -203,7 +203,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
       profileId: reviewerId,
       type: NOTIFICATION_EVENTS.TASK_ASSIGNED,
       title: `You were assigned as reviewer on: ${task.title}`,
-      linkUrl: `/projects/${projectId}/tasks/${task.id}`,
+      linkUrl: `/tasks/${task.id}`,
     }).catch(() => {})
   }
 

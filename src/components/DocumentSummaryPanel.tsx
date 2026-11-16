@@ -245,7 +245,7 @@ export function DocumentSummaryPanel({ projectId, document, onClose }: { project
                       <Row key={i} item={a}>
                         <p className="mt-1 text-[11px] text-ink-500">In the document: {a.owner ?? 'no one named'} · {a.due ?? 'no deadline'}</p>
                         {taskId ? (
-                          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Task created · <Link className="underline" href={`/projects/${projectId}/tasks/${taskId}`}>open</Link></p>
+                          <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Task created · <Link className="underline" href={`/tasks/${taskId}`}>open</Link></p>
                         ) : (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-700">
