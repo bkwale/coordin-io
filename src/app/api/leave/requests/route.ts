@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server'
+import { leaveRules, estonianPublicHolidays } from '@/lib/region'
+import { firmDefaults } from '@/lib/region-server'
 import { prisma } from '@/lib/prisma'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -37,7 +39,16 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
 
   let where: Record<string, unknown>
 
-  if (showAll && (profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER')) {
+  const upcomingApproved = url.searchParams.get('upcoming') === 'true'
+  if (showAll && upcomingApproved && ['HR', 'ADMIN', 'OWNER'].includes(profile.orgPermission as string)) {
+    // HR/Admin/Owner: approved leave that is current or still to come — the list they can cancel from
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    where = {
+      profile: { organisationId: profile.organisationId },
+      status: 'APPROVED',
+      endDate: { gte: today },
+    }
+  } else if (showAll && (profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER')) {
     // Admin/Owner sees all org requests
     where = {
       profile: { organisationId: profile.organisationId },
@@ -132,7 +143,25 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const halfDayPeriod = halfDay ? (body.halfDayPeriod === 'PM' ? 'PM' : 'AM') : null
 
   // Validate dates and calculate working days
-  const { days: workingDays } = validateLeaveRequest(startDate, endDate)
+  // Day counting follows the firm's country: Estonia counts calendar days and skips public holidays in annual leave
+  let rules = leaveRules(null)
+  try { rules = leaveRules((await firmDefaults(profile.organisationId)).country) } catch { /* default rules */ }
+  let holidays: Date[] = []
+  if (rules.skipPublicHolidays && leaveType === 'ANNUAL') {
+    try {
+      const rows = await prisma.publicHoliday.findMany({
+        where: { organisationId: profile.organisationId, type: 'PUBLIC_HOLIDAY', AND: [{ OR: [{ officeId: null }, ...(profile.officeId ? [{ officeId: profile.officeId }] : [])] }, { OR: [{ isRecurring: true }, { date: { gte: startDate, lte: endDate } }] }] },
+        select: { date: true, isRecurring: true },
+      })
+      for (const h of rows) {
+        if (!h.isRecurring) { holidays.push(h.date); continue }
+        for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) holidays.push(new Date(y, h.date.getMonth(), h.date.getDate()))
+      }
+    } catch { holidays = [] }
+    // Estonia's own public holidays always apply, whether or not the firm has typed them in
+    for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) holidays.push(...estonianPublicHolidays(y))
+  }
+  const { days: workingDays } = validateLeaveRequest(startDate, endDate, { basis: rules.dayBasis, holidays, maxDays: rules.maxRequestDays })
 
   // Half-day adjusts the count
   const days = halfDay ? 0.5 : workingDays

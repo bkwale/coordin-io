@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BookOpen, Search, Plus, ChevronDown, ChevronUp,
   Tag, X, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Breadcrumb } from '@/components/Breadcrumb'
-import { DEFAULT_TOPICS, type TopicCategory, type KnowledgeTopic } from '@/lib/knowledge-data'
+import { DEFAULT_TOPICS, topicsForCountry, type TopicCategory, type KnowledgeTopic } from '@/lib/knowledge-data'
 
 /* ── Category colours ─────────────────────────────────────── */
 
@@ -32,7 +32,11 @@ export default function KnowledgeBasePage() {
   const [selectedCategory, setSelectedCategory] = useState<TopicCategory | 'All'>('All')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
-  const [topics, setTopics] = useState<KnowledgeTopic[]>(DEFAULT_TOPICS)
+  const [rawTopics, setTopics] = useState<KnowledgeTopic[]>(DEFAULT_TOPICS)
+  // The firm's own country's topics come first (an Estonian practice sees the Building Code before UK regulations)
+  const [firmCountry, setFirmCountry] = useState<string | null>(null)
+  useEffect(() => { fetch('/api/org/region', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => setFirmCountry(d?.data?.country ?? null)).catch(() => {}) }, [])
+  const topics = useMemo(() => topicsForCountry(rawTopics, firmCountry), [rawTopics, firmCountry])
   const [submitting, setSubmitting] = useState(false)
 
   // Add-topic form state

@@ -212,8 +212,28 @@ export async function sendLeaveNotifications(params: {
   leaveRequest: LeaveRequestCore
   requesterName: string
   comment?: string | null
+  /** Who made the change, and the requester's line manager — so a self-withdrawal tells the people waiting on it */
+  actorId?: string
+  managerId?: string | null
 }) {
   const { newStatus, leaveRequest, requesterName, comment } = params
+  const byRequester = !!params.actorId && params.actorId === leaveRequest.profileId
+
+  // The requester withdrew, or cancelled their own approved leave → tell their manager and approver
+  if (byRequester && (newStatus === 'WITHDRAWN' || newStatus === 'CANCELLED') && leaveRequest.status !== 'DRAFT') {
+    const fmt = { day: 'numeric' as const, month: 'short' as const, year: 'numeric' as const }
+    const range = `${leaveRequest.startDate.toLocaleDateString('en-GB', fmt)} – ${leaveRequest.endDate.toLocaleDateString('en-GB', fmt)}`
+    const recipients = Array.from(new Set([params.managerId, leaveRequest.approverId].filter((x): x is string => !!x && x !== leaveRequest.profileId)))
+    for (const to of recipients) {
+      await createNotification({
+        profileId: to,
+        type: NOTIFICATION_EVENTS.LEAVE_DECISION,
+        title: `${requesterName} ${newStatus === 'CANCELLED' ? 'cancelled their approved leave' : 'withdrew a leave request'}`,
+        body: `${leaveRequest.leaveType} leave, ${range} — ${leaveRequest.days} day(s). No action needed.`,
+        linkUrl: `/leave?role=approver`,
+      }).catch(() => {})
+    }
+  }
 
   // SUBMITTED → notify approver (in-app + email)
   if (newStatus === 'SUBMITTED' && leaveRequest.approverId) {
@@ -265,7 +285,7 @@ export async function sendLeaveNotifications(params: {
   }
 
   // Approval/rejection decisions → notify requester
-  if (['APPROVED', 'REJECTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED', 'CANCELLED'].includes(newStatus)) {
+  if (['APPROVED', 'REJECTED', 'LINE_MANAGER_APPROVED', 'HR_APPROVED', 'CANCELLED'].includes(newStatus) && !(byRequester && newStatus === 'CANCELLED')) {
     await createNotification({
       profileId: leaveRequest.profileId,
       type: NOTIFICATION_EVENTS.LEAVE_DECISION,
@@ -289,6 +309,16 @@ export async function orchestrateLeaveApproval(params: {
   leaveType: string
   submitterManagerId: string | null
 }) {
+  // Withdrawn or cancelled: close any approval still in progress so it leaves the approvers' lists
+  if (params.newStatus === 'WITHDRAWN' || params.newStatus === 'CANCELLED') {
+    try {
+      await prisma.approvalInstance.updateMany({
+        where: { entityId: params.entityId, status: 'IN_PROGRESS' },
+        data: { status: 'CANCELLED' },
+      })
+    } catch { /* non-critical */ }
+    return
+  }
   if (params.newStatus !== 'SUBMITTED') return
 
   // Cancel any existing IN_PROGRESS instance (e.g. re-submit after REQUEST_CHANGES)

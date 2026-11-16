@@ -174,6 +174,8 @@ export default function SettingsPage() {
 
 // ── Offices Manager (inline CRUD) ─────────────────────────
 
+const OFFICE_COUNTRY_LIST = <datalist id="office-countries"><option value="Estonia" /><option value="United Kingdom" /><option value="Nigeria" /></datalist>
+
 function OfficesManager({ offices, onUpdate }: { offices: OfficeData[]; onUpdate: (offices: OfficeData[]) => void }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -290,7 +292,8 @@ function OfficesManager({ offices, onUpdate }: { offices: OfficeData[]; onUpdate
                   <div className="grid grid-cols-3 gap-2">
                     <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Office name" className="settings-input text-[12px]" />
                     <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" className="settings-input text-[12px]" />
-                    <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="settings-input text-[12px]" />
+                    <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" list="office-countries" className="settings-input text-[12px]" />
+                    {OFFICE_COUNTRY_LIST}
                   </div>
                   <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
                     <input type="checkbox" checked={form.isHeadOffice} onChange={(e) => setForm({ ...form, isHeadOffice: e.target.checked })} className="rounded" />
@@ -345,7 +348,7 @@ function OfficesManager({ offices, onUpdate }: { offices: OfficeData[]; onUpdate
           <div className="grid grid-cols-3 gap-2">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Office name" className="settings-input text-[12px]" />
             <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="City" className="settings-input text-[12px]" />
-            <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" className="settings-input text-[12px]" />
+            <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} placeholder="Country" list="office-countries" className="settings-input text-[12px]" />
           </div>
           <label className="flex items-center gap-2 text-[12px] text-ink-600 cursor-pointer">
             <input type="checkbox" checked={form.isHeadOffice} onChange={(e) => setForm({ ...form, isHeadOffice: e.target.checked })} className="rounded" />
@@ -1332,6 +1335,7 @@ function NumberingSection() {
 // ── Section: Regional ──────────────────────────────────────
 
 function RegionalSection() {
+  const [country, setCountry] = useState('')
   const [regional, setRegional] = useState({
     timezone: 'Europe/London',
     dateFormat: 'DD/MM/YYYY',
@@ -1350,6 +1354,7 @@ function RegionalSection() {
         if (data.data?.settings?.regional) {
           setRegional((prev) => ({ ...prev, ...data.data.settings.regional }))
         }
+        if (data.data?.settings?.country) setCountry(data.data.settings.country)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -1388,6 +1393,8 @@ function RegionalSection() {
       />
 
       <div className="space-y-6 mt-8">
+        <p className="text-[12px] text-ink-400">{country ? `Your practice’s country is ${({ EE: 'Estonia', GB: 'the United Kingdom', NG: 'Nigeria' } as Record<string, string>)[country] ?? country}. ` : 'No country is set for your practice yet. '}Change it under Organisation Profile — it sets the currency, VAT rate, leave rules and building rules for new work.</p>
+
         <FieldGroup label="Timezone">
           <select className="settings-input" value={regional.timezone} onChange={(e) => update('timezone', e.target.value)}>
             <option value="Europe/London">Europe/London (GMT/BST)</option>

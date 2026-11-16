@@ -13,6 +13,7 @@ import type { LeaveFilterStatus } from '@/lib/leave-filters'
 import { useToast } from '@/components/Toast'
 import { useApiMutation } from '@/hooks/use-api'
 import { SkeletonRow } from '@/components/Skeleton'
+import { leaveRules } from '@/lib/region'
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -142,6 +143,15 @@ const MONTH_NAMES = [
 const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /* ── Helpers ───────────────────────────────────────────── */
+
+/** Stages at which the requester can still withdraw their own request. */
+const WITHDRAWABLE = ['SUBMITTED', 'UNDER_REVIEW', 'LINE_MANAGER_APPROVED', 'HR_APPROVED']
+
+/** True while leave has not begun (it starts after today). */
+function notStarted(startDate: string): boolean {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return new Date(startDate).getTime() > today.getTime()
+}
 
 function calculateWorkingDays(startStr: string, endStr: string): number {
   const start = new Date(startStr)
@@ -289,6 +299,12 @@ export default function LeavePage() {
   const [showForm, setShowForm] = useState(false)
   const [formType, setFormType] = useState('ANNUAL')
   const [formStart, setFormStart] = useState('')
+  const [approvedRefresh, setApprovedRefresh] = useState(0)
+  // Estonia counts leave in calendar days; everyone else in working days
+  const [dayBasis, setDayBasis] = useState<'working' | 'calendar'>('working')
+  useEffect(() => {
+    fetch('/api/org/region', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => setDayBasis(leaveRules(d?.data?.country ?? null).dayBasis)).catch(() => {})
+  }, [])
   const [formEnd, setFormEnd] = useState('')
   const [formReason, setFormReason] = useState('')
   const [formHalfDay, setFormHalfDay] = useState(false)
@@ -314,7 +330,8 @@ export default function LeavePage() {
   const [approvalComment, setApprovalComment] = useState('')
 
   // Computed: is manager or admin?
-  const isManager = userProfile?.orgPermission === 'MANAGER' || userProfile?.orgPermission === 'ADMIN' || userProfile?.orgPermission === 'OWNER'
+  // HR acts on leave too (HR approval stage, cancelling approved leave), so HR sees the manager tabs
+  const isManager = ['MANAGER', 'HR', 'ADMIN', 'OWNER'].includes(userProfile?.orgPermission ?? '')
   const isAdmin = userProfile?.orgPermission === 'ADMIN' || userProfile?.orgPermission === 'OWNER'
 
   /* ── Data fetching ──────────────────────────────────── */
@@ -455,9 +472,10 @@ export default function LeavePage() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error?.message || 'Failed to update')
+        throw new Error((typeof body.error === 'string' ? body.error : body.error?.message) || 'Failed to update')
       }
-      toast(`Leave request ${newStatus.toLowerCase().replace(/_/g, ' ')}`, 'success')
+      toast(newStatus === 'CANCELLED' ? 'Leave cancelled — the days are back in the balance' : `Leave request ${newStatus.toLowerCase().replace(/_/g, ' ')}`, 'success')
+      setApprovedRefresh((n) => n + 1)
       fetchMyLeave()
       if (activeTab === 'approvals') fetchApprovals()
       setSelectedRequest(null)
@@ -471,8 +489,12 @@ export default function LeavePage() {
   const workingDaysPreview = useMemo(() => {
     if (!formStart || !formEnd) return null
     if (formHalfDay) return 0.5
+    if (dayBasis === 'calendar') {
+      const a = new Date(formStart), b = new Date(formEnd)
+      return b < a ? 0 : Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1
+    }
     return calculateWorkingDays(formStart, formEnd)
-  }, [formStart, formEnd, formHalfDay])
+  }, [formStart, formEnd, formHalfDay, dayBasis])
 
   /* ── Filter ──────────────────────────────────────── */
 
@@ -609,6 +631,7 @@ export default function LeavePage() {
           formHalfDayPeriod={formHalfDayPeriod}
           setFormHalfDayPeriod={setFormHalfDayPeriod}
           workingDaysPreview={workingDaysPreview}
+          dayBasis={dayBasis}
           handleStatusChange={handleStatusChange}
           selectedRequest={selectedRequest}
           setSelectedRequest={setSelectedRequest}
@@ -647,6 +670,10 @@ export default function LeavePage() {
           approvalComment={approvalComment}
           setApprovalComment={setApprovalComment}
         />
+      )}
+
+      {activeTab === 'approvals' && ['HR', 'ADMIN', 'OWNER'].includes(userProfile?.orgPermission ?? '') && (
+        <ApprovedLeaveSection refreshKey={approvedRefresh} onOpen={setSelectedRequest} />
       )}
 
       {activeTab === 'admin' && isAdmin && (
@@ -694,6 +721,7 @@ interface MyLeaveTabProps {
   formHalfDayPeriod: 'AM' | 'PM'
   setFormHalfDayPeriod: (v: 'AM' | 'PM') => void
   workingDaysPreview: number | null
+  dayBasis?: 'working' | 'calendar'
   handleStatusChange: (id: string, status: string, comment?: string) => void
   selectedRequest: LeaveRequest | null
   setSelectedRequest: (r: LeaveRequest | null) => void
@@ -705,7 +733,7 @@ function MyLeaveTab(props: MyLeaveTabProps) {
     showForm, handleCreate, cancelForm, creating,
     formType, setFormType, formStart, setFormStart, formEnd, setFormEnd,
     formReason, setFormReason, formHalfDay, setFormHalfDay,
-    formHalfDayPeriod, setFormHalfDayPeriod, workingDaysPreview,
+    formHalfDayPeriod, setFormHalfDayPeriod, workingDaysPreview, dayBasis = 'working',
     handleStatusChange, setSelectedRequest, requests,
   } = props
 
@@ -848,7 +876,7 @@ function MyLeaveTab(props: MyLeaveTabProps) {
             <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
               <CalendarDays className="w-4 h-4 text-blue-500" />
               <span className="text-[12px] text-blue-700 font-medium">
-                {workingDaysPreview} working {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}
+                {workingDaysPreview} {dayBasis === 'calendar' ? 'calendar' : 'working'} {workingDaysPreview === 1 || workingDaysPreview === 0.5 ? 'day' : 'days'}{dayBasis === 'calendar' ? ' (public holidays inside annual leave are not counted)' : ''}
                 {formHalfDay && ` (${formHalfDayPeriod} half day)`}
               </span>
             </div>
@@ -961,13 +989,22 @@ function MyLeaveTab(props: MyLeaveTabProps) {
                     </button>
                   </>
                 )}
-                {req.status === 'SUBMITTED' && (
+                {WITHDRAWABLE.includes(req.status) && (
                   <button
                     onClick={() => handleStatusChange(req.id, 'WITHDRAWN')}
                     className="p-1.5 rounded-md text-ink-300 hover:bg-ink-50 transition-colors"
-                    title="Withdraw"
+                    title="Withdraw this request"
                   >
                     <Ban className="w-4 h-4" />
+                  </button>
+                )}
+                {req.status === 'APPROVED' && notStarted(req.startDate) && (
+                  <button
+                    onClick={() => setSelectedRequest(req)}
+                    className="px-2 py-1 rounded-md text-[11px] font-medium text-red-600 hover:bg-red-50 transition-colors"
+                    title="Cancel this approved leave"
+                  >
+                    Cancel
                   </button>
                 )}
                 <button
@@ -2032,6 +2069,43 @@ function AdminRulesPanel() {
   )
 }
 
+/* ── Approved leave (HR / admin): where approved leave can be cancelled ── */
+
+function ApprovedLeaveSection({ refreshKey, onOpen }: { refreshKey: number; onOpen: (r: LeaveRequest) => void }) {
+  const [rows, setRows] = useState<LeaveRequest[] | null>(null)
+  useEffect(() => {
+    let live = true
+    fetch('/api/leave/requests?all=true&upcoming=true', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live) setRows(j?.data?.requests ?? []) })
+      .catch(() => { if (live) setRows([]) })
+    return () => { live = false }
+  }, [refreshKey])
+  if (!rows) return null
+  const sorted = [...rows].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+  return (
+    <div className="space-y-3 mt-8">
+      <h2 className="text-[16px] font-semibold text-ink-900">Approved leave — current and upcoming ({sorted.length})</h2>
+      <p className="text-[12px] text-ink-400">Open a request to cancel it. The days go back into the person’s balance and they are told.</p>
+      {sorted.length === 0 ? (
+        <div className="bg-white rounded-xl border border-ink-100 px-5 py-6 text-[13px] text-ink-400">No approved leave coming up.</div>
+      ) : (
+        <div className="bg-white rounded-xl border border-ink-100 divide-y divide-ink-50">
+          {sorted.map((req) => (
+            <div key={req.id} className="flex items-center gap-4 px-5 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-ink-800 truncate">{req.profile?.fullName ?? 'Unknown'}</p>
+                <p className="text-[11px] text-ink-400 mt-0.5">{getLeaveTypeLabel(req.leaveType)} · {formatDateRange(req.startDate, req.endDate)} · {req.days} {req.days === 1 || req.days === 0.5 ? 'day' : 'days'}{notStarted(req.startDate) ? '' : ' · in progress'}</p>
+              </div>
+              <button onClick={() => onOpen(req)} className="px-3 py-1.5 rounded-md border border-red-200 text-[12px] font-medium text-red-700 hover:bg-red-50 transition-colors">Cancel…</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════
    REQUEST DETAIL MODAL
    ══════════════════════════════════════════════════════════ */
@@ -2048,6 +2122,8 @@ function RequestDetailModal({ request, onClose, handleStatusChange, userProfile 
   const stepIndex = getApprovalStepIndex(request.status)
   const isOwner = userProfile?.id === request.profile.id
   const isTerminal = ['REJECTED', 'CANCELLED', 'WITHDRAWN', 'APPROVED'].includes(request.status)
+  const canCancelAny = ['HR', 'ADMIN', 'OWNER'].includes(userProfile?.orgPermission ?? '')
+  const [confirmCancel, setConfirmCancel] = useState(false)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -2201,13 +2277,45 @@ function RequestDetailModal({ request, onClose, handleStatusChange, userProfile 
                   </button>
                 </div>
               )}
-              {request.status === 'SUBMITTED' && (
+              {WITHDRAWABLE.includes(request.status) && (
+                <div className="space-y-2">
+                  {request.status !== 'SUBMITTED' && <p className="text-[12px] text-ink-500">This request is part-way through approval. Withdrawing it frees the dates so you can ask for different ones; your approvers are told.</p>}
+                  <button
+                    onClick={() => handleStatusChange(request.id, 'WITHDRAWN')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-ink-100 text-ink-600 text-[12px] font-medium hover:bg-ink-200 transition-colors"
+                  >
+                    <Ban className="w-3.5 h-3.5" /> Withdraw request
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Approved leave: the requester can cancel before it starts; HR/admin at any time */}
+          {request.status === 'APPROVED' && (isOwner || canCancelAny) && (
+            <div className="border-t border-ink-100 pt-4 space-y-2">
+              {isOwner && !canCancelAny && !notStarted(request.startDate) ? (
+                <p className="text-[12px] text-ink-500">This leave has already started. Ask HR or an admin if it needs to be cancelled.</p>
+              ) : !confirmCancel ? (
                 <button
-                  onClick={() => handleStatusChange(request.id, 'WITHDRAWN')}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-ink-100 text-ink-600 text-[12px] font-medium hover:bg-ink-200 transition-colors"
+                  onClick={() => setConfirmCancel(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-200 text-red-700 text-[12px] font-medium hover:bg-red-50 transition-colors"
                 >
-                  <Ban className="w-3.5 h-3.5" /> Withdraw request
+                  <Ban className="w-3.5 h-3.5" /> Cancel this leave
                 </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[12px] text-ink-600">Cancel this approved leave? The {request.days} day{request.days === 1 ? '' : 's'} go back into the balance{isOwner ? ' and your manager is told' : ' and the person is told'}. You can then request new dates.</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleStatusChange(request.id, 'CANCELLED')}
+                      className="px-4 py-2 rounded-lg bg-red-600 text-white text-[12px] font-medium hover:bg-red-700 transition-colors"
+                    >
+                      Yes, cancel the leave
+                    </button>
+                    <button onClick={() => setConfirmCancel(false)} className="px-4 py-2 rounded-lg bg-ink-100 text-ink-600 text-[12px] font-medium hover:bg-ink-200 transition-colors">Keep it</button>
+                  </div>
+                </div>
               )}
             </div>
           )}

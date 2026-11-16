@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { leaveRules } from '@/lib/region'
 import { Mail, Plus, UserPlus, Copy, Check, Clock, CheckCircle2, XCircle } from 'lucide-react'
 
 type InvitationForm = {
@@ -36,6 +37,16 @@ const initialForm: InvitationForm = {
 export default function PeopleAdminPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<InvitationForm>(initialForm)
+  // Annual leave default follows the firm's country (Estonia: 28 calendar days)
+  const [leaveDefault, setLeaveDefault] = useState(initialForm.annualLeave)
+  const [leaveBasis, setLeaveBasis] = useState<'working' | 'calendar'>('working')
+  useEffect(() => {
+    fetch('/api/org/region', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      const rules = leaveRules(d?.data?.country ?? null)
+      setLeaveDefault(rules.annualDays); setLeaveBasis(rules.dayBasis)
+      setForm((f) => (f.fullName === '' && f.annualLeave === initialForm.annualLeave ? { ...f, annualLeave: rules.annualDays } : f))
+    }).catch(() => {})
+  }, [])
   const [submitting, setSubmitting] = useState(false)
   const [invitations, setInvitations] = useState<InvitationRecord[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -69,7 +80,7 @@ export default function PeopleAdminPage() {
       const data = await res.json()
       setSuccess(`Invitation created for ${form.fullName}`)
       setInvitations(prev => [data.invitation, ...prev])
-      setForm(initialForm)
+      setForm({ ...initialForm, annualLeave: leaveDefault })
       setShowForm(false)
     } catch {
       setError('Something went wrong')
@@ -170,7 +181,7 @@ export default function PeopleAdminPage() {
               />
             </div>
             <div>
-              <label className="block text-[13px] font-semibold text-ink-700 mb-1">Annual leave (days)</label>
+              <label className="block text-[13px] font-semibold text-ink-700 mb-1">Annual leave ({leaveBasis === 'calendar' ? 'calendar days' : 'days'})</label>
               <input
                 type="number"
                 value={form.annualLeave}
@@ -183,7 +194,7 @@ export default function PeopleAdminPage() {
             <div className="col-span-2 flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => { setShowForm(false); setForm(initialForm) }}
+                onClick={() => { setShowForm(false); setForm({ ...initialForm, annualLeave: leaveDefault }) }}
                 className="px-4 py-2 text-[14px] font-medium text-ink-600 hover:bg-surface-50 rounded-lg transition-colors"
               >
                 Cancel

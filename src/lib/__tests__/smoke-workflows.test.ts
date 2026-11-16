@@ -821,6 +821,67 @@ describe('Smoke Workflows', () => {
         }),
       )
     })
+
+    // ── Withdrawing and cancelling (so staff can re-book different dates) ──
+    const DAY = 86_400_000
+    async function patchLeave(status: string) {
+      const { isRequesterTransition, isAdminTransition } = await import('@/lib/request-transitions')
+      ;(isRequesterTransition as any).mockImplementation((s: string) => s === 'SUBMITTED' || s === 'WITHDRAWN')
+      ;(isAdminTransition as any).mockImplementation((s: string) => ['FULFILMENT_IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(s))
+      ctx.prisma.$transaction.mockImplementation(async (fn: any) => (typeof fn === 'function' ? fn(ctx.prisma) : Promise.all(fn)))
+      ctx.prisma.approvalInstance.updateMany.mockResolvedValue({ count: 1 })
+      const { PATCH } = await import('@/app/api/leave/requests/[id]/route')
+      return PATCH(createMockRequest({ method: 'PATCH', url: 'http://localhost/api/leave/requests/leave-1', body: { status } }))
+    }
+    function seedLeave(over: Record<string, unknown>) {
+      const leaveRequest = createMockLeaveRequest({
+        id: 'leave-1', profileId: 'profile-1', approverId: 'manager-1', leaveType: 'ANNUAL', days: 3,
+        startDate: new Date(Date.now() + 10 * DAY), endDate: new Date(Date.now() + 12 * DAY),
+        profile: { organisationId: 'org-1', managerId: 'manager-1' }, ...over,
+      })
+      ctx.prisma.leaveRequest.findUnique.mockResolvedValue(leaveRequest)
+      ctx.prisma.leaveRequest.update.mockResolvedValue({ ...leaveRequest, profile: { id: 'profile-1', fullName: 'Test User' }, approver: null })
+      return leaveRequest
+    }
+
+    it('the requester can withdraw a request that a manager has already approved', async () => {
+      ctx.profileRef.current = createMockProfile({ id: 'profile-1' })
+      seedLeave({ status: 'LINE_MANAGER_APPROVED' })
+      const res = await patchLeave('WITHDRAWN')
+      expect(res.status).toBe(200)
+      // the approval in progress is closed, and the manager is told
+      expect(ctx.prisma.approvalInstance.updateMany).toHaveBeenCalledWith({ where: { entityId: 'leave-1', status: 'IN_PROGRESS' }, data: { status: 'CANCELLED' } })
+      const { createNotification } = await import('@/lib/notifications')
+      expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'manager-1' }))
+    })
+
+    it('nobody else can withdraw someone’s request', async () => {
+      ctx.profileRef.current = createMockProfile({ id: 'someone-else' })
+      seedLeave({ status: 'UNDER_REVIEW' })
+      expect((await patchLeave('WITHDRAWN')).status).toBe(403)
+    })
+
+    it('the requester can cancel their own approved leave before it starts, and the days come back', async () => {
+      ctx.profileRef.current = createMockProfile({ id: 'profile-1' })
+      seedLeave({ status: 'APPROVED' })
+      const res = await patchLeave('CANCELLED')
+      expect(res.status).toBe(200)
+      expect(ctx.prisma.leaveBalance.update).toHaveBeenCalledWith(expect.objectContaining({ data: { used: { decrement: 3 } } }))
+    })
+
+    it('the requester cannot cancel leave that has already started', async () => {
+      ctx.profileRef.current = createMockProfile({ id: 'profile-1' })
+      seedLeave({ status: 'APPROVED', startDate: new Date(Date.now() - 2 * DAY), endDate: new Date(Date.now() + 2 * DAY) })
+      expect((await patchLeave('CANCELLED')).status).toBe(403)
+    })
+
+    it('HR can cancel approved leave that has started; an ordinary colleague cannot', async () => {
+      seedLeave({ status: 'APPROVED', startDate: new Date(Date.now() - 2 * DAY), endDate: new Date(Date.now() + 2 * DAY) })
+      ctx.profileRef.current = createMockProfile({ id: 'hr-1', orgPermission: 'HR' })
+      expect((await patchLeave('CANCELLED')).status).toBe(200)
+      ctx.profileRef.current = createMockProfile({ id: 'colleague-1', orgPermission: 'MEMBER' })
+      expect((await patchLeave('CANCELLED')).status).toBe(403)
+    })
   })
 
   // =========================================================================

@@ -108,6 +108,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (isRequesterTransition(newStatus) && currentStatus !== 'UNDER_REVIEW' && !isOwner) {
     throw new PermissionError('Only the requester can perform this action')
   }
+  // Withdrawing is always the requester's own act, whatever stage the request has reached
+  if (newStatus === 'WITHDRAWN' && !isOwner) {
+    throw new PermissionError('Only the requester can withdraw a leave request')
+  }
   if (newStatus === 'SUBMITTED' && currentStatus === 'UNDER_REVIEW' && !isOwner) {
     throw new PermissionError('Only the requester can re-submit after info request')
   }
@@ -132,7 +136,16 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (newStatus === 'REJECTED' && !isLineManager && !isApproverUser && !isAdmin) {
     throw new PermissionError('Only the line manager, approver, or an admin can reject')
   }
-  if (isAdminTransition(newStatus) && !isAdmin) {
+  if (newStatus === 'CANCELLED') {
+    // Approved leave: HR or an admin can cancel it at any time; the requester can cancel their own before it starts
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const notStarted = leaveRequest.startDate.getTime() > today.getTime()
+    if (!isHR && !(isOwner && notStarted)) {
+      throw new PermissionError(isOwner
+        ? 'This leave has already started — ask HR or an admin to cancel it'
+        : 'Only the requester, HR or an admin can cancel approved leave')
+    }
+  } else if (isAdminTransition(newStatus) && !isAdmin) {
     throw new PermissionError('Only an admin can perform this action')
   }
 
@@ -173,6 +186,8 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     leaveRequest,
     requesterName,
     comment,
+    actorId: profile.id,
+    managerId: leaveRequest.profile.managerId,
   })
 
   await orchestrateLeaveApproval({

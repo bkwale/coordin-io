@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { firmDefaults } from '@/lib/region-server'
+import { leaveRules } from '@/lib/region'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { calculateLeaveBalance } from '@/lib/leave-utils'
@@ -28,7 +30,9 @@ export const GET = withAuth(async (_request, { profile }) => {
     select: { annualLeaveAllocation: true },
   })
 
-  const allocation = balance?.allocation ?? employeeProfile?.annualLeaveAllocation ?? 25
+  let rules = leaveRules(null)
+  try { rules = leaveRules((await firmDefaults(profile.organisationId)).country) } catch { /* default rules */ }
+  const allocation = balance?.allocation ?? employeeProfile?.annualLeaveAllocation ?? rules.annualDays
   const used = balance?.used ?? 0
   const carriedForward = balance?.carriedForward ?? 0
 

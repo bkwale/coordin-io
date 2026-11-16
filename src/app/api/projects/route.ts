@@ -171,7 +171,8 @@ export const POST = withAuth(async (request: NextRequest, { profile, authUserId 
       code: code || undefined,
       description: description || undefined,
       location: location || undefined,
-      projectType: projectType || undefined,
+      // Left blank: Nigerian firms keep the old default (hotel); everyone else gets 'Other', never a hotel by accident
+      projectType: projectType || (orgCountry(org) === 'NG' || !orgCountry(org) ? undefined : 'OTHER'),
       stage: stage || undefined,
       status: status || undefined,
       currency: resolvedCurrency,

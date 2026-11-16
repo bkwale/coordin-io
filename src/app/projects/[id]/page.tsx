@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { countryCode, COUNTRY_OPTIONS, COUNTRIES } from '@/lib/region'
 import { SkeletonCard, SkeletonStats } from '@/components/Skeleton'
 import { TaskStatusBadge } from '@/components/StatusFlow'
 import { useToast } from '@/components/Toast'
@@ -376,9 +377,11 @@ export default function ProjectDashboard() {
   const locationStr = locationParts.length > 0 ? locationParts.join(', ') : project.location || 'Not provided'
 
   // Compliance badges
+  // BRPD and CDM are UK duties: never badge them on an Estonian project (its duties are on the Regulatory card below)
+  const projectCountry = countryCode(project.jurisdiction) ?? countryCode(project.siteCountry)
   const complianceBadges: string[] = []
-  if (project.isBRPD) complianceBadges.push('BRPD')
-  if (project.isCDM) complianceBadges.push('CDM')
+  if (project.isBRPD && projectCountry !== 'EE') complianceBadges.push('BRPD')
+  if (project.isCDM && projectCountry !== 'EE') complianceBadges.push('CDM')
   if (project.complianceFrameworks) {
     project.complianceFrameworks.split(',').forEach(f => {
       const trimmed = f.trim()
@@ -541,7 +544,7 @@ export default function ProjectDashboard() {
           <Row label="Development type" value={DEV_TYPE_LABELS[project.developmentType || ''] || project.developmentType || 'Not provided'} />
           <Row label="Sector" value={project.projectType.replace(/_/g, ' ')} />
           <Row label="Work stage" value={FRAMEWORK_LABELS[project.workStageFramework || ''] || project.workStageFramework || 'Not provided'} />
-          <Row label="Jurisdiction" value={project.jurisdiction || 'Not provided'} />
+          <Row label="Jurisdiction" value={(project.jurisdiction && (COUNTRIES as Record<string, { name: string }>)[project.jurisdiction]?.name) || project.jurisdiction || 'Not provided'} />
           <Row label="Location" value={locationStr} />
           {project.sitePostcode && <Row label="Postcode" value={project.sitePostcode} />}
           <Row label="Start date" value={formatDate(project.startDate)} />
@@ -1330,6 +1333,11 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Nigerian firms keep free-text jurisdiction; until we know, assume so (nothing changes for them)
+  const [firmIsNigerian, setFirmIsNigerian] = useState(true)
+  useEffect(() => {
+    fetch('/api/org/region', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => setFirmIsNigerian(!d?.data?.country || d.data.country === 'NG')).catch(() => {})
+  }, [])
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm(f => ({ ...f, [field]: e.target.value }))
   }
@@ -1509,7 +1517,19 @@ function ProjectEditModal({ projectId, project, onClose, onSuccess }: {
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-ink-600 mb-1">Jurisdiction</label>
-                <input type="text" value={form.jurisdiction} onChange={set('jurisdiction')} className={inputClass} placeholder="England, Nigeria-Lagos..." />
+{firmIsNigerian ? (
+                  // Nigerian firms keep the free-text field they have always had (e.g. "Nigeria-Lagos")
+                  <input type="text" value={form.jurisdiction} onChange={set('jurisdiction')} className={inputClass} placeholder="England, Nigeria-Lagos..." />
+                ) : (
+                  <>
+                    <select value={(COUNTRY_OPTIONS as string[]).includes(form.jurisdiction) ? form.jurisdiction : form.jurisdiction ? '__keep' : ''} onChange={(e) => { if (e.target.value !== '__keep') set('jurisdiction')(e) }} className={inputClass}>
+                      <option value="">Not set</option>
+                      {COUNTRY_OPTIONS.map((c) => <option key={c} value={c}>{COUNTRIES[c].name}{c === 'GB' ? ' (England)' : ''}</option>)}
+                      {form.jurisdiction && !(COUNTRY_OPTIONS as string[]).includes(form.jurisdiction) && <option value="__keep">{form.jurisdiction}</option>}
+                    </select>
+                    <p className="text-[11px] text-ink-400 mt-1">Sets which rule set and permit wording this project uses.</p>
+                  </>
+                )}
               </div>
             </div>
           </fieldset>

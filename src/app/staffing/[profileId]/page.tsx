@@ -109,6 +109,8 @@ interface EmployeeProfileData {
   isAdmin: boolean
   hasHRAccess: boolean
   isSelf: boolean
+  /** The firm's country (only sent to people who can see confidential data) */
+  firmCountry?: string | null
   privacy?: PrivacyInfo
 }
 
@@ -1065,6 +1067,7 @@ function EmploymentContent({
   onEditChange: (key: string, val: string) => void
 }) {
   const employment = data.employment
+  const showHmo = !data.firmCountry || data.firmCountry === 'NG'
 
   if (!employment) {
     return <p className="text-[13px] text-ink-400 pt-4">Employment details are only visible to HR and the employee.</p>
@@ -1188,8 +1191,9 @@ function EmploymentContent({
       <div>
         <h4 className="text-[12px] font-semibold text-ink-400 uppercase tracking-wide mb-3">Health & Pension</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {renderField('HMO provider', 'hmoProvider', displayValue(employment.hmoProvider))}
-          {renderField('HMO plan', 'hmoPlan', displayValue(employment.hmoPlan))}
+          {/* HMO is a Nigerian health-insurance scheme: shown for Nigerian firms, or where a value already exists */}
+          {(showHmo || employment.hmoProvider || employment.hmoPlan) && renderField('HMO provider', 'hmoProvider', displayValue(employment.hmoProvider))}
+          {(showHmo || employment.hmoProvider || employment.hmoPlan) && renderField('HMO plan', 'hmoPlan', displayValue(employment.hmoPlan))}
           {renderField('Dependants', 'dependants', employment.dependants !== null && employment.dependants !== undefined ? String(employment.dependants) : 'Not provided', { type: 'number' })}
           {renderField('Pension provider', 'pensionProvider', displayValue(employment.pensionProvider))}
           {renderField('Pension contribution', 'pensionContribution', employment.pensionContribution !== null && employment.pensionContribution !== undefined ? `${employment.pensionContribution}%` : 'Not provided', { type: 'number' })}

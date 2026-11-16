@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { COUNTRIES } from '@/lib/region'
+import { firmDefaults } from '@/lib/region-server'
 import { withAuth } from '@/lib/with-auth'
 import { prisma } from '@/lib/prisma'
 import { ValidationError, PermissionError, NotFoundError } from '@/lib/errors'
@@ -41,7 +43,16 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const body = await parseBody(request)
   const name = requireString(body.name, 'Office name', 200)
   const city = requireString(body.city, 'City', 200)
-  const country = optionalString(body.country, 'Country', 200) || 'NG'
+  // No country given: use the firm's own. A Nigerian firm keeps the stored value it has always had ('NG');
+  // a firm whose country isn't known yet must choose, rather than be assumed Nigerian.
+  let country = optionalString(body.country, 'Country', 200)
+  if (!country) {
+    let firm: string | null = null
+    try { firm = (await firmDefaults(profile.organisationId)).country } catch { /* unknown */ }
+    if (firm === 'NG') country = 'NG'
+    else if (firm === 'EE' || firm === 'GB') country = COUNTRIES[firm].name
+    else throw new ValidationError("Choose the office's country")
+  }
   const isHeadOffice = body.isHeadOffice === true
 
   // If setting as head office, unset any existing head office

@@ -570,7 +570,7 @@ export default function ServiceRequestsPage() {
                 type="text"
                 value={formLocation}
                 onChange={(e) => setFormLocation(e.target.value)}
-                placeholder="e.g. Lagos Office"
+                placeholder="e.g. Head office"
                 className="w-full px-3 py-2 text-[13px] border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-300 placeholder:text-ink-300"
                 maxLength={500}
               />

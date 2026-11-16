@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { leaveDefaultForNewEmployee } from '@/lib/leave-defaults'
 import { withAuth } from '@/lib/with-auth'
 import { prisma } from '@/lib/prisma'
 import { success, error } from '@/lib/api-response'
@@ -47,6 +48,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
         where: { profileId: profile.id },
         create: {
           profileId: profile.id,
+          ...(await leaveDefaultForNewEmployee(profile.organisationId)),
           emergencyName: emergencyContactName || null,
           emergencyPhone: emergencyContactPhone || null,
         },

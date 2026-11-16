@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server'
+import { firmDefaults } from '@/lib/region-server'
+import { leaveRules } from '@/lib/region'
 import { prisma } from '@/lib/prisma'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
@@ -109,6 +111,9 @@ export async function POST(
     const ipAddress = request.headers.get('x-forwarded-for') || undefined
 
     // ── Transaction: create profile + employee profile + update invitation ──
+    // A new joiner with no allowance set gets the firm's country default (Estonia 28, otherwise 25)
+    let defaultAnnualLeave = 25
+    try { defaultAnnualLeave = leaveRules((await firmDefaults(invitation.organisationId)).country).annualDays } catch { /* keep 25 */ }
     const result = await prisma.$transaction(
       async (
         tx: any,
@@ -134,7 +139,7 @@ export async function POST(
         await tx.employeeProfile.create({
           data: {
             profileId: profile.id,
-            annualLeaveAllocation: invitation.annualLeave ?? 25,
+            annualLeaveAllocation: invitation.annualLeave ?? defaultAnnualLeave,
           },
         })
 
@@ -143,7 +148,7 @@ export async function POST(
           data: {
             profileId: profile.id,
             year: new Date().getFullYear(),
-            allocation: invitation.annualLeave ?? 25,
+            allocation: invitation.annualLeave ?? defaultAnnualLeave,
           },
         })
 

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { leaveDefaultForNewEmployee } from '@/lib/leave-defaults'
 import { assertOrgProfile, assertOrgOffice, assertOrgRole, assertCanGrant } from '@/lib/tenant'
 import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
@@ -308,7 +309,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   if (Object.keys(emergencyFields).length > 0) {
     await modulesPrisma.employeeProfile.upsert({
       where: { profileId },
-      create: { profileId, ...emergencyFields },
+      create: { profileId, ...(await leaveDefaultForNewEmployee(profile.organisationId)), ...emergencyFields },
       update: emergencyFields,
     })
   }
