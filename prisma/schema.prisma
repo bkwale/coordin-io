@@ -89,6 +89,7 @@ model Organisation {
   categorisationRules  CategorisationRule[]
   xeroConnections      XeroConnection[]
   microsoftConnections MicrosoftConnection[]
+  meritConnections     MeritConnection[]
   selfServiceTokens    OnboardingSelfServiceToken[]
   trainingItems        TrainingItem[]
 
@@ -314,6 +315,7 @@ model Profile {
   // Xero Integration
   xeroConnections      XeroConnection[]      @relation("XeroConnector")
   microsoftConnections MicrosoftConnection[] @relation("MicrosoftConnector")
+  meritConnections     MeritConnection[]     @relation("MeritConnector")
 
   // RIBA Stage Tracking
   stageGatesAdvanced StageGate[] @relation("StageGateAdvancer")
@@ -3575,4 +3577,36 @@ model ErrorEvent {
   @@index([createdAt])
   @@index([organisationId, createdAt])
   @@map("error_events")
+}
+
+// Merit Aktiva (Estonian accounting). The firm's own API ID + key, sealed with secret-box. One active row per firm.
+model MeritConnection {
+  id             String @id @default(cuid())
+  organisationId String @map("organisation_id")
+
+  apiId  String @map("api_id") @db.Text // sealed
+  apiKey String @map("api_key") @db.Text // sealed
+
+  // Chosen from the firm's own Merit VAT list when connecting
+  defaultTaxId   String? @map("default_tax_id")
+  defaultTaxName String? @map("default_tax_name")
+  defaultTaxPct  Float?  @map("default_tax_pct")
+  zeroTaxId      String? @map("zero_tax_id")
+  itemCode       String  @default("TEENUS") @map("item_code")
+  sendEInvoice   Boolean @default(false) @map("send_e_invoice")
+
+  lastCheckedAt DateTime? @map("last_checked_at")
+  lastSyncAt    DateTime? @map("last_sync_at")
+  lastSyncError String?   @map("last_sync_error")
+
+  connectedAt    DateTime  @default(now()) @map("connected_at")
+  connectedById  String    @map("connected_by_id")
+  disconnectedAt DateTime? @map("disconnected_at")
+  active         Boolean   @default(true)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  connectedBy  Profile      @relation("MeritConnector", fields: [connectedById], references: [id])
+
+  @@index([organisationId, active])
+  @@map("merit_connections")
 }

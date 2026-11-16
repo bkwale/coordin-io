@@ -1,5 +1,6 @@
 'use client'
 
+import { EstoniaIntegrations } from '@/components/EstoniaIntegrations'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Building2, Users, CreditCard, Hash, Globe, Puzzle, Shield,
@@ -1476,6 +1477,12 @@ function IntegrationsSection() {
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
   const [integrationError, setIntegrationError] = useState<string | null>(null)
+  const [firmCountry, setFirmCountry] = useState<string | null>(null)
+
+  // Estonian firms also see Merit and the Estonia roadmap
+  useEffect(() => {
+    fetch('/api/org-settings').then(r => r.ok ? r.json() : null).then(d => setFirmCountry(d?.data?.settings?.country ?? null)).catch(() => {})
+  }, [])
 
   // Disconnect, so the connection can be made again from scratch
   const disconnect = async (key: 'xero' | 'microsoft') => {
@@ -1673,6 +1680,8 @@ function IntegrationsSection() {
           </div>
         ))}
       </div>
+
+      {firmCountry === 'EE' && <EstoniaIntegrations />}
     </div>
   )
 }
