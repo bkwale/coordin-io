@@ -39,7 +39,7 @@ function escapeCsvField(value: string): string {
   if (first === '=' || first === '+' || first === '-' || first === '@' || first === '\t' || first === '\r') {
     value = `'${value}`
   }
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+  if (/[",\n\r]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`
   }
   return value

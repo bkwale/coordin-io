@@ -108,7 +108,7 @@ describe.skipIf(!shouldRun)('Integration: Real Database', () => {
       await prisma.notification.deleteMany({ where: { id: TEST_NOTIFICATION_ID } })
       await prisma.invitation.deleteMany({ where: { id: TEST_INVITATION_ID } })
       await prisma.leaveBalance.deleteMany({ where: { id: TEST_LEAVE_BALANCE_ID } })
-      await prisma.auditEvent.deleteMany({ where: { id: TEST_AUDIT_ID } })
+      // audit_events is append-only (DB trigger) — the test row stays, scoped to the test org
       await prisma.task.deleteMany({ where: { projectId: TEST_PROJECT_ID } })
       await prisma.projectMembership.deleteMany({ where: { projectId: TEST_PROJECT_ID } })
       await prisma.project.deleteMany({ where: { id: TEST_PROJECT_ID } })

@@ -3,7 +3,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
-import { optionalString, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { optionalString, optionalDate, optionalNumber, parseBody, optionalUrl } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { canManageHR, hasStaffingDashboardAccess } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -100,7 +100,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
   const expiryDate = optionalDate(body.expiryDate, 'expiryDate')
   const renewalDate = optionalDate(body.renewalDate, 'renewalDate')
   const notes = optionalString(body.notes, 'notes', 2000)
-  const certificateUrl = optionalString(body.certificateUrl, 'certificateUrl', 2000)
+  const certificateUrl = optionalUrl(body.certificateUrl, 'certificateUrl', 2000)
 
   // Parse existing metadata
   let existingMeta: Record<string, unknown> = {}

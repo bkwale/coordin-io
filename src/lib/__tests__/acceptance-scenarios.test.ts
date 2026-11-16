@@ -314,7 +314,7 @@ describe('Scenario 3: Approval workflow', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Scenario 4: Multi-approver AND', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks(); ctx.prisma.profile.findUnique.mockResolvedValue({ orgPermission: 'MEMBER', organisationId: 'org-1' }) })
 
   it('AND step: first approver approves → step NOT advanced → second approver approves → step advances', async () => {
     // Instance with one AND step (two approvers)
@@ -389,7 +389,7 @@ describe('Scenario 4: Multi-approver AND', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Scenario 5: CC notifications', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks(); ctx.prisma.profile.findUnique.mockResolvedValue({ orgPermission: 'MEMBER', organisationId: 'org-1' }) })
 
   it('CC recipients notified on instance creation and on completion', async () => {
     const ccRoute = {

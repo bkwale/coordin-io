@@ -3,7 +3,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
-import { requireString, requireEnum, optionalString, optionalDate, parseBody } from '@/lib/validation'
+import { requireString, requireEnum, optionalString, optionalDate, parseBody, optionalUrl } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
 import { canManageHR } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -99,7 +99,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     const url = requireString(body.url, 'url')
     fileUrl = url
   } else {
-    fileUrl = optionalString(body.fileUrl, 'fileUrl', 2000) ?? undefined
+    fileUrl = optionalUrl(body.fileUrl, 'fileUrl', 2000) ?? undefined
   }
 
   // Verify profile is in same org

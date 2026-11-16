@@ -139,6 +139,10 @@ export function withProjectAccess(handler: ProjectAccessHandler, options: WithPr
           'AUTH_REQUIRED',
         )
       }
+      // Deactivated people lose project, task and document access immediately (same as withAuth)
+      if (profile.status === 'DEACTIVATED') {
+        throw new AuthError('Your account has been deactivated. Please contact your administrator.', 'AUTH_REQUIRED')
+      }
 
       // 3. Extract projectId from URL
       const url = new URL(request.url)

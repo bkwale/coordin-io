@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/with-auth'
 import { ValidationError, PermissionError } from '@/lib/errors'
 import { fileLink } from '@/lib/storage-links'
 import { canManageHR } from '@/lib/staffing-utils'
+import { assertOrgProfile } from '@/lib/tenant'
 import type { OrgPermission } from '@/generated/prisma/client'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
@@ -52,9 +53,11 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     throw new ValidationError('A file is required')
   }
 
-  if (!targetProfileId || typeof targetProfileId !== 'string' || !targetProfileId.trim()) {
+  if (!targetProfileId || typeof targetProfileId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(targetProfileId)) {
     throw new ValidationError('profileId is required')
   }
+  // The person must be in this firm
+  await assertOrgProfile(targetProfileId, profile.organisationId, 'Employee')
 
   // Validate file type
   const extension = getExtension(file.name)
@@ -102,7 +105,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   if (uploadError) {
     console.error('[HR_DOC_UPLOAD] Storage error:', uploadError.message)
-    throw new ValidationError(`Upload failed: ${uploadError.message}`)
+    throw new ValidationError('Upload failed — please try again')
   }
 
   // Store a stable app link; /api/files signs a 1-hour URL each time the file is opened
@@ -119,7 +122,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     if (err instanceof ValidationError) throw err
     console.error('[HR_DOC_UPLOAD] Unexpected error:', err)
     throw new ValidationError(
-      `Upload failed: ${err instanceof Error ? err.message : 'Unknown storage error'}`,
+      "Upload failed — please try again",
     )
   }
 })

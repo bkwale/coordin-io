@@ -4,7 +4,7 @@ import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
 import { assertAssignable } from '@/lib/assignable'
-import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { requireString, optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody, optionalUrl } from '@/lib/validation'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import {
   buildProjectTaskNumberMap,
@@ -121,7 +121,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { profile, pr
   const estimatedHours = optionalNumber(body.estimatedHours, 'Estimated hours', { min: 0, max: 10000 })
   const milestoneId = optionalId(body.milestoneId, 'Milestone ID')
   const deliverable = optionalString(body.deliverable, 'Deliverable', 500)
-  const sharepointUrl = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
+  const sharepointUrl = optionalUrl(body.sharepointUrl, 'SharePoint URL', 2000)
 
   // Parse optional inline checklist items
   const checklistItems: { title: string; required: boolean }[] = []

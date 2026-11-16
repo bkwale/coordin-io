@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { sealSecret, openSecret } from '@/lib/secret-box'
 import type { XeroTokenSet, XeroTenant } from './types'
 
 /* ── Config ────────────────────────────────────────────── */
@@ -144,7 +145,7 @@ export async function refreshAccessToken(connectionId: string): Promise<XeroToke
 
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
-    refresh_token: connection.refreshToken,
+    refresh_token: openSecret(connection.refreshToken),
     client_id: clientId,
     client_secret: clientSecret,
   })
@@ -171,8 +172,8 @@ export async function refreshAccessToken(connectionId: string): Promise<XeroToke
   await prisma.xeroConnection.update({
     where: { id: connectionId },
     data: {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
+      accessToken: sealSecret(tokens.access_token),
+      refreshToken: sealSecret(tokens.refresh_token),
       tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
       lastSyncError: null,
     },
@@ -218,7 +219,7 @@ export async function getValidAccessToken(connectionId: string): Promise<string>
   const bufferMs = 60_000 // refresh 60s before expiry
 
   if (connection.tokenExpiresAt && connection.tokenExpiresAt.getTime() - now.getTime() > bufferMs) {
-    return connection.accessToken
+    return openSecret(connection.accessToken)
   }
 
   // Token expired or about to — refresh

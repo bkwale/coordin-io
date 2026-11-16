@@ -1,4 +1,5 @@
 import { cached } from '@/lib/cache'
+import { safeFetch, safeFetchFollow, readCapped, assertPublicUrl, UnsafeUrlError } from './safe-fetch'
 
 export interface CrawledPage {
   url: string
@@ -52,6 +53,8 @@ const KEYWORD_RE = /about|meist|people|team|inimesed|tiim|projekt|project|work|k
 const CRAWL_TTL = 60 * 60 * 24 // 24h
 const MAX_PAGE_CHARS = 14_000
 const MAX_PAGES = 6
+const MAX_CANDIDATES = 20
+const CRAWL_DEADLINE_MS = 90_000
 const THIN_TEXT = 400       // chars — below this a page is "thin"
 const THIN_HTML = 3_000     // bytes — above this with thin text = JS app
 const MIN_TOTAL_TEXT = 900  // chars across all pages before we try rendering
@@ -105,11 +108,25 @@ export function normaliseUrl(input: string): URL {
   return u
 }
 
+const robotsCache = new Map<string, Promise<string | null>>()
+function robotsText(base: URL): Promise<string | null> {
+  const key = base.origin
+  if (!robotsCache.has(key)) {
+    robotsCache.set(key, (async () => {
+      try {
+        const res = await safeFetchFollow(new URL('/robots.txt', base), { headers: { 'user-agent': BOT_UA }, timeoutMs: 5000 })
+        return res.ok ? await readCapped(res, 200_000) : null
+      } catch { return null }
+    })())
+    if (robotsCache.size > 200) robotsCache.delete(robotsCache.keys().next().value as string)
+  }
+  return robotsCache.get(key)!
+}
+
 async function robotsAllows(base: URL, path: string): Promise<boolean> {
   try {
-    const res = await fetch(new URL('/robots.txt', base), { headers: { 'user-agent': BOT_UA }, signal: AbortSignal.timeout(5000) })
-    if (!res.ok) return true
-    const txt = await res.text()
+    const txt = await robotsText(base)
+    if (txt === null) return true
     let applies = false
     const disallowed: string[] = []
     for (const raw of txt.split('\n')) {
@@ -134,8 +151,9 @@ async function fetchHtml(url: URL, ua: string): Promise<{ res?: Response; failur
     seen.add(current.toString())
     let res: Response
     try {
-      res = await fetch(current, { headers: { 'user-agent': ua, accept: 'text/html,application/xhtml+xml' }, redirect: 'manual', signal: AbortSignal.timeout(12_000) })
-    } catch {
+      res = await safeFetch(current, { headers: { 'user-agent': ua, accept: 'text/html,application/xhtml+xml' }, timeoutMs: 12_000 })
+    } catch (e) {
+      if (e instanceof UnsafeUrlError) throw new CrawlError('dns', e.message)
       return { failure: 'dns', finalUrl: current }
     }
     if (res.status >= 300 && res.status < 400) {
@@ -165,7 +183,7 @@ async function fetchPage(url: URL): Promise<FetchOutcome> {
   if (!res.ok) return { status: res.status }
   const ct = res.headers.get('content-type') || ''
   if (!/text\/html|application\/xhtml/.test(ct)) return { status: res.status, failure: 'not_html' }
-  const html = await res.text()
+  const html = await readCapped(res)
   let text = stripHtml(html)
   if (text.length < THIN_TEXT) {
     const meta = metaText(html)
@@ -181,12 +199,13 @@ async function sitemapUrls(base: URL): Promise<string[]> {
   async function read(u: URL, depth: number) {
     if (depth > 1) return
     try {
-      const res = await fetch(u, { headers: { 'user-agent': BOT_UA }, signal: AbortSignal.timeout(8000) })
+      if (out.length >= 500) return
+      const res = await safeFetchFollow(u, { headers: { 'user-agent': BOT_UA }, timeoutMs: 8000 })
       if (!res.ok) return
-      const xml = await res.text()
+      const xml = await readCapped(res, 1_000_000)
       const locs = Array.from(xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)).map((m) => m[1])
       const isIndex = /<sitemapindex/i.test(xml)
-      for (const l of locs) {
+      for (const l of locs.slice(0, isIndex ? 5 : 500)) {
         if (isIndex) await read(new URL(l), depth + 1)
         else if (!seen.has(l)) { seen.add(l); out.push(l) }
       }
@@ -200,9 +219,10 @@ async function sitemapUrls(base: URL): Promise<string[]> {
 async function renderPage(url: string): Promise<CrawledPage | null> {
   const t0 = Date.now()
   try {
+    await assertPublicUrl(new URL(url))
     const res = await fetch(RENDER_API + url, { headers: { 'user-agent': BOT_UA, accept: 'text/plain' }, signal: AbortSignal.timeout(40_000) })
     if (!res.ok) return null
-    const text = stripMarkdown(await res.text()).slice(0, MAX_PAGE_CHARS)
+    const text = stripMarkdown(await readCapped(res)).slice(0, MAX_PAGE_CHARS)
     if (text.length < 200) return null
     return { url, text, ms: Date.now() - t0, rendered: true }
   } catch {
@@ -219,6 +239,10 @@ type StageFn = (s: { name: string; detail?: string; ms?: number }) => void
  */
 export async function crawlPractice(input: string, onStage?: StageFn): Promise<CrawledPage[]> {
   const base = normaliseUrl(input)
+  try { await assertPublicUrl(base) } catch (e) {
+    if (e instanceof UnsafeUrlError) throw new CrawlError('dns', e.message)
+    throw new CrawlError('dns', FAILURE_MESSAGE.dns)
+  }
   const key = `ai:crawl:v2:${base.hostname}`
   const result = await cached<CrawlResult>(key, () => doCrawl(base, onStage), CRAWL_TTL)
   if (!result.pages.length) throw new CrawlError(result.failure ?? 'empty', FAILURE_MESSAGE[result.failure ?? 'empty'])
@@ -272,8 +296,9 @@ async function doCrawl(base: URL, onStage?: StageFn): Promise<CrawlResult> {
     .sort((a, b) => rank(a) - rank(b) || a.length - b.length)
 
   let blockedCount = 0
-  for (const p of candidates) {
-    if (pages.length >= MAX_PAGES) break
+  const deadline = Date.now() + CRAWL_DEADLINE_MS
+  for (const p of candidates.slice(0, MAX_CANDIDATES)) {
+    if (pages.length >= MAX_PAGES || Date.now() > deadline) break
     if (!(await robotsAllows(base, p))) continue
     const o = await fetchPage(new URL(p, base))
     if (o.failure === 'blocked') blockedCount++
@@ -286,6 +311,7 @@ async function doCrawl(base: URL, onStage?: StageFn): Promise<CrawlResult> {
     onStage?.({ name: 'fetch', detail: 'JavaScript site — rendering in a browser' })
     const toRender = [base.toString(), ...candidates.slice(0, 3).map((p) => new URL(p, base).toString())]
     for (const u of toRender) {
+      if (Date.now() > deadline) break
       if (pages.filter((p) => p.rendered).length >= 3) break
       const r = await renderPage(u)
       if (r) add(r)

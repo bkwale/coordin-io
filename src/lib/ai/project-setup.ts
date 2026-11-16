@@ -51,7 +51,19 @@ export async function startProjectSetup(input: StartProjectSetupInput) {
   await assertAiBudget(organisationId)
 
   if (input.file) {
-    pages = await pdfToPages(input.file.bytes) // throws IngestError
+    try {
+      pages = await pdfToPages(input.file.bytes) // throws IngestError
+    } catch (e) {
+      // A document we refused still counts against today's AI allowance, so bad files can't be sent endlessly
+      await prisma.aIRun.create({
+        data: {
+          surface: 'PROJECT_SETUP', organisationId, projectId, status: 'FAILED', promptVersion: PROMPT_VERSION[kind],
+          inputHash: '', inputSummary: JSON.stringify({ kind, documentId: null, fileName: input.file.name, rejected: true }),
+          createdBy: authUserId, stages: [], error: e instanceof Error ? e.message.slice(0, 500) : 'unreadable', errorKind: 'input',
+        },
+      }).catch(() => {})
+      throw e
+    }
     if (!input.reuseDocumentId && projectId) storage = await uploadToStorage(organisationId, projectId, input.file)
   } else if (input.text && input.text.trim()) {
     pages = capPages(paginateText(input.text))
@@ -216,19 +228,20 @@ export async function confirmProjectSetup(input: ConfirmProjectSetupInput) {
       })
     }
     await tx.aIRun.update({ where: { id: run.id }, data: { status: 'APPLIED', confirmedBy: input.actorAuthUserId, confirmedAt: new Date(), appliedAt: new Date() } })
+    // Audit in the same transaction: if it can't be written, nothing is applied
+    await recordAuditEvent({
+      organisationId: input.organisationId, actorId: input.actorProfileId, action: AuditActions.AI_PROJECT_CONFIGURED, entityType: 'project', entityId: input.projectId,
+      metadata: {
+        sourceRunId: run.id, documentId: docInfo.documentId ?? null, promptVersion: run.promptVersion, model: run.model,
+        profileVersion: applied.profile.version, ruleSetVersion: applied.ruleSetVersion, parameters: params as unknown as Record<string, unknown>,
+        ruleItems: applied.checklist.length, municipalAccepted: accepted.length, municipalRejected: mapping.conditions.length - accepted.length,
+        citations: applied.checklist.map((c) => `${c.ruleId} ${c.citation}`),
+        added: applied.diff.added.map((i) => i.ruleId), removed: applied.diff.removed.map((i) => i.ruleId),
+      },
+    }, tx)
     return applied
   }, APPLY_TX_OPTIONS)
 
-  await recordAuditEvent({
-    organisationId: input.organisationId, actorId: input.actorProfileId, action: AuditActions.AI_PROJECT_CONFIGURED, entityType: 'project', entityId: input.projectId,
-    metadata: {
-      sourceRunId: run.id, documentId: docInfo.documentId ?? null, promptVersion: run.promptVersion, model: run.model,
-      profileVersion: result.profile.version, ruleSetVersion: result.ruleSetVersion, parameters: params as unknown as Record<string, unknown>,
-      ruleItems: result.checklist.length, municipalAccepted: accepted.length, municipalRejected: mapping.conditions.length - accepted.length,
-      citations: result.checklist.map((c) => `${c.ruleId} ${c.citation}`),
-      added: result.diff.added.map((i) => i.ruleId), removed: result.diff.removed.map((i) => i.ruleId),
-    },
-  })
 
   return { profileVersion: result.profile.version, ruleSetVersion: result.ruleSetVersion, ruleItems: result.checklist.length, municipalItems: accepted.length, diff: { added: result.diff.added.map((i) => i.ruleId), removed: result.diff.removed.map((i) => i.ruleId) } }
 }

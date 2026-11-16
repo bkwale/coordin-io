@@ -3,7 +3,7 @@ import { success } from '@/lib/api-response'
 import { withAuth } from '@/lib/with-auth'
 import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
-import { requireString, optionalString, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { requireString, optionalString, optionalDate, optionalNumber, parseBody, optionalUrl } from '@/lib/validation'
 import { NotFoundError, PermissionError } from '@/lib/errors'
 import { canManageHR, hasStaffingDashboardAccess } from '@/lib/staffing-utils'
 import type { OrgPermission } from '@/generated/prisma/client'
@@ -26,7 +26,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const targetProfileId = requireString(body.profileId, 'profileId')
   const completedAt = optionalDate(body.completedAt, 'completedAt') ?? new Date()
   const score = optionalNumber(body.score, 'score', { min: 0, max: 100 })
-  const certificateUrl = optionalString(body.certificateUrl, 'certificateUrl', 2000)
+  const certificateUrl = optionalUrl(body.certificateUrl, 'certificateUrl', 2000)
 
   // Verify training item exists
   const trainingItem = await modulesPrisma.trainingItem.findFirst({

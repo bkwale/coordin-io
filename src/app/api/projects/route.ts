@@ -224,6 +224,12 @@ export const POST = withAuth(async (request: NextRequest, { profile, authUserId 
     },
   })
 
+  // Whoever creates a project leads it until they hand it on — otherwise a manager or HR creator couldn't
+  // add the team or file the wizard's document (admins and owners can act on any project anyway)
+  if (!['ADMIN', 'OWNER'].includes(profile.orgPermission as string)) {
+    await prisma.projectMembership.create({ data: { projectId: project.id, profileId: profile.id, projectRole: 'PROJECT_LEAD' } }).catch(() => {})
+  }
+
   // Hand the reading to the new project; the architect reviews and confirms it on the Regulatory page
   if (run) await prisma.aIRun.updateMany({ where: { id: run.id, projectId: null }, data: { projectId: project.id } })
 

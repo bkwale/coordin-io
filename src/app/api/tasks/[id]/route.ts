@@ -8,7 +8,7 @@ import { validateTaskTransition, isReviewerTransition } from '@/lib/task-transit
 import { withTaskAccess } from '@/lib/with-task-access'
 import { canPerform } from '@/lib/role-permissions'
 
-import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody } from '@/lib/validation'
+import { optionalString, optionalId, optionalEnum, optionalDate, optionalNumber, parseBody, optionalUrl } from '@/lib/validation'
 import { formatMilestoneTaskNumber } from '@/lib/task-numbering'
 import { assertAssignable } from '@/lib/assignable'
 import type { TaskStatus, OrgPermission } from '@/generated/prisma/client'
@@ -114,7 +114,7 @@ export const PATCH = withTaskAccess(async (request: NextRequest, { task: current
   if ('estimatedHours' in body) data.estimatedHours = optionalNumber(body.estimatedHours, 'Estimated hours', { min: 0, max: 10000 })
   if ('attachments' in body) data.attachments = typeof body.attachments === 'string' ? body.attachments : (body.attachments ? JSON.stringify(body.attachments) : null)
   if ('deliverable' in body) data.deliverable = optionalString(body.deliverable, 'Deliverable', 500)
-  if ('sharepointUrl' in body) data.sharepointUrl = optionalString(body.sharepointUrl, 'SharePoint URL', 2000)
+  if ('sharepointUrl' in body) data.sharepointUrl = optionalUrl(body.sharepointUrl, 'SharePoint URL', 2000)
 
   // Validate IDs
   const ownerId = 'ownerId' in body ? optionalId(body.ownerId, 'Owner ID') : undefined

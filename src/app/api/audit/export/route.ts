@@ -170,9 +170,9 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
       time,
       escCsv(label),
       escCsv(actor),
-      role,
-      e.entityType,
-      e.entityId,
+      escCsv(role),
+      escCsv(e.entityType),
+      escCsv(e.entityId),
       escCsv(meta),
     ].join(','))
   }

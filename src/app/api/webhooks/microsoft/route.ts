@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { safeEqual } from '@/lib/safe-compare'
 import { prisma } from '@/lib/prisma'
 
 /**
@@ -45,7 +46,8 @@ export async function POST(request: NextRequest) {
 
       // Validate clientState matches our secret (prevents spoofed webhooks)
       const expectedSecret = process.env.MS_WEBHOOK_SECRET
-      if (expectedSecret && clientState !== expectedSecret) {
+      // Fail closed: with no secret configured, nothing is trusted
+      if (!expectedSecret || !safeEqual(clientState, expectedSecret)) {
         console.warn('[ms-webhook] Invalid clientState — potential spoofed webhook')
         continue
       }

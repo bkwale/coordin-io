@@ -72,7 +72,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
 
   if (uploadError) {
     console.error('[RECEIPT_UPLOAD] Storage error:', uploadError.message)
-    throw new ValidationError(`Upload failed: ${uploadError.message}`)
+    throw new ValidationError("Upload failed — please try again")
   }
 
   // Store a stable app link; /api/files signs a 1-hour URL each time the file is opened
@@ -83,7 +83,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     if (err instanceof ValidationError) throw err
     console.error('[RECEIPT_UPLOAD] Unexpected error:', err)
     throw new ValidationError(
-      `Upload failed: ${err instanceof Error ? err.message : 'Unknown storage error'}`,
+      "Upload failed — please try again",
     )
   }
 })

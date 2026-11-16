@@ -111,7 +111,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
     <tr><td style="padding: 8px 0; color: #666;">Organisation</td><td style="padding: 8px 0;">${escHtml(orgName)}</td></tr>
     <tr><td style="padding: 8px 0; color: #666;">Priority</td><td style="padding: 8px 0;">${priorityEmoji} ${priority.charAt(0).toUpperCase() + priority.slice(1)}</td></tr>
     <tr><td style="padding: 8px 0; color: #666;">Category</td><td style="padding: 8px 0;">${category.replace('_', ' ')}</td></tr>
-    <tr><td style="padding: 8px 0; color: #666;">Page</td><td style="padding: 8px 0;"><a href="${APP_URL}${escHtml(page)}" style="color: #2563eb;">${escHtml(page)}</a></td></tr>
+    <tr><td style="padding: 8px 0; color: #666;">Page</td><td style="padding: 8px 0;">${/^\/(?!\/)[^\s@\\]*$/.test(page) ? `<a href="${APP_URL}${escHtml(page)}" style="color: #2563eb;">${escHtml(page)}</a>` : escHtml(page)}</td></tr>
   </table>
   <h2 style="font-size: 16px; margin: 0 0 8px; color: #18181b;">${escHtml(title)}</h2>
   <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${escHtml(description)}</div>

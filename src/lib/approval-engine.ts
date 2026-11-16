@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { isSoleOwner, SELF_APPROVED_ACTION } from './sole-owner'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { notifyMentions } from '@/lib/mentions'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
@@ -137,6 +138,26 @@ async function resolveApprover(
 }
 
 /**
+ * Nobody approves their own request. When a step would land on the submitter (they are the named approver,
+ * the only Finance person, their own manager…), hand it to someone else instead of leaving it stuck:
+ * their line manager → the firm's owner → the longest-serving admin. Returns null if there is nobody else;
+ * the step then waits for an admin, and submitWithoutApprover() below reports it.
+ */
+export async function approverOtherThanSubmitter(context: SubmitContext): Promise<string | null> {
+  const mgr = context.submitterManagerId
+  if (mgr && mgr !== context.submitterId) {
+    const m = await prisma.profile.findFirst({ where: { id: mgr, organisationId: context.organisationId, status: 'ACTIVE' }, select: { id: true } })
+    if (m) return m.id
+  }
+  const seniors = await prisma.profile.findMany({
+    where: { organisationId: context.organisationId, status: 'ACTIVE', orgPermission: { in: ['OWNER', 'ADMIN'] as any }, id: { not: context.submitterId } },
+    select: { id: true, orgPermission: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  return (seniors.find((p: { orgPermission: string }) => p.orgPermission === 'OWNER') ?? seniors[0])?.id ?? null
+}
+
+/**
  * Resolve multiple approvers for an AND step.
  * Returns an array of profile IDs.
  */
@@ -203,13 +224,24 @@ export async function createApprovalInstance(
     // Create step instances
     let previousApproverId: string | null = null
     for (const step of route.steps) {
-      const approverId = await resolveApprover(step, context)
+      let approverId = await resolveApprover(step, context)
+      let rerouted = false
+      if (approverId && approverId === context.submitterId) {
+        approverId = await approverOtherThanSubmitter(context)
+        rerouted = true
+      }
 
-      // AND step: resolve multiple approvers
+      // AND step: resolve multiple approvers (the submitter never counts as one of them)
       const isAndStep = (step as any).requireAll === true
       let stepApproverIds: string[] = []
       if (isAndStep) {
-        stepApproverIds = await resolveApprovers(step as any, context)
+        const all = await resolveApprovers(step as any, context)
+        stepApproverIds = all.filter((id) => id !== context.submitterId)
+        if (all.length > 0 && stepApproverIds.length === 0) {
+          const other = await approverOtherThanSubmitter(context)
+          stepApproverIds = other ? [other] : []
+          rerouted = true
+        }
       }
 
       // Skip if same as previous and canSkipIfSameAsPrevious is true
@@ -225,7 +257,7 @@ export async function createApprovalInstance(
         data: {
           instanceId: inst.id,
           stepOrder: step.stepOrder,
-          label: step.label,
+          label: rerouted ? `${step.label} (reassigned — the requester can't approve their own request)`.slice(0, 190) : step.label,
           approverId: isAndStep ? null : approverId,
           approverIds: isAndStep ? stepApproverIds : (approverId ? [approverId] : []),
           approvedByIds: [],
@@ -323,6 +355,25 @@ export async function processApprovalStep(
       throw new Error('No pending step found')
     }
 
+    // Who is acting: must be in the same firm, and never the person who submitted the request
+    const actor = await tx.profile.findUnique({ where: { id: approverId }, select: { orgPermission: true, organisationId: true, managerId: true } })
+    if (!actor || (instance.organisationId && actor.organisationId !== instance.organisationId)) {
+      throw new Error('Approval instance not found')
+    }
+    if (instance.submitterId === approverId && action !== 'REQUEST_CHANGES') {
+      // The one exception: the owner of a firm with nobody else who could approve (always audited)
+      const sole = await isSoleOwner({ id: approverId, organisationId: actor.organisationId, orgPermission: actor.orgPermission, managerId: actor.managerId }, tx as any)
+      if (!sole) throw new Error("You can't approve or reject your own request — another approver must do it")
+      await tx.auditEvent.create({
+        data: { organisationId: actor.organisationId, actorId: approverId, action: SELF_APPROVED_ACTION, entityType: 'approval_instance', entityId: instance.id, metadata: { decision: action, reason: 'Sole owner — no other owner, admin or line manager to approve' } },
+      })
+    }
+    // A step with no named approver can only be actioned by an admin (never by any member)
+    const namedIds = (effectiveStep.approverIds as string[] ?? [])
+    if (namedIds.length === 0 && !effectiveStep.approverId && !['ADMIN', 'OWNER'].includes(actor.orgPermission)) {
+      throw new Error('This step has no approver assigned — an admin must action it')
+    }
+
     // Verify the approver matches (or is admin)
     const stepApproverIds = (effectiveStep.approverIds as string[] ?? [])
     if (stepApproverIds.length > 1) {
@@ -339,6 +390,11 @@ export async function processApprovalStep(
       // Check if already approved
       if ((effectiveStep.approvedByIds as string[] ?? []).includes(approverId)) {
         throw new Error('You have already approved this step')
+      }
+    } else if (!effectiveStep.approverId && stepApproverIds.length === 1 && stepApproverIds[0] !== approverId) {
+      // A one-name approverIds list (approverId left null) — only that person or an admin
+      if (!['ADMIN', 'OWNER'].includes(actor.orgPermission)) {
+        throw new Error('You are not the assigned approver for this step')
       }
     } else if (effectiveStep.approverId && effectiveStep.approverId !== approverId) {
       const approverProfile = await tx.profile.findUnique({

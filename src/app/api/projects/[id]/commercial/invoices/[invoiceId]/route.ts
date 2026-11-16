@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { assertCommercialWrite } from '@/lib/delivery/access'
 import { commercialPrisma as prisma } from '@/lib/prisma-commercial'
 import { success } from '@/lib/api-response'
 import { withProjectAccess } from '@/lib/with-project-access'
@@ -43,7 +44,8 @@ export const GET = withProjectAccess(async (request: NextRequest, { projectId })
 /**
  * PATCH /api/projects/[id]/commercial/invoices/[invoiceId] — Update invoice fields or record payment.
  */
-export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile }) => {
+export const PATCH = withProjectAccess(async (request: NextRequest, { projectId, profile, membership }) => {
+  await assertCommercialWrite({ profile, projectId, membership })
   const invoiceId = extractInvoiceId(request)
   const body = await parseBody(request)
 

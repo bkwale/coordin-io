@@ -6,8 +6,7 @@ import { modulesPrisma } from '@/lib/prisma-modules'
 import { recordAuditEvent } from '@/lib/audit'
 import {
   requireString, optionalString, optionalDate, optionalNumber,
-  parseBody,
-} from '@/lib/validation'
+  parseBody, optionalUrl } from '@/lib/validation'
 import { PermissionError } from '@/lib/errors'
 import { createNotification, NOTIFICATION_EVENTS } from '@/lib/notifications'
 import { canManageHR, hasStaffingDashboardAccess } from '@/lib/staffing-utils'
@@ -128,7 +127,7 @@ export const POST = withAuth(async (request: NextRequest, { profile }) => {
   const completedDate = optionalDate(body.completedDate, 'completedDate')
   const cpdHours = optionalNumber(body.cpdHours, 'cpdHours', { min: 0, max: 1000 })
   const isMandatory = body.isMandatory === true
-  const certificateUrl = optionalString(body.certificateUrl, 'certificateUrl', 2000)
+  const certificateUrl = optionalUrl(body.certificateUrl, 'certificateUrl', 2000)
   const expiryDate = optionalDate(body.expiryDate, 'expiryDate')
   const renewalDate = optionalDate(body.renewalDate, 'renewalDate')
   const notes = optionalString(body.notes, 'notes', 2000)

@@ -14,8 +14,9 @@ interface AuditParams {
  * Record an audit event. Every material action in the system
  * must create an audit trail entry.
  */
-export async function recordAuditEvent(params: AuditParams) {
-  return prisma.auditEvent.create({
+/** Pass `db` (a transaction client) to write the event in the same transaction as the change it records. */
+export async function recordAuditEvent(params: AuditParams, db: { auditEvent: { create: typeof prisma.auditEvent.create } } = prisma) {
+  return db.auditEvent.create({
     data: {
       organisationId: params.organisationId,
       actorId: params.actorId ?? null,
@@ -276,6 +277,9 @@ export function getAuditPrefixesForRole(
  * Human-readable labels for audit actions.
  */
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'approval.self_approved_sole_owner': 'Owner approved their own request (sole owner)',
+  'gdpr.data_exported': 'Personal data exported',
+  'gdpr.profile_anonymised': 'Record anonymised',
   // Invitations
   'invitation.created': 'Sent invitation',
   'invitation.sent': 'Resent invitation email',

@@ -1,4 +1,5 @@
 import { captureErrorAndWait } from '@/lib/error-reporting'
+import { safeEqual } from '@/lib/safe-compare'
 import { NextRequest, NextResponse } from 'next/server'
 import { runOnboardingReminders } from '@/lib/onboarding/window-service'
 
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
     console.error('[cron/onboarding-reminders] CRON_SECRET env var not configured')
     return NextResponse.json({ error: 'Not configured' }, { status: 500 })
   }
-  if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!safeEqual(request.headers.get('authorization'), `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {

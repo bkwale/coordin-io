@@ -1,6 +1,9 @@
 import { isValidProbationStatus, PROBATION_STATUS_OPTIONS } from '@/lib/staffing/probation'
+import { retentionDays } from '@/lib/gdpr'
 import { bankFormatFor, validateBank, normaliseSortCode } from '@/lib/bank-format'
 import { prisma } from '@/lib/prisma'
+import { resolveNigerianAccount } from '@/lib/paystack'
+import { assertOrgOffice, assertOrgProfile } from '@/lib/tenant'
 import { firmDefaults } from '@/lib/region-server'
 import { NextRequest } from 'next/server'
 import { success } from '@/lib/api-response'
@@ -315,6 +318,20 @@ export const GET = withAuth(async (request: NextRequest, { profile }) => {
     isAdmin: hasHRAccess,
     hasHRAccess,
     isSelf,
+    privacy: (() => {
+      const senior = profile.orgPermission === 'ADMIN' || profile.orgPermission === 'OWNER'
+      const anonymised = String(employee.email ?? '').endsWith('@anonymised.invalid')
+      const days = retentionDays()
+      const at = employee.deactivatedAt ? new Date(employee.deactivatedAt) : null
+      return {
+        canExport: isSelf || hasHRAccess,
+        canAnonymise: senior && !isSelf && employee.status === 'DEACTIVATED' && employee.orgPermission !== 'OWNER',
+        canErase: profile.orgPermission === 'OWNER',
+        anonymised,
+        retentionDays: days,
+        retentionEndsAt: employee.status === 'DEACTIVATED' && at ? new Date(at.getTime() + days * 86_400_000).toISOString() : null,
+      }
+    })(),
   })
 })
 
@@ -370,8 +387,38 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     if (availabilityStatus !== null) empData.availabilityStatus = availabilityStatus
   }
 
-  // HR+-only fields
+  // HR+-only fields — HR can't set their own pay, allowance, status, grade, probation or manager (another admin does)
+  const SELF_LOCKED = [
+    'salary', 'salaryCurrency', 'salaryFrequency', 'benefits', 'pensionProvider', 'pensionContribution', 'hmoProvider', 'hmoPlan', 'dependants', 'noticePeriod',
+    'annualLeaveAllocation', 'status', 'managerId', 'grade', 'employmentType', 'contractType', 'workingHours', 'workingPattern',
+    'probationStatus', 'probationLength', 'probationStartDate', 'probationEndDate', 'officeId', 'roleId',
+  ]
+  if (hasHRAccess && isSelf && profile.orgPermission !== 'OWNER') {
+    // The edit form sends every field on each save, so only a value that actually CHANGES is blocked
+    const [cur, emp, conf] = await Promise.all([
+      prisma.profile.findUnique({ where: { id: profileId }, select: { managerId: true, roleId: true, officeId: true, status: true } }),
+      modulesPrisma.employeeProfile.findUnique({ where: { profileId } }).catch(() => null),
+      modulesPrisma.confidentialEmployeeData.findUnique({ where: { profileId } }).catch(() => null),
+    ])
+    const stored: Record<string, unknown> = { ...(emp ?? {}), ...(conf ?? {}), ...(cur ?? {}) }
+    const norm = (v: unknown): string => {
+      if (v === undefined || v === null || v === '') return ''
+      if (v instanceof Date) return v.toISOString().slice(0, 10)
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10)
+      if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)))) return String(Number(v))
+      return String(v).trim()
+    }
+    const changed = SELF_LOCKED.filter((k) => body[k] !== undefined && norm(body[k]) !== norm(stored[k]))
+    if (changed.length) throw new PermissionError('Ask another admin to change your own pay, benefits, allowance, status, probation or manager')
+  }
   if (hasHRAccess) {
+    for (const k of ['officeId', 'managerId', 'lineManagerId']) {
+      const v = body[k]
+      if (typeof v === 'string' && v) {
+        if (k === 'officeId') await assertOrgOffice(v, profile.organisationId)
+        else await assertOrgProfile(v, profile.organisationId, 'Manager')
+      }
+    }
     // Profile fields
     const jobTitle = optionalString(body.jobTitle as unknown, 'jobTitle', 200)
     if (jobTitle !== null) profileData.jobTitle = jobTitle
@@ -468,7 +515,10 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     const bankAccountName = optionalString(body.bankAccountName as unknown, 'bankAccountName', 200)
     const bankName = optionalString(body.bankName as unknown, 'bankName', 200)
     const bankSortCode = optionalString(body.bankSortCode as unknown, 'bankSortCode', 10)
-    let bankVerified = typeof body.bankVerified === 'boolean' ? body.bankVerified : null
+    // "Verified" is never taken from the browser: it is set only by the Paystack check below
+    const wantsVerify = body.bankVerified === true
+    let bankVerified: boolean | null = null
+    const storedBank = await modulesPrisma.confidentialEmployeeData.findUnique({ where: { profileId }, select: { bankAccountName: true, bankVerified: true } }).catch(() => null)
 
     // Format follows the person's office country (else the firm's): IBAN in Estonia, sort code in the UK, NUBAN in Nigeria
     if (bankAccountNumber !== null) {
@@ -483,10 +533,21 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
       bankConfidentialData.bankAccountNumber = checked.accountNumber
       if (checked.sortCode) bankConfidentialData.bankSortCode = checked.sortCode
       if (format !== 'nuban') { bankConfidentialData.bankCode = checked.bankCode; bankVerified = false } // only Nigerian accounts can be checked automatically
+      else if (wantsVerify) {
+        // Never trust the browser's "verified": check again with Paystack here and use the name it returns
+        const r = await resolveNigerianAccount(checked.accountNumber, String(bankCode ?? ''))
+        bankVerified = r.verified
+        if (r.verified) { bankConfidentialData.bankAccountName = r.accountName; bankConfidentialData.bankName = r.bankName }
+        else throw new ValidationError(r.error)
+      }
+    }
+    if (bankAccountNumber !== null && bankVerified === null) bankVerified = false // a new number that wasn't checked
+    if (bankAccountNumber === null && bankAccountName !== null && storedBank?.bankVerified && bankAccountName.trim() !== (storedBank.bankAccountName ?? '').trim()) {
+      bankVerified = false // a hand-typed name replaces a verified one — needs checking again
     }
     if (bankCode !== null && bankConfidentialData.bankCode === undefined) bankConfidentialData.bankCode = bankCode
-    if (bankAccountName !== null) bankConfidentialData.bankAccountName = bankAccountName
-    if (bankName !== null) bankConfidentialData.bankName = bankName
+    if (bankAccountName !== null && bankConfidentialData.bankAccountName === undefined) bankConfidentialData.bankAccountName = bankAccountName
+    if (bankName !== null && bankConfidentialData.bankName === undefined) bankConfidentialData.bankName = bankName
     if (bankSortCode !== null && bankConfidentialData.bankSortCode === undefined && bankAccountNumber === null) {
       const sc = normaliseSortCode(bankSortCode)
       if (!sc) throw new ValidationError('Sort code must be 6 digits, e.g. 20-00-00')
@@ -537,12 +598,15 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     })
   }
 
-  // Update EmployeeProfile fields via upsert
-  if (Object.keys(empData).length > 0) {
+  // Update EmployeeProfile fields via upsert. Salary, benefits, HMO, pension and notice period live only in
+  // ConfidentialEmployeeData (written below) — never in the old employee_profiles columns again.
+  const LEGACY_CONFIDENTIAL = new Set(['salary', 'salaryFrequency', 'salaryCurrency', 'benefits', 'hmoProvider', 'hmoPlan', 'dependants', 'pensionProvider', 'pensionContribution', 'noticePeriod'])
+  const empWrite = Object.fromEntries(Object.entries(empData).filter(([k]) => !LEGACY_CONFIDENTIAL.has(k)))
+  if (Object.keys(empWrite).length > 0) {
     await modulesPrisma.employeeProfile.upsert({
       where: { profileId },
-      create: { profileId, ...empData },
-      update: empData,
+      create: { profileId, ...empWrite },
+      update: empWrite,
     })
   }
 
@@ -600,7 +664,7 @@ export const PATCH = withAuth(async (request: NextRequest, { profile }) => {
     }
   }
 
-  // Dual-write: mirror confidential fields to ConfidentialEmployeeData table
+  // Confidential fields go to ConfidentialEmployeeData only
   const confidentialFieldKeys = [
     'salary', 'salaryFrequency', 'salaryCurrency', 'benefits',
     'hmoProvider', 'hmoPlan', 'dependants',
