@@ -16,6 +16,7 @@ export const FEATURE_REGISTRY = {
   invoicing:        { label: 'Invoicing',             default: false, description: 'Inbound invoice reception, parsing, categorisation, and accounting sync' },
   ai_reader:        { label: 'AI Reader',             default: false, description: 'Read planning documents (Estonian PT, English decision notices, client briefs) into the regulatory checklist. Shows the AI Reader tab.' },
   ai_summaries:     { label: 'AI document summaries',  default: false, description: 'Summarise a project document (PDF or Word): what it settles, decisions, actions with who and by when, open questions, and figures that disagree. Every item cites its page. Actions become tasks only after someone confirms them.' },
+  ai_risk:          { label: 'Project risk analysis',  default: false, description: 'Flags trouble on a project from its own records: late tasks and milestones, planning conditions and permits, regulatory items, and figures that disagree in documents. Every flag links to the record behind it.' },
   ai_fallback:      { label: 'AI backup reader (outside EU)', default: false, description: 'If the EU AI service is down, read documents with a US-hosted model instead. Names, emails, phone numbers and ID numbers are masked first. Off: you fill in by hand until the EU service is back.' },
   riba_tracking:    { label: 'RIBA Stage Tracking',   default: false, description: 'RIBA work stage gates, transition history, prerequisite validation, and resource planning' },
 } as const
