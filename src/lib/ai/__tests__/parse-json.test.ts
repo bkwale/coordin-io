@@ -26,3 +26,23 @@ describe('parseJson', () => {
     expect(() => parseJson('no json here')).toThrow(/No JSON/)
   })
 })
+
+describe('messageText (answer shape differs between models)', () => {
+  it('returns a plain string answer as it is', async () => {
+    const { messageText } = await import('@/lib/ai/providers')
+    expect(messageText('{"a":1}')).toBe('{"a":1}')
+  })
+  it('takes only the answer parts from a reasoning model, never its thinking', async () => {
+    const { messageText } = await import('@/lib/ai/providers')
+    expect(messageText([{ type: 'thinking', thinking: [{ type: 'text', text: 'let me think {"wrong":true}' }] }, { type: 'text', text: '{"a":' }, { type: 'text', text: '1}' }])).toBe('{"a":1}')
+  })
+  it('missing or odd content is empty text, not a crash', async () => {
+    const { messageText } = await import('@/lib/ai/providers')
+    expect(messageText(undefined)).toBe('')
+    expect(messageText([null, 3, { type: 'text' }])).toBe('')
+  })
+  it('the default model is a dated one, not a moving alias', async () => {
+    const { DEFAULT_PRIMARY_MODEL } = await import('@/lib/ai/providers')
+    expect(DEFAULT_PRIMARY_MODEL).not.toMatch(/latest/)
+  })
+})
