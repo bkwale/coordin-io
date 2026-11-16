@@ -4,6 +4,8 @@ import { sealSecret, openSecret } from '@/lib/secret-box'
 import { prisma } from '@/lib/prisma'
 import { exchangeCodeForTokens, fetchTenants } from '@/lib/integrations/xero/oauth'
 import { recordAuditEvent } from '@/lib/audit'
+import { captureError } from '@/lib/error-reporting'
+import { planActivation } from '@/lib/integrations/activate-connection'
 
 /**
  * GET /api/integrations/xero/callback — OAuth 2.0 redirect handler.
@@ -86,31 +88,30 @@ export async function GET(request: NextRequest) {
     // Use the first tenant (most common case — single org)
     const tenant = tenants[0]
 
-    // Deactivate any existing connection for this org+tenant pair
-    await prisma.xeroConnection.updateMany({
-      where: {
-        organisationId: pendingConnection.organisationId,
-        xeroTenantId: tenant.tenantId,
-        active: true,
-      },
-      data: { active: false, disconnectedAt: new Date() },
+    // If this firm connected the same Xero organisation before, the sign-in goes back into that row
+    const previous = await prisma.xeroConnection.findFirst({
+      where: { organisationId: pendingConnection.organisationId, xeroTenantId: tenant.tenantId },
+      select: { id: true },
     })
-
-    // Activate the connection with real data
-    await prisma.xeroConnection.update({
-      where: { id: pendingConnection.id },
-      data: {
-        xeroTenantId: tenant.tenantId,
-        xeroTenantName: tenant.tenantName,
-        xeroTenantType: tenant.tenantType,
-        accessToken: sealSecret(tokens.access_token),
-        refreshToken: sealSecret(tokens.refresh_token),
-        tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
-        scopes: tokens.scope.split(' '),
-        active: true,
-        connectedAt: new Date(),
-      },
+    const plan = planActivation(pendingConnection.id, previous?.id)
+    const live = {
+      xeroTenantId: tenant.tenantId,
+      xeroTenantName: tenant.tenantName,
+      xeroTenantType: tenant.tenantType,
+      accessToken: sealSecret(tokens.access_token),
+      refreshToken: sealSecret(tokens.refresh_token),
+      tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
+      scopes: tokens.scope.split(' '),
+      active: true,
+      connectedAt: new Date(),
+      disconnectedAt: null,
+      connectedById: pendingConnection.connectedById,
+    }
+    await prisma.$transaction(async (tx) => {
+      if (plan.deletePendingId) await tx.xeroConnection.delete({ where: { id: plan.deletePendingId } })
+      await tx.xeroConnection.update({ where: { id: plan.targetId }, data: live })
     })
+    const connectionId = plan.targetId
 
     // Audit trail
     try {
@@ -119,8 +120,9 @@ export async function GET(request: NextRequest) {
         actorId: pendingConnection.connectedById,
         action: 'xero.connected',
         entityType: 'integration',
-        entityId: pendingConnection.id,
+        entityId: connectionId,
         metadata: {
+          reconnected: plan.reuse,
           xeroTenantId: tenant.tenantId,
           xeroTenantName: tenant.tenantName,
         },
@@ -135,6 +137,7 @@ export async function GET(request: NextRequest) {
     ), 'xero')
   } catch (err) {
     console.error('[xero-callback] OAuth flow failed:', err)
+    captureError(err, { source: 'api', route: '/api/integrations/xero/callback', code: 'XERO_CONNECT_FAILED' })
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=integrations&xero=error&reason=exchange_failed`,
     )
