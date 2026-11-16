@@ -101,6 +101,11 @@ describe('checking quotes against the document', () => {
   it('a changed number is not verified', () => expect(checkItem(item('vähemalt 3', 2), pages).verified).toBe(false))
   it('no quote: unverified', () => expect(checkItem(item(null, 2), pages).verified).toBe(false))
   it('page outside the document is removed', () => expect(checkItem(item('nothing here at all', 99), pages)).toMatchObject({ page: null, verified: false }))
+  it('a quote shortened with [...] is verified when every piece is on the page, in order', () => {
+    expect(checkItem(item('Projekteerija esitab eelprojekti [...] Parkimiskohti peab olema vähemalt 2', 2), pages).verified).toBe(true)
+    expect(checkItem(item('Parkimiskohti peab olema … Projekteerija esitab eelprojekti', 2), pages).verified).toBe(false) // wrong order
+    expect(checkItem(item('Projekteerija esitab eelprojekti ... fassaadi viimistlus on puitlaudis', 2), pages).verified).toBe(false) // pieces from two pages
+  })
   it('quote running over a page break is verified', () => expect(checkItem(item('olema vähemalt 2. otsustati: fassaadi', 2), pages).verified).toBe(true))
 
   it('checkSummary counts unverified items and says so', () => {

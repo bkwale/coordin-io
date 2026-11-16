@@ -87,15 +87,18 @@ export function checkItem<T extends { text: string; page: number | null; quote: 
   let page = item.page != null && item.page >= 1 && item.page <= squashedPages.length ? item.page : null
   const q = item.quote ? squash(item.quote).replace(/(\.\.\.|…)$/, '').trim() : ''
   if (q.length < 8) return { ...item, page, verified: false }
-  const on = (i: number) => squashedPages[i].includes(q)
+  // A quote shortened with "[...]" or "…" counts only if every piece is on the same page, in order
+  const pieces = q.split(/\s*(?:\[\s*(?:\.\.\.|…)\s*\]|\.\.\.|…)\s*/).map((x) => x.trim()).filter((x) => x.length >= 8)
+  if (pieces.length === 0) return { ...item, page, verified: false }
+  const on = (i: number) => { let from = 0; for (const piece of pieces) { const at = squashedPages[i].indexOf(piece, from); if (at < 0) return false; from = at + piece.length } return true }
   if (page != null && on(page - 1)) return { ...item, page, verified: true }
   // neighbours first (a sentence can run over a page break), then anywhere
   const order = page != null ? [page, page - 2, ...squashedPages.keys()] : [...squashedPages.keys()]
   for (const i of order) if (i >= 0 && i < squashedPages.length && on(i)) return { ...item, page: i + 1, verified: true }
   // quote split across a page break
-  if (page != null && page < squashedPages.length && (squashedPages[page - 1] + ' ' + squashedPages[page]).includes(q)) return { ...item, page, verified: true }
+  if (pieces.length === 1 && page != null && page < squashedPages.length && (squashedPages[page - 1] + ' ' + squashedPages[page]).includes(q)) return { ...item, page, verified: true }
   // near-exact (the PDF text layer dropped or added a character)
-  if (page != null && wordCoverage(q, squashedPages[page - 1]) >= 0.9) return { ...item, page, verified: true }
+  if (pieces.length === 1 && page != null && wordCoverage(q, squashedPages[page - 1]) >= 0.9) return { ...item, page, verified: true }
   return { ...item, page, verified: false }
 }
 
