@@ -27,6 +27,8 @@ export interface RunAIOptions<S extends ZodTypeAny> {
   /** Optional light normalisation before Zod parse. */
   /** Output token cap for this surface (default 8192). */
   maxTokens?: number
+  /** Sampling temperature for the final call (provider default when not set). */
+  temperature?: number
   normalise?: (raw: unknown) => unknown
   /** Optional deterministic enrichment after validation (e.g. registry facts overlay). May push a stage. */
   enrich?: (output: z.infer<S>, push: (s: Omit<Stage, 'at'>) => Promise<void>) => Promise<z.infer<S>>
@@ -76,7 +78,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
     // Non-EU backup model only if this organisation opted in (Settings → Modules); personal data is masked first
     const orgId = opts.organisationId ?? (await prisma.aIRun.findUnique({ where: { id: runId }, select: { organisationId: true } }).catch(() => null))?.organisationId ?? null
     const allowFallback = orgId ? await isFeatureEnabled(orgId, 'ai_fallback').catch(() => false) : false
-    const result = await chat({ system, user, json: true, maxTokens: opts.maxTokens, allowFallback })
+    const result = await chat({ system, user, json: true, maxTokens: opts.maxTokens, allowFallback, ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}) })
     const { value: raw, repaired } = parseJsonWithMeta(result.text)
     const normalised = opts.normalise ? opts.normalise(raw) : raw
     const parsed = opts.schema.safeParse(normalised)

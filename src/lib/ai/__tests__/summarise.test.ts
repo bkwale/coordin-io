@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { deflateRawSync } from 'node:zlib'
 import { docxToPages, docxXmlToPages, sniffZip } from '../docx'
-import { chunkPages, checkItem, checkSummary, readDocumentPages, SECTION_CHARS } from '../summary-core'
-import { DocumentSummarySchema, SectionNotesSchema, normaliseSummary, normaliseNotes } from '../schemas-summary'
+import { around, resolveLanguage, chunkPages, checkItem, checkSummary, checkContradictions, readDocumentPages, sectionSize, SECTION_CHARS, SECTION_CHARS_MAX } from '../summary-core'
+import { DocumentSummarySchema, SectionNotesSchema, ContradictionsSchema, normaliseSummary, normaliseNotes, normaliseContradictions } from '../schemas-summary'
 import { IngestError, cleanText } from '../document-ingest'
 
 /** Smallest valid ZIP with the given entries (deflated), enough for the reader under test. */
@@ -75,10 +75,15 @@ describe('Word reader', () => {
 describe('sections for long documents', () => {
   const pages = Array.from({ length: 10 }, (_, i) => ({ n: i + 1, text: 'x'.repeat(15_000) }))
   it('keeps pages whole, in order, within the size', () => {
-    const sections = chunkPages(pages)
+    const sections = chunkPages(pages, 40_000)
     expect(sections.flat().map((x) => x.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    for (const s of sections) expect(s.reduce((a, x) => a + x.text.length, 0)).toBeLessThanOrEqual(SECTION_CHARS)
+    for (const s of sections) expect(s.reduce((a, x) => a + x.text.length, 0)).toBeLessThanOrEqual(40_000)
     expect(sections).toHaveLength(5)
+  })
+  it('section size: small for recall, larger for long documents, capped', () => {
+    expect(sectionSize(20_000)).toBe(SECTION_CHARS)
+    expect(sectionSize(200_000)).toBe(25_000)
+    expect(sectionSize(900_000)).toBe(SECTION_CHARS_MAX)
   })
   it('an oversized page is its own section', () => {
     const s = chunkPages([{ n: 1, text: 'a'.repeat(90_000) }, { n: 2, text: 'b' }])
@@ -115,6 +120,7 @@ describe('checking quotes against the document', () => {
       keyPoints: [{ text: 'Kõrgus kuni 9 m', page: 1, quote: 'suurim lubatud kõrgus on 9 m' }],
       decisions: [{ text: 'Made up', page: 1, quote: 'seda lauset dokumendis ei ole' }],
       actions: [{ text: 'Esita eelprojekt', owner: 'Projekteerija', due: '15.12.2026', page: 2, quote: 'esitab eelprojekti hiljemalt 15.12.2026' }],
+      openQuestions: [],
       warnings: [],
     }, raw, { sections: 1, truncated: true, engineWarnings: ['1 passage in this document addressed an AI system and was ignored.'] })
     expect(m.coverage).toEqual({ pages: 2, sections: 1, truncated: true, unverified: 1 })
@@ -149,5 +155,80 @@ describe('summary normaliser', () => {
   })
   it('section notes normalise the same way', () => {
     expect(SectionNotesSchema.safeParse(normaliseNotes({ summary: 'Osa 2', keyPoints: ['a'], actions: [{ action: 'b', owner: null }] })).success).toBe(true)
+  })
+})
+
+describe('figures that disagree', () => {
+  const pages = ['Katuse soojusläbivuse sihtväärtus on U = 0,10 W/(m²K). Välisseina U = 0,16 W/(m²K).', 'Hoones on 24 korterit.', 'Katuse U-arv on 0,12 W/(m²K) kogu katuse ulatuses.']
+  const side = (value: string, page: number, quote: string) => ({ value, page, quote })
+  it('keeps one where both quotes are in the document and the values differ', () => {
+    const out = checkContradictions([{ subject: 'Katuse U-arv', a: side('0,10 W/(m²K)', 1, 'sihtväärtus on U = 0,10 W/(m²K)'), b: side('0,12 W/(m²K)', 3, 'Katuse U-arv on 0,12 W/(m²K)') }], pages)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ subject: 'Katuse U-arv', a: { page: 1 }, b: { page: 3 } })
+  })
+  it('drops one whose quote is not in the document', () => {
+    expect(checkContradictions([{ subject: 'Korterite arv', a: side('24', 2, 'Hoones on 24 korterit'), b: side('26', 3, 'Hoones on 26 korterit') }], pages)).toEqual([])
+  })
+  it('drops one where the values are the same, or the quote does not contain the value', () => {
+    expect(checkContradictions([{ subject: 'Katus', a: side('0,10', 1, 'sihtväärtus on U = 0,10 W/(m²K)'), b: side('0.10 W/(m²K)', 1, 'sihtväärtus on U = 0,10 W/(m²K)') }], pages)).toEqual([])
+    expect(checkContradictions([{ subject: 'Katus', a: side('0,10', 1, 'sihtväärtus on U = 0,10 W/(m²K)'), b: side('0,12', 2, 'Hoones on 24 korterit') }], pages)).toEqual([])
+  })
+  it('drops different units, a side with several numbers, and lists the same pair once', () => {
+    const p2 = ['Hoone brutopind on 2 180 m2. See on 80-leheküljeline seletuskiri. Hoones on 24 korterit.', 'Korterid: 6 ühetoalist, 12 kahetoalist ja 6 kolmetoalist. Katuse U on 0,10 W/(m2K).', 'Katuse U-arv on 0,12 W/(m2K). Katuse soojusläbivus 0,12 W/(m2K) kehtib kogu katusele.']
+    expect(checkContradictions([{ subject: 'brutopind', a: side('2 180 m2', 1, 'Hoone brutopind on 2 180 m2'), b: side('80-leheküljeline seletuskiri', 1, 'See on 80-leheküljeline seletuskiri') }], p2)).toEqual([])
+    expect(checkContradictions([{ subject: 'korterite arv', a: side('24 korterit', 1, 'Hoones on 24 korterit'), b: side('6 ühetoalist, 12 kahetoalist ja 6 kolmetoalist', 2, '6 ühetoalist, 12 kahetoalist ja 6 kolmetoalist') }], p2)).toEqual([])
+    const twice = checkContradictions([
+      { subject: 'katuse U', a: side('0,10 W/(m2K)', 2, 'Katuse U on 0,10 W/(m2K)'), b: side('0,12 W/(m2K)', 3, 'Katuse U-arv on 0,12 W/(m2K)') },
+      { subject: 'katuse U-väärtus', a: side('0,10 W/(m²K)', 2, 'Katuse U on 0,10 W/(m2K)'), b: side('0,12 W/(m²K)', 3, 'Katuse soojusläbivus 0,12 W/(m2K)') },
+    ], p2)
+    expect(twice).toHaveLength(1)
+  })
+  it('reads a thousands space as one number', () => {
+    const p3 = ['Köetav pind on 1 745 m2.', 'Köetav pind on 1 478 m2.']
+    expect(checkContradictions([{ subject: 'köetav pind', a: side('1 745 m2', 1, 'Köetav pind on 1 745 m2'), b: side('1 478 m2', 2, 'Köetav pind on 1 478 m2') }], p3)).toHaveLength(1)
+  })
+  it('normaliser accepts a bare list and skips broken entries', () => {
+    const v = ContradictionsSchema.safeParse(normaliseContradictions([{ what: 'Roof U', first: { value: '0.10', page: '8', quote: 'q1' }, second: { value: '0.12', page: 30, quote: 'q2' } }, { subject: 'x' }, null]))
+    expect(v.success && v.data.contradictions).toEqual([{ subject: 'Roof U', a: { value: '0.10', page: 8, quote: 'q1' }, b: { value: '0.12', page: 30, quote: 'q2' } }])
+  })
+})
+
+describe('open questions and figures in the schema', () => {
+  it('summary carries open questions; missing list becomes empty', () => {
+    const v = DocumentSummarySchema.safeParse(normaliseSummary({ summary: 's', open_questions: [{ text: 'Kes hakkab äripinda kasutama?', page: 72, quote: 'Ei ole otsustatud' }] }))
+    expect(v.success && v.data.openQuestions).toEqual([{ text: 'Kes hakkab äripinda kasutama?', page: 72, quote: 'Ei ole otsustatud' }])
+    const w = DocumentSummarySchema.safeParse(normaliseSummary({ summary: 's' }))
+    expect(w.success && w.data.openQuestions).toEqual([])
+  })
+  it('section notes carry figures', () => {
+    const v = SectionNotesSchema.safeParse(normaliseNotes({ gist: 'g', figures: [{ subject: 'roof U-value', value: '0.10 W/(m2K)', page: 8, quote: 'q' }, { subject: 'no value' }] }))
+    expect(v.success && v.data.figures).toHaveLength(1)
+  })
+})
+
+describe('language of the summary', () => {
+  const et = 'Hoone on neljakorruseline ja selle katus on lame. Projekteerija peab esitama eelprojekti ning tellija kinnitab selle, kui see vastab lähteülesandele. '.repeat(6)
+  const en = 'The building is four storeys and the roof is flat. The architect shall submit the design to the client for approval and this is not optional. '.repeat(6)
+  it('a chosen language is kept', () => expect(resolveLanguage('en', [et])).toBe('en'))
+  it('Estonian text gives Estonian, English text gives English', () => {
+    expect(resolveLanguage('same', [et])).toBe('et')
+    expect(resolveLanguage('same', [en + ' Sild Arhitektuur OÜ, Emajõe Kodu OÜ, Kasevälja 12, Tartu.'])).toBe('en')
+  })
+  it('too little text or an even mix is left to the model', () => {
+    expect(resolveLanguage('same', ['Tere.'])).toBe('same')
+    expect(resolveLanguage('same', [et + en])).toBe('same')
+  })
+})
+
+describe('the passage around a quote', () => {
+  const pages = ['x', 'Korteriprogramm sisaldab 24 korterit. Eluruumide köetav pind kokku on ligikaudu 1 478 m²; ülejäänud köetav pind kuulub trepikojale ja äripinnale. Igas eluruumis on aken.']
+  it('includes the text before and after, so the reader sees what the value describes', () => {
+    const p = around(pages, 2, 'köetav pind kokku on ligikaudu 1 478 m²')
+    expect(p).toContain('Korteriprogramm sisaldab')
+    expect(p).toContain('ülejäänud köetav pind kuulub trepikojale')
+  })
+  it('falls back to the quote when it cannot be placed', () => {
+    expect(around(pages, null, 'köetav pind 1 745 m2')).toBe('köetav pind 1 745 m2')
+    expect(around(pages, 1, 'seda siin ei ole üldse')).toBe('seda siin ei ole üldse')
   })
 })

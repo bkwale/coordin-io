@@ -2,7 +2,7 @@
 import { runAI } from './pipeline'
 import { DocumentSummarySchema, normaliseSummary } from './schemas-summary'
 import { SUMMARY_PROMPT_VERSION, type SummaryLanguage } from './prompts/summary'
-import { planSummary, finalPrompt, checkSummary, verifiedShare } from './summary-core'
+import { planSummary, finalPrompt, settleContradictions, checkSummary, verifiedShare } from './summary-core'
 
 export * from './summary-core'
 
@@ -14,6 +14,7 @@ export async function executeSummary(runId: string, rawPages: string[], opts: Ex
   return runAI(runId, {
     surface: 'EXTRACTION', createdBy: '', inputSummary: '', promptVersion: SUMMARY_PROMPT_VERSION,
     maxTokens: 8_000,
+    temperature: 0, // the same document should give the same summary
     ingest: async (push) => {
       await push({ name: 'read', status: 'done', detail: `${rawPages.length} page${rawPages.length > 1 ? 's' : ''}${n > 1 ? ` · read in ${n} sections` : ''}` })
       if (n > 1) await push({ name: 'sections', status: 'running', detail: `0 of ${n}` })
@@ -23,7 +24,9 @@ export async function executeSummary(runId: string, rawPages: string[], opts: Ex
     },
     schema: DocumentSummarySchema,
     normalise: normaliseSummary,
-    map: (s) => checkSummary(s, rawPages, { sections: n, truncated: opts.truncated === true, engineWarnings: plan.engineWarnings }),
+    // the check for figures that disagree has been running alongside the final call; wait for it here
+    enrich: async (o) => { await settleContradictions(plan); return o },
+    map: (s) => checkSummary(s, rawPages, { sections: n, truncated: opts.truncated === true, engineWarnings: plan.engineWarnings, contradictions: plan.contradictions }),
     confidenceOf: (s) => verifiedShare(s, rawPages),
   })
 }
