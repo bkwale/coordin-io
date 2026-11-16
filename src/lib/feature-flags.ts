@@ -56,7 +56,11 @@ export async function getOrgFeatures(orgId: string): Promise<Record<FeatureKey, 
 
 export async function isFeatureEnabled(orgId: string, feature: FeatureKey): Promise<boolean> {
   const features = await getOrgFeatures(orgId)
-  return features[feature] ?? FEATURE_REGISTRY[feature]?.default ?? false
+  if (feature in features) return features[feature]
+  // The cached list was built by a version of the app that did not know this feature yet (the cache is shared
+  // between the live site and previews). Ask the database directly instead of answering "off".
+  const row = await prisma.organisationFeature.findFirst({ where: { organisationId: orgId, featureKey: feature }, select: { enabled: true } })
+  return row?.enabled ?? FEATURE_REGISTRY[feature]?.default ?? false
 }
 
 // ─── Invalidate Cache ───────────────────────────────────────────────

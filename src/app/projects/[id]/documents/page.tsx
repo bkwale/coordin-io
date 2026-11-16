@@ -9,11 +9,13 @@ import {
   Send, Inbox, Plus,
   ChevronDown, ChevronRight,
   Clock, CheckCircle2, Eye,
-  X, Loader2,
+  X, Loader2, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkeletonRow } from '@/components/Skeleton'
 import FileUpload, { type UploadResult } from '@/components/FileUpload'
+import { DocumentSummaryPanel } from '@/components/DocumentSummaryPanel'
+import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
 
 // Re-export UploadResult so other files can import from here if needed
 export type { UploadResult }
@@ -155,6 +157,11 @@ export default function DocumentsPage() {
 
   /* ── Shared state ─────────────────────────────────────── */
   const [activeTab, setActiveTab] = useState<TabKey>('register')
+
+  /* ── AI summary (only when the practice has it switched on) ── */
+  const { isEnabled } = useOrgFeatures()
+  const summariesOn = isEnabled('ai_summaries')
+  const [summaryDoc, setSummaryDoc] = useState<{ id: string; title: string } | null>(null)
 
   /* ── Register state ───────────────────────────────────── */
   const [documents, setDocuments] = useState<DocumentItem[]>([])
@@ -667,10 +674,20 @@ export default function DocumentsPage() {
                       </div>
 
                       {/* Updated */}
-                      <div className="sm:col-span-2">
+                      <div className="sm:col-span-2 flex items-center justify-between gap-2">
                         <span className="text-[11px] text-ink-400">
                           {doc.latestRevision ? formatDate(doc.latestRevision.createdAt) : formatDate(doc.createdAt)}
                         </span>
+                        {summariesOn && doc.latestRevision && doc.documentType !== 'DRAWING' && doc.documentType !== 'PHOTOGRAPH' && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSummaryDoc({ id: doc.id, title: doc.title }) }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-ink-100 px-2 py-1 text-[11px] font-medium text-ink-600 hover:border-accent-200 hover:bg-accent-50 hover:text-accent-700"
+                            aria-label={`Summarise ${doc.title}`}
+                          >
+                            <Sparkles className="w-3 h-3" /> Summary
+                          </button>
+                        )}
                       </div>
                     </Link>
                   )
@@ -1197,6 +1214,8 @@ export default function DocumentsPage() {
           )}
         </>
       )}
+
+      {summaryDoc && <DocumentSummaryPanel projectId={projectId} document={summaryDoc} onClose={() => setSummaryDoc(null)} />}
     </div>
   )
 }
