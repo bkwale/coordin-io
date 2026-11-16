@@ -216,7 +216,8 @@ export function DocumentSummaryPanel({ projectId, document, onClose }: { project
 
               {(m.contradictions?.length ?? 0) > 0 && (
                 <section className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                  <h3 className="text-[12px] font-semibold text-red-900">Figures that disagree ({m.contradictions!.length})</h3>
+                  <h3 className="text-[12px] font-semibold text-red-900">Figures that may disagree ({m.contradictions!.length})</h3>
+                  <p className="mt-0.5 text-[11px] text-red-800">The same thing seems to be given two values. Check both pages: now and then this check pairs up two different things.</p>
                   <ul className="mt-2 space-y-3">
                     {m.contradictions!.map((c, i) => (
                       <li key={i} className="text-[12px] text-red-900">
