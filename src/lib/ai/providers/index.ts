@@ -45,6 +45,22 @@ function networkError(provider: AIProvider, e: unknown): unknown {
   return e
 }
 
+/**
+ * The answer text from a chat completion. Older models return a string; reasoning models return a list of
+ * parts (their thinking, then the answer). Only the answer parts count: thinking is never treated as output.
+ */
+export function messageText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content.map((c) => (c && typeof c === 'object' && (c as { type?: string }).type === 'text' && typeof (c as { text?: unknown }).text === 'string' ? (c as { text: string }).text : '')).join('')
+}
+
+/**
+ * Pinned on purpose. "mistral-large-latest" moved to a reasoning model (Large 4) in November 2026: answers took
+ * minutes instead of seconds and came back in a different shape. A dated model only changes when we change it.
+ */
+export const DEFAULT_PRIMARY_MODEL = 'mistral-large-2512'
+
 async function mistral(req: ChatRequest, model: string, timeoutMs = PRIMARY_TIMEOUT_MS): Promise<ChatResult> {
   const key = process.env.MISTRAL_API_KEY
   if (!key) throw new Error('MISTRAL_API_KEY not set')
@@ -65,7 +81,7 @@ async function mistral(req: ChatRequest, model: string, timeoutMs = PRIMARY_TIME
   })
   if (!res.ok) throw providerErrorFromStatus('mistral', res.status, await res.text().catch(() => ''))
   const data = await res.json()
-  return { text: data.choices?.[0]?.message?.content ?? '', model, tokens: data.usage?.total_tokens ?? 0, provider: 'mistral' }
+  return { text: messageText(data.choices?.[0]?.message?.content), model, tokens: data.usage?.total_tokens ?? 0, provider: 'mistral' }
 }
 
 async function claude(req: ChatRequest, model: string, timeoutMs = FALLBACK_TIMEOUT_MS): Promise<ChatResult> {
@@ -117,7 +133,7 @@ async function attempt(provider: AIProvider, call: () => Promise<ChatResult>, ti
 }
 
 export async function chat(req: ChatRequest): Promise<ChatResult> {
-  const primary = process.env.AI_PRIMARY_MODEL || 'mistral-large-latest'
+  const primary = process.env.AI_PRIMARY_MODEL || DEFAULT_PRIMARY_MODEL
   const fallback = process.env.AI_FALLBACK_MODEL || 'claude-sonnet-4-5'
   const fallbackAvailable = !!process.env.ANTHROPIC_API_KEY && req.allowFallback === true
   let primaryErr: unknown
