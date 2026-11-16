@@ -22,7 +22,7 @@ export interface RunAIOptions<S extends ZodTypeAny> {
   inputSummary: string
   promptVersion: string
   /** Produces the raw text given to the model; may push stages (e.g. crawl). */
-  ingest: (push: (s: Omit<Stage, 'at'>) => Promise<void>) => Promise<{ system: string; user: string; inputForHash: string }>
+  ingest: (push: (s: Omit<Stage, 'at'>) => Promise<void>) => Promise<{ system: string; user: string; inputForHash: string; tokens?: number }>
   schema: S
   /** Optional light normalisation before Zod parse. */
   /** Output token cap for this surface (default 8192). */
@@ -66,7 +66,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
   try {
     await push({ name: 'ingest', status: 'running' })
     const ti = Date.now()
-    const { system, user, inputForHash } = await opts.ingest(push)
+    const { system, user, inputForHash, tokens: ingestTokens } = await opts.ingest(push)
     await push({ name: 'ingest', status: 'done', ms: Date.now() - ti })
 
     const inputHash = createHash('sha256').update(inputForHash).digest('hex').slice(0, 16)
@@ -109,7 +109,7 @@ export async function runAI<S extends ZodTypeAny>(runId: string, opts: RunAIOpti
         mapping: (mapping ?? undefined) as any,
         confidence,
         latencyMs: Date.now() - t0,
-        tokensUsed: result.tokens,
+        tokensUsed: result.tokens + (ingestTokens ?? 0),
         stages: stages as any,
       },
     })

@@ -15,6 +15,10 @@ export const INGEST_LIMITS = {
   maxPages: 60,
 } as const
 
+/** Summaries read whole documents from storage (no upload-size limit applies), in sections. */
+export const SUMMARY_LIMITS = { maxBytes: 25 * 1024 * 1024, maxChars: 600_000, minChars: 300, maxPages: 300 } as const
+export type IngestLimits = { maxBytes: number; maxChars: number; minChars: number; maxPages: number }
+
 export const INGEST_MESSAGE: Record<IngestFailure, string> = {
   no_text_layer: 'This PDF has no text layer (it is a scan). Ask the municipality for the digital original, or paste the text.',
   too_large: 'File is over 4 MB. Paste the text instead, or compress the PDF.',
@@ -51,18 +55,18 @@ export function paginateText(text: string, pageChars = 4000): string[] {
 /** A hostile PDF can make pdf.js spin; give up after this long. */
 export const PDF_PARSE_TIMEOUT_MS = 30_000
 
-export async function pdfToPages(bytes: Uint8Array): Promise<string[]> {
+export async function pdfToPages(bytes: Uint8Array, limits: IngestLimits = INGEST_LIMITS): Promise<string[]> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new IngestError('unreadable', INGEST_MESSAGE.unreadable + ' (took too long to read)')), PDF_PARSE_TIMEOUT_MS) })
   try {
-    return await Promise.race([pdfToPagesInner(bytes), timeout])
+    return await Promise.race([pdfToPagesInner(bytes, limits), timeout])
   } finally {
     clearTimeout(timer)
   }
 }
 
-async function pdfToPagesInner(bytes: Uint8Array): Promise<string[]> {
-  if (bytes.byteLength > INGEST_LIMITS.maxBytes) throw new IngestError('too_large', INGEST_MESSAGE.too_large)
+async function pdfToPagesInner(bytes: Uint8Array, limits: IngestLimits): Promise<string[]> {
+  if (bytes.byteLength > limits.maxBytes) throw new IngestError('too_large', limits.maxBytes === INGEST_LIMITS.maxBytes ? INGEST_MESSAGE.too_large : `File is over ${Math.round(limits.maxBytes / 1024 / 1024)} MB.`)
   if (!sniffPdf(bytes)) throw new IngestError('not_pdf', INGEST_MESSAGE.not_pdf)
   // unpdf (maintained, serverless build of current pdf.js). Copy into a fresh Uint8Array — pdf.js detaches the buffer it is given.
   const data = new Uint8Array(bytes.byteLength); data.set(bytes)
@@ -71,7 +75,7 @@ async function pdfToPagesInner(bytes: Uint8Array): Promise<string[]> {
   try {
     const { getDocumentProxy } = await import('unpdf')
     pdf = await getDocumentProxy(data)
-    const n = Math.min(pdf.numPages, INGEST_LIMITS.maxPages)
+    const n = Math.min(pdf.numPages, limits.maxPages)
     for (let i = 1; i <= n; i++) {
       const page = await pdf.getPage(i)
       const tc = await page.getTextContent()
@@ -94,12 +98,12 @@ async function pdfToPagesInner(bytes: Uint8Array): Promise<string[]> {
   }
   const cleaned = pages.map(cleanText)
   const total = cleaned.reduce((a, p) => a + p.length, 0)
-  if (total < INGEST_LIMITS.minChars) throw new IngestError('no_text_layer', INGEST_MESSAGE.no_text_layer)
-  return capPages(cleaned)
+  if (total < limits.minChars) throw new IngestError('no_text_layer', INGEST_MESSAGE.no_text_layer)
+  return capPages(cleaned, limits.maxChars)
 }
 
-export function capPages(pages: string[]): string[] {
-  let budget = INGEST_LIMITS.maxChars
+export function capPages(pages: string[], maxChars: number = INGEST_LIMITS.maxChars): string[] {
+  let budget = maxChars
   const out: string[] = []
   for (const p of pages) {
     if (budget <= 0) break
