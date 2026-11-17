@@ -4,6 +4,8 @@ import { sealSecret, openSecret } from '@/lib/secret-box'
 import { prisma } from '@/lib/prisma'
 import { exchangeCodeForTokens, fetchUserProfile } from '@/lib/integrations/microsoft/oauth'
 import { recordAuditEvent } from '@/lib/audit'
+import { captureError } from '@/lib/error-reporting'
+import { planActivation } from '@/lib/integrations/activate-connection'
 
 /**
  * GET /api/integrations/microsoft/callback — OAuth 2.0 redirect handler.
@@ -110,32 +112,31 @@ export async function GET(request: NextRequest) {
       tenantName = userProfile.companyName
     }
 
-    // Deactivate any existing connection for this org+tenant pair
-    await prisma.microsoftConnection.updateMany({
-      where: {
-        organisationId: pendingConnection.organisationId,
-        msTenantId: tenantId,
-        active: true,
-      },
-      data: { active: false, disconnectedAt: new Date() },
+    // If this firm connected the same Microsoft tenant before, the sign-in goes back into that row
+    const previous = await prisma.microsoftConnection.findFirst({
+      where: { organisationId: pendingConnection.organisationId, msTenantId: tenantId },
+      select: { id: true },
     })
-
-    // Activate the connection with real data
-    await prisma.microsoftConnection.update({
-      where: { id: pendingConnection.id },
-      data: {
-        msTenantId: tenantId,
-        msTenantName: tenantName,
-        msUserId: userProfile.id,
-        msUserEmail: userProfile.mail || userProfile.userPrincipalName,
-        accessToken: sealSecret(tokens.access_token),
-        refreshToken: sealSecret(tokens.refresh_token),
-        tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
-        scopes: tokens.scope.split(' '),
-        active: true,
-        connectedAt: new Date(),
-      },
+    const plan = planActivation(pendingConnection.id, previous?.id)
+    const live = {
+      msTenantId: tenantId,
+      msTenantName: tenantName,
+      msUserId: userProfile.id,
+      msUserEmail: userProfile.mail || userProfile.userPrincipalName,
+      accessToken: sealSecret(tokens.access_token),
+      refreshToken: sealSecret(tokens.refresh_token),
+      tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
+      scopes: tokens.scope.split(' '),
+      active: true,
+      connectedAt: new Date(),
+      disconnectedAt: null,
+      connectedById: pendingConnection.connectedById,
+    }
+    await prisma.$transaction(async (tx) => {
+      if (plan.deletePendingId) await tx.microsoftConnection.delete({ where: { id: plan.deletePendingId } })
+      await tx.microsoftConnection.update({ where: { id: plan.targetId }, data: live })
     })
+    const connectionId = plan.targetId
 
     // Audit trail
     try {
@@ -144,8 +145,9 @@ export async function GET(request: NextRequest) {
         actorId: pendingConnection.connectedById,
         action: 'microsoft.connected',
         entityType: 'integration',
-        entityId: pendingConnection.id,
+        entityId: connectionId,
         metadata: {
+          reconnected: plan.reuse,
           msTenantId: tenantId,
           msTenantName: tenantName,
           msUserEmail: userProfile.mail || userProfile.userPrincipalName,
@@ -161,6 +163,7 @@ export async function GET(request: NextRequest) {
     ), 'microsoft')
   } catch (err) {
     console.error('[microsoft-callback] OAuth flow failed:', err)
+    captureError(err, { source: 'api', route: '/api/integrations/microsoft/callback', code: 'MICROSOFT_CONNECT_FAILED' })
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=integrations&microsoft=error&reason=exchange_failed`,
     )
