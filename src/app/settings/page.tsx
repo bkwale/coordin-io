@@ -1,6 +1,8 @@
 'use client'
 
 import { EstoniaIntegrations } from '@/components/EstoniaIntegrations'
+import { RiskSettingsSection } from '@/components/RiskSettingsSection'
+import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Building2, Users, CreditCard, Hash, Globe, Puzzle, Shield,
@@ -9,6 +11,7 @@ import {
   ScrollText, Download, ChevronLeft, Filter, CalendarDays,
   Link2, Copy, Ban, LockKeyhole, FileText, ClipboardList,
   ChevronDown, ChevronUp, ToggleLeft,
+  AlertTriangle as RiskIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -77,6 +80,7 @@ const SETTINGS_TABS = [
   { key: 'holidays', label: 'Public Holidays', icon: CalendarDays, description: 'Manage public holidays' },
   { key: 'leavePolicies', label: 'Leave Policies', icon: FileText, description: 'Entitlement rules by grade & type' },
   { key: 'onboarding', label: 'Onboarding', icon: ClipboardList, description: 'Templates & task options' },
+  { key: 'risk', label: 'Risk', icon: RiskIcon, description: 'When flags are raised & weekly email', featureKey: 'ai_risk' },
   { key: 'features', label: 'Features', icon: ToggleLeft, description: 'Enable or disable modules' },
 ] as const
 
@@ -93,6 +97,9 @@ const CURRENCY_OPTIONS = [
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('organisation')
+  const { isEnabled } = useOrgFeatures()
+  // A tab tied to a module only shows when that module is switched on for the practice
+  const tabs = SETTINGS_TABS.filter((t) => !('featureKey' in t) || isEnabled(t.featureKey))
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -109,7 +116,7 @@ export default function SettingsPage() {
           {/* Left Rail Navigation */}
           <nav className="w-full lg:w-64 shrink-0 hidden lg:block">
             <div className="sticky top-8 space-y-1">
-              {SETTINGS_TABS.map((tab) => {
+              {tabs.map((tab) => {
                 const Icon = tab.icon
                 const isActive = activeTab === tab.key
                 return (
@@ -141,7 +148,7 @@ export default function SettingsPage() {
               onChange={(e) => setActiveTab(e.target.value as TabKey)}
               className="w-full px-4 py-3 rounded-lg border border-surface-200 bg-white text-[13px] text-ink-900"
             >
-              {SETTINGS_TABS.map((tab) => (
+              {tabs.map((tab) => (
                 <option key={tab.key} value={tab.key}>{tab.label}</option>
               ))}
             </select>
@@ -164,6 +171,7 @@ export default function SettingsPage() {
               {activeTab === 'holidays' && <PublicHolidaysSection />}
               {activeTab === 'leavePolicies' && <LeavePoliciesSection />}
               {activeTab === 'onboarding' && <OnboardingSection />}
+              {activeTab === 'risk' && <RiskSettingsSection />}
               {activeTab === 'features' && <FeaturesSection />}
             </div>
           </div>
@@ -3209,6 +3217,7 @@ const NOTIFICATION_CATEGORIES: Array<{
       { key: 'project.update', label: 'Project update' },
       { key: 'project.health_changed', label: 'Project health changed' },
       { key: 'project.milestone_due', label: 'Milestone due' },
+      { key: 'risk.digest', label: 'Weekly risk email (project leads)' },
     ],
   },
   {
