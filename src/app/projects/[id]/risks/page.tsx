@@ -123,7 +123,7 @@ export default function ProjectRisksPage() {
                 </div>
               </div>
               {briefError && <p role="alert" className="mt-2 text-[12px] text-red-700">{briefError}</p>}
-              {!brief?.brief && !writing && !briefError && <p className="mt-2 text-[12px] text-ink-500">Has the AI put the flags below in order and say what to do first. It is shown only these flags and adds nothing of its own.</p>}
+              {!brief?.brief && !writing && !briefError && <p className="mt-2 text-[12px] text-ink-500">The AI puts the flags below in order and suggests what to do first. It is shown only these flags. Its wording can still be wrong, so check the record.</p>}
               {brief?.brief && (
                 <div className={cn('mt-3', writing && 'opacity-50')}>
                   {!brief.current && <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800"><AlertTriangle className="h-3 w-3" /> The flags have changed since this was written</p>}

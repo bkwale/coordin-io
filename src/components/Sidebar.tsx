@@ -14,7 +14,7 @@ import {
   TrendingUp, Receipt, Target, Shield, Clock, ClipboardList,
   Link as LinkIcon, Plus, Search, MoreHorizontal,
   ChevronLeft, ChevronRight, CalendarDays, Wallet,
-  Wrench, Package, User as UserIcon, Settings, LogOut, Bug, Ticket,
+  Wrench, Package, User as UserIcon, Settings, LogOut, Bug, Ticket, AlertTriangle,
 } from 'lucide-react'
 import { ReportIssueModal } from './ReportIssueModal'
 import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
@@ -26,6 +26,7 @@ const MAIN_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/ai', label: 'AI Reader', icon: Sparkles, featureKey: 'ai_reader' },
   { href: '/projects', label: 'Projects', icon: FolderOpen, featureKey: 'projects' },
+  { href: '/risks', label: 'Risks', icon: AlertTriangle, featureKey: 'ai_risk' },
   { href: '/leave', label: 'Leave', icon: CalendarDays, featureKey: 'staffing' },
   { href: '/expenses', label: 'Expenses', icon: Wallet, featureKey: 'staffing' },
   { href: '/service-requests', label: 'Requests', icon: Wrench },

@@ -31,7 +31,7 @@ function shape(run: NonNullable<Awaited<ReturnType<typeof latestBrief>>>, hash: 
 /** GET /api/projects/[id]/risks/brief — the newest AI brief for this project, and whether it still matches the flags. */
 export const GET = withProjectAccess(async (_request: NextRequest, { projectId, profile }) => {
   await guard(profile.organisationId)
-  const [{ active }, run] = await Promise.all([activeRiskSignals(projectId), latestBrief(projectId)])
+  const [{ active }, run] = await Promise.all([activeRiskSignals(projectId, profile.organisationId), latestBrief(projectId)])
   return NextResponse.json({ data: { brief: run ? shape(run, flagsHash(active)) : null } }, { headers: { 'cache-control': 'no-store' } })
 })
 
@@ -48,7 +48,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
     const body = await parseBody(request).catch(() => ({} as Record<string, unknown>))
     const language = body.language === 'et' ? 'et' : 'en'
 
-    const { active } = await activeRiskSignals(projectId)
+    const { active } = await activeRiskSignals(projectId, project.organisationId)
     if (active.length === 0) throw new ValidationError('Nothing is flagged, so there is nothing to brief.')
     const hash = flagsHash(active)
     const existing = await latestBrief(projectId)

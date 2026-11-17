@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
  */
 export const GET = withProjectAccess(async (_request: NextRequest, { projectId, profile }) => {
   if (!(await isFeatureEnabled(profile.organisationId, 'ai_risk'))) throw new ValidationError('Risk analysis is not switched on for your practice.')
-  const { active, dismissed, generatedAt } = await activeRiskSignals(projectId)
+  const { active, dismissed, generatedAt } = await activeRiskSignals(projectId, profile.organisationId)
   const ids = [...new Set(dismissed.map((d) => d.dismissedBy))]
   const people = ids.length ? await prisma.profile.findMany({ where: { id: { in: ids }, organisationId: profile.organisationId }, select: { id: true, fullName: true } }) : []
   const name = (id: string) => people.find((p) => p.id === id)?.fullName ?? 'Someone'

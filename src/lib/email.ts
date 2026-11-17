@@ -516,3 +516,13 @@ export async function sendErrorAlertEmail(p: ErrorAlertEmailParams): Promise<{ s
     return { success: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
+
+/** Weekly risk digest. Subject, text and html are built (and escaped) in lib/risk/digest. */
+export async function sendRiskDigestEmail(p: { to: string; subject: string; text: string; html: string }): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await getResend().emails.send({ from: FROM_EMAIL, to: p.to, subject: p.subject, text: p.text, html: p.html })
+    return error ? { success: false, error: error.message } : { success: true }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}

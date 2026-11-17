@@ -41,9 +41,27 @@ export function flagsHash(signals: RiskSignal[]): string {
   return createHash('sha256').update(JSON.stringify(stable)).digest('hex').slice(0, 20)
 }
 
+/** Small numbers written as words, so "three conditions" is checked like "3 conditions". English and Estonian. */
+const NUMBER_WORDS: Record<string, number> = {
+  two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  kaks: 2, kolm: 3, neli: 4, viis: 5, kuus: 6, seitse: 7, kaheksa: 8, 'üheksa': 9, 'kümme': 10,
+}
+// "one"/"üks" are left out on purpose: they are used as articles ("one of them") far more often than as counts.
+
 /** Numbers in a piece of text, written with a dot. A digit glued to a letter is part of a name or unit (m2, R60), not a number. */
 export function numbersIn(text: string): string[] {
-  return (text.replace(/(\d)[\s ](?=\d{3}(?!\d))/g, '$1').replace(/(?<=\p{L})\d+/gu, '').match(/\d+(?:[.,]\d+)?/g) ?? []).map((n) => String(Number(n.replace(',', '.'))))
+  // A date is one thing: "2026-11-07" must match a date in the flag, and its 7 must not excuse "7 days late"
+  const dates = text.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? []
+  const rest = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+  const digits = (rest.replace(/(\d)[\s\u00a0](?=\d{3}(?!\d))/g, '$1').replace(/(?<=\p{L})\d+/gu, '').match(/\d+(?:[.,]\d+)?/g) ?? []).map((n) => String(Number(n.replace(',', '.'))))
+  const words = (rest.toLowerCase().match(/[\p{L}]+/gu) ?? []).filter((w) => w in NUMBER_WORDS).map((w) => String(NUMBER_WORDS[w]))
+  return [...dates, ...digits, ...words]
+}
+
+/** Counts worked out here and handed to the model, so it never has to count flags itself. */
+export function flagCounts(signals: RiskSignal[]) {
+  const by = <K extends string>(key: (s: RiskSignal) => K) => signals.reduce((m, s) => ({ ...m, [key(s)]: (m[key(s)] ?? 0) + 1 }), {} as Record<string, number>)
+  return { total: signals.length, bySeverity: by((s) => s.severity), byArea: by((s) => s.area), withNoOwner: signals.filter((s) => s.facts.hasOwner === false || /nobody (owns|is assigned)|no owner/i.test(`${s.title} ${s.detail}`)).length }
 }
 
 export interface CheckedBrief {
@@ -67,6 +85,7 @@ export function checkBrief(raw: RiskBriefRaw, signals: RiskSignal[]): CheckedBri
   const all = new Set<string>([String(signals.length), String(high), String(medium), String(low), String(high + medium)])
   for (const s of signals) for (const n of numsOf(s)) all.add(n)
   for (const area of new Set(signals.map((s) => s.area))) all.add(String(signals.filter((s) => s.area === area).length))
+  all.add(String(flagCounts(signals).withNoOwner))
 
   const notes: string[] = []
   const seen = new Set<string>()

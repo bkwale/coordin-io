@@ -7,7 +7,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags'
 import { parseBody, requireString } from '@/lib/validation'
 import { prisma } from '@/lib/prisma'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
-import { projectRiskSignals } from '@/lib/risk/load'
+import { activeRiskSignals } from '@/lib/risk/active'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,7 @@ export const POST = withProjectAccess(async (request: NextRequest, { projectId, 
   const reason = requireString(body.reason, 'Reason', 500).trim()
   if (reason.length < 3) throw new ValidationError('Say briefly why this is being set aside.')
 
-  const { signals } = await projectRiskSignals(projectId)
+  const { all: signals } = await activeRiskSignals(projectId, profile.organisationId)
   const signal = signals.find((s) => s.id === signalId)
   if (!signal) throw new NotFoundError('That flag is no longer being raised.')
 
