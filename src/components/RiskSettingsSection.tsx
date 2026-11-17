@@ -17,6 +17,18 @@ export function RiskSettingsSection() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const sendTest = async () => {
+    setTesting(true); setTestResult(null)
+    try {
+      const res = await fetch('/api/settings/risk/test-digest', { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(errText(d, 'The test could not be sent.'))
+      setTestResult({ ok: true, text: d.data?.message ?? 'Sent.' })
+    } catch (e) { setTestResult({ ok: false, text: e instanceof Error ? e.message : 'The test could not be sent.' }) } finally { setTesting(false) }
+  }
 
   const apply = (d: Pick<Data, 'thresholds' | 'weeklyDigest'>) => { setValues(Object.fromEntries(Object.entries(d.thresholds).map(([k, v]) => [k, String(v)]))); setDigest(d.weeklyDigest) }
 
@@ -76,6 +88,13 @@ export function RiskSettingsSection() {
             <span className="block text-[11px] text-ink-400">Every Monday morning, each project lead gets one email listing the high and medium flags on the projects they lead. Nothing is sent to anyone with nothing flagged. Each person can switch it off for themselves under Notifications.</span>
           </span>
         </label>
+        {data.canEdit && (
+          <div className="ml-7 mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={sendTest} disabled={testing} className="inline-flex items-center gap-1.5 rounded-lg border border-ink-100 bg-white px-3 py-1.5 text-[12px] font-medium text-ink-700 hover:bg-surface-50 disabled:opacity-50">{testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Send me a test now</button>
+            <span className="text-[11px] text-ink-400">Goes only to your own address. Works whether the box is ticked or not.</span>
+            {testResult && <p role={testResult.ok ? 'status' : 'alert'} className={testResult.ok ? 'w-full text-[12px] text-emerald-700' : 'w-full text-[12px] text-red-700'}>{testResult.text}</p>}
+          </div>
+        )}
       </div>
 
       {data.canEdit && (

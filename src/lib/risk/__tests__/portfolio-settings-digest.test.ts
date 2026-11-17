@@ -2,10 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/lib/prisma', () => ({ prisma: {} }))
 vi.mock('@/lib/email', () => ({ sendRiskDigestEmail: vi.fn() }))
 vi.mock('@/lib/error-reporting', () => ({ captureError: vi.fn() }))
+vi.mock('@/lib/audit', () => ({ recordAuditEvent: vi.fn(), AuditActions: {} }))
 import { DEFAULT_THRESHOLDS, computeSignals, type RiskSignal } from '../signals'
 import { parseRiskSettings, validateThresholds, thresholdsToStore, THRESHOLD_FIELDS, toShown } from '../settings'
 import { rankProjects, topSignals, totals } from '../portfolio'
-import { buildDigest, digestProjects, wantsDigest } from '../digest'
+import { buildDigest, digestProjects, wantsDigest, weekKey } from '../digest'
 
 const c = (high: number, medium: number, low = 0) => ({ total: high + medium + low, high, medium, low })
 const shownDefaults = () => Object.fromEntries(THRESHOLD_FIELDS.map((f) => [f.key, toShown(f.unit, DEFAULT_THRESHOLDS[f.key])]))
@@ -92,6 +93,19 @@ describe('weekly digest', () => {
   })
   it('the worst project comes first', () => {
     expect(digestProjects([project({ id: 'x', name: 'X', counts: c(0, 1) }), project({ id: 'y', name: 'Y', counts: c(3, 0) })]).map((p) => p.id)).toEqual(['y', 'x'])
+  })
+  it('every day of a week gives the same key, and the next Monday gives a new one', () => {
+    expect(weekKey(new Date('2026-11-16T06:00:00Z'))).toBe('2026-11-16')
+    expect(weekKey(new Date('2026-11-16T00:00:00Z'))).toBe('2026-11-16')
+    expect(weekKey(new Date('2026-11-22T23:59:59Z'))).toBe('2026-11-16')
+    expect(weekKey(new Date('2026-11-23T06:00:00Z'))).toBe('2026-11-23')
+    expect(weekKey(new Date('2027-01-01T12:00:00Z'))).toBe('2026-12-28')
+  })
+  it('a test email says it is a test and who the real one goes to', () => {
+    const m = buildDigest({ firstName: 'Wale', organisationName: 'Testbüroo OÜ', projects: [project()], test: true, scope: 'the projects you can see' })!
+    expect(m.subject.startsWith('[Test] ')).toBe(true)
+    expect(m.text).toContain('on the projects you can see at Testbüroo OÜ')
+    expect(m.text).toContain('This is a test you sent to yourself')
   })
   it('a person gets it unless they switched its email off', () => {
     expect(wantsDigest(null)).toBe(true)
