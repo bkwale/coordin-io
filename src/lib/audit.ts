@@ -195,6 +195,9 @@ export const AuditActions = {
   AI_PROJECT_CONFIGURED: 'ai.project_configured',
   AI_SUMMARY_RUN: 'ai.summary_run',
   AI_SUMMARY_TASKS_CREATED: 'ai.summary_tasks_created',
+  AI_RISK_BRIEF_RUN: 'ai.risk_brief_run',
+  RISK_DISMISSED: 'risk.dismissed',
+  RISK_RESTORED: 'risk.restored',
   PROJECT_EHR_LINKED: 'project.ehr_linked',
   PROJECT_EHR_UNLINKED: 'project.ehr_unlinked',
 
@@ -436,6 +439,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'ai.project_configured': 'Applied AI project configuration',
   'ai.summary_run': 'Summarised a document with AI',
   'ai.summary_tasks_created': 'Created tasks from an AI document summary',
+  'ai.risk_brief_run': 'Wrote a risk brief with AI',
+  'risk.dismissed': 'Set aside a risk flag',
+  'risk.restored': 'Brought back a risk flag',
   'project.ehr_linked': 'Linked Ehitisregister building',
   'project.ehr_unlinked': 'Unlinked Ehitisregister building',
 

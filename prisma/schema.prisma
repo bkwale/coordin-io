@@ -3610,3 +3610,23 @@ model MeritConnection {
   @@index([organisationId, active])
   @@map("merit_connections")
 }
+
+// A risk flag someone has set aside, with their reason. Flags are worked out fresh from the project's records each
+// time; this only remembers which ones a person has dealt with. One row per project and flag.
+model RiskDismissal {
+  id          String    @id @default(cuid())
+  projectId   String    @map("project_id")
+  signalId    String    @map("signal_id") // e.g. TASK_OVERDUE:<task id>
+  kind        String
+  severity    String // severity when it was set aside: a flag that later gets worse comes back
+  title       String    @db.Text // what it said at the time, for the record
+  reason      String    @db.Text
+  dismissedBy String    @map("dismissed_by") // profile id
+  dismissedAt DateTime  @default(now()) @map("dismissed_at")
+  restoredBy  String?   @map("restored_by")
+  restoredAt  DateTime? @map("restored_at")
+
+  @@unique([projectId, signalId])
+  @@index([projectId])
+  @@map("risk_dismissals")
+}
