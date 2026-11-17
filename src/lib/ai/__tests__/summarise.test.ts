@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { deflateRawSync } from 'node:zlib'
 import { docxToPages, docxXmlToPages, sniffZip } from '../docx'
-import { around, resolveLanguage, chunkPages, checkItem, checkSummary, checkContradictions, readDocumentPages, sectionSize, SECTION_CHARS, SECTION_CHARS_MAX } from '../summary-core'
+import { around, repeats, resolveLanguage, chunkPages, checkItem, checkSummary, checkContradictions, readDocumentPages, sectionSize, SECTION_CHARS, SECTION_CHARS_MAX } from '../summary-core'
 import { DocumentSummarySchema, SectionNotesSchema, ContradictionsSchema, normaliseSummary, normaliseNotes, normaliseContradictions } from '../schemas-summary'
 import { IngestError, cleanText } from '../document-ingest'
 
@@ -230,5 +230,30 @@ describe('the passage around a quote', () => {
   it('falls back to the quote when it cannot be placed', () => {
     expect(around(pages, null, 'köetav pind 1 745 m2')).toBe('köetav pind 1 745 m2')
     expect(around(pages, 1, 'seda siin ei ole üldse')).toBe('seda siin ei ole üldse')
+  })
+})
+
+describe('key points do not repeat what has its own section', () => {
+  const raw = ['Tellija kinnitas äripinna esialgseks kasutusprofiiliks kontori või vaikse teeninduse. Hoone brutopind on 2 180 m2, köetav pind 1 745 m2.', 'Katuse U-arvuks 0,12 W/(m2K) on märgitud lõikes 4.']
+  const base = { title: 'P', documentType: 'minutes' as const, language: 'et', summary: 's', actions: [], openQuestions: [], warnings: [] }
+  it('drops a key point quoting the same sentence as a decision, keeps the others', () => {
+    const m = checkSummary({ ...base,
+      keyPoints: [
+        { text: 'Äripind on kontor', page: 1, quote: 'Tellija kinnitas äripinna esialgseks kasutusprofiiliks kontori või vaikse teeninduse.' },
+        { text: 'Brutopind 2 180 m2', page: 1, quote: 'Hoone brutopind on 2 180 m2, köetav pind 1 745 m2.' },
+      ],
+      decisions: [{ text: 'Äripinna profiil kinnitatud', page: 1, quote: 'Tellija kinnitas äripinna esialgseks kasutusprofiiliks kontori või vaikse teeninduse' }],
+    }, raw, { sections: 1, truncated: false })
+    expect(m.keyPoints.map((k) => k.text)).toEqual(['Brutopind 2 180 m2'])
+    expect(m.decisions).toHaveLength(1)
+  })
+  it('drops a key point that restates a flagged contradiction', () => {
+    const m = checkSummary({ ...base, decisions: [], keyPoints: [{ text: 'Katuse U on vastuolus', page: 2, quote: 'Katuse U-arvuks 0,12 W/(m2K) on märgitud lõikes 4.' }] }, raw,
+      { sections: 1, truncated: false, contradictions: [{ subject: 'katuse U', a: { value: '0,10', page: 1, quote: 'x' }, b: { value: '0,12 W/(m2K)', page: 2, quote: 'Katuse U-arvuks 0,12 W/(m2K)' } }] })
+    expect(m.keyPoints).toEqual([])
+  })
+  it('short or missing quotes never count as a repeat', () => {
+    expect(repeats('9 m', ['kõrgus on 9 m maapinnast'])).toBe(false)
+    expect(repeats(null, ['anything long enough to matter here'])).toBe(false)
   })
 })

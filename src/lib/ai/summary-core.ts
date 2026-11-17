@@ -137,12 +137,22 @@ export function checkItem<T extends { text: string; page: number | null; quote: 
   return { ...item, page, verified: false }
 }
 
+/** True when a quote says the same thing as one already shown: one contains the other (after tidying), and it is long enough to mean something. */
+export function repeats(quote: string | null, others: Array<string | null>): boolean {
+  const q = quote ? squash(quote) : ''
+  if (q.length < 20) return false
+  return others.some((o) => { const t = o ? squash(o) : ''; return t.length >= 20 && (q.includes(t) || t.includes(q)) })
+}
+
 export function checkSummary(s: DocumentSummary, pages: string[], extra: { sections: number; truncated: boolean; engineWarnings?: string[]; contradictions?: CheckedContradiction[] }): SummaryMapping {
   const sp = pages.map(squash)
-  const keyPoints = s.keyPoints.map((x) => checkItem(x, sp))
   const decisions = s.decisions.map((x) => checkItem(x, sp))
   const actions = s.actions.map((x) => checkItem(x, sp))
   const openQuestions = s.openQuestions.map((x) => checkItem(x, sp))
+  // A key point that only repeats a decision, action, open question or a flagged contradiction is left out:
+  // the reader already sees it in its own section
+  const elsewhere = [...decisions, ...actions, ...openQuestions].map((x) => x.quote).concat((extra.contradictions ?? []).flatMap((c) => [c.a.quote, c.b.quote]))
+  const keyPoints = s.keyPoints.map((x) => checkItem(x, sp)).filter((x) => !repeats(x.quote, elsewhere))
   const unverified = [...keyPoints, ...decisions, ...actions, ...openQuestions].filter((x) => !x.verified).length
   const warnings = [...(extra.engineWarnings ?? []), ...s.warnings]
   if (unverified) warnings.push(`${unverified} item${unverified > 1 ? 's' : ''} could not be matched to the wording of the document. They are marked: check them against the file.`)

@@ -1,5 +1,6 @@
 'use client'
 
+import { useOrgFeatures } from '@/lib/hooks/useOrgFeatures'
 import { usePathname, useParams } from 'next/navigation'
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
@@ -19,6 +20,8 @@ interface SubTab {
   hideIn?: CountryCode[]
   /** Hotel-only pages (schedule of accommodation): hidden on non-hotel projects outside Nigeria */
   hospitalityOnly?: boolean
+  /** Only shown when the practice has this feature switched on */
+  feature?: string
 }
 
 interface TabDef {
@@ -43,10 +46,11 @@ const PROJECT_TABS: TabDef[] = [
     label: 'Overview',
     href: '',
     icon: LayoutDashboard,
-    routes: ['', '/health', '/brief', '/resources', '/delivery'],
+    routes: ['', '/health', '/risks', '/brief', '/resources', '/delivery'],
     subTabs: [
       { label: 'Dashboard', href: '' },
       { label: 'Health', href: '/health' },
+      { label: 'Risks', href: '/risks', feature: 'ai_risk' },
       { label: 'Brief', href: '/brief' },
       { label: 'Resources', href: '/resources' },
       { label: 'Delivery', href: '/delivery' },
@@ -126,6 +130,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const projectId = params.id as string
   const basePath = `/projects/${projectId}`
 
+  const { isEnabled, loading: featuresLoading } = useOrgFeatures()
   const [projectName, setProjectName] = useState<string | null>(null)
   const [workStageFramework, setWorkStageFramework] = useState<string | null>(null)
   const [country, setCountry] = useState<CountryCode | null>(null)
@@ -154,9 +159,11 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     PROJECT_TABS
       .filter(tab => !tab.frameworks || (workStageFramework && tab.frameworks.includes(workStageFramework)))
       .map(tab => (tab.subTabs ? { ...tab, subTabs: tab.subTabs.filter(st =>
+        !(st.feature && !isEnabled(st.feature)) &&
         !(country && st.hideIn?.includes(country)) &&
         !(st.hospitalityOnly && !showsHospitality({ country: firmCountry === 'NG' ? 'NG' : (country ?? firmCountry), projectType }))) } : tab)),
-    [workStageFramework, country, firmCountry, projectType]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workStageFramework, country, firmCountry, projectType, featuresLoading]
   )
 
   // Determine active tab and sub-route
