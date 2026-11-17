@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkBrief, flagsHash, flagsForModel, normaliseRiskBrief, numbersIn, RiskBriefSchema } from '../risk-brief-core'
+import { checkBrief, flagCounts, flagsHash, flagsForModel, normaliseRiskBrief, numbersIn, RiskBriefSchema } from '../risk-brief-core'
 import { applyDismissals } from '@/lib/risk/dismissals'
 import type { RiskSignal } from '@/lib/risk/signals'
 
@@ -52,6 +52,29 @@ describe('what the AI brief may say', () => {
   })
 })
 
+describe('numbers written as words', () => {
+  it('are checked like digits, in English and Estonian', () => {
+    expect(numbersIn('three conditions, two of them unowned')).toEqual(['3', '2'])
+    expect(numbersIn('kolm tingimust on hilinenud')).toEqual(['3'])
+    expect(numbersIn('one of them is late')).toEqual([])
+  })
+  it('a date is matched whole: its day number does not excuse another figure', () => {
+    expect(numbersIn('Due 2026-11-07, 10 days late')).toEqual(['2026-11-07', '10'])
+    const p = (why: string) => checkBrief({ headline: 'H', overview: 'Late.', priorities: [{ signalId: 'CONDITION_OVERDUE:c1', why, action: 'Submit it.' }] }, flags).priorities.length
+    expect(p('Due 2026-11-07 and 10 days late.')).toBe(1)
+    expect(p('It is 7 days late.')).toBe(0)
+    expect(p('Due 2026-11-08.')).toBe(0)
+  })
+  it('a priority that says "twelve days" when the flag says 10 is dropped', () => {
+    const b = checkBrief({ headline: 'H', overview: 'Late condition.', priorities: [{ signalId: 'CONDITION_OVERDUE:c1', why: 'It is twelve days late.', action: 'Submit it.' }] }, flags)
+    expect(b.priorities).toEqual([])
+  })
+  it('an overview count that matches nothing is replaced', () => {
+    const b = checkBrief({ headline: 'H', overview: 'Seven conditions are late.', priorities: [] }, flags)
+    expect(b.overview).toBe('3 flags: 2 high, 1 medium, 0 low.')
+  })
+})
+
 describe('brief plumbing', () => {
   it('the hash changes when a flag changes or disappears, not when the order does', () => {
     expect(flagsHash(flags)).toBe(flagsHash([late, hours, sig()]))
@@ -65,6 +88,10 @@ describe('brief plumbing', () => {
   it('normaliser accepts loose shapes and drops incomplete priorities', () => {
     const v = RiskBriefSchema.safeParse(normaliseRiskBrief({ title: 'H', summary: 'O', top: [{ id: 'a', reason: 'w', next: 'do' }, { id: 'b' }, null] }))
     expect(v.success && v.data).toEqual({ headline: 'H', overview: 'O', priorities: [{ signalId: 'a', why: 'w', action: 'do' }] })
+  })
+  it('counts are worked out for the model, including flags with no owner', () => {
+    const c = flagCounts([...flags, sig({ id: 'x', detail: 'Due 2026-11-21 and nobody is assigned.', facts: {} })])
+    expect(c).toMatchObject({ total: 4, bySeverity: { high: 3, medium: 1 }, byArea: { permits: 2, money: 1, schedule: 1 }, withNoOwner: 1 })
   })
   it('numbers: thousands, decimals, and unit digits ignored', () => {
     expect(numbersIn('1 745 m2 and 0,12 W/(m2K), R60, 30%')).toEqual(['1745', '0.12', '30'])

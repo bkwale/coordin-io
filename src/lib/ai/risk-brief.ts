@@ -8,7 +8,7 @@ import { assertAiBudget } from './budget'
 import { createRun, runAI } from './pipeline'
 import { recordAuditEvent, AuditActions } from '@/lib/audit'
 import { RISK_BRIEF_PROMPT_VERSION, RISK_BRIEF_SYSTEM, riskBriefUser, type BriefLanguage } from './prompts/risk-brief'
-import { RiskBriefSchema, normaliseRiskBrief, checkBrief, flagsForModel, flagsHash, type CheckedBrief } from './risk-brief-core'
+import { RiskBriefSchema, normaliseRiskBrief, checkBrief, flagsForModel, flagsHash, flagCounts, type CheckedBrief } from './risk-brief-core'
 import type { RiskSignal } from '@/lib/risk/signals'
 
 const KIND = 'risk-brief'
@@ -39,7 +39,7 @@ export async function writeBrief(input: { projectId: string; projectName: string
   const flags = flagsForModel(signals)
   return runAI(run.id, {
     surface: 'DRAFT', organisationId, projectId, createdBy: authUserId, inputSummary: JSON.stringify(summary), promptVersion: RISK_BRIEF_PROMPT_VERSION,
-    ingest: async () => ({ system: RISK_BRIEF_SYSTEM, user: riskBriefUser(projectName, flags, language), inputForHash: `${hash}:${language}` }),
+    ingest: async () => ({ system: RISK_BRIEF_SYSTEM, user: riskBriefUser(projectName, flags, language, flagCounts(signals)), inputForHash: `${hash}:${language}` }),
     schema: RiskBriefSchema,
     normalise: normaliseRiskBrief,
     maxTokens: 2000,
