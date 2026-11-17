@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeSignals, countSignals, taskSignals, milestoneSignals, permitSignals, regulatorySignals, documentSignals, daysBetween, DEFAULT_THRESHOLDS, type TaskIn, type MilestoneIn, type ConditionIn, type ApplicationIn, type RegulatoryItemIn, type RiskInput } from '../signals'
+import { computeSignals, countSignals, taskSignals, milestoneSignals, permitSignals, regulatorySignals, documentSignals, moneySignals, approvalSignals, daysBetween, DEFAULT_THRESHOLDS, type TaskIn, type MilestoneIn, type ConditionIn, type ApplicationIn, type RegulatoryItemIn, type RiskInput } from '../signals'
 
 const NOW = new Date('2026-11-16T10:30:00Z')
 const d = (s: string) => new Date(`${s}T00:00:00Z`)
@@ -162,6 +162,46 @@ describe('documents', () => {
   })
 })
 
+describe('hours against the resource plan', () => {
+  const run = (plannedToDate: number, loggedToDate: number, plannedTotal = 400) => moneySignals({ projectId: P, hours: { plannedToDate, loggedToDate, plannedTotal } })
+  it('on or under plan, or just inside the tolerance, raises nothing', () => {
+    expect(run(100, 80)).toEqual([])
+    expect(run(100, 100)).toEqual([])
+    expect(run(100, 110)).toEqual([])
+  })
+  it('more than 10% over is medium, more than 25% over is high', () => {
+    expect(run(100, 118)[0]).toMatchObject({ kind: 'HOURS_OVER_PLAN', severity: 'medium', area: 'money', id: 'HOURS_OVER_PLAN:proj1', facts: { percentOver: 18, loggedToDate: 118, plannedToDate: 100 } })
+    expect(run(100, 140)[0].severity).toBe('high')
+    expect(run(100, 118)[0].detail).toBe('118 h logged against 100 h planned to date (400 h planned in all).')
+  })
+  it('too little planned so far to judge: nothing, however far over', () => expect(run(8, 30)).toEqual([]))
+  it('no resource plan at all: nothing', () => {
+    expect(moneySignals({ projectId: P, hours: null })).toEqual([])
+    expect(moneySignals({ projectId: P })).toEqual([])
+  })
+})
+
+describe('things waiting for a decision', () => {
+  const run = (over: Partial<Parameters<typeof approvalSignals>[0]>) => approvalSignals({ projectId: P, tasks: [], ...over }, NOW)
+  it('a task ready for review and untouched for five days is flagged; fourteen is high', () => {
+    expect(run({ tasks: [task({ status: 'READY_FOR_REVIEW', updatedAt: d('2026-11-13') })] })).toEqual([])
+    expect(run({ tasks: [task({ status: 'READY_FOR_REVIEW', updatedAt: d('2026-11-09') })] })[0]).toMatchObject({ kind: 'TASK_REVIEW_WAITING', severity: 'medium', area: 'approvals', facts: { daysWaiting: 7 } })
+    expect(run({ tasks: [task({ status: 'READY_FOR_REVIEW', updatedAt: d('2026-10-30') })] })[0].severity).toBe('high')
+    expect(run({ tasks: [task({ status: 'IN_PROGRESS', updatedAt: d('2026-10-01') })] })).toEqual([])
+  })
+  it('an expense waiting on this project is flagged with its amount', () => {
+    const [s] = run({ expensesWaiting: [{ id: 'e1', description: 'Site visit travel', amount: 84.5, currency: 'EUR', status: 'SUBMITTED', submittedAt: d('2026-11-06') }] })
+    expect(s).toMatchObject({ kind: 'EXPENSE_WAITING', severity: 'medium', facts: { daysWaiting: 10, amount: 84.5 } })
+    expect(s.detail).toBe('EUR 84.50, submitted 2026-11-06.')
+    expect(run({ expensesWaiting: [{ id: 'e2', description: 'x', amount: 1, currency: null, status: 'SUBMITTED', submittedAt: d('2026-11-14') }] })).toEqual([])
+    expect(run({ expensesWaiting: [{ id: 'e3', description: 'x', amount: 1, currency: null, status: 'SUBMITTED', submittedAt: null }] })).toEqual([])
+  })
+  it('a document review with no outcome is flagged', () => {
+    const [s] = run({ documentReviewsWaiting: [{ id: 'rv1', documentId: 'doc1', documentTitle: 'Eelprojekt', revision: 'B', requestedAt: d('2026-10-28') }] })
+    expect(s).toMatchObject({ kind: 'DOCUMENT_REVIEW_WAITING', severity: 'high', link: '/documents/doc1', facts: { daysWaiting: 19, revision: 'B' } })
+  })
+})
+
 describe('all together', () => {
   const input: RiskInput = {
     projectId: P,
@@ -178,7 +218,7 @@ describe('all together', () => {
     expect(a.map((s) => `${s.severity}:${s.kind}`)).toEqual(['high:CONDITION_OVERDUE', 'high:MILESTONE_OVERDUE', 'high:TASK_OVERDUE', 'medium:DOCUMENT_FIGURES_DISAGREE', 'low:REGULATORY_UNOWNED', 'low:TASK_OVERDUE'])
   })
   it('counts by severity and area', () => {
-    expect(countSignals(computeSignals(input, NOW))).toEqual({ total: 6, high: 3, medium: 1, low: 2, byArea: { permits: 2, schedule: 3, documents: 1 } })
+    expect(countSignals(computeSignals(input, NOW))).toEqual({ total: 6, high: 3, medium: 1, low: 2, byArea: { permits: 2, schedule: 3, money: 0, approvals: 0, documents: 1 } })
   })
   it('an empty project raises nothing', () => {
     expect(computeSignals({ projectId: P, tasks: [], milestones: [], conditions: [], applications: [], regulatoryItems: [], documentContradictions: [] }, NOW)).toEqual([])

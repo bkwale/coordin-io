@@ -6,7 +6,7 @@
  * Pure: give it the records and today's date, get the signals. The same input always gives the same output.
  */
 
-export type RiskArea = 'schedule' | 'permits' | 'documents'
+export type RiskArea = 'schedule' | 'permits' | 'money' | 'approvals' | 'documents'
 export type RiskSeverity = 'high' | 'medium' | 'low'
 export type SignalKind =
   | 'TASK_OVERDUE' | 'TASK_BLOCKED' | 'TASK_DUE_SOON_UNOWNED'
@@ -14,6 +14,8 @@ export type SignalKind =
   | 'CONDITION_OVERDUE' | 'CONDITION_DUE_SOON' | 'CONDITION_NOT_DISCHARGED'
   | 'PERMIT_DECISION_LATE' | 'PERMIT_EXPIRED' | 'PERMIT_EXPIRING'
   | 'REGULATORY_OVERDUE' | 'REGULATORY_ACTION_REQUIRED' | 'REGULATORY_UNOWNED'
+  | 'HOURS_OVER_PLAN'
+  | 'EXPENSE_WAITING' | 'DOCUMENT_REVIEW_WAITING' | 'TASK_REVIEW_WAITING'
   | 'DOCUMENT_FIGURES_DISAGREE'
 
 export interface RiskSignal {
@@ -24,7 +26,7 @@ export interface RiskSignal {
   severity: RiskSeverity
   title: string
   detail: string
-  record: { type: 'task' | 'milestone' | 'planning_condition' | 'planning_application' | 'regulatory_item' | 'document'; id: string; label: string }
+  record: { type: 'task' | 'milestone' | 'planning_condition' | 'planning_application' | 'regulatory_item' | 'document' | 'project' | 'expense'; id: string; label: string }
   link: string
   /** The numbers and dates behind the signal, for the AI brief and for checking. */
   facts: Record<string, string | number | boolean | null>
@@ -42,8 +44,16 @@ export interface RiskThresholds {
   milestoneWindowDays: number
   /** Warn this long before a permission lapses. */
   permitExpiryWarningDays: number
+  /** Hours are only compared with the plan once this many have been planned, so one odd week does not raise a flag. */
+  hoursMinimumPlanned: number
+  /** Logged hours this far over the plan to date are flagged (0.1 = 10%), and this far over are high. */
+  hoursOverPlan: number
+  hoursOverPlanHigh: number
+  /** Something waiting for a decision this many days is flagged, and this many is high. */
+  waitingDays: number
+  waitingHighDays: number
 }
-export const DEFAULT_THRESHOLDS: RiskThresholds = { taskHighAfterDays: 14, taskMediumAfterDays: 3, blockedAfterDays: 5, dueSoonDays: 7, milestoneWindowDays: 14, permitExpiryWarningDays: 90 }
+export const DEFAULT_THRESHOLDS: RiskThresholds = { taskHighAfterDays: 14, taskMediumAfterDays: 3, blockedAfterDays: 5, dueSoonDays: 7, milestoneWindowDays: 14, permitExpiryWarningDays: 90, hoursMinimumPlanned: 20, hoursOverPlan: 0.1, hoursOverPlanHigh: 0.25, waitingDays: 5, waitingHighDays: 14 }
 
 /* ── Input shapes: only the fields the rules read ───────────────────────────────── */
 
@@ -54,6 +64,11 @@ export interface ApplicationIn { id: string; reference: string | null; authority
 export interface RegulatoryItemIn { id: string; requirement: string; titleLocal: string | null; status: string; origin: string; dueDate: Date | null; ownerId: string | null; citation: string | null }
 export interface DocumentContradictionIn { documentId: string; documentTitle: string; revision: string | null; runId: string; contradictions: Array<{ subject: string; a: { value: string; page: number | null }; b: { value: string; page: number | null } }> }
 
+/** Hours planned (resource plan) and logged (timesheets) on the project, for weeks up to and including this one. */
+export interface HoursIn { plannedToDate: number; loggedToDate: number; plannedTotal: number }
+export interface ExpenseWaitingIn { id: string; description: string; amount: number; currency: string | null; status: string; submittedAt: Date | null }
+export interface DocumentReviewWaitingIn { id: string; documentId: string; documentTitle: string; revision: string; requestedAt: Date }
+
 export interface RiskInput {
   projectId: string
   tasks: TaskIn[]
@@ -62,6 +77,9 @@ export interface RiskInput {
   applications: ApplicationIn[]
   regulatoryItems: RegulatoryItemIn[]
   documentContradictions: DocumentContradictionIn[]
+  hours?: HoursIn | null
+  expensesWaiting?: ExpenseWaitingIn[]
+  documentReviewsWaiting?: DocumentReviewWaitingIn[]
 }
 
 /* ── Dates: whole days, in UTC, so "due today" is never "late" ──────────────────── */
@@ -277,6 +295,68 @@ export function regulatorySignals(input: Pick<RiskInput, 'projectId' | 'regulato
   return out
 }
 
+/* ── Money ──────────────────────────────────────────────────────────────────────── */
+
+const hrs = (n: number) => `${Math.round(n * 10) / 10} h`
+
+/**
+ * Hours logged against hours planned, to date. Coordin holds no charge-out rates, so this is about time, not money:
+ * it says the team has spent more hours than the resource plan allowed by now, which is the early sign of a fee overrun.
+ */
+export function moneySignals(input: Pick<RiskInput, 'projectId' | 'hours'>, th: RiskThresholds = DEFAULT_THRESHOLDS): RiskSignal[] {
+  const h = input.hours
+  if (!h || h.plannedToDate < th.hoursMinimumPlanned) return []
+  // rounded so that exactly 10% over is not pushed past the line by floating-point arithmetic
+  const over = Math.round((h.loggedToDate / h.plannedToDate - 1) * 10_000) / 10_000
+  if (over <= th.hoursOverPlan) return []
+  const pct = Math.round(over * 100)
+  return [{
+    id: `HOURS_OVER_PLAN:${input.projectId}`, kind: 'HOURS_OVER_PLAN', area: 'money', severity: over > th.hoursOverPlanHigh ? 'high' : 'medium',
+    record: { type: 'project', id: input.projectId, label: 'Resource plan' }, link: `/projects/${input.projectId}/resources`,
+    title: `Hours are ${pct}% over the plan so far`,
+    detail: `${hrs(h.loggedToDate)} logged against ${hrs(h.plannedToDate)} planned to date${h.plannedTotal > h.plannedToDate ? ` (${hrs(h.plannedTotal)} planned in all)` : ''}.`,
+    facts: { loggedToDate: Math.round(h.loggedToDate * 10) / 10, plannedToDate: Math.round(h.plannedToDate * 10) / 10, plannedTotal: Math.round(h.plannedTotal * 10) / 10, percentOver: pct },
+  }]
+}
+
+/* ── Things waiting for a decision ──────────────────────────────────────────────── */
+
+export function approvalSignals(input: Pick<RiskInput, 'projectId' | 'tasks' | 'expensesWaiting' | 'documentReviewsWaiting'>, now: Date, th: RiskThresholds = DEFAULT_THRESHOLDS): RiskSignal[] {
+  const out: RiskSignal[] = []
+  const sev = (days: number): RiskSeverity => (days >= th.waitingHighDays ? 'high' : 'medium')
+
+  for (const t of input.tasks) {
+    if (t.archivedAt || t.status !== 'READY_FOR_REVIEW') continue
+    const waiting = daysBetween(t.updatedAt, now)
+    if (waiting < th.waitingDays) continue
+    out.push({
+      id: `TASK_REVIEW_WAITING:${t.id}`, kind: 'TASK_REVIEW_WAITING', area: 'approvals', severity: sev(waiting), record: { type: 'task', id: t.id, label: t.title }, link: `/tasks/${t.id}`,
+      title: `Waiting ${plural(waiting, 'day')} for review: ${short(t.title, 70)}`, detail: `Marked ready for review and not touched since ${iso(t.updatedAt)}.`,
+      facts: { daysWaiting: waiting, since: iso(t.updatedAt), priority: t.priority },
+    })
+  }
+  for (const e of input.expensesWaiting ?? []) {
+    if (!e.submittedAt) continue
+    const waiting = daysBetween(e.submittedAt, now)
+    if (waiting < th.waitingDays) continue
+    out.push({
+      id: `EXPENSE_WAITING:${e.id}`, kind: 'EXPENSE_WAITING', area: 'approvals', severity: sev(waiting), record: { type: 'expense', id: e.id, label: short(e.description, 60) }, link: '/expenses',
+      title: `Expense waiting ${plural(waiting, 'day')} for approval: ${short(e.description, 60)}`, detail: `${e.currency ? e.currency + ' ' : ''}${e.amount.toFixed(2)}, submitted ${iso(e.submittedAt)}.`,
+      facts: { daysWaiting: waiting, submittedAt: iso(e.submittedAt), amount: e.amount, currency: e.currency, status: e.status },
+    })
+  }
+  for (const r of input.documentReviewsWaiting ?? []) {
+    const waiting = daysBetween(r.requestedAt, now)
+    if (waiting < th.waitingDays) continue
+    out.push({
+      id: `DOCUMENT_REVIEW_WAITING:${r.id}`, kind: 'DOCUMENT_REVIEW_WAITING', area: 'approvals', severity: sev(waiting), record: { type: 'document', id: r.documentId, label: r.documentTitle }, link: `/documents/${r.documentId}`,
+      title: `Review waiting ${plural(waiting, 'day')}: ${short(r.documentTitle, 60)}`, detail: `Revision ${r.revision} was sent for review on ${iso(r.requestedAt)} and has no outcome yet.`,
+      facts: { daysWaiting: waiting, requestedAt: iso(r.requestedAt), revision: r.revision },
+    })
+  }
+  return out
+}
+
 /* ── Documents ──────────────────────────────────────────────────────────────────── */
 
 export function documentSignals(input: Pick<RiskInput, 'projectId' | 'documentContradictions'>): RiskSignal[] {
@@ -297,10 +377,10 @@ export function documentSignals(input: Pick<RiskInput, 'projectId' | 'documentCo
 /* ── All together ───────────────────────────────────────────────────────────────── */
 
 const RANK: Record<RiskSeverity, number> = { high: 0, medium: 1, low: 2 }
-const AREA_ORDER: RiskArea[] = ['permits', 'schedule', 'documents']
+const AREA_ORDER: RiskArea[] = ['permits', 'schedule', 'money', 'approvals', 'documents']
 
 export function computeSignals(input: RiskInput, now: Date, th: RiskThresholds = DEFAULT_THRESHOLDS): RiskSignal[] {
-  const all = [...permitSignals(input, now, th), ...regulatorySignals(input, now, th), ...milestoneSignals(input, now, th), ...taskSignals(input, now, th), ...documentSignals(input)]
+  const all = [...permitSignals(input, now, th), ...regulatorySignals(input, now, th), ...milestoneSignals(input, now, th), ...taskSignals(input, now, th), ...moneySignals(input, th), ...approvalSignals(input, now, th), ...documentSignals(input)]
   return all.sort((a, b) => RANK[a.severity] - RANK[b.severity] || AREA_ORDER.indexOf(a.area) - AREA_ORDER.indexOf(b.area) || a.id.localeCompare(b.id))
 }
 
