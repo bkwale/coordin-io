@@ -11,7 +11,7 @@ import { pdfToPages, paginateText, capPages, IngestError } from './document-inge
 import { PlanningConditionsSchema, normalisePlanningConditions, BriefSchema, normaliseBrief, DecisionNoticeSchema, normaliseDecisionNotice } from './schemas-documents'
 import { DECISION_NOTICE_PROMPT_VERSION, DECISION_NOTICE_SYSTEM, decisionNoticeUser } from './prompts/decision-notice'
 import { PLANNING_CONDITIONS_SYSTEM, PLANNING_CONDITIONS_PROMPT_VERSION, planningConditionsUser } from './prompts/planning-conditions'
-import { mapPlanningConditions, mapBrief, mapDecisionNotice, pinDocumentNumber, pinApplicationReference, verifyQuotes, type ProjectSetupMapping } from './map-project'
+import { mapPlanningConditions, mapBrief, mapDecisionNotice, guardBriefFigures, pinDocumentNumber, pinApplicationReference, verifyQuotes, type ProjectSetupMapping } from './map-project'
 import { BRIEF_PROMPT_VERSION, BRIEF_SYSTEM, briefUser } from './prompts/brief'
 import { applyInjectionGuard } from './injection-guard'
 import { assertAiBudget } from './budget'
@@ -108,7 +108,7 @@ export async function executeProjectSetup(runId: string, kind: SetupDocumentKind
       ingest: async (push) => { await readStage(push); return { system: BRIEF_SYSTEM, user: briefUser(pages), inputForHash: pages.join('\n') } },
       schema: BriefSchema,
       normalise: normaliseBrief,
-      map: (b) => applyInjectionGuard(verifyQuotes(mapBrief(b), pages), pages),
+      map: (b) => applyInjectionGuard(guardBriefFigures(verifyQuotes(mapBrief(b), pages), pages), pages),
       confidenceOf: (b) => {
         const f = [b.parameters.buildingType, b.parameters.workType, b.parameters.grossFloorArea, b.parameters.storeys]
         return f.reduce((a, x) => a + (x?.confidence ?? 0), 0) / f.length

@@ -250,6 +250,8 @@ export default function NewProjectPage() {
   const { toast } = useToast()
 
   const [step, setStep] = useState(1)
+  // A long text pasted into Description, handed to step 1 to be read as the brief
+  const [briefSeed, setBriefSeed] = useState<string | null>(null)
   const [reading, setReading] = useState<WizardReading | null>(null)
   const [orgRegion, setOrgRegion] = useState<{ country: CountryCode | null; currency: string } | null>(null)
   const [stageTouched, setStageTouched] = useState(false)
@@ -569,7 +571,7 @@ export default function NewProjectPage() {
                 <p className="text-[11px] text-slate-400 mt-1">{ruleSet ? `Coordin builds the ${ruleSet === 'EE' ? 'Estonian' : 'English'} regulatory checklist for this project.` : 'No regulatory rule set for this country yet — everything else works the same.'}</p>
               </div>
             </div>
-            <StartFromDocument jurisdiction={ruleSet} onRead={applyReading} onSkip={() => setStep(2)} />
+            <StartFromDocument jurisdiction={ruleSet} onRead={applyReading} onSkip={() => setStep(2)} seedText={briefSeed} />
           </div>
         )}
 
@@ -609,6 +611,14 @@ export default function NewProjectPage() {
             <div>
               <label className={labelCls}>Description</label>
               <textarea value={form.description} onChange={e => update('description', e.target.value)} placeholder="Brief project overview..." rows={3} className={`${fieldCls} placeholder:text-ink-300 resize-none`} />
+              <p className="text-[11px] text-slate-400 mt-1">A short overview for people opening the project. Coordin does not read this box.</p>
+              {form.description.trim().length >= 600 && briefSeed !== form.description && (
+                <div role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-900">
+                  <p className="font-medium">This looks like a whole document, not an overview.</p>
+                  <p className="mt-0.5">Text here is only stored. If it is the client brief, Coordin can read it and fill in the next steps. You check everything before it is saved.</p>
+                  <button type="button" onClick={() => { setBriefSeed(form.description); setStep(1) }} className="mt-2 px-3 py-1.5 rounded-md bg-ink-900 text-white text-[12px] font-medium hover:bg-ink-800">Read this as the brief</button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>

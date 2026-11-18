@@ -21,16 +21,20 @@ const POLL_MS = 1500
 const GIVE_UP_MS = 8 * 60_000
 const STAGE_LABEL: Record<string, string> = { read: 'Reading the document', extract: 'Finding the facts', map: 'Matching to the rules' }
 
-export function StartFromDocument({ jurisdiction, onRead, onSkip }: {
+export function StartFromDocument({ jurisdiction, onRead, onSkip, seedText }: {
   /** EE → planning conditions, GB → decision notice; null → brief only. */
   jurisdiction: 'EE' | 'GB' | null
   onRead: (r: WizardReading) => void
   onSkip: () => void
+  /** Text the person typed elsewhere in the wizard and now wants read as the brief. Shown ready to read; nothing is sent until they press the button. */
+  seedText?: string | null
 }) {
   const official: Kind | null = jurisdiction === 'GB' ? 'decision_notice' : jurisdiction === 'EE' ? 'planning_conditions' : null
   const [kind, setKind] = useState<Kind>(official ?? 'brief')
   useEffect(() => { setKind(official ?? 'brief') }, [official])
   const [text, setText] = useState('')
+  // Runs after the jurisdiction effect above, so a seeded brief stays on the brief tab
+  useEffect(() => { if (seedText) { setText(seedText); setKind('brief') } }, [seedText, official])
   const [busy, setBusy] = useState(false)
   const [run, setRun] = useState<Run | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -100,7 +104,7 @@ export function StartFromDocument({ jurisdiction, onRead, onSkip }: {
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />} {busy ? 'Reading…' : `Choose the ${docName} (PDF)`}
             </button>
             {!busy && (
-              <details className="text-[12px] text-ink-500">
+              <details open={!!seedText || undefined} className="text-[12px] text-ink-500">
                 <summary className="cursor-pointer">Or paste the text</summary>
                 <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Paste the document text…" className="mt-2 w-full text-[12px] px-2.5 py-1.5 rounded-md border border-surface-300" />
                 <button type="button" disabled={text.trim().length < 300} onClick={() => submit(null)} className="mt-1 px-3 py-1.5 rounded-md bg-accent-500 text-white text-[12px] font-medium disabled:opacity-40">Read pasted text</button>
