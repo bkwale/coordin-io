@@ -341,3 +341,72 @@ describe('verifyQuotes', () => {
     expect(m.warnings[0]).toMatch(/1 value cite/)
   })
 })
+
+import { guardBriefFigures, readFigure } from '@/lib/ai/map-project'
+describe('brief figures: a threshold in a rule is not a fact about the building', () => {
+  it('reads how a figure is written', () => {
+    expect(readFigure('the building will have 24 apartments', 24)).toBe('stated')
+    expect(readFigure('buildings with ≥ 3 flats and ≥ 1,200 m² closed net area', 1200)).toBe('threshold')
+    expect(readFigure('buildings with $\\ge 3$ flats', 3)).toBe('threshold')
+    expect(readFigure('R90+ (≥ 9 stories, with sprinklers)', 9)).toBe('threshold')
+    expect(readFigure('at least 12 apartments', 12)).toBe('threshold')
+    expect(readFigure('mandatory above 4 stories', 4)).toBe('threshold')
+    expect(readFigure('up to 8 stories', 8)).toBe('threshold')
+    expect(readFigure('9 storeys or more', 9)).toBe('threshold')
+    expect(readFigure('vähemalt 20 korterit', 20)).toBe('threshold')
+    expect(readFigure('kuni 2 korrust', 2)).toBe('threshold')
+    expect(readFigure('brutopind 150–180 m²', 180)).toBe('range')
+    expect(readFigure('0.5–1.2 car spaces/flat', 1.2)).toBe('range')
+    expect(readFigure('spread over 5 storeys', 5)).toBe('unclear')
+    expect(readFigure('brutopind ca 185,5 m2', 185.5)).toBe('unclear')
+    expect(readFigure('kahekorruseline', 2)).toBe('stated')
+    expect(readFigure('a two-storey house', 2)).toBe('stated')
+    expect(readFigure('suletud netopind 1 745 m²', 1745)).toBe('stated')
+    expect(readFigure('five floors', 9)).toBe('not_in_quote')
+  })
+  it('stated once plainly beats a threshold elsewhere in the same quote', () => {
+    expect(readFigure('The block has 9 storeys; R90 applies for ≥ 9 storeys', 9)).toBe('stated')
+  })
+
+  const page = 'Mandatory Shelter: Required for buildings with ≥ 3 flats and ≥ 1,200 m² closed net area. Fire Class: TP1; load-bearing resistance R60 (up to 8 stories) or R90+ (≥ 9 stories, with sprinklers). Parking: 0.5–1.2 car spaces/flat.'
+  const fill = (key: string, value: number, quote: string, over = {}) => ({ key, value, kind: 'value', label: String(value), because: 'Client brief', confidence: 1, page: 1, quote, preAccept: true, ...over })
+  const mapping = (prefills: any[], warnings: string[] = []) => ({ kind: 'brief', document: {} as any, conditions: [], warnings, bounds: { maxHeightM: null, maxStoreys: null, maxFootprint: null, minSetbackM: null }, prefills }) as any
+
+  it('the general specification that started this: floor area, storeys and apartments are removed, with the reason', () => {
+    const g = guardBriefFigures(mapping([
+      fill('buildingType', 0, 'x', { value: 'apartment_block' }),
+      fill('grossFloorArea', 1200, '≥ 1,200 m² closed net area'),
+      fill('storeys', 9, 'R90+ (≥ 9 stories, with sprinklers)'),
+      fill('apartments', 3, 'buildings with ≥ 3 flats and ≥ 1,200 m² closed net area'),
+    ]), [page])
+    expect(g.prefills.map((p: any) => p.key)).toEqual(['buildingType'])
+    expect(g.warnings).toHaveLength(3)
+    expect(g.warnings[0]).toMatch(/Floor area: not stated.*only as a limit or condition/)
+    expect(g.warnings.join(' ')).toMatch(/Storeys: not stated/)
+    expect(g.warnings.join(' ')).toMatch(/Apartments: not stated/)
+  })
+  it('a quote trimmed to hide the ≥ is still caught from the words around it in the document', () => {
+    const g = guardBriefFigures(mapping([fill('grossFloorArea', 1200, '1,200 m² closed net area')]), [page])
+    expect(g.prefills).toEqual([])
+  })
+  it('a figure from a range is kept but never pre-ticked', () => {
+    const g = guardBriefFigures(mapping([fill('parkingSpaces', 1.2, '0.5–1.2 car spaces/flat')]), [page])
+    expect(g.prefills[0]).toMatchObject({ preAccept: false, confidence: 0.5 })
+    expect(g.prefills[0].because).toMatch(/taken from a range/)
+  })
+  it('a figure the model says it inferred is never pre-ticked, even when written plainly', () => {
+    const g = guardBriefFigures(mapping([fill('apartments', 24, 'the building will have 24 apartments')], ['apartments: Inferred from unit schedule.']), ['the building will have 24 apartments'])
+    expect(g.prefills[0]).toMatchObject({ value: 24, preAccept: false })
+    expect(g.prefills[0].because).toMatch(/worked out by the AI/)
+  })
+  it('a plainly stated figure passes untouched, and so does everything that is not a figure', () => {
+    const m = mapping([fill('apartments', 24, 'the building will have 24 apartments'), fill('storeys', 2, 'kahekorruseline'), fill('timberStructure', 0, 'puitkarkass', { value: true })])
+    const g = guardBriefFigures(m, ['the building will have 24 apartments. kahekorruseline, puitkarkass'])
+    expect(g.prefills).toEqual(m.prefills)
+    expect(g.warnings).toEqual([])
+  })
+  it('only briefs are touched: an official limit in planning conditions is a bound and stays', () => {
+    const m = { ...mapping([fill('storeys', 2, 'kuni 2 korrust', { kind: 'bound' })]), kind: 'planning_conditions' }
+    expect(guardBriefFigures(m, ['kuni 2 korrust'])).toBe(m)
+  })
+})

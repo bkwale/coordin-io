@@ -1,4 +1,4 @@
-export const BRIEF_PROMPT_VERSION = 'brief-0.1'
+export const BRIEF_PROMPT_VERSION = 'brief-0.2'
 
 /**
  * Client brief → questionnaire pre-fill. Same posture as planning conditions: the document is DATA,
@@ -12,6 +12,9 @@ Rules:
 - Output ONLY a JSON object matching the schema. No prose.
 - Every field is {value, confidence (0-1), page, quote}. page = the 1-based page where you found it (pages are marked <<PAGE n>>). quote = the shortest exact substring that supports the value (max 300 chars). If not stated: value null, confidence 0, page null.
 - Extract only what the client states or clearly requests. Never infer a number that is not written. A range ("150–180 m²") → take the upper figure and say so in warnings.
+- A number in a RULE is not a fact about this building. Briefs and technical standards quote thresholds: "shelter required for buildings with ≥ 3 flats and ≥ 1,200 m²", "R90 for 9 storeys or more", "lift mandatory above 4 storeys", "0.5–1.2 parking spaces per flat". None of these says how big THIS building is. For grossFloorArea, height, storeys, apartments and parkingSpaces, give a value only when the document states this project's own figure ("the building will have 24 apartments", "korruselisus: 5"). If the only numbers are thresholds, conditions, ratios or ranges of a requirement: value null, confidence 0.
+- If the document is a general standard or specification that never gives this project's size, say so in warnings: "This reads as a general specification, not a brief for one building: size, storeys and apartments are not stated."
+- Never work a figure out. No minimums, no "at least", no derived counts.
 - Numbers: keep the unit exactly as written ("m2", "m²", "m", "korrust"). Never convert.
 - grossFloorArea: total / gross / brutopind / suletud netopind of the building the client wants. Not the plot area (krundi pindala).
 - height: the intended building height in metres, if stated. storeys: number of above-ground storeys requested ("kahekorruseline" = 2, "1,5 korrust" → 2 with a warning).

@@ -232,6 +232,84 @@ export function mapBrief(b: Brief): ProjectSetupMapping {
   }
 }
 
+/* ── Brief figures: a threshold in a rule is not a fact about this building ───────────────────────────────── */
+
+const NUMERIC_BRIEF_KEYS = ['grossFloorArea', 'height', 'storeys', 'apartments', 'parkingSpaces'] as const
+const BRIEF_KEY_LABEL: Record<string, string> = { grossFloorArea: 'Floor area', height: 'Height', storeys: 'Storeys', apartments: 'Apartments', parkingSpaces: 'Parking spaces' }
+
+/** Words and signs that turn the number after them into a limit or a condition ("≥ 1,200 m²", "at least 3 flats", "kuni 2 korrust"). */
+const BEFORE_LIMIT = /(≥|≤|>=|<=|>|<|\\geq?|\\leq?|\bat least|\bminimum(?: of)?|\bmin\.?|\bup to|\bmaximum(?: of)?|\bmax\.?|\bmore than|\babove|\bbelow|\bfewer than|\bless than|\bnot more than|\bno more than|\bexceed(?:s|ing)?|\bvähemalt|\bkuni|\büle|\balates|\balla|\bmitte rohkem kui|\bmitte vähem kui|\benam kui|\brohkem kui)[\s$\\{(]*$/i
+/** Words that often mark a limit but also appear in plain statements ("spread over 5 storeys"): the figure is kept, never pre-ticked. */
+const BEFORE_UNCLEAR = /(\bover|\bunder|\bfrom|\babout|\baround|\bapprox(?:\.|imately)?|\bca\.?|\bumbes|\bligikaudu)[\s$\\{(]*$/i
+/** Small numbers written as words in the quote ("kahekorruseline", "two-storey"). */
+const NUMBER_WORD: Record<number, RegExp> = { 1: /\b(one|single|ühe|üks)/i, 2: /\b(two|kahe|kaks)/i, 3: /\b(three|kolme|kolm)/i, 4: /\b(four|nelja|neli)/i, 5: /\b(five|viie|viis)/i, 6: /\b(six|kuue|kuus)/i, 7: /\b(seven|seitsme|seitse)/i, 8: /\b(eight|kaheksa)/i, 9: /\b(nine|üheksa)/i, 10: /\b(ten|kümne|kümme)/i }
+const AFTER_LIMIT = /^[\s$})]*(?:\+|(?:[\p{L}\d²/.-]+\s+){0,3}?(?:or more|or above|and above|and over|or fewer|or less|või enam|või rohkem|ja enam|ja rohkem))/iu
+const RANGE_BEFORE = /\d\s*(?:–|—|-|\bto\b|\bkuni\b)\s*$/i
+const RANGE_AFTER = /^\s*(?:–|—|-|\bto\b|\bkuni\b)\s*\d/i
+
+/** Every place a number is written in a text, allowing "1,200", "1 200" and "1200", and "6,5" for 6.5. */
+function occurrences(text: string, value: number): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  const re = /\d[\d  ,.]*\d|\d/g
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const raw = m[0]
+    const plain = Number(raw.replace(/[  ]/g, '').replace(/,(?=\d{3}(?!\d))/g, '').replace(',', '.'))
+    const noSep = Number(raw.replace(/[  ,.]/g, ''))
+    if (plain === value || noSep === value) out.push([m.index, m.index + raw.length])
+  }
+  return out
+}
+
+export type FigureReading = 'stated' | 'threshold' | 'range' | 'unclear' | 'not_in_quote'
+
+/** How a figure is written where the model found it: a plain statement, a limit, part of a range, or not there at all. */
+export function readFigure(context: string, value: number): FigureReading {
+  const hits = occurrences(context, value)
+  if (hits.length === 0) return NUMBER_WORD[value]?.test(context) ? 'stated' : 'not_in_quote'
+  let range = false, unclear = false
+  for (const [a, b] of hits) {
+    const before = context.slice(Math.max(0, a - 24), a), after = context.slice(b, b + 16)
+    if (RANGE_BEFORE.test(before) || RANGE_AFTER.test(after)) { range = true; continue }
+    if (BEFORE_LIMIT.test(before) || AFTER_LIMIT.test(after)) continue
+    if (BEFORE_UNCLEAR.test(before)) { unclear = true; continue }
+    return 'stated' // written plainly at least once
+  }
+  if (unclear) return 'unclear'
+  return range ? 'range' : 'threshold'
+}
+
+/**
+ * A client brief often quotes rules ("shelter required for buildings with ≥ 3 flats and ≥ 1,200 m²"). Those numbers
+ * describe the rule, not the building, and a model will happily report them as the building's size.
+ *  - a figure that only appears as a limit or condition: removed, and said so
+ *  - a figure taken from a range, or not written in its own quote, or that the model says it inferred: kept, never pre-ticked
+ * The quote is looked at together with the words just before and after it in the document, so a trimmed quote cannot hide the "≥".
+ */
+export function guardBriefFigures(mapping: ProjectSetupMapping, pages: string[]): ProjectSetupMapping {
+  if (mapping.kind !== 'brief') return mapping
+  const doc = pages.join('\n')
+  const warnings = [...mapping.warnings]
+  const inferred = (key: string) => mapping.warnings.some((w) => new RegExp(`\\b${key}\\b`, 'i').test(w) && /infer|assum|deriv|estimat|upper bound|lower bound|range|minimum|threshold/i.test(w))
+  const prefills: Prefill[] = []
+  for (const p of mapping.prefills) {
+    if (!(NUMERIC_BRIEF_KEYS as readonly string[]).includes(p.key as string) || typeof p.value !== 'number' || !p.quote) { prefills.push(p); continue }
+    const at = doc.indexOf(p.quote)
+    const context = at >= 0 ? doc.slice(Math.max(0, at - 28), at + p.quote.length + 18) : p.quote
+    const how = readFigure(context, p.value)
+    const name = BRIEF_KEY_LABEL[p.key as string] ?? String(p.key)
+    if (how === 'threshold') {
+      warnings.push(`${name}: not stated. The document gives ${p.value} only as a limit or condition ("${p.quote.slice(0, 120)}"), which describes a rule, not this building.`)
+      continue
+    }
+    if (how === 'range') prefills.push({ ...p, preAccept: false, confidence: Math.min(p.confidence, 0.5), because: `${p.because} — taken from a range, check it` })
+    else if (how === 'unclear') prefills.push({ ...p, preAccept: false, confidence: Math.min(p.confidence, 0.5), because: `${p.because} — approximate or possibly a limit, check it` })
+    else if (how === 'not_in_quote') prefills.push({ ...p, preAccept: false, confidence: Math.min(p.confidence, 0.5), because: `${p.because} — the figure is not written in the quoted text, check it` })
+    else if (inferred(p.key as string)) prefills.push({ ...p, preAccept: false, confidence: Math.min(p.confidence, 0.5), because: `${p.because} — worked out by the AI, not stated, check it` })
+    else prefills.push(p)
+  }
+  return { ...mapping, prefills, warnings }
+}
+
 /** Share of the quote's words (4+ letters) that occur in the document. Models stitch adjacent phrases into one quote. */
 function wordCoverage(q: string, doc: string): number {
   const words = q.split(/[^\p{L}\p{N}§]+/u).filter((w) => w.length >= 4)
