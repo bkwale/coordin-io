@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { canDeleteComment } from '@/lib/task-comments'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -167,6 +168,8 @@ export default function TaskDetailPage() {
   const [transitionLoading, setTransitionLoading] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [commentLoading, setCommentLoading] = useState(false)
+  const [confirmDeleteComment, setConfirmDeleteComment] = useState<string | null>(null)
+  const [deletingComment, setDeletingComment] = useState<string | null>(null)
   const [checklistLoading, setChecklistLoading] = useState<string | null>(null)
   const [checklistDeleting, setChecklistDeleting] = useState<string | null>(null)
   const [clearingAll, setClearingAll] = useState(false)
@@ -347,6 +350,26 @@ export default function TaskDetailPage() {
       toast(err instanceof Error ? err.message : 'Failed to update status', 'error')
     } finally {
       setTransitionLoading(false)
+    }
+  }
+
+  /* ── Delete comment ──────────────────────────────────── */
+
+  async function handleDeleteComment(commentId: string) {
+    setDeletingComment(commentId)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/comments?commentId=${encodeURIComponent(commentId)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error?.message || (typeof body.error === 'string' ? body.error : '') || 'Could not delete the comment')
+      }
+      setTask((prev) => (prev ? { ...prev, comments: prev.comments.filter((c) => c.id !== commentId) } : prev))
+      setConfirmDeleteComment(null)
+      toast('Comment deleted', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not delete the comment', 'error')
+    } finally {
+      setDeletingComment(null)
     }
   }
 
@@ -1119,6 +1142,17 @@ export default function TaskDetailPage() {
                       </div>
                       <span className="text-[12px] font-medium text-ink-700">{comment.author.fullName}</span>
                       <span className="text-[11px] text-ink-300">{timeAgo(comment.createdAt)}</span>
+                      {currentUserId && canDeleteComment({ id: currentUserId, orgPermission: currentUserPermission ?? 'MEMBER' }, { authorId: comment.author.id }) && (
+                        confirmDeleteComment === comment.id ? (
+                          <span className="ml-auto flex items-center gap-2 text-[11px]">
+                            <span className="text-ink-500">Delete this comment?</span>
+                            <button type="button" onClick={() => handleDeleteComment(comment.id)} disabled={deletingComment === comment.id} className="font-medium text-red-600 hover:text-red-700 disabled:opacity-50">{deletingComment === comment.id ? 'Deleting…' : 'Delete'}</button>
+                            <button type="button" onClick={() => setConfirmDeleteComment(null)} disabled={deletingComment === comment.id} className="font-medium text-ink-500 hover:text-ink-700">Cancel</button>
+                          </span>
+                        ) : (
+                          <button type="button" onClick={() => setConfirmDeleteComment(comment.id)} aria-label={`Delete comment by ${comment.author.fullName}`} className="ml-auto text-[11px] font-medium text-ink-300 hover:text-red-600">Delete</button>
+                        )
+                      )}
                     </div>
                     <p className="text-[13px] text-ink-600 ml-8 leading-relaxed whitespace-pre-wrap">{comment.content}</p>
                   </div>
