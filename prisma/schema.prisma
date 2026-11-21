@@ -952,6 +952,9 @@ model TaskComment {
   authorId  String   @map("author_id")
   content   String
   createdAt DateTime @default(now()) @map("created_at")
+  // A deleted comment is hidden, not erased: the row stays so a mistake can be undone and the record is honest
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by")
 
   task   Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author Profile @relation(fields: [authorId], references: [id])

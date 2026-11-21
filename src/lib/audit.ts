@@ -61,6 +61,7 @@ export const AuditActions = {
   TASK_REVIEWED: 'task.reviewed',
   TASK_CHECKLIST_MODIFIED: 'task.checklist_modified',
   TASK_DELETED: 'task.deleted',
+  TASK_COMMENT_DELETED: 'task.comment_deleted',
 
   // Documents
   DOCUMENT_UPLOADED: 'document.uploaded',
@@ -316,6 +317,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'task.reviewed': 'Reviewed task',
   'task.checklist_modified': 'Modified task checklist',
   'task.deleted': 'Deleted task',
+  'task.comment_deleted': 'Deleted a comment on a task',
 
   // Documents
   'document.uploaded': 'Uploaded document',

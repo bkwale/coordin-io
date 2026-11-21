@@ -29,6 +29,7 @@ export const GET = withTaskAccess(async (_request: NextRequest, { taskId }) => {
         include: { assignee: { select: { id: true, fullName: true } } },
       },
       comments: {
+        where: { deletedAt: null },
         orderBy: { createdAt: 'asc' },
         include: {
           author: { select: { id: true, fullName: true } },
